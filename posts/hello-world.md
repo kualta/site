@@ -1,7 +1,7 @@
 ---
 title: "Hello world"
 description: "wow a first post"
-date: "1940-02-01"
+date: "1940/01/01"
 ---
 
 # Test: testing tests 

@@ -4,7 +4,7 @@ description: "the art of online games balance"
 date: "2021/07/08"
 ---
 
-# "Fair Play: The art of online games balance"
+# Fair Play: The art of online games balance
 
 **Disclaimer**: **a lot** of bad writing. I was young. The ideas are still fresh tho. I'll revisit this post in the upcoming weeks.
 
