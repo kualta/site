@@ -1,3 +1,9 @@
+---
+title: "Some random Post 2"
+description: "description of the second post!"
+date: "1942-02-01"
+---
+
 # Test: Post 2 
 
 - [Test: Post 2](#test-post-2)

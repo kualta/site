@@ -7,16 +7,16 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   let header = (
-    <header className="text-3xl">
+    <header className="flex items-center justify-between roboto-mono border-neutral-800 border-b py-4">
       <Link href={'/'}>
-        kualta writes things
+        <b>kualta</b> simply writes words
       </Link>
     </header>
   );
   return (
-    <html>
+    <html className='dark bg-[#111111]'>
       <head />
-      <body>
+      <body className='mx-auto flex flex-col min-h-screen max-w-2xl text-stone-200 px-4'>
         {header}
         {children}
       </body>
