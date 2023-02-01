@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import '../styles/globals.css'
 
 export default function RootLayout({
@@ -7,7 +8,9 @@ export default function RootLayout({
 }) {
   let header = (
     <header className="text-3xl">
-      kualta writes things
+      <Link href={'/'}>
+        kualta writes things
+      </Link>
     </header>
   );
   return (
