@@ -1,3 +1,1 @@
-## A personal blog, I write words there 
-
-### take a look: https://blog.kualta.dev/
+<h3 align="center"> ><a href="https://blog.kualta.dev/"> blog.kualta.dev </a>< </h3>
