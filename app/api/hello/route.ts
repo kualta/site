@@ -7,5 +7,5 @@ export async function GET(request: Request) {
     'ayo what\'s up',
   ];
   let phrase = phrases[Math.floor(Math.random() * phrases.length)];
-  return NextResponse.json({message:`kualta says: ${phrase}`})
+  return NextResponse.json({ message: `kualta says: ${phrase}` })
 }
