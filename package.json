@@ -1,0 +1,10 @@
+{
+  "name": "web",
+  "workspaces": [
+    "site/",
+    "blog/"
+  ],
+  "scripts": {
+    "dev": "turbo run dev"
+  }
+}
