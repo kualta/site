@@ -1,9 +1,15 @@
 import Link from 'next/link';
 import '../styles/globals.css'
 
-export default function RootLayout({
-    children,
-}: {
+export const metadata = {
+  title: 'kualta\'s blog',
+  description: 'I simply write words here',
+  icons: {
+    icon: "/icon.png"
+  }
+}
+
+export default function RootLayout({ children }: {
     children: React.ReactNode
 }) {
     let actionTexts = [
