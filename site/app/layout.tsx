@@ -10,9 +10,9 @@ export const metadata = {
   }
 }
 
-export default function RootLayout({ children }: {
-  children: React.ReactNode
-}) {
+export default function RootLayout(
+  { children }: { children: React.ReactNode }
+) {
   let texts = [
     'simply makes things',
     'makes simple things',

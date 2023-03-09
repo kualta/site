@@ -1,0 +1,97 @@
+{
+    "projects": [
+        {
+            "name": "Fuji",
+            "description": "a hardcore hypercasual game",
+            "link": "https://github.com/kualta/Fuji",
+            "language": "C#",
+            "date": "SEP 2019",
+            "status": "Complete",
+            "stack": "Unity"
+        },
+        {
+            "name": "Core",
+            "description": "a neat game engine",
+            "link": "https://github.com/kualta/Core",
+            "language": "C++",
+            "date": "JAN 2021",
+            "status": "Archived",
+            "stack": "Core, Magnum, ImGUI"
+        },
+        {
+            "name": "Hemi",
+            "description": "an experimental typing trainer",
+            "link": "https://github.com/kualta/Hemi",
+            "language": "Rust",
+            "date": "MAR 2022",
+            "status": "Complete",
+            "stack": "WASM, Dioxus"
+        },
+        {
+            "name": "Pomo",
+            "description": "a simple pomodoro timer",
+            "link": "https://github.com/kualta/Pomo",
+            "language": "Rust",
+            "date": "SEP 2022",
+            "status": "Complete",
+            "stack": "WASM, Dioxus"
+        },
+        {
+            "name": "Site",
+            "description": "a personal website",
+            "link": "https://github.com/kualta/Site",
+            "language": "Rust",
+            "date": "SEP 2022",
+            "status": "Complete",
+            "stack": "WASM, Dioxus, Reqwest"
+        },
+        {
+            "name": "Box",
+            "description": "a collection of tools for the Bevy Engine",
+            "link": "https://github.com/kualta/Box",
+            "language": "Rust",
+            "date": "TBD",
+            "status": "In Development",
+            "stack": "Bevy"
+        },
+        {
+            "name": "Snap",
+            "description": "a social network analysis pinboard",
+            "link": "https://github.com/kualta/Snap",
+            "language": "TypeScript",
+            "date": "TBD",
+            "status": "In Development",
+            "stack": "React, Next.JS"
+        }
+    ],
+    "articles": [
+        {
+            "name": "Fair Play",
+            "description": "the art of online games balance",
+            "link": "https://blog.kualta.dev/posts/fair-play",
+            "theme": "Game Design"
+        }
+    ],
+    "contacts": [
+        {
+            "name": "github",
+            "description": "@kualta",
+            "link": "https://github.com/kualta"
+        },
+        {
+            "name": "email",
+            "description": "jobs@kualta.dev",
+            "link": "mailto:jobs@kualta.dev"
+        },
+        {
+            "name": "youtube",
+            "description": "@kualta",
+            "link": "https://youtube.com/@kualta"
+        },
+        {
+            "name": "twitter",
+            "description": "@realkualta",
+            "link": "https://twitter.com/realkualta"
+        }
+    ]
+}
