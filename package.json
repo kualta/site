@@ -6,5 +6,6 @@
   ],
   "scripts": {
     "dev": "turbo run dev"
-  }
+  },
+  "packageManager": "^npm@9.6.1"
 }
