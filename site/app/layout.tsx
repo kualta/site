@@ -1,6 +1,6 @@
 import '@/styles/globals.css';
 import Link from 'next/link';
-import { roboto_mono } from './fonts';
+import { roboto_mono } from '@/components/fonts';
 
 export const metadata = {
   title: 'kualta',
@@ -13,12 +13,12 @@ export const metadata = {
 export default function RootLayout({ children }: {
   children: React.ReactNode
 }) {
-  let actionTexts = [
+  let texts = [
     'simply makes things',
     'makes simple things',
     'makes things simple',
   ];
-  let action = actionTexts[Math.floor(Math.random() * actionTexts.length)];
+  let action = texts[Math.floor(Math.random() * texts.length)];
 
   let header = (
     <header className={`flex items-center justify-between border-b py-4 dark:border-neutral-800 ${roboto_mono.className}`}>

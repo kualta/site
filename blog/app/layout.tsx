@@ -1,25 +1,26 @@
+import { roboto_mono } from '@/components/fonts';
+import '@/styles/globals.css';
 import Link from 'next/link';
-import '@/styles/globals.css'
 
 export const metadata = {
-  title: 'kualta\'s blog',
-  description: 'I simply write words here',
-  icons: {
-    icon: "/icon.png"
-  }
+    title: 'kualta\'s blog',
+    description: 'kualta\'s official blog',
+    icons: {
+        icon: "/icon.png"
+    }
 }
 
-export default function RootLayout({ children }: {
-    children: React.ReactNode
-}) {
-    let actionTexts = [
+export default function RootLayout(
+    { children }: { children: React.ReactNode }
+) {
+    let texts = [
         'simply writes words',
         'writes simple words',
     ];
-    let action = actionTexts[Math.floor(Math.random() * actionTexts.length)];
+    let action = texts[Math.floor(Math.random() * texts.length)];
 
     let header = (
-        <header className="flex items-center justify-between roboto-mono border-neutral-800 border-b py-4">
+        <header className={`flex items-center justify-between border-b py-4 dark:border-neutral-800 ${roboto_mono.className}`}>
             <Link href={'/'}>
                 <b>kualta</b> {action}
             </Link>

@@ -38,7 +38,7 @@
     ".next/types/**/*.ts",
     "/home/lm/proj/site/.next/types/**/*.ts",
     "/home/lm/proj/site/site/.next/types/**/*.ts"
-  ],
+, "../components/fonts.ts"  ],
   "exclude": [
     "node_modules"
   ]
