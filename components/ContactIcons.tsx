@@ -5,6 +5,7 @@ const ContactIcons = (props: { contacts: Contact[]}) => {
     let links = props.contacts.map((contact) => {
         let icon = <></>;
         let iconSize = 22;
+
         switch (contact.name) {
             case 'github':
                 icon = <FiGithub size={iconSize} />;
