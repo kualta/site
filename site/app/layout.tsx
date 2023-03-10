@@ -29,11 +29,7 @@ export default function RootLayout({
             <Link href={'/'}>
                 <b>kualta</b> {action}
             </Link>
-            <a
-                href="https://blog.kualta.dev/"
-                target={'_blank'}
-                rel={'noreferrer'}
-            >{`blog >`}</a>
+            <a href="https://blog.kualta.dev/" target={'_blank'} rel={'noreferrer'} >{`blog >`}</a>
         </header>
     );
 
