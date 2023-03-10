@@ -1,19 +1,14 @@
 import { Contact } from './api/contacts/route';
+import ContactIcons from '../../components/ContactIcons'
 
 const HomePage = async () => {
     const contacts = await getData<Contact[]>(
         'https://kualta.dev/api/contacts'
     );
 
-    let links = contacts.map((contact) => (
-        <a href={contact.link} key={contact.link}>
-            {contact.name}
-        </a>
-    ));
-
     return (
         <div className="flex place-items-center justify-center flex-row flex-wrap gap-8 p-4 border-b border-neutral-800">
-            {links}
+            <ContactIcons contacts={contacts} />
         </div>
     );
 };
