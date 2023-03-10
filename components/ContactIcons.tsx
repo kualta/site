@@ -1,4 +1,4 @@
-import { FiGithub, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
+import { FiGithub, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi'
 import { Contact } from 'site/app/api/contacts/route';
 
 const ContactIcons = (props: { contacts: Contact[]}) => {
