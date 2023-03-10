@@ -5,7 +5,8 @@
     "blog/"
   ],
   "scripts": {
-    "dev": "turbo run dev"
+    "dev": "turbo dev",
+    "build": "turbo build"
   },
   "packageManager": "^npm@9.6.1",
   "dependencies": {
