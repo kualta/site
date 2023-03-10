@@ -1,7 +1,9 @@
-import { Contact } from "./api/contacts/route";
+import { Contact } from './api/contacts/route';
 
 const HomePage = async () => {
-    const contacts = await getData<Contact[]>('/api/contacts');
+    const contacts = await getData<Contact[]>(
+        'https://kualta.dev/api/contacts'
+    );
 
     let links = contacts.map((contact) => (
         <a href={contact.link} key={contact.link}>
@@ -9,9 +11,11 @@ const HomePage = async () => {
         </a>
     ));
 
-    return <div>
-        {links}
-    </div>;
+    return (
+        <div className="flex place-items-center justify-center flex-row flex-wrap gap-8 p-4 border-b border-neutral-800">
+            {links}
+        </div>
+    );
 };
 
 async function getData<T>(url: string): Promise<T> {
