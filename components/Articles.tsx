@@ -1,5 +1,4 @@
 import { Article } from '../site/app/api/articles/route';
-import React from 'react';
 
 const Articles = (props: { articles: Article[] }) => {
     return (

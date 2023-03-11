@@ -1,5 +1,4 @@
 import { Project } from '../site/app/api/projects/route';
-import React from 'react';
 
 const Articles = (props: { projects: Project[] }) => {
     return (
