@@ -25,7 +25,7 @@ export default function RootLayout({
             <Link href={'/'}>
                 <b className="text-lg">kualta</b> {action}
             </Link>
-            <a href="https://kualta.dev/">{`site >`}</a>
+            <a href="https://kualta.dev/">{`main >`}</a>
         </header>
     );
 

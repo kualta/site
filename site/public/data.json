@@ -1,63 +1,99 @@
 {
     "projects": [
         {
-            "name": "Fuji",
+            "name": "fuji",
             "description": "a hardcore hypercasual game",
-            "link": "https://github.com/kualta/Fuji",
+            "link": "https://github.com/kualta/fuji",
             "language": "C#",
             "date": "SEP 2019",
             "status": "Complete",
             "stack": "Unity"
         },
         {
-            "name": "Core",
+            "name": "core",
             "description": "a neat game engine",
-            "link": "https://github.com/kualta/Core",
+            "link": "https://github.com/kualta/core",
             "language": "C++",
             "date": "JAN 2021",
             "status": "Archived",
             "stack": "Core, Magnum, ImGUI"
         },
         {
-            "name": "Hemi",
+            "name": "hemi",
             "description": "an experimental typing trainer",
-            "link": "https://github.com/kualta/Hemi",
+            "link": "https://hemi.kualta.dev/",
             "language": "Rust",
             "date": "MAR 2022",
             "status": "Complete",
             "stack": "WASM, Dioxus"
         },
         {
-            "name": "Pomo",
+            "name": "pomo",
             "description": "a simple pomodoro timer",
-            "link": "https://github.com/kualta/Pomo",
+            "link": "https://pomo.kualta.dev/",
             "language": "Rust",
             "date": "SEP 2022",
             "status": "Complete",
             "stack": "WASM, Dioxus"
         },
         {
-            "name": "Site",
-            "description": "a personal website",
-            "link": "https://github.com/kualta/Site",
+            "name": "wasm",
+            "description": "this site, ported to WASM",
+            "link": "https://wasm.kualta.dev/",
             "language": "Rust",
             "date": "SEP 2022",
             "status": "Complete",
             "stack": "WASM, Dioxus, Reqwest"
         },
         {
-            "name": "Box",
-            "description": "a collection of tools for the Bevy Engine",
-            "link": "https://github.com/kualta/Box",
+            "name": "main",
+            "description": "my web infrastructure",
+            "link": "https://github.com/kualta/main",
+            "language": "TypeScript",
+            "date": "JAN 2023",
+            "status": "Complete",
+            "stack": "React, Next.JS"
+        },
+        {
+            "name": "boxd",
+            "description": "a collection of tools for bevy",
+            "link": "https://github.com/kualta/boxd",
             "language": "Rust",
             "date": "TBD",
             "status": "In Development",
             "stack": "Bevy"
         },
         {
-            "name": "Snap",
+            "name": "snap",
             "description": "a social network analysis pinboard",
-            "link": "https://github.com/kualta/Snap",
+            "link": "https://github.com/kualta/snap",
+            "language": "TypeScript",
+            "date": "TBD",
+            "status": "In Development",
+            "stack": "React, Next.JS"
+        },
+        {
+            "name": "mine",
+            "description": "sentence mining made easy",
+            "link": "https://github.com/kualta/mine",
+            "language": "TypeScript",
+            "date": "TBD",
+            "status": "In Development",
+            "stack": "React, Next.JS"
+        },
+        {
+            "name": "rand",
+            "description": "TBD",
+            "link": "https://kualta.dev/",
+            "language": "TypeScript",
+            "date": "TBD",
+            "status": "In Development",
+            "stack": "React, Next.JS"
+        },
+        {
+            "name": "noir",
+            "description": "TBD",
+            "link": "https://kualta.dev/",
             "language": "TypeScript",
             "date": "TBD",
             "status": "In Development",
@@ -66,7 +102,7 @@
     ],
     "articles": [
         {
-            "name": "Fair Play",
+            "name": "fair play",
             "description": "the art of online games balance",
             "link": "https://blog.kualta.dev/posts/fair-play",
             "theme": "Game Design"
