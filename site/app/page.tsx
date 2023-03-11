@@ -1,5 +1,6 @@
 import Articles from '@/components/Articles';
 import ContactIcons from '@/components/ContactIcons';
+import Contacts from '@/components/Contacts';
 import Projects from '@/components/Projects';
 import { Article } from './api/articles/route';
 import { Contact } from './api/contacts/route';
@@ -18,11 +19,12 @@ const HomePage = async () => {
 
     return (
         <>
-            <div className="flex flex-row place-items-center justify-center gap-x-8 py-4">
+            <div className="flex flex-row place-items-center gap-x-8 py-4">
                 <ContactIcons contacts={contacts} />
             </div>
             <Projects projects={projects} />
             <Articles articles={articles} />
+            <Contacts contacts={contacts} />
         </>
     );
 };
