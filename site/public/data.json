@@ -46,15 +46,6 @@
             "stack": "WASM, Dioxus, Reqwest"
         },
         {
-            "name": "main",
-            "description": "my web infrastructure",
-            "link": "https://github.com/kualta/main",
-            "language": "TypeScript",
-            "date": "JAN 2023",
-            "status": "Complete",
-            "stack": "React, Next.JS"
-        },
-        {
             "name": "boxd",
             "description": "a collection of tools for bevy",
             "link": "https://github.com/kualta/boxd",
@@ -86,7 +77,7 @@
             "description": "TBD",
             "link": "https://kualta.dev/",
             "language": "TypeScript",
-            "date": "TBD",
+            "date": "to be disclosed",
             "status": "In Development",
             "stack": "React, Next.JS"
         },
@@ -95,7 +86,7 @@
             "description": "TBD",
             "link": "https://kualta.dev/",
             "language": "TypeScript",
-            "date": "TBD",
+            "date": "to be disclosed",
             "status": "In Development",
             "stack": "React, Next.JS"
         }

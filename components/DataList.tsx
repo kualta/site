@@ -14,7 +14,7 @@ const DataList = (props: { list: Data[]; title: string }) => {
             >
                 {props.title}
             </h2>
-            <div className="flex flex-col space-y-4 p-4">
+            <div className="flex flex-col space-y-2 p-4">
                 {props.list.map((project) => (
                     <a href={project.link} key={project.link} className="">
                         <b className={roboto_mono.className}>
