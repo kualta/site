@@ -1,6 +1,6 @@
+import { roboto_mono } from '@/components/fonts';
 import Link from 'next/link';
 import 'styles/globals.css';
-import { roboto_mono } from '@/components/fonts';
 
 export const metadata = {
     title: 'kualta',
@@ -27,7 +27,7 @@ export default function RootLayout({
             className={`flex items-center justify-between border-b py-4 dark:border-neutral-800 ${roboto_mono.className}`}
         >
             <Link href={'/'}>
-                <b>kualta</b> {action}
+                <b className="text-lg">kualta</b> {action}
             </Link>
             <a href="https://blog.kualta.dev/">{`blog >`}</a>
         </header>

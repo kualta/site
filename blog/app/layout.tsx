@@ -23,7 +23,7 @@ export default function RootLayout({
             className={`flex items-center justify-between border-b py-4 dark:border-neutral-800 ${roboto_mono.className}`}
         >
             <Link href={'/'}>
-                <b>kualta</b> {action}
+                <b className="text-lg">kualta</b> {action}
             </Link>
             <a href="https://kualta.dev/">{`site >`}</a>
         </header>
