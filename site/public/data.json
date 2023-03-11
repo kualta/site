@@ -37,8 +37,8 @@
             "stack": "WASM, Dioxus"
         },
         {
-            "name": "wasm",
-            "description": "this site, ported to WASM",
+            "name": "site",
+            "description": "a personal site ported to wasm",
             "link": "https://wasm.kualta.dev/",
             "language": "Rust",
             "date": "SEP 2022",
@@ -65,7 +65,7 @@
         },
         {
             "name": "mine",
-            "description": "sentence mining made easy",
+            "description": "a sentence mining tool",
             "link": "https://github.com/kualta/mine",
             "language": "TypeScript",
             "date": "TBD",
@@ -74,19 +74,19 @@
         },
         {
             "name": "rand",
-            "description": "TBD",
+            "description": "to be disclosed",
             "link": "https://kualta.dev/",
             "language": "TypeScript",
-            "date": "to be disclosed",
+            "date": "TBD",
             "status": "In Development",
             "stack": "React, Next.JS"
         },
         {
             "name": "noir",
-            "description": "TBD",
+            "description": "to be disclosed",
             "link": "https://kualta.dev/",
             "language": "TypeScript",
-            "date": "to be disclosed",
+            "date": "TBD",
             "status": "In Development",
             "stack": "React, Next.JS"
         }
