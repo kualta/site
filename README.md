@@ -1,5 +1,5 @@
-<b align="center"> kualta's web infrastructure </b> 
+<h4 align="center"> kualta's web infrastructure </h4> 
 
 **Projects included:**
-1. site - https://kualta.dev/
-2. blog - https://blog.kualta.dev/
+1. [kualta.dev](https://kualta.dev/) 
+1. [blog.kualta.dev](https://blog.kualta.dev/) 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import 'styles/globals.css';
-import { roboto_mono } from '../../components/fonts';
+import { roboto_mono } from '@/components/fonts';
 
 export const metadata = {
     title: 'kualta',
@@ -29,11 +29,7 @@ export default function RootLayout({
             <Link href={'/'}>
                 <b>kualta</b> {action}
             </Link>
-            <a
-                href="https://blog.kualta.dev/"
-                target={'_blank'}
-                rel={'noreferrer'}
-            >{`blog >`}</a>
+            <a href="https://blog.kualta.dev/">{`blog >`}</a>
         </header>
     );
 
