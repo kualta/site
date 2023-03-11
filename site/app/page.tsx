@@ -1,4 +1,6 @@
+import Articles from '@/components/Articles';
 import ContactIcons from '@/components/ContactIcons';
+import Projects from '@/components/Projects';
 import { Article } from './api/articles/route';
 import { Contact } from './api/contacts/route';
 import { Project } from './api/projects/route';
@@ -15,9 +17,13 @@ const HomePage = async () => {
     );
 
     return (
-        <div className="flex place-items-center justify-center flex-row flex-wrap gap-8 p-4 border-b border-neutral-800">
-            <ContactIcons contacts={contacts} />
-        </div>
+        <>
+            <div className="flex flex-row place-items-center justify-center gap-x-8 py-4">
+                <ContactIcons contacts={contacts} />
+            </div>
+            <Projects projects={projects} />
+            <Articles articles={articles} />
+        </>
     );
 };
 
@@ -28,7 +34,7 @@ async function getData<T>(url: string): Promise<T> {
         throw new Error(response.statusText);
     }
 
-    return await response.json() as Promise<T>;
+    return (await response.json()) as Promise<T>;
 }
 
 export default HomePage;

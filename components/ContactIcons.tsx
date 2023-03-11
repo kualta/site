@@ -1,7 +1,7 @@
-import { FiGithub, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi'
+import { FiGithub, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
 import { Contact } from 'site/app/api/contacts/route';
 
-const ContactIcons = (props: { contacts: Contact[]}) => {
+const ContactIcons = (props: { contacts: Contact[] }) => {
     let links = props.contacts.map((contact) => {
         let icon = <></>;
         let iconSize = 22;
@@ -22,9 +22,11 @@ const ContactIcons = (props: { contacts: Contact[]}) => {
         }
 
         return (
-            <a href={contact.link} key={contact.link}>
-                {icon}
-            </a>
+            <div className="hover:scale-125">
+                <a href={contact.link} key={contact.link}>
+                    {icon}
+                </a>
+            </div>
         );
     });
     return <>{links}</>;
