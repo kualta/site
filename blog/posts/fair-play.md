@@ -2,6 +2,7 @@
 title: "Fair Play"
 description: "the art of online games balance"
 date: "2021/07/08"
+tags: ["Game Design"]
 ---
 
 # Fair Play: The art of online games balance

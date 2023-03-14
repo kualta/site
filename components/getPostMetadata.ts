@@ -3,18 +3,20 @@ import matter from "gray-matter";
 import PostMetadata from "./PostMetadata";
 
 const getPostMetadata = (): PostMetadata[] => {
-    const folder = "posts/";
-    const files = readdirSync(folder);
-    const mdPosts = files.filter((file) => file.endsWith('.md'));
-    const posts = mdPosts.map((file) => {
-        const fileContents = readFileSync(`${folder}${file}`, 'utf-8');
+    const path = process.env.POSTS_PATH || '/posts';
+    const files = readdirSync(path);
+    const markdownFiles = files.filter((file) => file.endsWith('.md'));
+    const posts = markdownFiles.map((file) => {
+        const fileContents = readFileSync(`${path}${file}`, 'utf-8');
         const metadata = matter(fileContents);
-        const slug = file.replace('.md', '');
+        const filename = file.replace('.md', '');
+
         return {
             title: metadata.data.title,
             description: metadata.data.description,
             date: metadata.data.date,
-            slug: slug
+            tags: metadata.data.tags,
+            filename: filename
         } as PostMetadata;
     });
 

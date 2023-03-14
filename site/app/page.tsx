@@ -1,5 +1,5 @@
 import ContactIcons from '@/components/ContactIcons';
-import DataList from '@/components/DataList';
+import LinkList from '@/components/DataList';
 import { Article } from './api/articles/route';
 import { Contact } from './api/contacts/route';
 import { Project } from './api/projects/route';
@@ -20,9 +20,9 @@ const HomePage = async () => {
             <div className="flex flex-row place-items-center gap-x-8 p-4">
                 <ContactIcons contacts={contacts} />
             </div>
-            <DataList list={projects} title="Projects" />
-            <DataList list={articles} title="Articles" />
-            <DataList list={contacts} title="Contacts" />
+            <LinkList list={projects} title="Projects" />
+            <LinkList list={articles} title="Articles" />
+            <LinkList list={contacts} title="Contacts" />
         </>
     );
 };

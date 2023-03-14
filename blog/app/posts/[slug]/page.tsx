@@ -1,7 +1,7 @@
-import getPostMetadata from "@/components/getPostMetadata";
-import { readFileSync } from "fs"
-import matter from "gray-matter";
-import Markdown from "markdown-to-jsx";
+import getPostMetadata from '@/components/getPostMetadata';
+import { readFileSync } from 'fs';
+import matter from 'gray-matter';
+import Markdown from 'markdown-to-jsx';
 
 const getPostContent = (slug: string) => {
     const folder = 'posts/';
@@ -10,14 +10,14 @@ const getPostContent = (slug: string) => {
     const post = matter(content);
 
     return post;
-}
+};
 
 export const generateStaticParams = async () => {
     const posts = getPostMetadata();
-    return posts.map(post => ({
-        slug: post.slug,
+    return posts.map((post) => ({
+        slug: post.filename,
     }));
-}
+};
 
 const PostPage = (props: any) => {
     const slug = props.params.slug;
@@ -29,7 +29,7 @@ const PostPage = (props: any) => {
                 <Markdown>{post.content}</Markdown>
             </article>
         </>
-    )
-}
+    );
+};
 
-export default PostPage
+export default PostPage;

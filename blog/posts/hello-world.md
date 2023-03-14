@@ -2,6 +2,7 @@
 title: "Hello world"
 description: "wow a first post"
 date: "1940/01/01"
+tags: ["Hello World", "Game Design"]
 ---
 
 # Test: testing tests 
