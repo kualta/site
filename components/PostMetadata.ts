@@ -9,15 +9,19 @@ export interface PostMetadata {
     filename: string,
 }
 
-const getPostMetadata = (): PostMetadata[] => {
+const getPostMetadata = (filter?: string): PostMetadata[] => {
     const path = process.env.POSTS_PATH || '/posts';
     const files = readdirSync(path);
     const markdownFiles = files.filter((file) => file.endsWith('.md'));
+
     const posts = markdownFiles.map((file) => {
         const fileContents = readFileSync(`${path}${file}`, 'utf-8');
         const metadata = matter(fileContents);
         const filename = file.replace('.md', '');
 
+        if (filter && metadata.data.tags.indexOf(filter) === -1) {
+            return {} as PostMetadata;
+        };
         return {
             title: metadata.data.title,
             description: metadata.data.description,

@@ -5,15 +5,25 @@ import Link from 'next/link';
 const HomePage = () => {
     const postMetadata = getPostMetadata();
     const posts = postMetadata.map((post) => <PostPreview key={post.filename} {...post} />);
-    const tagList = [...new Set(postMetadata.flatMap((post) => post.tags))];
-    const tags = tagList.map((tag) => {
-        const slug = tag.replace(/\s+/g, '-').toLowerCase();
-        return (
-            <Link key={slug} href={'/tags/' + slug}>
-                {tag}
-            </Link>
-        );
-    });
+    const tagsSet = [...new Set(postMetadata.flatMap((post) => post.tags))];
+    const tags = tagsSet
+        .map((tag) => {
+            const text = tag.replace('-', ' ').toLowerCase();
+            return (
+                <Link key={tag} href={'/tags/' + tag} className="hover:scale-110">
+                    {text}
+                </Link>
+            );
+        })
+        .map((tag, i, arr) => {
+            const divider = i != arr.length - 1 ? `•` : ` `;
+            return (
+                <>
+                    {tag}
+                    <span className="select-none">{divider}</span>
+                </>
+            );
+        });
 
     return (
         <div>

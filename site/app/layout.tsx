@@ -1,6 +1,6 @@
-import { roboto_mono } from '@/components/fonts';
-import Link from 'next/link';
+import { roboto_mono } from '@/components/Fonts';
 import '@/styles/globals.css';
+import Link from 'next/link';
 
 export const metadata = {
     title: 'kualta',
@@ -10,16 +10,8 @@ export const metadata = {
     },
 };
 
-export default function RootLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
-    let texts = [
-        'simply makes things',
-        'makes simple things',
-        'makes things simple',
-    ];
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+    let texts = ['simply makes things', 'makes simple things', 'makes things simple'];
     let action = texts[Math.floor(Math.random() * texts.length)];
 
     let header = (
