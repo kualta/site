@@ -6,10 +6,9 @@ interface Data {
     link: string;
 }
 
-const DataList = (props: { list: Data[]; title: string }) => {
+const DataList = (props: { list: Data[] }) => {
     return (
         <div className="">
-            <h2 className={`${roboto_mono.className} font-semibold text-xl pt-8`}>{props.title}</h2>
             <div className="flex flex-col space-y-2 p-4">
                 {props.list.map((project) => (
                     <a
