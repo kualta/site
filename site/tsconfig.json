@@ -26,6 +26,6 @@
             "@/styles/*": ["../styles/*"]
         }
     },
-    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "../components/fonts.ts", "../**.tsx", "../**.ts"],
+    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "../components/Fonts.ts", "../**.tsx", "../**.ts"],
     "exclude": ["node_modules"]
 }

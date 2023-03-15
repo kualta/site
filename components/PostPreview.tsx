@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import React from 'react';
-import PostMetadata from './PostMetadata';
+import { PostMetadata } from './PostMetadata';
 
 const PostPreview = (props: PostMetadata) => {
     return (

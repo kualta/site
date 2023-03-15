@@ -1,15 +1,19 @@
-import getPostMetadata from '@/components/getPostMetadata';
+import getPostMetadata from '@/components/PostMetadata';
 import PostPreview from '@/components/PostPreview';
 import Link from 'next/link';
 
 const HomePage = () => {
     const postMetadata = getPostMetadata();
     const posts = postMetadata.map((post) => <PostPreview key={post.filename} {...post} />);
-    const tags = [...new Set(postMetadata.flatMap((post) => post.tags))].map((tag) => (
-        <Link key={tag} href={'/tags/' + tag}>
-            {tag}
-        </Link>
-    ));
+    const tagList = [...new Set(postMetadata.flatMap((post) => post.tags))];
+    const tags = tagList.map((tag) => {
+        const slug = tag.replace(/\s+/g, '-').toLowerCase();
+        return (
+            <Link key={slug} href={'/tags/' + slug}>
+                {tag}
+            </Link>
+        );
+    });
 
     return (
         <div>

@@ -1,4 +1,4 @@
-import getPostMetadata from '@/components/getPostMetadata';
+import getPostMetadata from '@/components/PostMetadata';
 
 export const generateStaticParams = async () => {
     const posts = getPostMetadata();

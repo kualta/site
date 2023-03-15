@@ -1,4 +1,4 @@
-import { roboto_mono } from '@/components/fonts';
+import { roboto_mono } from '@/components/Fonts';
 import '@/styles/globals.css';
 import Link from 'next/link';
 
