@@ -5,19 +5,13 @@ import { Contact } from './api/contacts/route';
 import { Project } from './api/projects/route';
 
 const HomePage = async () => {
-    const projects = await getData<Project[]>(
-        'https://kualta.dev/api/projects'
-    );
-    const articles = await getData<Article[]>(
-        'https://kualta.dev/api/articles'
-    );
-    const contacts = await getData<Contact[]>(
-        'https://kualta.dev/api/contacts'
-    );
+    const projects = await getData<Project[]>('https://kualta.dev/api/projects');
+    const articles = await getData<Article[]>('https://kualta.dev/api/articles');
+    const contacts = await getData<Contact[]>('https://kualta.dev/api/contacts');
 
     return (
         <>
-            <div className="flex flex-row place-items-center gap-x-8 p-4">
+            <div className="flex flex-row justify-center place-items-center gap-x-8 p-4">
                 <ContactIcons contacts={contacts} />
             </div>
             <LinkList list={projects} title="Projects" />

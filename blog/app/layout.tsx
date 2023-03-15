@@ -15,13 +15,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     let action = texts[Math.floor(Math.random() * texts.length)];
 
     let header = (
-        <header
-            className={`flex items-center justify-between border-b py-4 dark:border-neutral-800 ${roboto_mono.className}`}
-        >
-            <Link href={'/'}>
+        <header className={`flex items-center justify-center border-b py-4 dark:border-neutral-800`}>
+            <Link href={'/'} className={roboto_mono.className}>
                 <b className="text-lg">kualta</b> {action}
             </Link>
-            <a href="https://kualta.dev/">{`main >`}</a>
+            {/* <a href="https://kualta.dev/">{`main >`}</a> */}
         </header>
     );
 
