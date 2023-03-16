@@ -16,15 +16,30 @@ const HomePage = async () => {
             <div className="flex flex-row justify-center place-items-center gap-x-8 p-4">
                 <ContactIcons contacts={contacts} />
             </div>
-            <div className={roboto_mono.className}>
-                {/* TODO: add /projects */}
-                <h2 className={`flex font-semibold text-xl pt-8`}>projects</h2>
+            <div className={`${roboto_mono.className}`}>
+                <Link
+                    href="/projects"
+                    className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
+                >
+                    <span className="text-xl group-hover:underline my-auto">projects</span>
+                    <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
+                </Link>
                 <LinkList list={projects} />
-                <a href="https://blog.kualta.dev/" className={`flex font-semibold text-xl pt-8`}>
-                    articles {'>'}
+                <a
+                    href="https://blog.kualta.dev/"
+                    className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
+                >
+                    <span className="text-xl group-hover:underline my-auto">articles</span>
+                    <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </a>
                 <LinkList list={articles} />
-                <h2 className={` font-semibold text-xl pt-8`}>contacts</h2>
+                <Link
+                    href="/contacts"
+                    className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
+                >
+                    <span className="text-xl group-hover:underline my-auto">contacts</span>
+                    <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
+                </Link>
                 <LinkList list={contacts} />
             </div>
         </>

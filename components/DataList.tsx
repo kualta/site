@@ -14,11 +14,11 @@ const DataList = (props: { list: Data[] }) => {
                     <a
                         href={project.link}
                         key={project.link}
-                        className="decoration-slate-200 hover:underline decoration-1 w-fit"
+                        className="group decoration-slate-200 decoration-1 underline-offset-4 w-fit"
                     >
-                        <b className={roboto_mono.className}>{project.name}</b>
+                        <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
                         <span className="px-1">{` - `}</span>
-                        <span className={roboto_mono.className}>{project.description}</span>
+                        <span className={`${roboto_mono.className} group-hover:underline`}>{project.description}</span>
                     </a>
                 ))}
             </div>
