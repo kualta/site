@@ -1,7 +1,7 @@
 ---
 title: "Hello world"
 description: "wow a first post"
-date: "1940/01/01"
+date: "08/03/23"
 tags: ["miscellaneous"]
 ---
 

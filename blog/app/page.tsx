@@ -10,20 +10,18 @@ const HomePage = () => {
         const text = tag.replace('-', ' ').toLowerCase();
         const divider = i != arr.length - 1 ? `•` : ` `;
         return (
-            <>
-                <Link key={tag} href={'/tags/' + tag} className="hover:scale-110">
+            <div key={tag}>
+                <Link href={'/tags/' + tag} className="hover:scale-110">
                     {text}
                 </Link>
-                <span className="select-none">{divider}</span>
-            </>
+                <span className="select-none px-4">{divider}</span>
+            </div>
         );
     });
 
     return (
         <div>
-            <div className="flex place-items-center justify-center flex-row flex-wrap gap-8 p-4">
-                {tags}
-            </div>
+            <div className="flex place-items-center justify-center flex-row flex-wrap p-4 mb-10 h-8">{tags}</div>
             {posts}
         </div>
     );
