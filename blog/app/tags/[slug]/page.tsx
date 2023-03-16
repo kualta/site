@@ -23,7 +23,6 @@ async function TagsPage({ params }: { params: { slug: string } }) {
                     <span className="select-none">•</span>
                 </Link>
             </div>
-            {/* FIXME: remove empty posts from tag match */}
             {posts}
         </>
     );
