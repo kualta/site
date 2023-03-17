@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'fs';
 import matter from 'gray-matter';
+import path from 'path';
 
 export interface PostMetadata {
     title: string;
@@ -10,13 +11,13 @@ export interface PostMetadata {
 }
 
 const getPostMetadata = (filter?: string): PostMetadata[] => {
-    const path = 'posts/'
-    const files = readdirSync(path);
+    const postsPath = path.join(process.cwd(), '/posts/');
+    const files = readdirSync(postsPath);
     const markdownFiles = files.filter((file) => file.endsWith('.md'));
 
     const posts = markdownFiles
         .map((file) => {
-            const fileContents = readFileSync(`${path}${file}`, 'utf-8');
+            const fileContents = readFileSync(`${postsPath}${file}`, 'utf-8');
             const metadata = matter(fileContents);
             const filename = file.replace('.md', '');
 
