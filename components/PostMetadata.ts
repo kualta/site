@@ -10,7 +10,7 @@ export interface PostMetadata {
 }
 
 const getPostMetadata = (filter?: string): PostMetadata[] => {
-    const path = process.env.POSTS_PATH || '/posts';
+    const path = process.env.POSTS_PATH || 'posts/';
     const files = readdirSync(path);
     const markdownFiles = files.filter((file) => file.endsWith('.md'));
 
