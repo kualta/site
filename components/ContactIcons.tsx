@@ -1,4 +1,4 @@
-import { FiGithub, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
+import { FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
 import { Contact } from 'site/app/api/contacts/route';
 
 const ContactIcons = (props: { contacts: Contact[] }) => {
@@ -6,6 +6,9 @@ const ContactIcons = (props: { contacts: Contact[] }) => {
     let iconSize = 22;
     let links = props.contacts.map((contact) => {
         switch (contact.name) {
+            case 'website':
+                icon = <FiGlobe size={iconSize} />;
+                break;
             case 'github':
                 icon = <FiGithub size={iconSize} />;
                 break;

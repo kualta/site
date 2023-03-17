@@ -46,7 +46,7 @@ const HomePage = async () => {
     );
 };
 
-async function getData<T>(url: string): Promise<T> {
+export async function getData<T>(url: string): Promise<T> {
     const response = await fetch(url, { cache: 'no-store' });
 
     if (!response.ok) {
