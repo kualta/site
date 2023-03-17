@@ -1,5 +1,4 @@
 import { roboto_mono } from './Fonts';
-import React from 'react';
 
 interface Data {
     name: string;
@@ -13,9 +12,9 @@ const DataList = (props: { list: Data[] }) => {
             <div className="flex flex-col space-y-2 p-4">
                 {props.list.map((project) => (
                     <a
+                        className="group decoration-slate-200 decoration-1 underline-offset-4 w-fit"
                         href={project.link}
                         key={project.link}
-                        className="group decoration-slate-200 decoration-1 underline-offset-4 w-fit"
                     >
                         <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
                         <span className="px-1">{` - `}</span>
