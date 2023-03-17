@@ -15,16 +15,16 @@ async function TagsPage({ params }: { params: { slug: string } }) {
     const tagText = params.slug.replace('-', ' ').toLowerCase();
 
     return (
-        <>
-            <div className="flex place-items-center justify-center flex-row flex-wrap gap-8 p-4 h-8">
+        <div>
+            <div className="flex place-items-center justify-center flex-row flex-wrap gap-x-8 p-4 mb-10">
                 <Link href="/">
                     <span className="select-none">•</span>
-                    <span className="p-4 text-xl ">{tagText}</span>
+                    <span className="px-4 ">{tagText}</span>
                     <span className="select-none">•</span>
                 </Link>
             </div>
             {posts}
-        </>
+        </div>
     );
 }
 

@@ -21,7 +21,7 @@ const HomePage = () => {
 
     return (
         <div>
-            <div className="flex place-items-center justify-center flex-row flex-wrap p-4 mb-10 h-8">{tags}</div>
+            <div className="flex place-items-center justify-center flex-row flex-wrap p-4 mb-10">{tags}</div>
             {posts}
         </div>
     );
