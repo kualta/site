@@ -5,9 +5,8 @@ date: "07/08/23"
 tags: ["game-design"]
 ---
 
-# Fair Play: The art of online games balance
-
-**Disclaimer**: **a lot** of bad writing. I was young. The ideas are still fresh tho. I'll revisit this post in the upcoming weeks.
+<h2 className="flex justify-center">The art of online games balance </h2>
+<br>
 
 ## Abstract & Motivation
 

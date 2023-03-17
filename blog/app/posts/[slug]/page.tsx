@@ -14,7 +14,7 @@ async function PostPage({ params }: { params: { slug: string } }) {
 
     return (
         <>
-            <article className="prose dark:prose-invert prose-img:rounded-xl xl:prose-lg">
+            <article className="py-8 prose dark:prose-invert prose-img:rounded-xl xl:prose-lg">
                 <Markdown>{post.content}</Markdown>
             </article>
         </>
