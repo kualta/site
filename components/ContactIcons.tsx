@@ -1,7 +1,6 @@
-import { FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
-import { Contact } from 'site/app/api/contacts/route';
+import { FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi/index';
 
-const ContactIcons = (props: { contacts: Contact[] }) => {
+const ContactIcons = (props: { contacts: any[] }) => {
     let icon = <></>;
     let iconSize = 22;
     let links = props.contacts.map((contact) => {

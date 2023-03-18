@@ -1,4 +1,4 @@
-import { roboto_mono } from '@/../components/Fonts';
+import { roboto_mono } from '@/components/Fonts';
 import ContactIcons from '@/components/ContactIcons';
 import getPostContent from '@/components/PostContent';
 import getPostMetadata from '@/components/PostMetadata';
