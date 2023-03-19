@@ -16,12 +16,13 @@ async function GitPage() {
                 </a>
                 <span> - {repo.description}</span>
                 <div className="flex flex-col p-4 text-sm gap-x-4">
-                    <div className="flex gap-1 content-center">
-                        <FiStar size={15} color={star_color} className="place-self-center" />
+                    <div className="flex gap-1 content-center items-center place-content-start">
+                        <FiStar size={15} color={star_color} />
                         <span>{repo.stargazers_count}</span>
-                        <FiGitBranch size={15} color={branch_color} className="place-self-center" />
+                        <FiGitBranch size={15} color={branch_color} />
                         <span>{repo.forks_count}</span>
-                        <FiFileText size={15} className="place-self-center" /> <span>{repo.language}</span>
+                        <FiFileText size={15} />
+                        <span>{repo.language}</span>
                     </div>
                     <div>created at: {created_at}</div>
                     <div>updated at: {updated_at}</div>
