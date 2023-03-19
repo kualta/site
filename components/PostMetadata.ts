@@ -27,6 +27,10 @@ function getPostMetadata(): PostMetadata[] {
             tags: metadata.data.tags,
             filename: filename,
         } as PostMetadata;
+    }).sort((a, b) => {
+        let first = Date.parse(a.date);
+        let second = Date.parse(b.date);
+        return second - first;
     });
 
     return posts;
