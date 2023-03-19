@@ -1,7 +1,7 @@
 ---
 title: "Fair Play"
 description: "the art of online games balance"
-date: "07/08/23"
+date: "2021-07-08"
 tags: ["game-design"]
 ---
 

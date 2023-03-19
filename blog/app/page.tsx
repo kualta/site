@@ -9,6 +9,7 @@ const HomePage = () => {
     const tags = tagsSet.map((tag, i, arr) => {
         const text = tag.replace('-', ' ').toLowerCase();
         const divider = i != arr.length - 1 ? <span className="select-none px-4">{`•`}</span> : <></>;
+
         return (
             <div key={tag}>
                 <Link href={'/tags/' + tag} className="hover:scale-110">

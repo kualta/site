@@ -23,7 +23,7 @@ const ContactIcons = (props: { contacts: any[] }) => {
         }
 
         return (
-            <div className="hover:scale-125">
+            <div key={contact.link} className="hover:scale-125">
                 <a href={contact.link} key={contact.link}>
                     {icon}
                 </a>

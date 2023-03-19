@@ -10,7 +10,7 @@ export const metadata = {
     },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
     let texts = ['simply writes words', 'writes simple words'];
     let action = texts[Math.floor(Math.random() * texts.length)];
 
