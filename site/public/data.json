@@ -5,7 +5,7 @@
             "description": "a hardcore hypercasual game",
             "link": "https://github.com/kualta/fuji",
             "language": "C#",
-            "date": "SEP 2019",
+            "date": "2020-09-01",
             "status": "Complete",
             "stack": "Unity"
         },
@@ -14,7 +14,7 @@
             "description": "a neat game engine",
             "link": "https://github.com/kualta/core",
             "language": "C++",
-            "date": "JAN 2021",
+            "date": "2021-01-01",
             "status": "Archived",
             "stack": "Core, Magnum, ImGUI"
         },
@@ -23,7 +23,7 @@
             "description": "an experimental typing trainer",
             "link": "https://hemi.kualta.dev/",
             "language": "Rust",
-            "date": "MAR 2022",
+            "date": "2022-03-01",
             "status": "Complete",
             "stack": "WASM, Dioxus"
         },
@@ -32,7 +32,7 @@
             "description": "a simple pomodoro timer",
             "link": "https://pomo.kualta.dev/",
             "language": "Rust",
-            "date": "SEP 2022",
+            "date": "2022-09-01",
             "status": "Complete",
             "stack": "WASM, Dioxus"
         },
@@ -41,14 +41,23 @@
             "description": "a personal site ported to wasm",
             "link": "https://wasm.kualta.dev/",
             "language": "Rust",
-            "date": "SEP 2022",
+            "date": "2022-09-01",
             "status": "Complete",
             "stack": "WASM, Dioxus, Reqwest"
         },
         {
-            "name": "boxd",
+            "name": "main",
+            "description": "a personal infrastructure",
+            "link": "https://github.com/kualta/main",
+            "language": "TypeScript",
+            "date": "2023-01-01",
+            "status": "Complete",
+            "stack": "React, Next.JS, TailwindCSS"
+        },
+        {
+            "name": "boxy",
             "description": "a collection of tools for bevy",
-            "link": "https://github.com/kualta/boxd",
+            "link": "https://github.com/kualta/boxy",
             "language": "Rust",
             "date": "TBD",
             "status": "In Development",

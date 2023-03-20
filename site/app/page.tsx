@@ -1,15 +1,12 @@
 import ContactIcons from '@/components/ContactIcons';
-import LinkList from '@/components/DataList';
+import DataList from '@/components/DataList';
 import { roboto_mono } from '@/components/Fonts';
 import Link from 'next/link';
-import { Article } from './api/articles/route';
-import { Contact } from './api/contacts/route';
-import { Project } from './api/projects/route';
 
 async function HomePage() {
-    const projects = await getData<Project[]>('https://kualta.dev/api/projects');
-    const articles = await getData<Article[]>('https://kualta.dev/api/articles');
-    const contacts = await getData<Contact[]>('https://kualta.dev/api/contacts');
+    const projects = await (await fetch('https://kualta.dev/api/projects', { cache: 'no-store' })).json();
+    const articles = await (await fetch('https://blog.kualta.dev/api/posts', { cache: 'no-store' })).json();
+    const contacts = await (await fetch('https://kualta.dev/api/contacts', { cache: 'no-store' })).json();
 
     return (
         <>
@@ -24,7 +21,7 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">projects</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </Link>
-                <LinkList list={projects} />
+                <DataList list={projects} />
                 <a
                     href="https://blog.kualta.dev/"
                     className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
@@ -32,7 +29,7 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">articles</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </a>
-                <LinkList list={articles} />
+                <DataList list={articles} />
                 <Link
                     href="/contacts"
                     className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
@@ -40,20 +37,10 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">contacts</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </Link>
-                <LinkList list={contacts} />
+                <DataList list={contacts} />
             </div>
         </>
     );
-}
-
-async function getData<T>(url: string): Promise<T> {
-    const response = await fetch(url, { cache: 'no-store' });
-
-    if (!response.ok) {
-        throw new Error(response.statusText);
-    }
-
-    return (await response.json()) as Promise<T>;
 }
 
 export default HomePage;
