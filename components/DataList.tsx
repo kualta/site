@@ -1,3 +1,4 @@
+import { Project } from 'app/api/projects/route';
 import { roboto_mono } from './Fonts';
 
 interface Data {
@@ -6,7 +7,7 @@ interface Data {
     link: string;
 }
 
-const DataList = (props: { list: Data[] }) => {
+export function DataList(props: { list: Data[] }) {
     return (
         <div className="">
             <div className="flex flex-col space-y-2 p-4">
@@ -24,6 +25,35 @@ const DataList = (props: { list: Data[] }) => {
             </div>
         </div>
     );
-};
+}
 
-export default DataList;
+export function ProjectList(props: { list: Project[] }) {
+    return (
+        <div className="">
+            <div className="flex flex-col space-y-2 p-4">
+                {props.list.map((project) => {
+                    let current =
+                        project.status === 'In Development' ? (
+                            <span className="text-xs text-stone-600 px-2">current</span>
+                        ) : (
+                            <></>
+                        );
+                    return (
+                        <a
+                            className="flex group decoration-slate-200 decoration-1 underline-offset-4 w-fit items-center"
+                            href={project.link}
+                            key={project.link}
+                        >
+                            <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
+                            <span className="px-1">{` - `}</span>
+                            <span className={`${roboto_mono.className} group-hover:underline`}>
+                                {project.description}
+                            </span>
+                            {current}
+                        </a>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}

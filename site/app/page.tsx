@@ -1,5 +1,5 @@
 import ContactIcons from '@/components/ContactIcons';
-import DataList from '@/components/DataList';
+import { DataList, ProjectList } from '@/components/DataList';
 import { roboto_mono } from '@/components/Fonts';
 import Link from 'next/link';
 
@@ -21,7 +21,7 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">projects</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </Link>
-                <DataList list={projects} />
+                <ProjectList list={projects} />
                 <a
                     href="https://blog.kualta.dev/"
                     className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
@@ -29,7 +29,7 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">articles</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </a>
-                <DataList list={articles} />
+                <DataList list={[articles[0]]} />
                 <Link
                     href="/contacts"
                     className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}

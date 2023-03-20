@@ -6,7 +6,7 @@
             "link": "https://github.com/kualta/fuji",
             "language": "C#",
             "date": "2020-09-01",
-            "status": "Complete",
+            "status": "complete",
             "stack": "Unity"
         },
         {
@@ -15,7 +15,7 @@
             "link": "https://github.com/kualta/core",
             "language": "C++",
             "date": "2021-01-01",
-            "status": "Archived",
+            "status": "archived",
             "stack": "Core, Magnum, ImGUI"
         },
         {
@@ -24,7 +24,7 @@
             "link": "https://hemi.kualta.dev/",
             "language": "Rust",
             "date": "2022-03-01",
-            "status": "Complete",
+            "status": "complete",
             "stack": "WASM, Dioxus"
         },
         {
@@ -33,7 +33,7 @@
             "link": "https://pomo.kualta.dev/",
             "language": "Rust",
             "date": "2022-09-01",
-            "status": "Complete",
+            "status": "complete",
             "stack": "WASM, Dioxus"
         },
         {
@@ -42,7 +42,7 @@
             "link": "https://wasm.kualta.dev/",
             "language": "Rust",
             "date": "2022-09-01",
-            "status": "Complete",
+            "status": "complete",
             "stack": "WASM, Dioxus, Reqwest"
         },
         {
@@ -51,7 +51,7 @@
             "link": "https://github.com/kualta/main",
             "language": "TypeScript",
             "date": "2023-01-01",
-            "status": "Complete",
+            "status": "development",
             "stack": "React, Next.JS, TailwindCSS"
         },
         {
@@ -60,7 +60,7 @@
             "link": "https://github.com/kualta/boxy",
             "language": "Rust",
             "date": "TBD",
-            "status": "In Development",
+            "status": "paused",
             "stack": "Bevy"
         },
         {
@@ -68,8 +68,8 @@
             "description": "a social network analysis pinboard",
             "link": "https://github.com/kualta/snap",
             "language": "TypeScript",
-            "date": "TBD",
-            "status": "In Development",
+            "date": "2023-04-01",
+            "status": "paused",
             "stack": "React, Next.JS"
         },
         {
@@ -77,26 +77,35 @@
             "description": "a sentence mining tool",
             "link": "https://github.com/kualta/mine",
             "language": "TypeScript",
-            "date": "TBD",
-            "status": "In Development",
+            "date": "2023-03-01",
+            "status": "paused",
             "stack": "React, Next.JS"
         },
         {
             "name": "rand",
             "description": "to be disclosed",
-            "link": "https://kualta.dev/",
+            "link": "https://rand.kualta.dev/",
             "language": "TypeScript",
             "date": "TBD",
-            "status": "In Development",
+            "status": "development",
             "stack": "React, Next.JS"
+        },
+        {
+            "name": "cage",
+            "description": "to be disclosed",
+            "link": "https://cage.kualta.dev/",
+            "language": "",
+            "date": "TBD",
+            "status": "paused",
+            "stack": ""
         },
         {
             "name": "noir",
             "description": "to be disclosed",
-            "link": "https://kualta.dev/",
-            "language": "TypeScript",
+            "link": "https://noir.kualta.dev/",
+            "language": "",
             "date": "TBD",
-            "status": "In Development",
+            "status": "paused",
             "stack": "React, Next.JS"
         }
     ],
