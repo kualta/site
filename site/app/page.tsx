@@ -4,9 +4,10 @@ import { roboto_mono } from '@/components/Fonts';
 import Link from 'next/link';
 
 async function HomePage() {
-    const projects = await (await fetch('https://kualta.dev/api/projects', { cache: 'no-store' })).json();
-    const articles = await (await fetch('https://blog.kualta.dev/api/posts', { cache: 'no-store' })).json();
-    const contacts = await (await fetch('https://kualta.dev/api/contacts', { cache: 'no-store' })).json();
+    let projects = await (await fetch('https://kualta.dev/api/projects', { cache: 'no-store' })).json();
+    let articles = await (await fetch('https://blog.kualta.dev/api/posts', { cache: 'no-store' })).json();
+    let contacts = await (await fetch('https://kualta.dev/api/contacts', { cache: 'no-store' })).json();
+    projects = projects.filter((project: any) => project.date !== 'TBD');
 
     return (
         <>
@@ -21,7 +22,7 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">projects</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </Link>
-                <ProjectList list={projects} />
+                <ProjectList projects={projects} />
                 <a
                     href="https://blog.kualta.dev/"
                     className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
@@ -29,7 +30,7 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">articles</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </a>
-                <ArticleList list={articles} />
+                <ArticleList articles={articles} />
                 <Link
                     href="/contacts"
                     className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}
@@ -37,7 +38,7 @@ async function HomePage() {
                     <span className="text-xl group-hover:underline my-auto">contacts</span>
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </Link>
-                <DataList list={contacts} />
+                <DataList data={contacts} />
             </div>
         </>
     );

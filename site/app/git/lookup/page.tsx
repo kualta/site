@@ -9,6 +9,7 @@ async function GitPage() {
         let updated_at = new Date(repo.updated_at).toLocaleDateString();
         let star_color = repo.stargazers_count > 0 ? 'white' : 'gray';
         let branch_color = repo.forks_count > 0 ? 'white' : 'gray';
+
         return (
             <li key={repo.id} className={roboto_mono.className}>
                 <a href={repo.html_url} title={repo.full_name}>

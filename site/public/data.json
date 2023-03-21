@@ -59,7 +59,7 @@
             "description": "a collection of tools for bevy",
             "link": "https://github.com/kualta/boxy",
             "language": "Rust",
-            "date": "TBD",
+            "date": "2022-12-01",
             "status": "paused",
             "stack": "Bevy"
         },
@@ -94,6 +94,15 @@
             "name": "cage",
             "description": "to be disclosed",
             "link": "https://cage.kualta.dev/",
+            "language": "",
+            "date": "TBD",
+            "status": "paused",
+            "stack": ""
+        },
+        {
+            "name": "arts",
+            "description": "to be disclosed",
+            "link": "https://arts.kualta.dev/",
             "language": "",
             "date": "TBD",
             "status": "paused",
