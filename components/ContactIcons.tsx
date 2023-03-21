@@ -1,24 +1,25 @@
 import { FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
 
-const ContactIcons = (props: { contacts: any[] }) => {
+function ContactIcons(props: { contacts: any[]; size?: number }) {
     let icon = <></>;
-    let iconSize = 22;
+    let size = props.size ? props.size : 22;
+
     let links = props.contacts.map((contact) => {
         switch (contact.name) {
             case 'website':
-                icon = <FiGlobe size={iconSize} />;
+                icon = <FiGlobe size={size} />;
                 break;
             case 'github':
-                icon = <FiGithub size={iconSize} />;
+                icon = <FiGithub size={size} />;
                 break;
             case 'youtube':
-                icon = <FiYoutube size={iconSize} />;
+                icon = <FiYoutube size={size} />;
                 break;
             case 'twitter':
-                icon = <FiTwitter size={iconSize} />;
+                icon = <FiTwitter size={size} />;
                 break;
             case 'email':
-                icon = <FiMail size={iconSize} />;
+                icon = <FiMail size={size} />;
                 break;
         }
 
@@ -31,6 +32,6 @@ const ContactIcons = (props: { contacts: any[] }) => {
         );
     });
     return <>{links}</>;
-};
+}
 
 export default ContactIcons;
