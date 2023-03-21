@@ -1,4 +1,6 @@
+import { Contact } from 'app/api/contacts/route';
 import { Project } from 'app/api/projects/route';
+import Link from 'next/link';
 import { roboto_mono } from './Fonts';
 
 interface Data {
@@ -31,7 +33,7 @@ export function ArticleList(props: { articles: Data[] }) {
     return (
         <div className="">
             <div className="flex flex-col space-y-2 p-4">
-                {props.articles.map((project, i, list) => {
+                {props.articles.map((project, i) => {
                     let latest = i === 0 ? <span className="text-xs text-stone-600 px-2">latest</span> : <></>;
                     let title = project.name.toLocaleLowerCase();
                     return (
@@ -99,6 +101,31 @@ export function ProjectGrid(props: { projects: Project[] }) {
                     </a>
                 );
             })}
+            <div className="flex justify-center items-center">
+                <Link href={'/'}>{`< back`}</Link>
+            </div>
+        </div>
+    );
+}
+
+export function ContactList(props: { contacts: Contact[] }) {
+    return (
+        <div className="flex flex-col m-4 gap-4 p-4 my-10">
+            {props.contacts.map((contact) => {
+                return (
+                    <a
+                        className="flex group border-b p-4 border-stone-800 items-center"
+                        href={contact.link}
+                        key={contact.link}
+                    >
+                        <b className={`${roboto_mono.className} pr-4 w-24`}>{contact.name}</b>
+                        <b className={`${roboto_mono.className} group-hover:underline w-auto`}>{contact.description}</b>
+                    </a>
+                );
+            })}
+            <div className="flex justify-center items-center">
+                <Link href={'/'}>{`< back`}</Link>
+            </div>
         </div>
     );
 }
