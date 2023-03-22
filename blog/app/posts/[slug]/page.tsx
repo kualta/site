@@ -4,7 +4,7 @@ import getPostMetadata from '@/components/PostMetadata';
 import Link from 'next/link';
 import PostPage from './PostPage';
 
-export function generateMetadata({ params, searchParams }: any) {
+export function generateMetadata({ params }: any) {
     const post = getPostContent(params.slug);
     return { title: post.data.title };
 }
@@ -16,14 +16,12 @@ export const generateStaticParams = async () => {
     }));
 };
 
-export default function Page({ params, searchParams }: any) {
+export default function Page({ params }: any) {
     const post = getPostContent(params.slug);
 
     return (
         <>
-            <div className="">
-                <PostPage post={post} />
-            </div>
+            <PostPage post={post} />
             <footer
                 className={`flex flex-col underline-offset-2 border-t dark:border-neutral-800 p-4 mt-8 place-content-between place-items-center w-full ${roboto_mono.className}`}
             >
