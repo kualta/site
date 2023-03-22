@@ -1,8 +1,8 @@
 ---
-title: "Hello world"
-description: "wow a first post"
+title: "blog post"
+description: "a first post"
 date: "2023-03-08"
-tags: ["miscellaneous"]
+tags: ["miscellaneous", "english"]
 ---
 
 # Test: testing tests 

@@ -1,12 +1,11 @@
 ---
-title: "Fair Play"
+title: "fair play"
 description: "the art of online games balance"
 date: "2021-07-08"
-tags: ["game-design"]
+tags: ["game-design", "english"]
 ---
 
-<h2 className="flex justify-center">The art of online games balance </h2>
-<br>
+# The art of online games balance
 
 ## Abstract & Motivation
 
