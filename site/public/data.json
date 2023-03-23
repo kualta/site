@@ -38,10 +38,10 @@
         },
         {
             "name": "wasm",
-            "description": "a website powered to wasm",
+            "description": "a personla website ported to wasm",
             "link": "https://wasm.kualta.dev/",
             "language": "Rust",
-            "date": "2022-09-01",
+            "date": "2023-01-01",
             "status": "complete",
             "stack": "WASM, Dioxus, Reqwest"
         },
@@ -51,6 +51,15 @@
             "link": "https://github.com/kualta/main",
             "language": "TypeScript",
             "date": "2023-01-01",
+            "status": "complete",
+            "stack": "React, Next.JS, TailwindCSS"
+        },
+        {
+            "name": "twot",
+            "description": "an anonymised twitter",
+            "link": "https://twot.kualta.dev",
+            "language": "TypeScript",
+            "date": "2023-03-23",
             "status": "development",
             "stack": "React, Next.JS, TailwindCSS"
         },
