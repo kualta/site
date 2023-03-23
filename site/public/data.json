@@ -37,8 +37,8 @@
             "stack": "WASM, Dioxus"
         },
         {
-            "name": "site",
-            "description": "a personal site ported to wasm",
+            "name": "wasm",
+            "description": "a website powered to wasm",
             "link": "https://wasm.kualta.dev/",
             "language": "Rust",
             "date": "2022-09-01",
