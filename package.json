@@ -2,7 +2,8 @@
   "name": "main",
   "workspaces": [
     "site/",
-    "blog/"
+    "blog/",
+    "vids/"
   ],
   "scripts": {
     "dev": "turbo dev",

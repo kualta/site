@@ -2,4 +2,5 @@
 
 **Projects included:**
 1. [kualta.dev](https://kualta.dev/) 
-1. [blog.kualta.dev](https://blog.kualta.dev/) 
+2. [blog.kualta.dev](https://blog.kualta.dev/) 
+3. [vids.kualta.dev](https://vids.kualta.dev/) 
