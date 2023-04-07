@@ -1,14 +1,14 @@
 import '@/styles/globals.css';
 
 export const metadata = {
-    title: "kualta's kaomojis",
-    description: 'random kaomji generator',
+    title: "kualta\'s kaomjis",
+    description: 'a kaomji generator',
     icons: {
         icon: '/icon.png',
     },
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html className="dark dark:bg-[#111111]">
             <head />
