@@ -38,7 +38,7 @@
         },
         {
             "name": "wasm",
-            "description": "a personla website ported to wasm",
+            "description": "a personal website ported to wasm",
             "link": "https://wasm.kualta.dev/",
             "language": "Rust",
             "date": "2023-01-01",
