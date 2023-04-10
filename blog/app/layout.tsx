@@ -1,4 +1,4 @@
-import { roboto_mono } from '@/components/Fonts';
+import { roboto_mono } from 'components/Fonts';
 import '@/styles/globals.css';
 import Link from 'next/link';
 
@@ -19,7 +19,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link href={'/'} className={roboto_mono.className}>
                 <b className="text-lg">kualta</b> {action}
             </Link>
-            {/* <a href="https://kualta.dev/">{`main >`}</a> */}
         </header>
     );
 

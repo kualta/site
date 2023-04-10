@@ -1,6 +1,6 @@
-import { roboto_mono } from '@/components/Fonts';
-import getPostContent from '@/components/PostContent';
-import getPostMetadata from '@/components/PostMetadata';
+import { roboto_mono } from 'components/Fonts';
+import getPostContent from 'components/PostContent';
+import getPostMetadata from 'components/PostMetadata';
 import Link from 'next/link';
 import PostPage from './PostPage';
 

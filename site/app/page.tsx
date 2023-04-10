@@ -1,6 +1,6 @@
-import ContactIcons from '@/components/ContactIcons';
-import { ArticleList, DataList, ProjectList } from '@/components/DataList';
-import { roboto_mono } from '@/components/Fonts';
+import ContactIcons from 'components/ContactIcons';
+import { ArticleList, DataList, ProjectList } from 'components/DataList';
+import { roboto_mono } from 'components/Fonts';
 import Link from 'next/link';
 
 async function HomePage() {

@@ -1,4 +1,4 @@
-import { roboto_mono } from '@/components/Fonts';
+import { roboto_mono } from 'components/Fonts';
 import Link from 'next/link';
 import { FiFileText, FiGitBranch, FiStar } from 'react-icons/fi';
 

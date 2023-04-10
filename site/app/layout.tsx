@@ -1,5 +1,5 @@
-import { roboto_mono } from '@/components/Fonts';
 import '@/styles/globals.css';
+import { roboto_mono } from 'components/Fonts';
 import Link from 'next/link';
 
 export const metadata = {
