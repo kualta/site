@@ -2,21 +2,33 @@ import { contacts, projects } from '@prisma/client';
 import Link from 'next/link';
 import { roboto_mono } from './Fonts';
 
-export function ContactList(props: { contacts: contacts[] }) {
+export function ProjectList(props: { projects: projects[] }) {
     return (
         <div className="">
             <div className="flex flex-col space-y-2 p-4">
-                {props.contacts.map((project) => (
-                    <a
-                        className="group decoration-slate-200 decoration-1 underline-offset-4 w-fit"
-                        href={project.link}
-                        key={project.link}
-                    >
-                        <b className={`${roboto_mono.className} group-hover:underline`}>{project.platform}</b>
-                        <span className="px-1">{` - `}</span>
-                        <span className={`${roboto_mono.className} group-hover:underline`}>{project.label}</span>
-                    </a>
-                ))}
+                {props.projects.map((project) => {
+                    let link = project.link ? project.link : project.git_link;
+                    let current =
+                        project.status === 'development' ? (
+                            <span className="text-xs text-stone-600 px-2">current</span>
+                        ) : (
+                            <></>
+                        );
+                    return (
+                        <a
+                            className="flex group decoration-slate-200 decoration-1 underline-offset-4 w-fit items-center"
+                            href={link}
+                            key={project.link}
+                        >
+                            <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
+                            <span className="px-1">{` - `}</span>
+                            <span className={`${roboto_mono.className} group-hover:underline`}>
+                                {project.description}
+                            </span>
+                            {current}
+                        </a>
+                    );
+                })}
             </div>
         </div>
     );
@@ -55,37 +67,27 @@ export function ArticleList(props: { articles: Article[] }) {
     );
 }
 
-export function ProjectList(props: { projects: projects[] }) {
+export function ContactList(props: { contacts: contacts[] }) {
     return (
         <div className="">
             <div className="flex flex-col space-y-2 p-4">
-                {props.projects.map((project) => {
-                    let link = project.link ? project.link : project.git_link;
-                    let current =
-                        project.status === 'development' ? (
-                            <span className="text-xs text-stone-600 px-2">current</span>
-                        ) : (
-                            <></>
-                        );
-                    return (
-                        <a
-                            className="flex group decoration-slate-200 decoration-1 underline-offset-4 w-fit items-center"
-                            href={link}
-                            key={project.link}
-                        >
-                            <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
-                            <span className="px-1">{` - `}</span>
-                            <span className={`${roboto_mono.className} group-hover:underline`}>
-                                {project.description}
-                            </span>
-                            {current}
-                        </a>
-                    );
-                })}
+                {props.contacts.map((project) => (
+                    <a
+                        className="group decoration-slate-200 decoration-1 underline-offset-4 w-fit"
+                        href={project.link}
+                        key={project.link}
+                    >
+                        <b className={`${roboto_mono.className} group-hover:underline`}>{project.platform}</b>
+                        <span className="px-1">{` - `}</span>
+                        <span className={`${roboto_mono.className} group-hover:underline`}>{project.label}</span>
+                    </a>
+                ))}
             </div>
         </div>
     );
 }
+
+
 
 export function ProjectGrid(props: { projects: projects[] }) {
     return (
