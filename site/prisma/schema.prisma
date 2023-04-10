@@ -14,10 +14,11 @@ model contacts {
   label       String
   link        String
   description String?
+  is_main     Boolean @default(false)
 }
 
 model projects {
-  id          Int       @id @unique @default(autoincrement())
+  id          Int      @id @unique @default(autoincrement())
   name        String
   description String
   link        String?

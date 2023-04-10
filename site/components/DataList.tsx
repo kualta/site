@@ -2,11 +2,11 @@ import { contacts, projects } from '@prisma/client';
 import Link from 'next/link';
 import { roboto_mono } from './Fonts';
 
-export function DataList(props: { data: contacts[] }) {
+export function ContactList(props: { contacts: contacts[] }) {
     return (
         <div className="">
             <div className="flex flex-col space-y-2 p-4">
-                {props.data.map((project) => (
+                {props.contacts.map((project) => (
                     <a
                         className="group decoration-slate-200 decoration-1 underline-offset-4 w-fit"
                         href={project.link}
@@ -60,7 +60,7 @@ export function ProjectList(props: { projects: projects[] }) {
         <div className="">
             <div className="flex flex-col space-y-2 p-4">
                 {props.projects.map((project) => {
-                    let link = project.link ? project.link : project.git_link
+                    let link = project.link ? project.link : project.git_link;
                     let current =
                         project.status === 'development' ? (
                             <span className="text-xs text-stone-600 px-2">current</span>
@@ -91,7 +91,7 @@ export function ProjectGrid(props: { projects: projects[] }) {
     return (
         <div className="grid grid-cols-3 grid-flow-row m-4 gap-4 p-4 my-10">
             {props.projects.map((project) => {
-                let link = project.link ? project.link : project.git_link
+                let link = project.link ? project.link : project.git_link;
                 return (
                     <a
                         key={project.link}
@@ -109,7 +109,7 @@ export function ProjectGrid(props: { projects: projects[] }) {
     );
 }
 
-export function ContactList(props: { contacts: contacts[] }) {
+export function ContactGrid(props: { contacts: contacts[] }) {
     return (
         <div className="flex flex-col m-4 gap-4 p-4 my-10">
             {props.contacts.map((contact) => {

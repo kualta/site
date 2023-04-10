@@ -1,11 +1,12 @@
+import { contacts } from '@prisma/client';
 import { FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
 
-function ContactIcons(props: { contacts: any[]; size?: number }) {
+function ContactIcons(props: { contacts: contacts[]; size?: number }) {
     let icon = <></>;
     let size = props.size ? props.size : 22;
 
     let links = props.contacts.map((contact) => {
-        switch (contact.name) {
+        switch (contact.platform) {
             case 'website':
                 icon = <FiGlobe size={size} />;
                 break;
