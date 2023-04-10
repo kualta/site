@@ -1,8 +1,13 @@
+import { PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
-import data from 'public/data.json';
-
-export type Contact = typeof data['contacts'][0];
+const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
-    return NextResponse.json(data.contacts)
+    let contacts = await prisma.contacts.findMany({
+        orderBy: {
+            platform: "asc"
+        }
+    })
+
+    return NextResponse.json(contacts)
 }

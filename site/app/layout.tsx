@@ -19,7 +19,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href={'/'} className={roboto_mono.className}>
                 <b className="text-lg">kualta</b> {action}
             </Link>
-            {/* <a href="https://blog.kualta.dev/">{`blog >`}</a> */}
         </header>
     );
 
