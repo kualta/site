@@ -1,15 +1,20 @@
-import { contacts, projects } from '@prisma/client';
+import { Contact, Project } from '@prisma/client';
 import ContactIcons from 'components/ContactIcons';
 import { ArticleList, ContactList, ProjectList } from 'components/DataList';
 import { roboto_mono } from 'components/Fonts';
 import Link from 'next/link';
 
 async function HomePage() {
-    let projects = await (await fetch('https://kualta.dev/api/projects', { cache: 'no-store' })).json();
+    let projects = await (
+        await fetch('https://kualta.dev/api/projects', { cache: 'no-store' })
+    )
+        .json()
+        .then((projects) => projects.filter((project: Project) => project.status !== 'planned'))
+        .then((projects) => projects.slice(0, 11));
+    let contacts = await (await fetch('https://kualta.dev/api/contacts', { cache: 'no-store' }))
+        .json()
+        .then((contacts) => contacts.filter((contact: Contact) => contact.is_main));
     let articles = await (await fetch('https://blog.kualta.dev/api/posts', { cache: 'no-store' })).json();
-    let contacts = await (await fetch('https://kualta.dev/api/contacts', { cache: 'no-store' })).json();
-    projects = projects.filter((project: projects) => project.status !== 'planned').slice(0, 11);
-    contacts = contacts.filter((contact: contacts) => contact.is_main);
 
     return (
         <>

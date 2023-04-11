@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
-    let contacts = await prisma.contacts.findMany({
+    let contacts = await prisma.contact.findMany({
         orderBy: {
             platform: "asc"
         }

@@ -1,7 +1,7 @@
-import { contacts } from '@prisma/client';
+import { Contact } from '@prisma/client';
 import { FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from 'react-icons/fi';
 
-function ContactIcons(props: { contacts: contacts[]; size?: number }) {
+function ContactIcons(props: { contacts: Contact[]; size?: number }) {
     let icon = <></>;
     let size = props.size ? props.size : 22;
 

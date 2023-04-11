@@ -1,5 +1,5 @@
 generator client {
-  provider   = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -7,16 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model contacts {
+model Contact {
   id          Int     @id @default(autoincrement())
   platform    String
   label       String
   link        String
   description String?
   is_main     Boolean @default(false)
+
+  @@map("contacts")
 }
 
-model projects {
+model Project {
   id          Int      @id @unique @default(autoincrement())
   name        String
   description String
@@ -27,4 +29,6 @@ model projects {
   status      String
   tech_stack  String[]
   full_name   String?
+
+  @@map("projects")
 }
