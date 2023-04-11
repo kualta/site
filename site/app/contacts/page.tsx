@@ -1,13 +1,14 @@
 import { ContactIcon } from '@/components/ContactIcons';
 import { roboto_mono } from '@/components/Fonts';
 import { Contact } from '@prisma/client';
-import Link from 'next/link';
 
 async function ContactsPage() {
     let contacts: Contact[] = await (await fetch('https://kualta.dev/api/contacts', { cache: 'no-store' })).json();
 
     return (
-        <div className={`${roboto_mono.className} flex justify-center items-center flex-col m-4 gap-4 p-4 my-10`}>
+        <div
+            className={`${roboto_mono.className} flex justify-center items-center flex-col gap-4 py-4 m-auto`}
+        >
             {contacts.map((contact: Contact) => {
                 let icon = ContactIcon(contact, 22);
                 return (
@@ -16,18 +17,21 @@ async function ContactsPage() {
                         href={contact.link}
                         key={contact.link}
                     >
+                        <div className="text-right w-16">
+                            <b className="text-right">{contact.platform}</b>
+                        </div>
                         {icon}
-                        <p className="w-24 text-right">{contact.platform}</p>
-                        {` - `}
-                        <b className="group-hover:underline w-auto">{contact.label}</b>
-                        <p className="grow text-xs text-stone-400">{contact.description}</p>
+                        <div className="group-hover:underline">
+                            <p className="">{contact.label}</p>
+                            <p className="overflow-x-visible w-fit text-xs text-stone-400">{contact.description}</p>
+                        </div>
                     </a>
                 );
             })}
 
-            <div className="flex justify-center items-center">
+            {/* <div className="flex justify-center items-center mr-16">
                 <Link href={'/'}>{`< back`}</Link>
-            </div>
+            </div> */}
         </div>
     );
 }

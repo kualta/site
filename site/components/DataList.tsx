@@ -1,11 +1,10 @@
-import { Project, Contact } from '@prisma/client';
-import Link from 'next/link';
+import { Contact, Project } from '@prisma/client';
 import { roboto_mono } from './Fonts';
 
 export function ProjectList(props: { projects: Project[] }) {
     return (
         <div className="">
-            <div className="flex flex-col space-y-2 p-4">
+            <div className="flex flex-col space-y-2 p-4 pb-2">
                 {props.projects.map((project) => {
                     let link = project.link ? project.link : project.git_link;
                     let current =
@@ -21,8 +20,8 @@ export function ProjectList(props: { projects: Project[] }) {
                             key={project.link}
                         >
                             <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
-                            <span className="px-1">{` - `}</span>
-                            <span className={`${roboto_mono.className} group-hover:underline`}>
+                            <span className="px-1 font-light">{` - `}</span>
+                            <span className={`${roboto_mono.className} group-hover:underline font-light`}>
                                 {project.description}
                             </span>
                             {current}
@@ -54,8 +53,8 @@ export function ArticleList(props: { articles: Article[] }) {
                             key={project.link}
                         >
                             <b className={`${roboto_mono.className} group-hover:underline`}>{title}</b>
-                            <span className="px-1">{` - `}</span>
-                            <span className={`${roboto_mono.className} group-hover:underline`}>
+                            <span className="px-1 font-light">{` - `}</span>
+                            <span className={`${roboto_mono.className} group-hover:underline font-light`}>
                                 {project.description}
                             </span>
                             {latest}
@@ -78,8 +77,10 @@ export function ContactList(props: { contacts: Contact[] }) {
                         key={project.link}
                     >
                         <b className={`${roboto_mono.className} group-hover:underline`}>{project.platform}</b>
-                        <span className="px-1">{` - `}</span>
-                        <span className={`${roboto_mono.className} group-hover:underline`}>{project.label}</span>
+                        <span className="px-1 font-light">{` - `}</span>
+                        <span className={`${roboto_mono.className} font-light group-hover:underline`}>
+                            {project.label}
+                        </span>
                     </a>
                 ))}
             </div>
