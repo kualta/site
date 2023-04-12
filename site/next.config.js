@@ -3,10 +3,21 @@ const nextConfig = {
     experimental: {
         appDir: true,
     },
-
-    redirects: [
-        { source: '/blog', destination: 'https://blog.kualta.dev' },
-        { source: 'vids.kualta.dev', destination: '/vids' },
+    rewrites: [
+        {
+            source: '/:path*',
+            has: [
+                {
+                    type: 'host',
+                    value: 'vids.kualta.dev',
+                },
+            ],
+            destination: '/vids/:path*',
+        },
+        {
+            source: '/blog*',
+            destination: 'https://blog.kualta.dev'
+        }
     ],
 };
 
