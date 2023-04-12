@@ -1,6 +1,6 @@
-import '@/styles/globals.css';
 import { roboto_mono } from 'components/Fonts';
 import Link from 'next/link';
+import 'styles/globals.css';
 
 export const metadata = {
     title: 'kualta',
