@@ -4,6 +4,8 @@ import { ArticleList, ContactList, ProjectList } from 'components/DataList';
 import { roboto_mono } from 'components/Fonts';
 import Link from 'next/link';
 
+export const revalidate = 5;
+
 async function HomePage() {
     let projects = await (
         await fetch('https://kualta.dev/api/projects', { cache: 'no-store' })

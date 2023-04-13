@@ -33,7 +33,7 @@ export function ProjectList(props: { projects: Project[] }) {
     );
 }
 
-interface Article {
+export interface Article {
     name: string;
     link: string;
     description: string;

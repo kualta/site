@@ -13,6 +13,15 @@ export function middleware(request: NextRequest) {
     if (hostname.startsWith('arts')) {
         return NextResponse.redirect('https://kualta.dev/arts')
     }
+    if (hostname.startsWith('noir')) {
+        return NextResponse.redirect('https://kualta.dev/noir')
+    }
+    if (hostname.startsWith('noir')) {
+        return NextResponse.redirect('https://kualta.dev/noir')
+    }
+    if (hostname.startsWith('bbdd')) {
+        return NextResponse.redirect('https://kualta.dev/blackbox')
+    }
 
     // ---------------------------------------------------------------
     // kualta.dev/xyz

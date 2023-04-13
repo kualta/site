@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const revalidate = 5;
+
 export async function GET(request: Request) {
   let phrases = [
     'hi',
