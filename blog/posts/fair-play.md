@@ -9,7 +9,7 @@ tags: ["game-design", "english"]
 
 ## Abstract & Motivation
 
-Throughout human history thousands of multiplayer games were designed and played for centuries. One of the most important conditions of an experience being an actual game is presence of rules, which put players into defined game space and balances out their experience. Depending on the rule set players might be put into different initial conditions, yet one thing remains the same: games must always be fair.
+Throughout human history thousands of multiplayer games were designed and played for centuries. One of the most important conditions of an experience being an actual game is presence of rules, which put players into defined game space and balances out their experience. Depending on the rule set players might be put into different initial conditions, yet one thing remains the same: games must always be fair. 
 
 This paper will try to split existing multiplayer experiences into categories based on their rule sets and explain how these categories might be balanced by the game designer.
 

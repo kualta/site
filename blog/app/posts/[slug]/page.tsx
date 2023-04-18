@@ -1,8 +1,8 @@
-import { roboto_mono } from 'components/Fonts';
 import getPostContent from 'components/PostContent';
 import getPostMetadata from 'components/PostMetadata';
-import Link from 'next/link';
-import PostPage from './PostPage';
+import Footer from 'components/Footer';
+import { GrayMatterFile } from 'gray-matter';
+import Markdown from 'markdown-to-jsx';
 
 export function generateMetadata({ params }: any) {
     const post = getPostContent(params.slug);
@@ -22,20 +22,15 @@ export default function Page({ params }: any) {
     return (
         <>
             <PostPage post={post} />
-            <footer
-                className={`flex flex-col underline-offset-2 border-t dark:border-neutral-800 p-4 mt-8 place-content-between place-items-center w-full ${roboto_mono.className}`}
-            >
-                <div className="flex flex-row place-content-between w-full place-items-center text-sm ">
-                    <Link className="no-underline hover:underline" href="/">{`< home`}</Link>
-                    <div className="flex flex-row gap-4">
-                        <a
-                            href={'mailto:contact@kualta.dev'}
-                            className="no-underline hover:underline"
-                        >{`questions, thoughts, feelings to share?`}</a>
-                    </div>
-                    <a className="no-underline hover:underline" href="https://kualta.dev/">{`main >`}</a>
-                </div>
-            </footer>
+            <Footer />
         </>
+    );
+}
+
+function PostPage({ post }: { post: GrayMatterFile<string> }) {
+    return (
+        <article className="py-8 prose dark:prose-invert prose-img:rounded-xl ">
+            <Markdown>{post.content}</Markdown>
+        </article>
     );
 }

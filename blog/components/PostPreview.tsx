@@ -8,7 +8,7 @@ const PostPreview = (props: PostMetadata) => {
             <Link href={`/posts/${props.filename}`} className="flex flex-row items-center space-x-4">
                 <p className={`font-bold ${roboto_mono.className}`}>{props.title}</p>
                 <p className={`flex-grow `}>{props.description}</p>
-                <p className="text-sm w-16">{props.date}</p>
+                <p className="text-sm w-20">{props.date}</p>
             </Link>
         </div>
     );
