@@ -23,9 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     );
 
     return (
-        <html className={`dark dark:bg-[#111111]`}>
+        <html className="dark">
             <head />
-            <body className="mx-auto flex flex-col min-h-screen max-w-2xl dark:text-stone-200 px-4">
+            <body className="dark:bg-[#111111] mx-auto flex flex-col min-h-screen max-w-2xl dark:text-stone-200 px-4">
                 {header}
                 {children}
             </body>
