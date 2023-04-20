@@ -16,17 +16,17 @@ export function middleware(request: NextRequest) {
     if (hostname.startsWith('noir')) {
         return NextResponse.redirect('https://kualta.dev/noir')
     }
-    if (hostname.startsWith('noir')) {
-        return NextResponse.redirect('https://kualta.dev/noir')
+    if (hostname.startsWith('git')) {
+        return NextResponse.redirect('https://kualta.dev/git')
     }
     if (hostname.startsWith('bbdd')) {
         return NextResponse.redirect('https://kualta.dev/blackbox')
     }
 
-    // ---------------------------------------------------------------
     // kualta.dev/xyz
     if (pathname.startsWith('/blog')) {
         url.hostname = 'blog.kualta.dev'
+        url.pathname = ''
         return NextResponse.redirect(url)
     }
     if (pathname.startsWith("/_next")) return NextResponse.next();
