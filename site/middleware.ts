@@ -22,6 +22,9 @@ export function middleware(request: NextRequest) {
     if (hostname.startsWith('bbdd')) {
         return NextResponse.redirect('https://kualta.dev/blackbox')
     }
+    if (hostname.startsWith('moji')) {
+        return NextResponse.redirect('https://kualta.dev/kaomoji')
+    }
 
     // kualta.dev/xyz
     if (pathname.startsWith('/blog')) {
