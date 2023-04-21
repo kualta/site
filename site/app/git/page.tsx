@@ -35,10 +35,12 @@ async function GitPage() {
     return (
         <div className="prose prose-invert">
             <div className={`p-4 flex flex-wrap flex-row place-content-evenly align-middle ${roboto_mono.className}`}>
-                <h2 className="">Public GitHub repos for user: {username}</h2>
-                <h3>
+                <h2 className="font-light">
+                    github repos for user: <b>{username}</b>
+                </h2>
+                {/* <h3>
                     <Link href={'/git/lookup'}>{`Lookup >`}</Link>
-                </h3>
+                </h3> */}
             </div>
             <ol>{repoList}</ol>
         </div>

@@ -1,1 +1,0 @@
-<h3 align="center"> ><a href="https://blog.kualta.dev/"> blog.kualta.dev </a>< </h3>
