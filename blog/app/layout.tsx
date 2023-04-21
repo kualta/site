@@ -4,7 +4,7 @@ import 'styles/globals.css';
 
 export const metadata = {
     title: "kualta's blog",
-    description: "kualta's official blog",
+    description: "kualta's blog",
     icons: {
         icon: '/icon.png',
     },

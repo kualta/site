@@ -8,6 +8,7 @@ export interface PostMetadata {
     date: string;
     tags: string[];
     filename: string;
+    preview: string;
 }
 
 function getPostMetadata(): PostMetadata[] {
@@ -25,6 +26,7 @@ function getPostMetadata(): PostMetadata[] {
             description: metadata.data.description,
             date: metadata.data.date,
             tags: metadata.data.tags,
+            preview: metadata.data.preview,
             filename: filename,
         } as PostMetadata;
     }).sort((a, b) => {

@@ -3,9 +3,12 @@ title: "fair play"
 description: "the art of online games balance"
 date: "2021-07-08"
 tags: ["game-design", "english"]
+preview: "/images/fair-play-preview.png"
 ---
 
 # The art of online games balance
+
+![/images/fair-play-preview.png](/images/fair-play-preview.png)
 
 ## Abstract & Motivation
 

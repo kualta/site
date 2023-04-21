@@ -32,9 +32,11 @@ async function HomePage() {
                     <span className="hidden group-hover:block text-base px-2 align-baseline">{'>'}</span>
                 </Link>
                 <ProjectList projects={projects} />
-                <a className="hover:underline font-bold grow p-4" href="/projects">
-                    {`more . . . `}
-                </a>
+                <div className="mb-4">
+                    <a className="hover:underline font-bold p-4" href="/projects">
+                        {`more . . . `}
+                    </a>
+                </div>
                 <a
                     href="https://blog.kualta.dev/"
                     className={`flex items-center underline-offset-4 align-text-top font-semibold text-xl pt-8 group`}

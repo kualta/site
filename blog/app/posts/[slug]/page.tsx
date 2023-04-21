@@ -3,6 +3,7 @@ import getPostMetadata from 'components/PostMetadata';
 import Footer from 'components/Footer';
 import { GrayMatterFile } from 'gray-matter';
 import Markdown from 'markdown-to-jsx';
+import Image from 'next/image';
 
 export function generateMetadata({ params }: any) {
     const post = getPostContent(params.slug);
@@ -29,8 +30,10 @@ export default function Page({ params }: any) {
 
 function PostPage({ post }: { post: GrayMatterFile<string> }) {
     return (
-        <article className="py-8 prose dark:prose-invert prose-img:rounded-xl ">
+        <>
+        <article className="py-8 prose dark:prose-invert prose-img:rounded-2xl ">
             <Markdown>{post.content}</Markdown>
         </article>
+        </>
     );
 }
