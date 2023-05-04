@@ -10,18 +10,18 @@ preview: "/images/fair-play-preview.png"
 
 ![/images/fair-play-preview.png](/images/fair-play-preview.png)
 
-## Abstract & Motivation
+![/images/fair-play-preview.png](/images/fair-play-preview.png)
 
-Throughout human history thousands of multiplayer games were designed and played for centuries. One of the most important conditions of an experience being an actual game is presence of rules, which put players into defined game space and balances out their experience. Depending on the rule set players might be put into different initial conditions, yet one thing remains the same: games must always be fair. 
+## Abstract
+Multiplayer games have been a popular form of entertainment for centuries, with thousands of games designed and played throughout human history. One essential aspect of any game is the presence of rules, which define the game space and balance players' experiences. While players may start with different initial conditions, fairness is a fundamental requirement of any game.
 
-This paper will try to split existing multiplayer experiences into categories based on their rule sets and explain how these categories might be balanced by the game designer.
+In this paper we'll try to categorize existing multiplayer experiences based on their rule sets and explain how games in these categories might be balanced by the game designer.
 
-Motivation for creating this research paper was my desire to find out if it's possible to create fair experience for the players with completely different initial conditions. This paper will try to answer this question and find a solution based on the conclusion.
+In particular, this paper seeks to address the question of whether it is possible to create a fair gaming experience for players with vastly different initial conditions.
 
-This paper will not touch upon balancing the game mechanics themselves.
+This paper will not focus on balancing game mechanics, but rather on balancing the rule sets that define the game space.
 
 ## Introduction
-
 Before you start admiring this paper's groundbreaking ideas, some familiarization with terms used in it is required. They have been greatly described by a video game designer Jesse Schell in his work "The Art of Game Design: A Book of Lenses", so here's a few quotes from it:
 
 - [Chapter 13, p.203] Symmetrical Games
