@@ -10,19 +10,14 @@ preview: "/images/fair-play-preview.png"
 
 ![/images/fair-play-preview.png](/images/fair-play-preview.png)
 
-![/images/fair-play-preview.png](/images/fair-play-preview.png)
-
 ## Abstract
 Multiplayer games have been a popular form of entertainment for centuries, with thousands of games designed and played throughout human history. One essential aspect of any game is the presence of rules, which define the game space and balance players' experiences. While players may start with different initial conditions, fairness is a fundamental requirement of any game.
 
-In this paper we'll try to categorize existing multiplayer experiences based on their rule sets and explain how games in these categories might be balanced by the game designer.
+In this article we'll try to categorize existing multiplayer experiences based on their rule sets and explain how games in these categories might be balanced by the game designer.
 
-In particular, this paper seeks to address the question of whether it is possible to create a fair gaming experience for players with vastly different initial conditions.
+In particular, this article seeks to address the question of whether it is possible to create a fair gaming experience for players with vastly different initial conditions.
 
-This paper will not focus on balancing game mechanics, but rather on balancing the rule sets that define the game space.
-
-## Introduction
-Before you start admiring this paper's groundbreaking ideas, some familiarization with terms used in it is required. They have been greatly described by a video game designer Jesse Schell in his work "The Art of Game Design: A Book of Lenses", so here's a few quotes from it:
+This article will not focus on balancing game mechanics, but rather on balancing the rule sets that define the game space.
 
 - [Chapter 13, p.203] Symmetrical Games
     > One quality that players universally seek in games is fairness. Players want to feel that the forces working against them do not have an advantage that will make them impossible to defeat. One of the simplest ways to ensure this is to make your game symmetrical, that is, to give equal resources and powers to all players. Most traditional board games (such as checkers, chess, and Monopoly) and almost all sports use this method to be sure that no player has an unfair advantage over another. If you want to put players in direct competition with each other and you expect them to have roughly equal levels of skill, symmetrical games are a great choice. They are particularly good systems for determining which player is the best, since all things in the game are equal but for the skill and strategy that the individual players bring to the game.
@@ -47,10 +42,9 @@ Before you start admiring this paper's groundbreaking ideas, some familiarizatio
 
 ## Main part
 
-Now that we are on the same page we could try to split all existing experiences into two genres, or, more strictly speaking, _types of play_ these games provide.
+We could try to split all existing experiences into two genres, or, more strictly speaking, _types of play_ these games provide.
 
 ### **Fair Play**
-
 Fair play is a _symmetric_ at the start type of multiplayer game where powers and abilities are the same for each and every player and fairness of the game is close to absolute. The main deciding factor of these games is players _real skills_, such as reaction time, reflexes, strategical thinking etc.Therefore you'll often find PvP games use this type.
  Examples of such games are: Counter Strike series, Quake series and Chess. Fair play games usually require very little balancing, since players have the same initial conditions.
 
@@ -104,6 +98,6 @@ This simple chart describes the concept of _mad-fair play_ entirely, which shows
 
 For example let's take the Reaper's teleport ability from Overwatch. The way it works is extremely simple, you pick the ability by pressing E, and then pick a place to teleport to with your mouse. Then your character enters a preparation posture and teleports to the destination with a pretty loud sound, giving your opponents know where they might expect you from (an example of an actual mechanic balance in a fair play game). The way we could make this mechanic more interesting and unique for better players is to, for example, give the player a chance to complete a sequence of quick time events (QTE). Each would be harder to get than the previous one. The first success could remove paralyzing stance at the beginning of the ability. The second one could make the teleportation process faster. The third one could remove the loud teleportation sounds, therefore giving you a fair advantage in the game. 
 
-![/images/reaper.png](/images/reaper.png)
+![/images/reaper-tp.png](/images/reaper-tp.png)
 
 I hope this quick example of using the concept of _unique challenges_ helped you get the idea better. But don't hung up on QTE only! The best thing about mad-fair play is that the sky is the limit for different challenges you might put player through, and that's where game designer could become a real artist.

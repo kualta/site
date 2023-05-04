@@ -8,7 +8,7 @@ export function ProjectList(props: { projects: Project[] }) {
                 {props.projects.map((project) => {
                     let link = project.link ? project.link : project.git_link;
                     let current =
-                        project.status === 'development' ? (
+                        project.status === 'ongoing' ? (
                             <span className="text-xs text-stone-600 px-2">current</span>
                         ) : (
                             <></>
