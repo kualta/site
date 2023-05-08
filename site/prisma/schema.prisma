@@ -29,6 +29,7 @@ model Project {
   status      String
   tech_stack  String[]
   full_name   String?
+  relevance   Int?
 
   @@map("projects")
 }

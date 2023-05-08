@@ -11,9 +11,7 @@ async function HomePage() {
         await fetch('https://kualta.dev/api/projects', { cache: 'no-store' })
     )
         .json()
-        .then((projects) =>
-            projects.filter((project: Project) => project.status !== 'archived' && project.status !== 'planned')
-        )
+        .then((projects) => projects.filter((project: Project) => project.status !== 'planned'))
         .then((projects) => projects.slice(0, 11));
     let contacts = await (await fetch('https://kualta.dev/api/contacts', { cache: 'no-store' }))
         .json()

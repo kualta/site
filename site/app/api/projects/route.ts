@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 export async function GET(request: Request) {
     let projects = await prisma.project.findMany({
         orderBy: {
-            date: 'desc'
+            relevance: 'desc'
         }
     })
 
