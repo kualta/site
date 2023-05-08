@@ -48,7 +48,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
                         value="planned"
                         checked={selectedStatuses.includes('planned')}
                         onChange={handleStatusChange}
-                        className="mr-2 accent-indigo-950"
+                        className="mr-2 accent-gray-900"
                     />
                     Planned
                 </label>
@@ -58,7 +58,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
                         value="ongoing"
                         checked={selectedStatuses.includes('ongoing')}
                         onChange={handleStatusChange}
-                        className="mr-2 accent-teal-900"
+                        className="mr-2 accent-stone-800"
                     />
                     Ongoing
                 </label>
@@ -68,7 +68,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
                         value="complete"
                         checked={selectedStatuses.includes('complete')}
                         onChange={handleStatusChange}
-                        className="mr-2 accent-teal-900"
+                        className="mr-2 accent-stone-800"
                     />
                     Completed
                 </label>
@@ -88,7 +88,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
                         value="archived"
                         checked={selectedStatuses.includes('archived')}
                         onChange={handleStatusChange}
-                        className="mr-2 accent-rose-950"
+                        className="mr-2 accent-yellow-900"
                     />
                     Archived
                 </label>
@@ -106,13 +106,13 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
 function getBorderStyleForStatus(status: string) {
     switch (status) {
         case 'ongoing':
-            return 'border-teal-900';
+            return 'border-stone-800';
         case 'complete':
-            return 'border-teal-900';
+            return 'border-stone-800';
         case 'planned':
-            return 'border-indigo-950';
+            return 'border-gray-900';
         case 'archived':
-            return 'border-rose-950';
+            return 'border-yellow-900';
         case 'paused':
             return 'border-stone-800';
         default:
