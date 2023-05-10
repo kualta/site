@@ -1,6 +1,6 @@
 ---
 title: "fair play"
-description: "the art of online games balance"
+description: "Eliminating multiplayer asymmetry"
 date: "2021-07-08"
 tags: ["game-design", "english"]
 preview: "/images/fair-play-preview.png"
