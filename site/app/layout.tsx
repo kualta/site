@@ -19,7 +19,7 @@ export default function RootLayout({
 
 			<body className="dark:bg-[#1d1d1d] bg-[#fafafa] text-[#1d1d1d] mx-auto flex flex-col min-h-screen max-w-2xl dark:text-[#fafafa] px-4">
 				<header className={"flex items-center justify-center py-4"}>
-					<Link href={"/"} className="hover:scale-110 text-6xl select-none">
+					<Link href={"/"} className="text-6xl select-none">
 						<div className="active:scale-90">==</div>
 					</Link>
 				</header>
