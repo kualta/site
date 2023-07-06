@@ -1,24 +1,25 @@
 import { ListTitle } from "@/components/LIstTitle";
 import { Contact, Project } from "@prisma/client";
 import { ArticleList, ContactList, ProjectList } from "components/DataList";
+import { getAllPosts } from "./api/blog/posts/route";
+import { getAllContacts } from "./api/contacts/route";
+import { getAllProjects } from "./api/projects/route";
 
 async function HomePage() {
 	const projects = await (
-		await fetch("https://kualta.dev/api/projects", { cache: "no-store" })
+		await getAllProjects()
 	)
 		.json()
 		.then((projects) =>
 			projects.filter((project: Project) => project.status !== "planned"),
 		);
 	const contacts = await (
-		await fetch("https://kualta.dev/api/contacts", { cache: "no-store" })
+		await getAllContacts()
 	)
 		.json()
 		.then((contacts) => contacts.filter((contact: Contact) => contact.is_main));
 
-	const articles = await (
-		await fetch("https://blog.kualta.dev/api/posts", { cache: "no-store" })
-	).json();
+	const articles = await (await getAllPosts()).json();
 
 	return (
 		<div className="font-mono">
