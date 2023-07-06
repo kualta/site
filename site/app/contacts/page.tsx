@@ -17,7 +17,7 @@ async function ContactsPage() {
 					<a
 						className="flex gap-4 group border-b p-4 border-stone-800 w-full items-center"
 						href={contact.link}
-						key={contact.link+contact.description}
+						key={contact.link + contact.description}
 					>
 						<div className="text-right w-16">
 							<b className="text-right">{contact.platform}</b>

@@ -6,11 +6,11 @@ export const revalidate = 5;
 const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
-    let projects = await prisma.project.findMany({
-        orderBy: {
-            relevance: 'desc'
-        }
-    })
+	const projects = await prisma.project.findMany({
+		orderBy: {
+			relevance: "desc",
+		},
+	});
 
-    return NextResponse.json(projects)
+	return NextResponse.json(projects);
 }

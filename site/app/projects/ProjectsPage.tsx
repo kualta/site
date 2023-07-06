@@ -13,7 +13,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
 		"archived",
 	]);
 
-	function handleStatusChange(e: any) {
+	function handleStatusChange(e: { target: { value: any } }) {
 		const value = e.target.value;
 		setSelectedStatuses((prevSelectedStatuses) => {
 			if (prevSelectedStatuses.includes(value)) {

@@ -7,8 +7,7 @@ async function GitPage() {
 		await fetch("https://api.github.com/users/kualta/repos")
 	).json();
 
-
-    const repoList = repos.map((repo: any) => {
+const  repoList = repos.map((repo: any) => {
 		const created_at = new Date(repo.created_at).toLocaleDateString();
 		const updated_at = new Date(repo.updated_at).toLocaleDateString();
 		const star_color = repo.stargazers_count > 0 ? "white" : "gray";
