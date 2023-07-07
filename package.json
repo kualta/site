@@ -1,7 +1,7 @@
 {
   "name": "site",
   "description": "https://kualta.dev/",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "author": "kualta <contact@kualta.dev>",
   "private": true,
   "scripts": {
