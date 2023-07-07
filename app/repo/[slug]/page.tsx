@@ -1,9 +1,16 @@
 import { roboto_mono } from "components/Fonts";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { FiFileText, FiGitBranch, FiStar } from "react-icons/fi";
 
-async function GitPage() {
-  const repos = await (await fetch("https://api.github.com/users/kualta/repos")).json();
+export const generateServerSideParams = async ({ params }: any) => {
+  return { slug: params.slug };
+};
+
+async function page({ params }: any) {
+  const username = params.slug;
+  const repos = await (await fetch(`https://api.github.com/users/${username}/repos`)).json();
 
   const repoList = repos.map((repo: any) => {
     const created_at = new Date(repo.created_at).toLocaleDateString();
@@ -33,20 +40,17 @@ async function GitPage() {
     );
   });
 
-  const username = "kualta";
   return (
     <div className="prose prose-invert">
       <div className={`p-4 flex flex-wrap flex-row place-content-evenly align-middle ${roboto_mono.className}`}>
         <h2 className="font-light">
-          github repos for user: <b>{username}</b>
+          github repos for user: 
+          <b className="pl-4">{username}</b>
         </h2>
-        {/* <h3>
-                    <Link href={'/git/lookup'}>{`Lookup >`}</Link>
-                </h3> */}
       </div>
       <ol>{repoList}</ol>
     </div>
   );
 }
 
-export default GitPage;
+export default page;
