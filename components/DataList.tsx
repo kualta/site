@@ -1,5 +1,4 @@
 import { Contact, Project } from "@prisma/client";
-import { roboto_mono } from "./Fonts";
 
 export function ProjectList(props: { projects: Project[] }) {
   return (
@@ -12,9 +11,9 @@ export function ProjectList(props: { projects: Project[] }) {
             href={link}
             key={project.link + project.name + project.date}
           >
-            <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
+            <b className={"group-hover:underline"}>{project.name}</b>
             <span className="px-1 font-light">{" - "}</span>
-            <span className={`${roboto_mono.className} group-hover:underline font-light`}>{project.description}</span>
+            <span className={" group-hover:underline font-light truncate"}>{project.description}</span>
             {project.status === "ongoing" && <span className="text-xs text-stone-500 px-2">current</span>}
           </a>
         );
@@ -40,10 +39,10 @@ export function ArticleList(props: { articles: Article[] }) {
             href={article.link}
             key={article.link + article.name + article.description}
           >
-            <b className={`${roboto_mono.className} group-hover:underline`}>{title}</b>
+            <b className={"group-hover:underline w-fit"}>{title}</b>
             <span className="px-1 font-light">{" - "}</span>
-            <span className={`${roboto_mono.className} group-hover:underline font-light`}>{article.description}</span>
-            {i === 0 && <span className="text-xs text-stone-600 px-2">latest</span>}
+            <span className={"group-hover:underline font-light truncate"}>{article.description}</span>
+            {i === 0 && <span className="text-xs text-stone-500 px-2">latest</span>}
           </a>
         );
       })}
@@ -60,9 +59,9 @@ export function ContactList(props: { contacts: Contact[] }) {
           href={contact.link}
           key={contact.link + contact.id + contact.platform}
         >
-          <b className={`${roboto_mono.className} group-hover:underline`}>{contact.platform}</b>
+          <b className={"group-hover:underline"}>{contact.platform}</b>
           <span className="px-1 font-light">{" - "}</span>
-          <span className={`${roboto_mono.className} font-light group-hover:underline`}>{contact.label}</span>
+          <span className={"font-ultralight group-hover:underline truncate"}>{contact.label}</span>
         </a>
       ))}
     </div>
