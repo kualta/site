@@ -2,7 +2,7 @@ import { kaomoji } from "public/kaomoji";
 
 export const metadata = {
   title: "kaomoji",
-  description: "a kaomji generator",
+  description: "the most complete kaomoji library in the world",
 };
 
 export default function page() {
