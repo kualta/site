@@ -1,3 +1,5 @@
+"use client";
+
 import { kaomoji } from "public/kaomoji";
 
 export const metadata = {
