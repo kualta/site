@@ -3,10 +3,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FiFileText, FiGitBranch, FiStar } from "react-icons/fi";
 
-export const generateServerSideParams = async ({ params }: any) => {
-  return { slug: params.slug };
-};
-
 async function page({ params }: any) {
   const username = params.slug;
   const repos = await (await fetch(`https://api.github.com/users/${username}/repos`)).json();
@@ -43,7 +39,7 @@ async function page({ params }: any) {
     <div className="prose prose-invert">
       <div className={"p-4 flex flex-wrap flex-row place-content-evenly align-middle"}>
         <h2 className="font-light">
-          github repos for user: 
+          github repos for user:
           <b className="pl-4">{username}</b>
         </h2>
       </div>
