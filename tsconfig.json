@@ -35,6 +35,6 @@
     "../**.tsx",
     "../**.ts",
     "app/kaomoji/KumojisPage.jsx"
-, "app/kaomoji/page.tsx"  ],
+, "app/kaomoji/page.tsx", "app/kaomoji/KaomojiPage.jsx"  ],
   "exclude": ["node_modules"]
 }

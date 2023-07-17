@@ -1,4 +1,6 @@
+import { kaomoji } from "public/kaomoji";
 import KaomojiPage from "./KaomojiPage";
+import { useId } from "react";
 
 export const metadata = {
   title: "kaomoji",
@@ -6,5 +8,6 @@ export const metadata = {
 };
 
 export default function page() {
+
   return <KaomojiPage />;
 }
