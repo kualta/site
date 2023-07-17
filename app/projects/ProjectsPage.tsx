@@ -1,5 +1,4 @@
 "use client";
-import { roboto_mono } from "@/components/Fonts";
 import { Project } from "@prisma/client";
 import Link from "next/link";
 import { useState } from "react";
@@ -33,14 +32,14 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
           className={`flex group border border-yell aspect-video items-center justify-center ${border_color}`}
           href={link}
         >
-          <b className={`${roboto_mono.className} group-hover:underline`}>{project.name}</b>
+          <b className={"$group-hover:underline"}>{project.name}</b>
         </a>
       </div>
     );
   });
   return (
     <div>
-      <div className={`flex flex-row gap-4 p-4 justify-center items-center ${roboto_mono.className}`}>
+      <div className={"flex flex-row gap-4 p-4 justify-center items-center "}>
         <label>
           <input
             type="checkbox"

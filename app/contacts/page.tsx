@@ -1,12 +1,11 @@
 import { ContactIcon } from "@/components/ContactIcons";
-import { roboto_mono } from "@/components/Fonts";
 import { Contact } from "@prisma/client";
 
 async function ContactsPage() {
   const contacts: Contact[] = await (await fetch("https://kualta.dev/api/contacts", { cache: "no-store" })).json();
 
   return (
-    <div className={`${roboto_mono.className} flex justify-center items-center flex-col gap-4 py-4 m-auto`}>
+    <div className={"flex justify-center items-center flex-col gap-4 py-4 m-auto"}>
       {contacts.map((contact: Contact) => {
         const icon = ContactIcon(contact, 22);
         return (

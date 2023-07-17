@@ -1,4 +1,3 @@
-import { roboto_mono } from "components/Fonts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -19,7 +18,7 @@ async function page({ params }: any) {
     const branch_color = repo.forks_count > 0 ? "white" : "gray";
 
     return (
-      <li key={repo.id} className={roboto_mono.className}>
+      <li key={repo.id}>
         <a href={repo.html_url} title={repo.full_name}>
           {repo.name}
         </a>
@@ -42,7 +41,7 @@ async function page({ params }: any) {
 
   return (
     <div className="prose prose-invert">
-      <div className={`p-4 flex flex-wrap flex-row place-content-evenly align-middle ${roboto_mono.className}`}>
+      <div className={"p-4 flex flex-wrap flex-row place-content-evenly align-middle"}>
         <h2 className="font-light">
           github repos for user: 
           <b className="pl-4">{username}</b>
