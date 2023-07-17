@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { FiFileText, FiGitBranch, FiStar } from "react-icons/fi";
 
 async function page({ params }: any) {
