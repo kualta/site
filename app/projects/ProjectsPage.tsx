@@ -39,7 +39,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   });
   return (
     <div>
-      <div className={"flex flex-row gap-4 p-4 justify-center items-center "}>
+      <div className={"flex flex-wrap gap-4 p-4 justify-center items-center "}>
         <label>
           <input
             type="checkbox"
@@ -93,7 +93,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
       </div>
       <div className="grid grid-cols-3 grid-flow-row m-4 gap-4 p-4 my-10">
         {projectsGrid}
-        <div className="flex justify-center items-center">
+        <div className="flex justify-center items-center aspect-video">
           <Link href={"/"}>{"< back"}</Link>
         </div>
       </div>
