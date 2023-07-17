@@ -1,4 +1,4 @@
-export const kaomoji = {
+export const kaomoji: { [key: string]: string[] } = {
   random: [
     "¢‿¢",
     "©¿© o",
