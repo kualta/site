@@ -22,7 +22,7 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@/components/*": ["components/*"],
+      "@/components/*": ["extra/*"],
       "@/styles/*": ["../styles/*"]
     }
   },
@@ -31,10 +31,10 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "components/Fonts.ts",
+    "extra/Fonts.ts",
     "../**.tsx",
     "../**.ts",
     "app/kaomoji/KumojisPage.jsx"
-, "app/kaomoji/page.tsx", "app/kaomoji/KaomojiPage.jsx"  ],
+, "app/kaomoji/page.tsx", "app/kaomoji/KaomojiPage.jsx", "app/explore/page.jsx"  ],
   "exclude": ["node_modules"]
 }

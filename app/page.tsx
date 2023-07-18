@@ -1,9 +1,9 @@
-import { ListTitle } from "@/components/LIstTitle";
+import { ListTitle } from "extra/LIstTitle";
 import { Contact, Project } from "@prisma/client";
-import { ArticleList, ContactList, ProjectList } from "components/DataList";
-import { getAllPosts } from "./api/dataFetch";
-import { getAllContacts } from "./api/dataFetch";
-import { getAllProjects } from "./api/dataFetch";
+import { ArticleList, ContactList, ProjectList } from "extra/DataList";
+import { getAllPosts } from "../extra/dataFetch";
+import { getAllContacts } from "../extra/dataFetch";
+import { getAllProjects } from "../extra/dataFetch";
 
 async function HomePage() {
   const projects = await (

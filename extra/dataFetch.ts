@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import getPostMetadata from "components/PostMetadata";
+import getPostMetadata from "extra/PostMetadata";
 import { NextResponse } from "next/server";
 
 export const prisma = new PrismaClient();
