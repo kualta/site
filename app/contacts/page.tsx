@@ -1,4 +1,4 @@
-import { ContactIcon } from "extra/ContactIcons";
+import { ContactIcon } from "components/ContactIcons";
 import { Contact } from "@prisma/client";
 
 async function ContactsPage() {

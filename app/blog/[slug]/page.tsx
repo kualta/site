@@ -1,6 +1,6 @@
-import getPostContent from "extra/PostContent";
-import getPostMetadata from "extra/PostMetadata";
-import Footer from "extra/Footer";
+import getPostContent from "components/PostContent";
+import getPostMetadata from "components/PostMetadata";
+import Footer from "components/Footer";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
 

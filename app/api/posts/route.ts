@@ -1,4 +1,4 @@
-import { getAllPosts } from "../../../extra/dataFetch";
+import { getAllPosts } from "../../../prisma/dataFetch";
 
 export async function GET() {
   return getAllPosts();
