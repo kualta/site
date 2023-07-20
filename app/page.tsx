@@ -1,4 +1,4 @@
-import { LinkTitle } from "components/LIstTitle";
+import { ListTitle } from "components/LIstTitle";
 import { Contact, Project } from "@prisma/client";
 import { ArticleList, ContactList, ProjectList } from "components/DataList";
 import { getAllPosts } from "../prisma/dataFetch";
@@ -21,13 +21,12 @@ async function HomePage() {
 
   return (
     <div className="font-mono">
-      <LinkTitle href={"/projects"} text={"projects"} />
+      <ListTitle href={"/projects"} text={"projects"} />
       <ProjectList projects={projects} />
-      <LinkTitle href={"/blog"} text={"articles"} />
+      <ListTitle href={"/blog"} text={"articles"} />
       <ArticleList articles={articles} />
-      <LinkTitle href={"/contacts"} text={"contacts"} />
+      <ListTitle href={"/contacts"} text={"contacts"} />
       <ContactList contacts={contacts} />
-      <LinkTitle href={"/explore"} text={"explore >"} />
     </div>
   );
 }
