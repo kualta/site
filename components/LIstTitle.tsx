@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const ListTitle = (props: { href: string; text: string }) => {
+export const LinkTitle = (props: { href: string; text: string }) => {
   return (
     <Link
       href={props.href}
