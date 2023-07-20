@@ -6,6 +6,8 @@ const redirects: { [key: string]: string } = {
   arts: "https://kualta.dev/arts",
   noir: "https://kualta.dev/noir",
   git: "https://kualta.dev/repo/kualta",
+  api: "https://kualta.dev/api",
+  apis: "https://kualta.dev/api",
   repo: "https://kualta.dev/repo/kualta",
   bbdd: "https://kualta.dev/blackbox",
   moji: "https://kualta.dev/kaomoji",
