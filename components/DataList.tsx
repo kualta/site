@@ -11,9 +11,9 @@ export function ProjectList(props: { projects: Project[] }) {
             href={link}
             key={project.link + project.name + project.date}
           >
-            <b className={"group-hover:underline"}>{project.name}</b>
-            <span className="px-1 font-light">{" - "}</span>
-            <span className={" group-hover:underline font-light truncate"}>{project.description}</span>
+            <b className={"group-hover:underline font-mono"}>{project.name}</b>
+            <span className="px-1 ">{" - "}</span>
+            <span className={" group-hover:underline  truncate"}>{project.description}</span>
             {project.status === "ongoing" && <span className="text-xs text-stone-500 px-2">current</span>}
           </a>
         );
@@ -39,9 +39,9 @@ export function ArticleList(props: { articles: Article[] }) {
             href={article.link}
             key={article.link + article.name + article.description}
           >
-            <b className={"group-hover:underline w-fit"}>{title}</b>
-            <span className="px-1 font-light">{" - "}</span>
-            <span className={"group-hover:underline font-light truncate"}>{article.description}</span>
+            <b className={"group-hover:underline w-fit font-mono"}>{title}</b>
+            <span className="px-1 ">{" - "}</span>
+            <span className={"group-hover:underline truncate"}>{article.description}</span>
             {i === 0 && <span className="text-xs text-stone-500 px-2">latest</span>}
           </a>
         );
@@ -59,9 +59,9 @@ export function ContactList(props: { contacts: Contact[] }) {
           href={contact.link}
           key={contact.link + contact.id + contact.platform}
         >
-          <b className={"group-hover:underline"}>{contact.platform}</b>
-          <span className="px-1 font-light">{" - "}</span>
-          <span className={"font-ultralight group-hover:underline truncate"}>{contact.label}</span>
+          <b className={"group-hover:underline font-mono"}>{contact.platform}</b>
+          <span className="px-1 ">{" - "}</span>
+          <span className={"group-hover:underline truncate"}>{contact.label}</span>
         </a>
       ))}
     </div>

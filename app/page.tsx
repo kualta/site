@@ -20,7 +20,7 @@ async function HomePage() {
   const articles = await (await getAllPosts()).json();
 
   return (
-    <div className="font-mono">
+    <div className="font-light flex flex-col">
       <ListTitle href={"/projects"} text={"projects"} />
       <ProjectList projects={projects} />
       <ListTitle href={"/blog"} text={"articles"} />

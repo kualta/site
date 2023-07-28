@@ -1,9 +1,8 @@
-import Link from "next/link";
 import "styles/globals.css";
 
 export const metadata = {
   title: "kualta",
-  description: "kualta's official website",
+  description: "kualta's website",
   icons: {
     icon: "/icon.png",
   },
@@ -14,13 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <head />
 
-      <body className="dark:bg-[#1d1d1d] bg-[#fafafa] text-[#1d1d1d] text-sm sm:text-base mx-auto px-2 flex flex-col min-h-screen max-w-2xl dark:text-[#fafafa] ">
-        <header className={"flex items-center justify-center py-4"}>
-          <Link href={"/"} className="text-6xl select-none">
-            <div className="active:scale-90">==</div>
-          </Link>
-        </header>
-
+      <body className="dark:bg-[#222222] h-screen max-w-fit bg-[#fafafa] text-[#000000] p-10 py-auto dark:text-[#ffffff] ">
         {children}
       </body>
     </html>
