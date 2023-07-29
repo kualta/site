@@ -5,6 +5,7 @@ import { getAllPosts } from "../prisma/dataFetch";
 import { getAllContacts } from "../prisma/dataFetch";
 import { getAllProjects } from "../prisma/dataFetch";
 import ContactIcons, { ContactIcon } from "@/components/ContactIcons";
+import Polyhedron from "@/components/Polyhedron";
 
 async function HomePage() {
   const projects = (await getAllProjects()).json();
@@ -26,22 +27,26 @@ async function HomePage() {
   const articles = await (await getAllPosts()).json();
 
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <LinkHeader href={"/projects"} text={"projects"} />
-        <DataList data={relevantProjects} />
-      </div>
+    <div className="flex flex-row w-full h-full">
+      <div className="flex flex-col gap-8 justify-center">
+        <div>
+          <LinkHeader href={"/projects"} text={"projects"} />
+          <DataList data={relevantProjects} />
+        </div>
 
-      <div>
-        <LinkHeader href={"/blog"} text={"articles"} />
-        <DataList data={articles} />
-      </div>
+        <div>
+          <LinkHeader href={"/blog"} text={"articles"} />
+          <DataList data={articles} />
+        </div>
 
-      <div>
-        <LinkHeader href={"/contacts"} text={"contacts"} />
-        <ContactList contacts={contacts} />
+        <div>
+          <LinkHeader href={"/contacts"} text={"contacts"} />
+          <ContactList contacts={contacts} />
+        </div>
       </div>
-
+      <div className="absolute inset-0 -z-10">
+        <Polyhedron />
+      </div>
     </div>
   );
 }

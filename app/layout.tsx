@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <head />
 
-      <body className="dark:bg-dark-bg h-screen max-w-fit bg-lit-bg text-lit-text p-10 py-auto dark:text-dark-text">
+      <body className="dark:bg-dark-bg max-w-fit bg-lit-bg text-lit-text p-10 py-auto dark:text-dark-text w-screen h-screen">
         {children}
         <div className="absolute top-0 right-0">
           <ThemeToggle />
