@@ -1,16 +1,22 @@
-import { ListTitle } from "components/LIstTitle";
+import { LinkHeader } from "components/LIstTitle";
 import { Contact, Project } from "@prisma/client";
-import { ArticleList, ContactList, ProjectList } from "components/DataList";
+import { ContactList, DataEntry, DataList } from "components/DataList";
 import { getAllPosts } from "../prisma/dataFetch";
 import { getAllContacts } from "../prisma/dataFetch";
 import { getAllProjects } from "../prisma/dataFetch";
+import ContactIcons, { ContactIcon } from "@/components/ContactIcons";
 
 async function HomePage() {
-  const projects = await (
-    await getAllProjects()
-  )
-    .json()
-    .then((projects) => projects.filter((project: Project) => project.status !== "planned"));
+  const projects = (await getAllProjects()).json();
+
+  const relevantProjects = await projects
+    .then((projects: Project[]) => projects.filter((project: Project) => project.status !== "planned"))
+    .then((projects: Project[]) => projects.filter((project: Project) => project.relevance && project.relevance > 25));
+
+  const currentProjects = await projects.then((projects: Project[]) =>
+    projects.filter((project: Project) => project.status === "ongoing"),
+  );
+
   const contacts = await (
     await getAllContacts()
   )
@@ -20,13 +26,22 @@ async function HomePage() {
   const articles = await (await getAllPosts()).json();
 
   return (
-    <div className="font-light flex flex-col">
-      <ListTitle href={"/projects"} text={"projects"} />
-      <ProjectList projects={projects} />
-      <ListTitle href={"/blog"} text={"articles"} />
-      <ArticleList articles={articles} />
-      <ListTitle href={"/contacts"} text={"contacts"} />
-      <ContactList contacts={contacts} />
+    <div className="flex flex-col gap-8">
+      <div>
+        <LinkHeader href={"/projects"} text={"projects"} />
+        <DataList data={relevantProjects} />
+      </div>
+
+      <div>
+        <LinkHeader href={"/blog"} text={"articles"} />
+        <DataList data={articles} />
+      </div>
+
+      <div>
+        <LinkHeader href={"/contacts"} text={"contacts"} />
+        <ContactList contacts={contacts} />
+      </div>
+
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import ThemeToggle from "@/components/ThemeToggle";
 import "styles/globals.css";
 
 export const metadata = {
@@ -13,8 +14,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <head />
 
-      <body className="dark:bg-[#222222] h-screen max-w-fit bg-[#fafafa] text-[#000000] p-10 py-auto dark:text-[#ffffff] ">
+      <body className="dark:bg-dark-bg h-screen max-w-fit bg-lit-bg text-lit-text p-10 py-auto dark:text-dark-text">
         {children}
+        <div className="absolute top-0 right-0">
+          <ThemeToggle />
+        </div>
       </body>
     </html>
   );
