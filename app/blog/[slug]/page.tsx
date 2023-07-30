@@ -20,10 +20,10 @@ export default function Page({ params }: any) {
   const post = getPostContent(params.slug);
 
   return (
-    <>
+    <div className="mx-auto max-w-2xl">
       <PostPage post={post} />
       <Footer />
-    </>
+    </div>
   );
 }
 

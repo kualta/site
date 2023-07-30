@@ -24,12 +24,11 @@ export default function page() {
   const apis = fs
     .readdirSync(apiDirectory)
     .filter((path) => !path.endsWith(".tsx"))
-    .map((path) => `/api/${path}`)
+    .map((path) => `/api/${path}`);
 
   return (
-    <>
-      {/* <h1 className="text-bold text-md sm:text-lg">Available APIs:</h1> */}
+    <div className="mx-auto max-w-2xl">
       <ApiList pages={apis} />
-    </>
+    </div>
   );
 }

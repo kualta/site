@@ -67,8 +67,9 @@ const Polyhedron = () => {
     // Create an animation loop
     const animate = () => {
       requestAnimationFrame(animate);
-      wireframe.rotation.x += 0.006 * rotationDirection;
-      wireframe.rotation.y += 0.006 * rotationDirection;
+      wireframe.rotation.x += 0.005;
+      wireframe.rotation.y += 0.005;
+      wireframe.rotation.z += 0.005;
       renderer.render(scene, camera);
     };
     animate();

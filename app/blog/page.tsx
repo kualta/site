@@ -22,7 +22,7 @@ const HomePage = () => {
   });
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <div className="flex place-items-center justify-center flex-row flex-wrap p-4">{tags}</div>
       {posts}
     </div>

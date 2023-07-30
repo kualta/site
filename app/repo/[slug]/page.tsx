@@ -33,6 +33,7 @@ async function page({ params }: any) {
   });
 
   return (
+    <div className="mx-auto max-w-2xl">
     <div className="prose prose-invert">
       <div className={"p-4 flex flex-wrap flex-row place-content-evenly align-middle"}>
         <h2 className="font-light">
@@ -41,6 +42,8 @@ async function page({ params }: any) {
         </h2>
       </div>
       <ol>{repoList}</ol>
+
+    </div>
     </div>
   );
 }
