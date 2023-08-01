@@ -2,12 +2,7 @@ import Link from "next/link";
 
 export const LinkHeader = (props: { href: string; text: string }) => {
   return (
-    <Link
-      href={props.href}
-      className={
-        "flex items-center text-base font-mono underline-offset-4 align-text-top font-semibold group text-center hover:underline "
-      }
-    >
+    <Link href={props.href} className={"hover:text-lit-accent hover:dark:text-dark-accent font-mono font-bold"}>
       {props.text}
     </Link>
   );
