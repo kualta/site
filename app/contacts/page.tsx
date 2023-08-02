@@ -11,7 +11,7 @@ async function ContactsPage() {
         const icon = ContactIcon(contact, 22);
         return (
           <a
-            className="flex gap-4 group border-b p-4 border-stone-800 w-full items-center"
+            className="flex gap-4 hover:text-lit-accent hover:dark:text-dark-accent border-b p-4 border-stone-800 w-full items-center"
             href={contact.link}
             key={contact.link + contact.description}
           >
@@ -19,17 +19,13 @@ async function ContactsPage() {
               <b className="text-right">{contact.platform}</b>
             </div>
             {icon}
-            <div className="group-hover:underline">
+            <div>
               <p className="">{contact.label}</p>
               <p className="overflow-x-visible w-fit text-xs text-stone-400">{contact.description}</p>
             </div>
           </a>
         );
       })}
-
-      <div className="flex justify-center items-center mr-16">
-        <Link href={"/"}>{"< back"}</Link>
-      </div>
     </div>
   );
 }

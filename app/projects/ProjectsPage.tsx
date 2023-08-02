@@ -38,60 +38,31 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
     );
   });
 
+  const CheckBox = ({ value }: { value: string }) => {
+    return (
+      <label>
+        <input
+          type="checkbox"
+          value={value}
+          checked={selectedStatuses.includes(value)}
+          onChange={handleStatusChange}
+          className="mr-2 accent-gray-700"
+        />
+        {value}
+      </label>
+    );
+  };
+
   return (
     <div>
       <div className={"flex flex-wrap gap-4 p-4 justify-center items-center "}>
-        <label>
-          <input
-            type="checkbox"
-            value="planned"
-            checked={selectedStatuses.includes("planned")}
-            onChange={handleStatusChange}
-            className="mr-2 accent-gray-900"
-          />
-          Planned
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            value="ongoing"
-            checked={selectedStatuses.includes("ongoing")}
-            onChange={handleStatusChange}
-            className="mr-2 accent-stone-800"
-          />
-          Ongoing
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            value="complete"
-            checked={selectedStatuses.includes("complete")}
-            onChange={handleStatusChange}
-            className="mr-2 accent-stone-800"
-          />
-          Completed
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            value="paused"
-            checked={selectedStatuses.includes("paused")}
-            onChange={handleStatusChange}
-            className="mr-2 accent-stone-800"
-          />
-          Paused
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            value="archived"
-            checked={selectedStatuses.includes("archived")}
-            onChange={handleStatusChange}
-            className="mr-2 accent-yellow-900"
-          />
-          Archived
-        </label>
+        <CheckBox value="planned" />
+        <CheckBox value="complete" />
+        <CheckBox value="ongoing" />
+        <CheckBox value="paused" />
+        <CheckBox value="archived" />
       </div>
+
       <div className="grid grid-cols-3 grid-flow-row m-4 gap-4 p-4 my-10">{projectsGrid}</div>
     </div>
   );
