@@ -29,7 +29,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
       <div key={project.id}>
         <a
           key={project.id}
-          className={`flex group border border-yell aspect-video items-center justify-center ${border_color}`}
+          className={`flex group border-2 border-yell aspect-video items-center justify-center ${border_color}`}
           href={link}
         >
           <b className={"$group-hover:underline"}>{project.name}</b>
@@ -37,6 +37,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
       </div>
     );
   });
+
   return (
     <div>
       <div className={"flex flex-wrap gap-4 p-4 justify-center items-center "}>
@@ -91,12 +92,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
           Archived
         </label>
       </div>
-      <div className="grid grid-cols-3 grid-flow-row m-4 gap-4 p-4 my-10">
-        {projectsGrid}
-        <div className="flex justify-center items-center aspect-video">
-          <Link href={"/"}>{"< back"}</Link>
-        </div>
-      </div>
+      <div className="grid grid-cols-3 grid-flow-row m-4 gap-4 p-4 my-10">{projectsGrid}</div>
     </div>
   );
 };
@@ -104,17 +100,17 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
 function getBorderStyleForStatus(status: string) {
   switch (status) {
     case "ongoing":
-      return "border-stone-800";
+      return "border-lit-accent dark:border-dark-accent";
     case "complete":
-      return "border-stone-800";
+      return "border-lit-primary dark:border-dark-primary";
     case "planned":
-      return "border-gray-900";
+      return "border-gray-300 dark:border-gray-900";
     case "archived":
-      return "border-yellow-900";
+      return "border-lit-secondary dark:border-dark-secondary";
     case "paused":
-      return "border-stone-800";
+      return "border-lit-secondary dark:border-dark-secondary";
     default:
-      return "border-stone-800";
+      return "border-lit-secondary dark:border-dark-secondary";
   }
 }
 
