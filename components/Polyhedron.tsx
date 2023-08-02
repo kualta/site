@@ -1,17 +1,14 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import * as THREE from "three";
-import { init as initScene } from "./PolyhedronScene";
+import { setupScene } from "./PolyhedronScene";
 
 const Polyhedron = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [sceneRef, setSceneRef] = useState<ReturnType<typeof initScene>>();
+  const [sceneRef, setSceneRef] = useState<ReturnType<typeof setupScene>>();
   const [isDarkMode, setDarkMode] = useState(true);
 
   useEffect(() => {
-    console.log(isDarkMode);
-
     const observer = new MutationObserver(() => {
       setDarkMode(document.documentElement.classList.contains("dark"));
     });
@@ -26,7 +23,7 @@ const Polyhedron = () => {
     if (!sceneRef) {
       return;
     }
-    const color = isDarkMode ? 0xedb0e6: 0x000000;
+    const color = isDarkMode ? 0xedb0e6 : 0x000000;
     sceneRef.wireframe.material.color.set(color);
   }, [isDarkMode]);
 
@@ -35,7 +32,7 @@ const Polyhedron = () => {
       return;
     }
 
-    const scene = initScene(containerRef.current);
+    const scene = setupScene(containerRef.current);
     setSceneRef(scene);
 
     return () => {

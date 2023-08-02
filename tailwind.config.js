@@ -10,6 +10,11 @@ module.exports = {
           accent: "#efd2e1",
           bg: "#111111",
           text: "#fdf7fa",
+          shadow: [
+            "0 1px 2px 0 rgba(255, 255, 255, 0.05)",
+            "0 1px 3px 1px rgba(255, 255, 255, 0.1)",
+            "0 0 1px 0 rgba(255, 255, 255, 0.1)",
+          ],
         },
         lit: {
           primary: "#e4bed2",
