@@ -1,7 +1,4 @@
-import BackButton from "@/components/BackButton";
-import GitButton from "@/components/GitButton";
-import { MetaButton } from "@/components/MetaButton";
-import MojiButton from "@/components/MojiButton";
+import { BackButton, GitButton, KunetButton, MetaButton, MojiButton } from "@/components/MetaButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import Link from "next/link";
 import { FiGithub } from "react-icons/fi";
@@ -28,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute top-0 right-0 flex-col flex m-2">
           <ThemeToggle />
           <GitButton />
+          <KunetButton />
           <MojiButton />
         </div>
       </body>
