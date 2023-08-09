@@ -25,11 +25,6 @@ export default function KaomojiPage() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center">
-      <h2>the most complete kaomoji library in the world</h2>
-    <div className="flex w-screen absolute place-items-center items-center inset-0 font-mono top-40 justify-center flex-wrap gap-10 p-4">
-      {list}
-    </div>
-    </div>
+    <div className="flex w-full place-items-center items-center font-mono justify-center flex-wrap gap-10">{list}</div>
   );
 }
