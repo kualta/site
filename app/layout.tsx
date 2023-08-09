@@ -1,6 +1,9 @@
 import BackButton from "@/components/BackButton";
+import GitButton from "@/components/GitRepoButton";
+import { MetaButton } from "@/components/MetaButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import Link from "next/link";
+import { FiGithub } from "react-icons/fi";
 import "styles/globals.css";
 
 export const metadata = {
@@ -21,8 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BackButton />
         </div>
         {children}
-        <div className="absolute top-0 right-0">
+        <div className="absolute top-0 right-0 flex-col flex m-2">
           <ThemeToggle />
+          <GitButton />
         </div>
       </body>
     </html>

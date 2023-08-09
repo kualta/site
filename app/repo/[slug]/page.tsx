@@ -7,8 +7,6 @@ async function page({ params }: any) {
   const repoList = repos.map((repo: any) => {
     const created_at = new Date(repo.created_at).toLocaleDateString();
     const updated_at = new Date(repo.updated_at).toLocaleDateString();
-    const star_color = repo.stargazers_count > 0 ? "white" : "gray";
-    const branch_color = repo.forks_count > 0 ? "white" : "gray";
 
     return (
       <li key={repo.id}>
@@ -18,9 +16,9 @@ async function page({ params }: any) {
         <span> - {repo.description}</span>
         <div className="flex flex-col p-4 text-sm gap-x-4">
           <div className="flex gap-1 content-center items-center place-content-start">
-            <FiStar size={15} color={star_color} />
+            <FiStar size={15} />
             <span>{repo.stargazers_count}</span>
-            <FiGitBranch size={15} color={branch_color} />
+            <FiGitBranch size={15} />
             <span>{repo.forks_count}</span>
             <FiFileText size={15} />
             <span>{repo.language}</span>
@@ -34,16 +32,15 @@ async function page({ params }: any) {
 
   return (
     <div className="mx-auto max-w-2xl">
-    <div className="prose prose-invert">
-      <div className={"p-4 flex flex-wrap flex-row place-content-evenly align-middle"}>
-        <h2 className="font-light">
-          github repos for user:
-          <b className="pl-4">{username}</b>
-        </h2>
+      <div className="prose dark:prose-invert">
+        <div className={"p-4 flex flex-wrap flex-row place-content-evenly align-middle"}>
+          <h2 className="font-light">
+            github repos for user:
+            <b className="pl-4">{username}</b>
+          </h2>
+        </div>
+        <ol>{repoList}</ol>
       </div>
-      <ol>{repoList}</ol>
-
-    </div>
     </div>
   );
 }
