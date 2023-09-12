@@ -1,20 +1,22 @@
 "use client";
 
 import { PropsWithChildren } from "react";
-
-export const MetaButton = (props: PropsWithChildren) => {
-  return (
-    <div className="w-8 h-8 flex items-center justify-center rounded-md dark:shadow-dark-text/50 shadow-md bg-lit-bg dark:bg-dark-secondary m-2">
-      {props.children}
-    </div>
-  );
-};
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MdArrowBack } from "react-icons/md";
 import { FiGithub, FiGlobe } from "react-icons/fi";
 import { TbEqualDouble } from "react-icons/tb";
+
+export const MetaButton = (props: PropsWithChildren) => {
+  return (
+    <div className="w-8 h-8 flex items-center justify-center rounded-md 
+      hover:text-lit-accent hover:dark:text-dark-accent 
+      hover:shadow-lit-accent/30 hover:dark:shadow-dark-accent/50 
+      dark:shadow-dark-text/50 shadow-md bg-lit-bg dark:bg-dark-secondary m-2">
+      {props.children}
+    </div>
+  );
+};
 
 export function MojiButton() {
   const path = usePathname();

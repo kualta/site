@@ -8,7 +8,7 @@ export const DataEntry = ({ data }: { data: any }) => {
       href={link}
       key={data.link + data.name + data.date}
     >
-      <b className={" font-mono"}>{data.name}</b>
+      <b className={"font-mono"}>{data.name}</b>
       {" - "}
       <span>{data.description}</span>
     </a>
@@ -34,7 +34,7 @@ export function ContactList(props: { contacts: Contact[] }) {
           href={contact.link}
           key={contact.link + contact.id + contact.platform}
         >
-          <b>{contact.platform}</b>
+          <b className="font-mono">{contact.platform}</b>
           {" - "}
           <span className={"truncate"}>{contact.label}</span>
         </a>

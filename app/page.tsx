@@ -1,10 +1,9 @@
 import { LinkHeader } from "components/LIstTitle";
 import { Contact, Project } from "@prisma/client";
-import { ContactList, DataEntry, DataList } from "components/DataList";
+import { ContactList, DataList } from "components/DataList";
 import { getAllPosts } from "../prisma/dataFetch";
 import { getAllContacts } from "../prisma/dataFetch";
 import { getAllProjects } from "../prisma/dataFetch";
-import ContactIcons, { ContactIcon } from "@/components/ContactIcons";
 import Polyhedron from "@/components/Polyhedron";
 
 async function HomePage() {
@@ -22,13 +21,14 @@ async function HomePage() {
     await getAllContacts()
   )
     .json()
-    .then((contacts) => contacts.filter((contact: Contact) => contact.is_main));
+    .then((contacts: any) => contacts.filter((contact: Contact) => contact.is_main));
 
   const articles = await (await getAllPosts()).json();
 
   return (
     <div className="flex flex-row w-full h-full">
       <div className="flex flex-col gap-8 justify-center">
+
         <div>
           <LinkHeader href={"/projects"} text={"projects"} />
           <DataList data={relevantProjects} />
