@@ -24,9 +24,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <div className="absolute top-0 right-0 flex-col flex m-2">
           <ThemeToggle />
-          <GitButton />
-          <KunetButton />
-          <MojiButton />
         </div>
       </body>
     </html>
