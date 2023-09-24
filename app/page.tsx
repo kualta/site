@@ -7,15 +7,9 @@ import { getAllProjects } from "../prisma/dataFetch";
 import Polyhedron from "@/components/Polyhedron";
 
 async function HomePage() {
-  const projects = (await getAllProjects()).json();
-
-  const relevantProjects = await projects
+  const projects = await ((await getAllProjects()).json())
     .then((projects: Project[]) => projects.filter((project: Project) => project.status !== "planned"))
     .then((projects: Project[]) => projects.filter((project: Project) => project.relevance && project.relevance > 25));
-
-  const currentProjects = await projects.then((projects: Project[]) =>
-    projects.filter((project: Project) => project.status === "ongoing"),
-  );
 
   const contacts = await (
     await getAllContacts()
@@ -31,7 +25,7 @@ async function HomePage() {
 
         <div>
           <LinkHeader href={"/projects"} text={"projects"} />
-          <DataList data={relevantProjects} />
+          <DataList data={projects} />
         </div>
 
         <div>

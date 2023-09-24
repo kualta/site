@@ -1,4 +1,4 @@
-import { Contact } from "@prisma/client";
+import { Contact, Project } from "@prisma/client";
 
 export const DataEntry = ({ data }: { data: any }) => {
   const link = data.link ? data.link : data.git_link;
@@ -19,7 +19,7 @@ export function DataList({ data }: { data: any[] }) {
   return (
     <span className="flex flex-col space-y-2 pl-4 pt-2">
       {data.map((data) => (
-        <DataEntry data={data} />
+        <DataEntry key={data.link} data={data} />
       ))}
     </span>
   );

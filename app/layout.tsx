@@ -18,13 +18,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head />
 
       <body className="dark:bg-dark-bg bg-lit-bg text-lit-text p-2 md:p-10 py-auto dark:text-dark-text h-screen w-screen ">
-        <div className="absolute top-0 left-0 m-2">
+        <div className="fixed top-0 left-0 m-2">
           <BackButton />
         </div>
-        {children}
-        <div className="absolute top-0 right-0 flex-col flex m-2">
+        <div className="fixed top-0 right-0 flex-col flex m-2">
           <ThemeToggle />
         </div>
+        {children}
       </body>
     </html>
   );
