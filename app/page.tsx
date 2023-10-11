@@ -1,6 +1,6 @@
 import { LinkHeader } from "components/LIstTitle";
 import { Contact, Project } from "@prisma/client";
-import { ContactList, DataList } from "components/DataList";
+import { DataList } from "components/DataList";
 import { getAllPosts } from "../prisma/dataFetch";
 import { getAllContacts } from "../prisma/dataFetch";
 import { getAllProjects } from "../prisma/dataFetch";
@@ -37,7 +37,7 @@ async function HomePage() {
 
         <div>
           <LinkHeader href={"/contacts"} text={"contacts"} />
-          <ContactList contacts={contacts} />
+          <DataList data={contacts} />
         </div>
       </div>
       <div className="absolute inset-0 -z-10">
