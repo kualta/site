@@ -1,6 +1,5 @@
 import getPostContent from "components/PostContent";
 import getPostMetadata from "components/PostMetadata";
-import Footer from "components/Footer";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
 
@@ -22,7 +21,6 @@ export default function Page({ params }: any) {
   return (
     <div className="mx-auto max-w-2xl">
       <PostPage post={post} />
-      <Footer />
     </div>
   );
 }

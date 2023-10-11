@@ -1,5 +1,4 @@
-import { BackButton } from "@/components/MetaButton";
-import ThemeToggle from "@/components/ThemeToggle";
+import ThemeToggle, { BackButton } from "@/components/MetaButton";
 import "styles/globals.css";
 
 export const metadata = {

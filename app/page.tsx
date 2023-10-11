@@ -1,6 +1,5 @@
-import { LinkHeader } from "components/LIstTitle";
 import { Contact, Project } from "@prisma/client";
-import { DataList } from "components/DataList";
+import { DataList, LinkHeader } from "components/DataList";
 import { getAllPosts } from "../prisma/dataFetch";
 import { getAllContacts } from "../prisma/dataFetch";
 import { getAllProjects } from "../prisma/dataFetch";

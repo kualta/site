@@ -1,11 +1,9 @@
 "use client";
 
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MdArrowBack } from "react-icons/md";
-import { FiGithub, FiGlobe } from "react-icons/fi";
-import { TbEqualDouble } from "react-icons/tb";
+import { MdArrowBack, MdOutlineDarkMode, MdOutlineLightMode } from "react-icons/md";
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
@@ -19,23 +17,6 @@ export const MetaButton = (props: PropsWithChildren) => {
     </div>
   );
 };
-
-export function MojiButton() {
-  const path = usePathname();
-  const isRepoPage = path.includes("kaomoji");
-
-  if (isRepoPage) {
-    return null;
-  }
-
-  return (
-    <MetaButton>
-      <Link href={"/kaomoji"}>
-        <TbEqualDouble strokeWidth={2} />
-      </Link>
-    </MetaButton>
-  );
-}
 
 export function BackButton() {
   const path = usePathname();
@@ -54,36 +35,26 @@ export function BackButton() {
   );
 }
 
-export function GitButton() {
-  const path = usePathname();
-  const isRepoPage = path.includes("repo");
+export default function ThemeToggle() {
+  const [isDark, setIsDark] = useState(true);
 
-  if (isRepoPage) {
-    return null;
-  }
+  const handleToggle = () => {
+    setIsDark(!isDark);
+  };
 
-  return (
-    <MetaButton>
-      <Link href={"/repo/kualta"}>
-        <FiGithub strokeWidth={2.5} />
-      </Link>
-    </MetaButton>
-  );
-}
-
-export function KunetButton() {
-  const path = usePathname();
-  const isRepoPage = path.includes("kunet");
-
-  if (isRepoPage) {
-    return null;
-  }
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [isDark]);
 
   return (
     <MetaButton>
-      <Link href={"/kunet"}>
-        <FiGlobe />
-      </Link>
+      <button type="button" className="rounded-full flex items-center justify-center" onClick={handleToggle}>
+        {isDark ? <MdOutlineLightMode size={20} /> : <MdOutlineDarkMode size={20} />}
+      </button>
     </MetaButton>
   );
 }
