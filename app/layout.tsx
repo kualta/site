@@ -1,7 +1,5 @@
-import { BackButton, GitButton, KunetButton, MetaButton, MojiButton } from "@/components/MetaButton";
+import { BackButton } from "@/components/MetaButton";
 import ThemeToggle from "@/components/ThemeToggle";
-import Link from "next/link";
-import { FiGithub } from "react-icons/fi";
 import "styles/globals.css";
 
 export const metadata = {

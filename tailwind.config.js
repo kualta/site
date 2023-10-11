@@ -2,22 +2,17 @@
 module.exports = {
   darkMode: "class",
   theme: {
-    extend: {
-      colors: {
-        dark: {
-          primary: "#d2ade9",
-          secondary: "#1d1b1c",
-          accent: "#edb0e6",
-          bg: "#111111",
-          text: "#fdf7fa",
-        },
-        lit: {
-          primary: "#e4bed2",
-          secondary: "#f2d9f2",
-          accent: "#607588",
-          bg: "#e7e3e2",
-          text: "#191517",
-        },
+    colors: {
+      "secondary-text": "var(--secondary-text)",
+      primary: "var(--primary)",
+      secondary: "var(--secondary)",
+      bg: "var(--bg)",
+      text: "var(--text)",
+      dark: {
+        primary: "var(--primary-dark)",
+        secondary: "var(--secondary-dark)",
+        bg: "var(--bg-dark)",
+        text: "var(--text-dark)",
       },
     },
   },

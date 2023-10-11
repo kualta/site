@@ -7,7 +7,10 @@ import { getAllProjects } from "../prisma/dataFetch";
 import Polyhedron from "@/components/Polyhedron";
 
 async function HomePage() {
-  const projects = await ((await getAllProjects()).json())
+  const projects = await (
+    await getAllProjects()
+  )
+    .json()
     .then((projects: Project[]) => projects.filter((project: Project) => project.status !== "planned"))
     .then((projects: Project[]) => projects.filter((project: Project) => project.relevance && project.relevance > 25));
 
@@ -20,9 +23,8 @@ async function HomePage() {
   const articles = await (await getAllPosts()).json();
 
   return (
-    <div className="flex flex-row w-full h-full">
-      <div className="flex flex-col gap-8 justify-center">
-
+    <div className="flex flex-row w-full h-full place-items-center">
+      <div className="flex flex-col h-min gap-8 justify-center text-sm sm:text-base">
         <div>
           <LinkHeader href={"/projects"} text={"projects"} />
           <DataList data={projects} />

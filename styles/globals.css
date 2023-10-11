@@ -1,4 +1,29 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --primary-dark: #edb0e6;
+  --secondary-dark: #161616;
+  --bg-dark: #111111;
+  --text-dark: #fdf7fa;
+
+  --primary: #caa9bb;
+  --secondary: #ffffff;
+  --secondary-text: #9c9c9c;
+  --bg: #f6f5f4;
+  --text: #191517;
+}
  
+.dark .active-bg {
+    background: linear-gradient(var(--secondary-dark), var(--secondary-dark)) padding-box, 
+                linear-gradient(45deg, #ff33ccee, #cc77ffee) border-box;
+    border: 1px solid transparent;
+  
+}
+
+.active-bg {
+  background: linear-gradient(var(--secondary), var(--secondary)) padding-box, 
+              linear-gradient(45deg, #ff33ccee, #cc77ffee) border-box;
+  border: 1px solid transparent;
+}

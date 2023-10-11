@@ -9,10 +9,12 @@ import { TbEqualDouble } from "react-icons/tb";
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
-    <div className="w-8 h-8 flex items-center justify-center rounded-md 
-      hover:text-lit-accent hover:dark:text-dark-accent 
-      hover:shadow-lit-accent/30 hover:dark:shadow-dark-accent/50 
-      dark:shadow-dark-text/50 shadow-md bg-lit-bg dark:bg-dark-secondary m-2">
+    <div
+      className="w-8 h-8 flex items-center justify-center rounded-md 
+      hover:text-primary hover:dark:text-dark-primary 
+      hover:shadow-primary/30 hover:dark:shadow-dark-primary/50 
+      dark:shadow-dark-text/50 shadow-md bg-secondary dark:bg-dark-secondary m-2"
+    >
       {props.children}
     </div>
   );

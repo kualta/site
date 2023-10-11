@@ -23,13 +23,12 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
 
   const projectsGrid = filteredProjects.map((project) => {
     const link = project.link ? project.link : project.git_link;
-    const border_color = getBorderStyleForStatus(project.status);
 
     return (
       <div key={project.id}>
         <a
           key={project.id}
-          className={`flex group border-2 border-yell aspect-video items-center justify-center ${border_color}`}
+          className={"flex group border-2 border-yell aspect-video items-center justify-center active-bg"}
           href={link}
         >
           <b className={"$group-hover:underline"}>{project.name}</b>
@@ -40,62 +39,50 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
 
   const projectsList = filteredProjects.map((project) => {
     const link = project.link ? project.link : project.git_link;
-    const border_color = getBorderStyleForStatus(project.status);
-    const date = new Date(project.date);
 
     return (
-      <div key={project.id} className={`flex flex-col gap-1 border p-4 rounded-xl font-mono ${border_color}`}>
-        <a className={"flex group gap-2 group hover:underline "} href={link}>
-          <b>title: </b>
-          <p>{project.name}</p>
-          {project.full_name && (
-            <span className="flex font-mono">
-              {"(aka"}
-              &nbsp;
-              <p>{project.full_name}</p>
-              {")"}
-            </span>
-          )}
-        </a>
-        <span className="gap-2 flex font-mono">
-          <b>description: </b>
-          <p>{project.description}</p>
+      <div
+        key={project.id}
+        className="flex text-sm flex-col gap-1 group p-4 rounded-lg max-w-xl font-mono active-bg bg-secondary drop-shadow-md"
+      >
+        <span className={"text-base -mt-2 flex group items-center gap-2"}>
+          <b className="text-lg">{project.name}</b>
+          <span className="grow">
+            {project.full_name && (
+              <span className="flex text-xs">
+                {"(aka"}
+                &nbsp;
+                <p>{project.full_name}</p>
+                {")"}
+              </span>
+            )}
+          </span>
+          <p className="text-xs border px-2 py-0.5 rounded-lg text-secondary-text">{project.status}</p>
         </span>
         <span className="gap-2 flex font-mono">
-          <b>status: </b>
+          <b>what: </b>
+          <p> {project.description}</p>
+        </span>
+        <span className="gap-2 flex font-mono items-center">
+          <b>how: </b>
           <p className="flex flex-wrap gap-2">
-            {project.status}
-          </p>
-        </span>
-        <span className="gap-2 flex font-mono">
-          <b>date: </b>
-          <p>{date.toLocaleDateString()}</p>
-        </span>
-        <span className="gap-2 flex font-mono">
-          <b>language: </b>
-          <p>{project.language}</p>
-        </span>
-        <span className="gap-2 flex font-mono">
-          <b>stack: </b>
-          <p className="flex flex-wrap gap-2">
+            <span className="border px-2 py-0.5 rounded-lg">{project.language}</span>
             {project.tech_stack.map((v) => (
-              <span>{v}</span>
+              <span className="border px-2 py-0.5 rounded-lg">{v}</span>
             ))}
           </p>
         </span>
         {project.git_link && (
           <span className="flex font-mono">
-            <b>git: </b>
+            <b>where: </b>
             &nbsp;
-            <code>{project.git_link}</code>
+            <a href={project.git_link}>{project.git_link}</a>
           </span>
         )}
         {project.link && (
-          <span className="flex font-mono mt-4">
+          <span className="flex font-mono mt-2">
             <a className="underline" href={project.link}>
-              <code className="rounded-lg border border-lit-secondary bg-lit-primary py-1 dark:border-dark-primary dark:bg-dark-bg px-2">
-                {project.link}
-              </code>
+              <code className="rounded-lg py-1 px-2 active-bg">{project.link}</code>
             </a>
           </span>
         )}
@@ -111,9 +98,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
           value={value}
           checked={selectedStatuses.includes(value)}
           onChange={handleStatusChange}
-          className="mr-2 accent-gray-700"
+          className="mr-2 accent-primary dark:accent-dark-primary text-secondary"
         />
-        {value}
+        <span>{value}</span>
       </label>
     );
   };
@@ -132,20 +119,5 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
     </div>
   );
 };
-
-function getBorderStyleForStatus(status: string) {
-  switch (status) {
-    case "ongoing":
-      return "border-lit-accent dark:border-dark-accent";
-    case "complete":
-      return "border-lit-primary dark:border-dark-primary";
-    case "archived":
-      return "border-lit-secondary dark:border-dark-secondary";
-    case "paused":
-      return "border-lit-secondary dark:border-dark-secondary";
-    default:
-      return "border-lit-secondary dark:border-dark-secondary";
-  }
-}
 
 export default ProjectsPage;
