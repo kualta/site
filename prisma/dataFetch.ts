@@ -1,8 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import getPostMetadata from "components/PostMetadata";
 import { NextResponse } from "next/server";
-
-export const prisma = new PrismaClient();
+import prisma from "./db";
 
 export async function getAllContacts() {
   const contacts = await prisma.contact.findMany({

@@ -68,7 +68,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
           <p className="flex flex-wrap gap-2">
             <span className="border px-2 py-0.5 rounded-lg">{project.language}</span>
             {project.tech_stack.map((v) => (
-              <span className="border px-2 py-0.5 rounded-lg">{v}</span>
+              <span key={v} className="border px-2 py-0.5 rounded-lg">{v}</span>
             ))}
           </p>
         </span>
