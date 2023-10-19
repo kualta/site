@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const LinkHeader = (props: { href: string; text: string }) => {
   return (
-    <Link href={props.href} className={"hover:text-primary hover:dark:text-dark-primary font-mono font-bold"}>
+    <Link href={props.href} className={"hover:underline font-mono font-bold"}>
       {props.text}
     </Link>
   );
@@ -18,7 +18,7 @@ export function DataList({ data }: { data: any[] }) {
 
         return (
           <a
-            className="w-fit items-center hover:text-primary hover:dark:text-dark-primary"
+            className="w-fit items-center hover:underline"
             href={link}
             key={data.link + data.name + data.date}
           >

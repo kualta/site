@@ -3,16 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --primary-dark: #edb0e6;
-  --secondary-dark: #161616;
-  --bg-dark: #111111;
-  --text-dark: #fdf7fa;
+  --primary-dark: #3b3b3b;
+  --secondary-dark: #222222;
+  --bg-dark: #181818;
+  --text-dark: #e7e4e3;
 
-  --primary: #caa9bb;
+  --primary: #ffe7f1;
   --secondary: #ffffff;
+  --bg: #f8f8f8;
+  --text: #191817;
+
   --secondary-text: #9c9c9c;
-  --bg: #f6f5f4;
-  --text: #191517;
+}
+
+::selection {
+  background: var(--primary) 
+}
+
+.dark ::selection {
+  background: var(--primary-dark) 
 }
  
 .dark .active-bg {
