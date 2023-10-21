@@ -18,7 +18,7 @@ export async function getAllPosts() {
   const linkablePosts = posts.map((post) => ({
     name: post.title,
     description: post.description,
-    link: `https://kualta.dev/blog/${post.filename}`,
+    link: `https://kualta.dev/posts/${post.filename}`,
   }));
   return NextResponse.json(linkablePosts);
 }

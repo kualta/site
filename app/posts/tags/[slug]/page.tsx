@@ -18,7 +18,7 @@ async function TagsPage({ params }: { params: { slug: string } }) {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="flex place-items-center justify-center flex-row flex-wrap gap-x-8 p-4">
-        <Link href="/blog/">
+        <Link href="/posts/">
           <span className="select-none">•</span>
           <span className="px-4 ">{tagText}</span>
           <span className="select-none">•</span>

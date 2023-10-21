@@ -11,7 +11,9 @@ const redirects: { [key: string]: string } = {
   repo: "https://kualta.dev/repo/kualta",
   bbdd: "https://kualta.dev/blackbox",
   moji: "https://kualta.dev/kaomoji",
-  blog: "https://kualta.dev/blog",
+  blog: "https://kualta.dev/posts",
+  post: "https://kualta.dev/posts",
+  posts: "https://kualta.dev/posts",
 };
 
 export function middleware(request: NextRequest) {

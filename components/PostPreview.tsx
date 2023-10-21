@@ -8,7 +8,7 @@ const PostPreview = (props: PostMetadata) => {
       key={props.description}
       className="my-4 p-4 w-full rounded-lg bg-secondary dark:bg-dark-secondary drop-shadow-md border border-primary dark:border-dark-primary"
     >
-      <Link href={`/blog/${props.filename}`} className="flex flex-col md:flex-row items-center gap-4">
+      <Link href={`/posts/${props.filename}`} className="flex flex-col md:flex-row items-center gap-4">
         <Image
           src={props.preview}
           alt={props.title}

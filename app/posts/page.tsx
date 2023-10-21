@@ -13,7 +13,7 @@ const HomePage = () => {
 
     return (
       <div key={tag}>
-        <Link href={`/blog/tags/${tag}`} className="hover:scale-110">
+        <Link href={`/posts/tags/${tag}`} className="hover:scale-110">
           {text}
         </Link>
         {divider}
