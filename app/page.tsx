@@ -4,6 +4,13 @@ import { getAllPosts } from "../prisma/dataFetch";
 import { getAllContacts } from "../prisma/dataFetch";
 import { getAllProjects } from "../prisma/dataFetch";
 import Polyhedron from "@/components/Polyhedron";
+import { Gilda_Display } from "next/font/google";
+
+const font = Gilda_Display({
+  subsets: ["latin"],
+  weight: "400",
+  style: "normal",
+});
 
 async function HomePage() {
   const projects = await (
@@ -38,9 +45,6 @@ async function HomePage() {
           <LinkHeader href={"/contacts"} text={"contacts"} />
           <DataList data={contacts} />
         </div>
-      </div>
-      <div className="absolute inset-0 -z-10">
-        <Polyhedron />
       </div>
     </div>
   );

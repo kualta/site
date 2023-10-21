@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { setupScene } from "./PolyhedronScene";
 
 const Polyhedron = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef(null);
   const [sceneRef, setSceneRef] = useState<ReturnType<typeof setupScene>>();
   const [isDarkMode, setDarkMode] = useState(true);
 
@@ -20,16 +20,17 @@ const Polyhedron = () => {
     };
   }, []);
 
+  // Change Polyhedron color with dark mode 
   useEffect(() => {
     if (!sceneRef) {
       return;
     }
     const color = isDarkMode ? 0xedb0e6 : 0x000000;
     sceneRef.wireframe.material.color.set(color);
-  }, [isDarkMode]);
+  }, [isDarkMode, sceneRef]);
 
   useEffect(() => {
-    if (!containerRef?.current) {
+    if (!containerRef.current) {
       return;
     }
 

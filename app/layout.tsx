@@ -1,4 +1,5 @@
 import ThemeToggle, { BackButton } from "@/components/MetaButton";
+import Polyhedron from "@/components/Polyhedron";
 import "styles/globals.css";
 
 export const metadata = {
@@ -26,6 +27,10 @@ export default function RootLayout({
           <ThemeToggle />
         </div>
         {children}
+
+        <div className="absolute top-0 -z-10">
+          <Polyhedron />
+        </div>
       </body>
     </html>
   );
