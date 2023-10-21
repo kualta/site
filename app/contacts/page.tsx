@@ -11,7 +11,7 @@ async function ContactsPage() {
     <FadeIn>
       <div
         className={
-          "flex justify-center items-center flex-col gap-4 m-auto max-w-fit h-full"
+          "flex justify-center items-center flex-col gap-4 m-auto max-w-fit h-full mt-32"
         }
       >
         {contacts.map((contact: Contact) => {

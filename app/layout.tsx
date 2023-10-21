@@ -43,7 +43,9 @@ export default function RootLayout({
         <div className="fixed top-0 right-0 flex-col flex m-2">
           <ThemeToggle />
         </div>
-        <FadeIn>{children}</FadeIn>
+        <div className="flex flex-col w-full h-full grow">
+          <FadeIn>{children}</FadeIn>
+        </div>
       </body>
     </html>
   );
