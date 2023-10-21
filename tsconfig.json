@@ -34,7 +34,11 @@
     "components/Fonts.ts",
     "../**.tsx",
     "../**.ts",
-    "app/kaomoji/KumojisPage.jsx"
-, "app/kaomoji/page.tsx", "app/kaomoji/KaomojiPage.jsx", "app/api/page.tsx", "components/Polyhedron.tsx"  ],
+    "app/kaomoji/KumojisPage.jsx",
+    "app/kaomoji/page.tsx",
+    "app/kaomoji/KaomojiPage.jsx",
+    "app/api/page.tsx",
+    "components/Polyhedron.tsx"
+  ],
   "exclude": ["node_modules"]
 }

@@ -1,10 +1,17 @@
 "use client";
+import { FadeIn } from "@/components/FadeIn";
+import { Transition } from "@headlessui/react";
 import { Project } from "@prisma/client";
 import Link from "next/link";
 import { useState } from "react";
 
 const ProjectsPage = ({ projects }: { projects: Project[] }) => {
-  const [selectedStatuses, setSelectedStatuses] = useState(["complete", "ongoing", "paused", "archived"]);
+  const [selectedStatuses, setSelectedStatuses] = useState([
+    "complete",
+    "ongoing",
+    "paused",
+    "archived",
+  ]);
 
   function handleStatusChange(e: { target: { value: any } }) {
     const value = e.target.value;
@@ -28,7 +35,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
       <div key={project.id}>
         <a
           key={project.id}
-          className={"flex group border-2 border-yell aspect-video items-center justify-center active-bg"}
+          className={
+            "flex group border-2 border-yell aspect-video items-center justify-center active-bg"
+          }
           href={link}
         >
           <b className={"$group-hover:underline"}>{project.name}</b>
@@ -57,7 +66,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
               </span>
             )}
           </span>
-          <p className="text-xs border px-2 py-0.5 rounded-lg text-secondary-text">{project.status}</p>
+          <p className="text-xs border px-2 py-0.5 rounded-lg text-secondary-text">
+            {project.status}
+          </p>
         </span>
         <span className="gap-2 flex font-mono">
           <b>what: </b>
@@ -66,9 +77,13 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
         <span className="gap-2 flex font-mono items-center">
           <b>how: </b>
           <p className="flex flex-wrap gap-2">
-            <span className="border px-2 py-0.5 rounded-lg">{project.language}</span>
+            <span className="border px-2 py-0.5 rounded-lg">
+              {project.language}
+            </span>
             {project.tech_stack.map((v) => (
-              <span key={v} className="border px-2 py-0.5 rounded-lg">{v}</span>
+              <span key={v} className="border px-2 py-0.5 rounded-lg">
+                {v}
+              </span>
             ))}
           </p>
         </span>
@@ -82,7 +97,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
         {project.link && (
           <span className="flex font-mono mt-2">
             <a className="underline" href={project.link}>
-              <code className="rounded-lg py-1 px-2 active-bg">{project.link}</code>
+              <code className="rounded-lg py-1 px-2 active-bg">
+                {project.link}
+              </code>
             </a>
           </span>
         )}
@@ -115,7 +132,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
       </div>
 
       {/* <div className="grid grid-cols-3 grid-flow-row m-4 gap-4 p-4 my-10">{projectsGrid}</div> */}
-      <div className="flex flex-col m-4 gap-4 p-4">{projectsList}</div>
+      <FadeIn>
+        <div className="flex flex-col m-4 gap-4 p-4">{projectsList}</div>
+      </FadeIn>
     </div>
   );
 };

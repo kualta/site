@@ -1,10 +1,12 @@
+"use client"
+import { Transition } from "@headlessui/react";
 import Link from "next/link";
 
 export const LinkHeader = (props: { href: string; text: string }) => {
   return (
-    <Link href={props.href} className={"hover:underline font-mono font-bold"}>
-      {props.text}
-    </Link>
+      <Link href={props.href} className={"hover:underline font-mono font-bold"}>
+        {props.text}
+      </Link>
   );
 };
 
