@@ -14,6 +14,7 @@ export const FadeIn = (props: PropsWithChildren) => {
       leave="transition-opacity duration-150"
       leaveFrom="opacity-100"
       leaveTo="opacity-0"
+      className="h-full w-full"
     >
       {props.children}
     </Transition>

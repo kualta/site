@@ -29,11 +29,8 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
 
   const projectsList = filteredProjects.map((project) => {
     return (
-      <Card>
-        <div
-          key={project.id}
-          className="flex text-sm flex-col gap-1 group font-mono"
-        >
+      <Card key={project.id}>
+        <div className="flex text-sm flex-col gap-1 group font-mono">
           <span
             className={
               "text-base -mt-2 flex group items-center gap-2  min-w-fit"

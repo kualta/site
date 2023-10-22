@@ -9,7 +9,7 @@ const PostPreview = (props: PostMetadata) => {
       <div className="font-sans">
         <Link
           href={`/posts/${props.filename}`}
-          className="flex flex-col md:flex-row items-center gap-4"
+          className="flex flex-row items-center gap-4 w-fit"
         >
           <Image
             src={props.preview}

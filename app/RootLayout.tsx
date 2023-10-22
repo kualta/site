@@ -1,15 +1,4 @@
 import ThemeToggle, { BackButton } from "@/components/MetaButton";
-import Polyhedron from "@/components/Polyhedron";
-import "styles/globals.css";
-
-export const metadata = {
-  title: "kualta",
-  description: "kualta's website",
-  icons: {
-    icon: "/icon.png",
-  },
-};
-
 import { FadeIn } from "@/components/FadeIn";
 import Link from "next/link";
 import { gilda } from "styles/fonts";
@@ -28,7 +17,7 @@ export default function RootLayout({
           <BackButton />
         </div>
         <div
-          className={`flex flex-row place-content-center gap-12 text-xl sm:text-3xl tracking-wide w-full h-fit ${gilda.className}`}
+          className={`flex flex-row place-content-center gap-12 text-3xl tracking-wide w-full h-fit ${gilda.className}`}
         >
           <Link className="p-4" href="/projects">
             projects
