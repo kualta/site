@@ -10,15 +10,9 @@ export const metadata = {
   },
 };
 
-import { Gilda_Display } from "next/font/google";
 import { FadeIn } from "@/components/FadeIn";
 import Link from "next/link";
-
-const font = Gilda_Display({
-  subsets: ["latin"],
-  weight: "400",
-  style: "normal",
-});
+import { gilda } from "styles/fonts";
 
 export default function RootLayout({
   children,
@@ -30,15 +24,21 @@ export default function RootLayout({
       <head />
 
       <body
-        className={`p-2 md:p-10 py-auto bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text h-screen w-screen ${font.className}`}
+        className={`bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text h-screen w-screen ${gilda.className}`}
       >
         <div className="fixed top-0 left-0 m-2">
           <BackButton />
         </div>
-        <div className="flex flex-row place-content-center gap-12 text-3xl w-full h-fit">
-          <Link href="/projects">projects</Link>
-          <Link href="/posts">posts</Link>
-          <Link href="/contacts">contacts</Link>
+        <div className="flex flex-row place-content-center gap-12 text-3xl tracking-wide w-full h-fit">
+          <Link className="p-4" href="/projects">
+            projects
+          </Link>
+          <Link className="p-4" href="/posts">
+            posts
+          </Link>
+          <Link className="p-4" href="/contacts">
+            contacts
+          </Link>
         </div>
         <div className="fixed top-0 right-0 flex-col flex m-2">
           <ThemeToggle />
