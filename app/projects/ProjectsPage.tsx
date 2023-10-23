@@ -49,7 +49,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   };
 
   return (
-    <div>
+    <>
       <div className={"flex flex-wrap gap-4 p-4 justify-center items-center "}>
         <CheckBox value="complete" />
         <CheckBox value="ongoing" />
@@ -58,9 +58,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
       </div>
 
       <FadeIn>
-        <div className="flex flex-col gap-4 p-4">{projectsList}</div>
+        <div className="flex flex-col w-full gap-4 p-4">{projectsList}</div>
       </FadeIn>
-    </div>
+    </>
   );
 };
 

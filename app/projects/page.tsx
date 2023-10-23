@@ -7,7 +7,7 @@ async function page() {
   ).json();
 
   return (
-    <div className="mx-auto max-w-2xl min-w-fit">
+    <div className="max-w-2xl min-w-fit w-full">
       <ProjectsPage projects={projects} />
     </div>
   );
