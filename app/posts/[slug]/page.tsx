@@ -2,6 +2,7 @@ import getPostContent from "components/PostContent";
 import getPostMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
+import { fredoka } from "styles/fonts";
 
 export function generateMetadata({ params }: any) {
   const post = getPostContent(params.slug);
@@ -27,7 +28,9 @@ export default function Page({ params }: any) {
 
 function PostPage({ post }: { post: GrayMatterFile<string> }) {
   return (
-    <article className="py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl font-sans">
+    <article
+      className={"py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"}
+    >
       <Markdown>{post.content}</Markdown>
     </article>
   );
