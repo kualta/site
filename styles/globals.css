@@ -40,7 +40,7 @@
 .noise {
 	background-image: url(../public/noise.png);
   background-repeat: repeat;
-  filter: blur(1px);
+  opacity: 0.5;
   width: 100%;
   height: 100%;
   margin:auto;
@@ -50,5 +50,5 @@
 }
 
 .dark .noise {
-  filter: invert(0.6) blur(1px);
+  filter: invert(0.6);
 }
