@@ -3,6 +3,7 @@ import { Card } from "@/components/Card";
 import { FadeIn } from "@/components/FadeIn";
 import { Project } from "@prisma/client";
 import { useState } from "react";
+import { fredoka } from "styles/fonts";
 
 const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   const [selectedStatuses, setSelectedStatuses] = useState([
@@ -30,7 +31,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   const projectsList = filteredProjects.map((project) => {
     return (
       <Card key={project.id}>
-        <div className="flex text-sm flex-col gap-1 group font-mono">
+        <div
+          className={`flex text-sm flex-col gap-1 group ${fredoka.className}`}
+        >
           <span
             className={
               "text-base -mt-2 flex group items-center gap-2  min-w-fit"
@@ -52,7 +55,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
               {project.status}
             </p>
           </span>
-          <span className="gap-2 flex font-mono items-center">
+          <span className="gap-2 flex items-center">
             <b>how: </b>
             <p className="flex flex-wrap gap-2">
               <span className="border px-2 py-0.5 rounded-lg">
@@ -66,14 +69,14 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
             </p>
           </span>
           {project.git_link && (
-            <span className="flex font-mono">
+            <span className="flex ">
               <b>where: </b>
               &nbsp;
               <a href={project.git_link}>{project.git_link}</a>
             </span>
           )}
           {project.link && (
-            <span className="flex font-mono mt-2">
+            <span className="flex mt-2">
               <a className="underline" href={project.link}>
                 <code className="rounded-lg py-1 px-2 active-bg">
                   {project.link}

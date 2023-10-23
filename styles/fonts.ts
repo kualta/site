@@ -1,7 +1,7 @@
-import { Dosis, Gilda_Display } from "next/font/google";
+import { Dosis, Fredoka, Gilda_Display, Varela_Round } from "next/font/google";
 
-export const gilda = Dosis({
+export const fredoka = Fredoka({
   subsets: ["latin"],
-  weight: "400",
+  weight: ["400"],
   style: "normal",
 });

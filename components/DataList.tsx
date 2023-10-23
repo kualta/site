@@ -1,12 +1,12 @@
-"use client"
+"use client";
 import { Transition } from "@headlessui/react";
 import Link from "next/link";
 
 export const LinkHeader = (props: { href: string; text: string }) => {
   return (
-      <Link href={props.href} className={"hover:underline font-mono font-bold"}>
-        {props.text}
-      </Link>
+    <Link href={props.href} className={"hover:underline font-bold"}>
+      {props.text}
+    </Link>
   );
 };
 
@@ -24,7 +24,7 @@ export function DataList({ data }: { data: any[] }) {
             href={link}
             key={data.link + data.name + data.date}
           >
-            <b className={"font-mono"}>{name}</b>
+            <b>{name}</b>
             {" - "}
             <span>{description}</span>
           </a>

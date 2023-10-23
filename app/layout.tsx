@@ -11,7 +11,7 @@ export const metadata = {
 
 import { FadeIn } from "@/components/FadeIn";
 import Link from "next/link";
-import { gilda } from "styles/fonts";
+import { fredoka } from "styles/fonts";
 
 export default function RootLayout({
   children,
@@ -21,10 +21,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head />
-
-      <body className="bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text h-screen w-screen flex flex-col justify center">
+      <body className="bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text w-screen min-h-screen flex flex-col justify center relative">
+        <div className="noise" />
         <div
-          className={`flex flex-row place-content-around text-xl sm:text-2xl tracking-wide max-w-2xl w-full place-self-center h-fit ${gilda.className}`}
+          className={`flex flex-row place-content-around text-xl sm:text-2xl tracking-wide max-w-2xl w-full place-self-center h-fit ${fredoka.className}`}
         >
           <div className="p-3">
             <BackButton />

@@ -44,6 +44,8 @@ export function BackButton() {
 
 export default function ThemeToggle() {
   const [isDark, setIsDark] = useState(true);
+  const path = usePathname();
+  const isMainPage = path === "/";
 
   const handleToggle = () => {
     setIsDark(!isDark);
@@ -57,19 +59,26 @@ export default function ThemeToggle() {
     }
   }, [isDark]);
 
+  let cn = "opacity-100";
+  if (isMainPage) {
+    cn = "opacity-0";
+  }
+
   return (
-    <MetaButton>
-      <button
-        type="button"
-        className="rounded-full flex items-center justify-center"
-        onClick={handleToggle}
-      >
-        {isDark ? (
-          <MdOutlineLightMode size={20} />
-        ) : (
-          <MdOutlineDarkMode size={20} />
-        )}
-      </button>
-    </MetaButton>
+    <div className={cn}>
+      <MetaButton>
+        <button
+          type="button"
+          className="rounded-full flex items-center justify-center"
+          onClick={handleToggle}
+        >
+          {isDark ? (
+            <MdOutlineLightMode size={20} />
+          ) : (
+            <MdOutlineDarkMode size={20} />
+          )}
+        </button>
+      </MetaButton>
+    </div>
   );
 }
