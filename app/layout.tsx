@@ -21,24 +21,28 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head />
-      <body className={`bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text place-items-center w-screen min-h-screen flex flex-col justify center relative + ${fredoka.className}`}>
+      <body
+        className={`bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text place-items-center w-screen min-h-screen flex flex-col justify center relative + ${fredoka.className}`}
+      >
         <div className="noise" />
         <div
-          className={"flex flex-row place-content-around text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit "}
+          className={
+            "flex flex-row place-content-around text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit "
+          }
         >
-          <div className="p-3">
+          <div className="p-1 sm:p-3">
             <BackButton />
           </div>
-          <Link className="p-4" href="/projects">
+          <Link className="p-3 sm:p-4" href="/projects">
             projects
           </Link>
-          <Link className="p-4" href="/posts">
+          <Link className="p-3 sm:p-4" href="/posts">
             posts
           </Link>
-          <Link className="p-4" href="/contacts">
+          <Link className="p-3 sm:p-4" href="/contacts">
             contacts
           </Link>
-          <div className="p-3">
+          <div className="p-1 sm:p-3">
             <ThemeToggle />
           </div>
         </div>

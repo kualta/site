@@ -13,26 +13,29 @@ export const ProjectCard = ({ project }: { project: Project }) => {
       ? "text-text dark:text-dark-text"
       : "text-secondary";
 
+  // FIXME: Fix trunaction
   return (
     <Card>
       <div
-        className={`w-full rounded-lg flex text-sm flex-col gap-2 -mb-1 group ${fredoka.className}`}
+        className={`w-full flex text-sm flex-col gap-2 -mb-1 group ${fredoka.className}`}
       >
         <span
           className={
-            "text-base -mt-2 flex group items-center gap-2 place-items-center justify-center min-w-fit"
+            "text-base -mt-2 flex group items-center gap-2 place-items-center justify-center min-w-0"
           }
         >
-          <b className="text-lg">{project.name}</b>
+          <b className="text-lg min-w-fit">{project.name}</b>
           {project.full_name && (
-            <span className="flex text-xs">
+            <span className="flex text-xs truncate overflow-hidden text-elipsis truncate">
               {"(aka"}
               &nbsp;
               <p>{project.full_name}</p>
               {")"}
             </span>
           )}
-          <p>- {project.description}</p>
+          <p className="truncate overflow-hidden text-elipsis">
+            - {project.description}
+          </p>
           {project.link && (
             <a
               href={project.link}
@@ -51,7 +54,7 @@ export const ProjectCard = ({ project }: { project: Project }) => {
               </a>
             </>
           )}
-          <span className="grow" />
+          <span className="grow shrink" />
           <p
             className={`text-xs border px-2 py-0.5 rounded-lg text-secondary-text ${statusStyles}`}
           >
