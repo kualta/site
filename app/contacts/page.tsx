@@ -3,11 +3,10 @@ import { Contact } from "@prisma/client";
 import { FadeIn } from "@/components/FadeIn";
 import { Card } from "@/components/Card";
 import { fredoka } from "styles/fonts";
+import { getAllContacts } from "prisma/dataFetch";
 
 async function ContactsPage() {
-  const contacts: Contact[] = await (
-    await fetch("https://kualta.dev/api/contacts", { cache: "no-store" })
-  ).json();
+  const contacts = await (await getAllContacts()).json();
 
   return (
     <FadeIn>
