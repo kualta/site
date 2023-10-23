@@ -19,7 +19,7 @@ export default function Page({ params }: any) {
   const post = getPostContent(params.slug);
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-3xl">
       <PostPage post={post} />
     </div>
   );

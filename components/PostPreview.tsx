@@ -18,10 +18,12 @@ const PostPreview = (props: PostMetadata) => {
             height={100}
             className="rounded-xl border border-primary dark:border-dark-primary"
           />
-          <div className="flex flex-col gap-2 p-4">
-            <p className="font-extrabold text-xl">{props.title}</p>
-            <p className="flex-grow">{props.description}</p>
-            <p className="text-sm text-secondary-text">{props.date}</p>
+          <div className="flex flex-col gap-1 sm:gap-2 p-1 sm:p-4">
+            <p className="font-extrabold text-base sm:text-xl">{props.title}</p>
+            <p className="text-base flex-grow">{props.description}</p>
+            <p className="text-xs sm:text-sm text-secondary-text">
+              {props.date}
+            </p>
           </div>
         </Link>
       </div>

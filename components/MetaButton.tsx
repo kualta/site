@@ -3,7 +3,11 @@
 import { PropsWithChildren, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MdArrowBack, MdOutlineDarkMode, MdOutlineLightMode } from "react-icons/md";
+import {
+  MdArrowBack,
+  MdOutlineDarkMode,
+  MdOutlineLightMode,
+} from "react-icons/md";
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
@@ -22,16 +26,19 @@ export function BackButton() {
   const path = usePathname();
   const isMainPage = path === "/";
 
+  let cn = "opacity-100";
   if (isMainPage) {
-    return null;
+    cn = "opacity-0";
   }
 
   return (
-    <MetaButton>
-      <Link href={"/"}>
-        <MdArrowBack />
-      </Link>
-    </MetaButton>
+    <div className={cn}>
+      <MetaButton>
+        <Link href={"/"}>
+          <MdArrowBack size={18} />
+        </Link>
+      </MetaButton>
+    </div>
   );
 }
 
@@ -52,8 +59,16 @@ export default function ThemeToggle() {
 
   return (
     <MetaButton>
-      <button type="button" className="rounded-full flex items-center justify-center" onClick={handleToggle}>
-        {isDark ? <MdOutlineLightMode size={20} /> : <MdOutlineDarkMode size={20} />}
+      <button
+        type="button"
+        className="rounded-full flex items-center justify-center"
+        onClick={handleToggle}
+      >
+        {isDark ? (
+          <MdOutlineLightMode size={20} />
+        ) : (
+          <MdOutlineDarkMode size={20} />
+        )}
       </button>
     </MetaButton>
   );

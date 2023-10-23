@@ -1,5 +1,4 @@
 import ThemeToggle, { BackButton } from "@/components/MetaButton";
-import Polyhedron from "@/components/Polyhedron";
 import "styles/globals.css";
 
 export const metadata = {
@@ -23,13 +22,13 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <head />
 
-      <body className="bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text h-screen w-screen">
-        <div className="fixed top-0 left-0 m-2">
-          <BackButton />
-        </div>
+      <body className="bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text h-screen w-screen flex flex-col justify center">
         <div
-          className={`flex flex-row place-content-center gap-12 text-xl sm:text-3xl tracking-wide w-full h-fit ${gilda.className}`}
+          className={`flex flex-row place-content-around text-xl sm:text-2xl tracking-wide max-w-2xl w-full place-self-center h-fit ${gilda.className}`}
         >
+          <div className="p-3">
+            <BackButton />
+          </div>
           <Link className="p-4" href="/projects">
             projects
           </Link>
@@ -39,11 +38,11 @@ export default function RootLayout({
           <Link className="p-4" href="/contacts">
             contacts
           </Link>
+          <div className="p-3">
+            <ThemeToggle />
+          </div>
         </div>
-        <div className="fixed top-0 right-0 flex-col flex m-2">
-          <ThemeToggle />
-        </div>
-        <div className="flex flex-col w-full h-full grow">
+        <div className="flex flex-col grow">
           <FadeIn>{children}</FadeIn>
         </div>
       </body>

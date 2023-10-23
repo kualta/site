@@ -20,7 +20,7 @@ const Polyhedron = () => {
     };
   }, []);
 
-  // Change Polyhedron color with dark mode 
+  // Change Polyhedron color with dark mode
   useEffect(() => {
     if (!sceneRef) {
       return;

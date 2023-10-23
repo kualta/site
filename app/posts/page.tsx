@@ -31,8 +31,8 @@ const HomePage = () => {
 
   return (
     <FadeIn>
-      <div className="mx-auto max-w-lg sm:max-w-xl">
-        <div className="flex place-items-center justify-center flex-row flex-wrap p-4">
+      <div className="mx-auto max-w-xl sm:max-w-2xl px-2">
+        <div className="flex place-content-center justify-center flex-row flex-wrap p-4">
           {tags}
         </div>
         {posts}
