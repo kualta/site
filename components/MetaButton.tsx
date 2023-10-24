@@ -11,7 +11,7 @@ import {
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
-    <div className="w-8 h-8 flex items-center justify-center rounded-md hover:text-dark-primary hover:dark:text-primary m-2">
+    <div className="w-8 h-8 flex items-center justify-center rounded-md hover:text-dark-primary hover:dark:text-primary">
       {props.children}
     </div>
   );
@@ -22,15 +22,15 @@ export function BackButton() {
   const isMainPage = path === "/";
 
   if (isMainPage) {
-    return <div className="w-12 h-12" />;
+    return <div className="w-8 h-8" />;
   }
 
   return (
-      <MetaButton>
-        <Link href={"/"}>
-          <MdArrowBack size={22} />
-        </Link>
-      </MetaButton>
+    <MetaButton>
+      <Link href={"/"}>
+        <MdArrowBack size={22} />
+      </Link>
+    </MetaButton>
   );
 }
 
@@ -52,22 +52,22 @@ export default function ThemeToggle() {
   }, [isDark]);
 
   if (isMainPage) {
-    return <div className="w-12 h-12" />;
+    return <div className="w-8 h-8" />;
   }
 
   return (
-      <MetaButton>
-        <button
-          type="button"
-          className="rounded-full flex items-center justify-center"
-          onClick={handleToggle}
-        >
-          {isDark ? (
-            <MdOutlineLightMode size={22} />
-          ) : (
-            <MdOutlineDarkMode size={22} />
-          )}
-        </button>
-      </MetaButton>
+    <MetaButton>
+      <button
+        type="button"
+        className="rounded-full flex items-center justify-center"
+        onClick={handleToggle}
+      >
+        {isDark ? (
+          <MdOutlineLightMode size={22} />
+        ) : (
+          <MdOutlineDarkMode size={22} />
+        )}
+      </button>
+    </MetaButton>
   );
 }
