@@ -10,9 +10,7 @@ async function ContactsPage() {
 
   return (
     <FadeIn>
-      <div
-        className={`flex justify-center items-center flex-col gap-4 h-[90vh] ${fredoka.className}`}
-      >
+      <div className={"flex justify-center items-center flex-col gap-4 mt-16"}>
         {contacts.map((contact: Contact) => {
           const icon = ContactIcon(contact, 22);
           return (

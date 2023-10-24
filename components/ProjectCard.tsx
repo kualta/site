@@ -56,13 +56,13 @@ export const ProjectCard = ({ project }: { project: Project }) => {
           )}
           <span className="grow shrink" />
           <p
-            className={`text-xs border px-2 py-0.5 rounded-lg text-secondary-text ${statusStyles}`}
+            className={`text-xs border px-2 pb-0.5 rounded-lg text-secondary-text leading-4 -mb-1 ${statusStyles}`}
           >
             {project.status}
           </p>
           <button
             type="button"
-            className="text-secondary-text hover:text-text dark:hover:text-dark-text"
+            className="text-secondary-text hover:text-text dark:hover:text-dark-text -mb-1"
             onClick={() => setExpanded(!expanded)}
           >
             {expanded ? <MdOutlineExpandLess /> : <MdOutlineExpandMore />}
