@@ -27,7 +27,7 @@ export default function RootLayout({
         <div className="noise" />
         <div
           className={
-            "flex flex-row place-content-around text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit m-4 p-4"
+            "flex flex-row place-content-between  text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit m-4 p-4"
           }
         >
           <div>

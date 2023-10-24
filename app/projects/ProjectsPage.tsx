@@ -52,7 +52,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   // TODO: add expand all button
   return (
     <>
-      <div className={"flex flex-wrap gap-4 p-4 justify-center items-center "}>
+      <div className={"flex flex-wrap gap-4 p-4 justify-center items-center  text-xs sm:text-base"}>
         <CheckBox value="complete" />
         <CheckBox value="ongoing" />
         <CheckBox value="paused" />

@@ -14,7 +14,6 @@ export const ProjectCard = ({ project }: { project: Project }) => {
       : "text-secondary";
   const dateText = new Date(project.date).toLocaleDateString();
 
-  // FIXME: Fix trunaction
   return (
     <Card>
       <div
