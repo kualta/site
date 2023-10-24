@@ -27,15 +27,15 @@ export default function RootLayout({
         <div className="noise" />
         <div
           className={
-            "flex flex-row place-content-between  text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit m-4 p-4"
+            "flex flex-row place-content-between text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit m-4 p-4"
           }
         >
           <div>
             <BackButton />
           </div>
-          <Link href="/projects">projects</Link>
-          <Link href="/posts">posts</Link>
-          <Link href="/contacts">contacts</Link>
+          <Link className="active:text-secondary-text" href="/projects">projects</Link>
+          <Link className="active:text-secondary-text" href="/posts">posts</Link>
+          <Link className="active:text-secondary-text" href="/contacts">contacts</Link>
           <div>
             <ThemeToggle />
           </div>

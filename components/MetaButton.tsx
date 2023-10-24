@@ -11,7 +11,7 @@ import {
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
-    <div className="w-8 h-8 flex items-center justify-center rounded-md hover:text-dark-primary hover:dark:text-primary">
+    <div className="w-8 h-8 flex items-center justify-center rounded-md active:text-secondary-text active:dark:text-secondary-text">
       {props.children}
     </div>
   );
