@@ -5,7 +5,7 @@ export function setupScene(container: any) {
   const camera = new THREE.PerspectiveCamera(60, container.offsetWidth / container.offsetHeight, 0.1, 1000);
   camera.position.z = 3;
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); 
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(container.offsetWidth, container.offsetHeight);
   container.appendChild(renderer.domElement);
 
@@ -17,7 +17,7 @@ export function setupScene(container: any) {
 
   const randomGeometry = polyhedronGeometries[Math.floor(Math.random() * polyhedronGeometries.length)];
   const isDarkMode = document.documentElement.classList.contains("dark");
-  const material = new THREE.MeshBasicMaterial({ color: isDarkMode ? 0xedb0e6 : 0x000000 }); // Render as wireframe
+  const material = new THREE.MeshBasicMaterial({ color: isDarkMode ? 0xedb0e6 : 0x000000 });
   const wireframeGeometry = new THREE.WireframeGeometry(randomGeometry);
   const wireframe = new THREE.LineSegments(wireframeGeometry, material);
   scene.add(wireframe);
@@ -51,8 +51,10 @@ export function setupScene(container: any) {
     wireframe,
     dispose: () => {
       cancelAnimationFrame(animate as unknown as number);
+      wireframe.geometry.dispose();
       scene.remove(wireframe);
       resizeObserver.disconnect();
+      renderer.forceContextLoss();
       renderer.dispose();
     },
   };

@@ -1,10 +1,18 @@
 "use client";
+import { Card } from "@/components/Card";
+import { FadeIn } from "@/components/FadeIn";
+import { ProjectCard } from "@/components/ProjectCard";
 import { Project } from "@prisma/client";
-import Link from "next/link";
 import { useState } from "react";
+import { fredoka } from "styles/fonts";
 
 const ProjectsPage = ({ projects }: { projects: Project[] }) => {
-  const [selectedStatuses, setSelectedStatuses] = useState(["complete", "ongoing", "paused", "archived"]);
+  const [selectedStatuses, setSelectedStatuses] = useState([
+    "complete",
+    "ongoing",
+    "paused",
+    "archived",
+  ]);
 
   function handleStatusChange(e: { target: { value: any } }) {
     const value = e.target.value;
@@ -21,73 +29,8 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
     return selectedStatuses.includes(project.status);
   });
 
-  const projectsGrid = filteredProjects.map((project) => {
-    const link = project.link ? project.link : project.git_link;
-
-    return (
-      <div key={project.id}>
-        <a
-          key={project.id}
-          className={"flex group border-2 border-yell aspect-video items-center justify-center active-bg"}
-          href={link}
-        >
-          <b className={"$group-hover:underline"}>{project.name}</b>
-        </a>
-      </div>
-    );
-  });
-
   const projectsList = filteredProjects.map((project) => {
-    const link = project.link ? project.link : project.git_link;
-
-    return (
-      <div
-        key={project.id}
-        className="flex text-sm flex-col gap-1 group p-4 rounded-lg max-w-xl font-mono active-bg bg-secondary drop-shadow-md"
-      >
-        <span className={"text-base -mt-2 flex group items-center gap-2"}>
-          <b className="text-lg">{project.name}</b>
-          <span className="grow">
-            {project.full_name && (
-              <span className="flex text-xs">
-                {"(aka"}
-                &nbsp;
-                <p>{project.full_name}</p>
-                {")"}
-              </span>
-            )}
-          </span>
-          <p className="text-xs border px-2 py-0.5 rounded-lg text-secondary-text">{project.status}</p>
-        </span>
-        <span className="gap-2 flex font-mono">
-          <b>what: </b>
-          <p> {project.description}</p>
-        </span>
-        <span className="gap-2 flex font-mono items-center">
-          <b>how: </b>
-          <p className="flex flex-wrap gap-2">
-            <span className="border px-2 py-0.5 rounded-lg">{project.language}</span>
-            {project.tech_stack.map((v) => (
-              <span key={v} className="border px-2 py-0.5 rounded-lg">{v}</span>
-            ))}
-          </p>
-        </span>
-        {project.git_link && (
-          <span className="flex font-mono">
-            <b>where: </b>
-            &nbsp;
-            <a href={project.git_link}>{project.git_link}</a>
-          </span>
-        )}
-        {project.link && (
-          <span className="flex font-mono mt-2">
-            <a className="underline" href={project.link}>
-              <code className="rounded-lg py-1 px-2 active-bg">{project.link}</code>
-            </a>
-          </span>
-        )}
-      </div>
-    );
+    return <ProjectCard key={project.id} project={project} />;
   });
 
   const CheckBox = ({ value }: { value: string }) => {
@@ -105,18 +48,21 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
     );
   };
 
+  // TODO: add sorting options
+  // TODO: add expand all button
   return (
-    <div>
-      <div className={"flex flex-wrap gap-4 p-4 justify-center items-center "}>
+    <>
+      <div className={"flex flex-wrap gap-4 p-4 justify-center items-center  text-xs sm:text-base"}>
         <CheckBox value="complete" />
         <CheckBox value="ongoing" />
         <CheckBox value="paused" />
         <CheckBox value="archived" />
       </div>
 
-      {/* <div className="grid grid-cols-3 grid-flow-row m-4 gap-4 p-4 my-10">{projectsGrid}</div> */}
-      <div className="flex flex-col m-4 gap-4 p-4">{projectsList}</div>
-    </div>
+      <FadeIn>
+        <div className="flex flex-col w-full gap-4 p-4">{projectsList}</div>
+      </FadeIn>
+    </>
   );
 };
 

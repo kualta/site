@@ -1,5 +1,14 @@
 import { Contact } from "@prisma/client";
-import { FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from "react-icons/fi";
+import {
+  FiAtSign,
+  FiGithub,
+  FiGlobe,
+  FiMail,
+  FiTwitter,
+  FiYoutube,
+} from "react-icons/fi";
+
+import { RiTwitterXLine } from "react-icons/ri";
 
 export const ContactIcon = (contact: Contact, size?: number) => {
   let icon = <></>;
@@ -14,7 +23,10 @@ export const ContactIcon = (contact: Contact, size?: number) => {
       icon = <FiYoutube size={size} />;
       break;
     case "twitter":
-      icon = <FiTwitter size={size} />;
+      icon = <RiTwitterXLine size={size} />;
+      break;
+    case "ping":
+      icon = <FiAtSign size={size} />;
       break;
     case "email":
       icon = <FiMail size={size} />;
@@ -24,7 +36,7 @@ export const ContactIcon = (contact: Contact, size?: number) => {
 };
 
 function ContactIcons(props: { contacts: Contact[]; size?: number }) {
-  const size = props.size ? props.size : 22;
+  const size = props.size ? props.size : 18;
 
   const links = props.contacts.map((contact) => {
     const icon = ContactIcon(contact, size);

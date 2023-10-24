@@ -8,4 +8,4 @@
 [<a href="https://wasm.kualta.dev">wasm.kualta.dev</a>]
 [<a href="https://pomo.kualta.dev">pomo.kualta.dev</a>]
 [<a href="https://hemi.kualta.dev">hemi.kualta.dev</a>]
-[<a href="https://twot.kualta.dev">twot.kualta.dev</a>]
+[<a href="https://ping.kualta.dev">ping.kualta.dev</a>]
