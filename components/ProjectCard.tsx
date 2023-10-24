@@ -12,12 +12,13 @@ export const ProjectCard = ({ project }: { project: Project }) => {
     project.status === "complete" || project.status === "ongoing"
       ? "text-text dark:text-dark-text"
       : "text-secondary";
+  const dateText = new Date(project.date).toLocaleDateString();
 
   // FIXME: Fix trunaction
   return (
     <Card>
       <div
-        className={`w-full flex text-sm flex-col gap-2 -mb-1 group ${fredoka.className}`}
+        className={`min-w-0 w-full flex text-sm flex-col gap-2 -mb-1 group ${fredoka.className}`}
       >
         <span
           className={
@@ -26,16 +27,14 @@ export const ProjectCard = ({ project }: { project: Project }) => {
         >
           <b className="text-lg min-w-fit">{project.name}</b>
           {project.full_name && (
-            <span className="flex text-xs truncate overflow-hidden text-elipsis truncate">
+            <span className="hidden sm:flex text-xs truncate overflow-hidden text-elipsis truncate">
               {"(aka"}
               &nbsp;
               <p>{project.full_name}</p>
               {")"}
             </span>
           )}
-          <p className="truncate overflow-hidden text-elipsis">
-            - {project.description}
-          </p>
+          <p className=" truncate ">- {project.description}</p>
           {project.link && (
             <a
               href={project.link}
@@ -56,7 +55,7 @@ export const ProjectCard = ({ project }: { project: Project }) => {
           )}
           <span className="grow shrink" />
           <p
-            className={`text-xs border px-2 pb-0.5 rounded-lg text-secondary-text leading-4 -mb-1 ${statusStyles}`}
+            className={`text-xs hidden sm:flex border px-2 pb-0.5 rounded-lg text-secondary-text leading-4 -mb-1 ${statusStyles}`}
           >
             {project.status}
           </p>
@@ -70,6 +69,19 @@ export const ProjectCard = ({ project }: { project: Project }) => {
         </span>
         {expanded ? (
           <>
+            <span className="gap-2 flex sm:hidden items-center">
+              <b>status: </b>
+
+              <p
+                className={`border px-2 pb-0.5 rounded-lg text-secondary-text leading-4 ${statusStyles}`}
+              >
+                {project.status}
+              </p>
+            </span>
+            <span className="gap-2 flex">
+              <b>date: </b>
+              <p>{dateText}</p>
+            </span>
             <span className="gap-2 flex items-center">
               <b>stack: </b>
               <p className="flex flex-wrap gap-2">
