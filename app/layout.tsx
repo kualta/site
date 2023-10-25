@@ -10,7 +10,7 @@ export const metadata = {
   },
 };
 
-import { FadeIn } from "@/components/FadeIn";
+import { FadeIn } from "@/components/Transitions";
 import Link from "next/link";
 import { fredoka } from "styles/fonts";
 

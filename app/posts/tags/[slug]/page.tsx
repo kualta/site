@@ -1,4 +1,4 @@
-import { FadeIn } from "@/components/FadeIn";
+import { FadeIn } from "@/components/Transitions";
 import getPostMetadata from "components/PostMetadata";
 import PostPreview from "components/PostPreview";
 import Link from "next/link";

@@ -1,6 +1,6 @@
 "use client";
 import { Card } from "@/components/Card";
-import { FadeIn } from "@/components/FadeIn";
+import { FadeIn } from "@/components/Transitions";
 import { ProjectCard } from "@/components/ProjectCard";
 import { Project } from "@prisma/client";
 import { useState } from "react";
