@@ -16,9 +16,7 @@ async function ContactsPage() {
           return (
             <Card key={contact.link + contact.description}>
               <a
-                className={
-                  "flex gap-4 hover:underline p-1 px-2 items-center w-60"
-                }
+                className={"flex gap-4 p-1 px-2 items-center w-60"}
                 href={contact.link}
               >
                 <span>{icon}</span>

@@ -7,7 +7,7 @@ function ApiList({ pages: apis }: any) {
     <div className="">
       <ul className="gap-2 text-sm sm:text-base flex-col flex ml-4">
         {apis.map((api: any) => (
-          <li className="hover:underline font-mono">
+          <li className="font-mono">
             <Link href={api} key={api}>
               {api}
             </Link>
