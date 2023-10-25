@@ -1,6 +1,6 @@
 import ThemeToggle, { BackButton } from "@/components/MetaButton";
 import "styles/globals.css";
-import { Analytics } from '@vercel/analytics/react';
+import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
   title: "kualta",
@@ -34,15 +34,21 @@ export default function RootLayout({
           <div>
             <BackButton />
           </div>
-          <Link className="active:text-secondary-text" href="/projects">projects</Link>
-          <Link className="active:text-secondary-text" href="/posts">posts</Link>
-          <Link className="active:text-secondary-text" href="/contacts">contacts</Link>
+          <Link className="active:text-secondary-text" href="/projects">
+            projects
+          </Link>
+          <Link className="active:text-secondary-text" href="/posts">
+            posts
+          </Link>
+          <Link className="active:text-secondary-text" href="/contacts">
+            contacts
+          </Link>
           <div>
             <ThemeToggle />
           </div>
         </div>
-        <div className="flex flex-col grow w-full max-w-2xl">
-          <FadeIn>{children}</FadeIn>
+        <div className="flex flex-col grow w-full max-w-2xl h-full">
+          {children}
         </div>
         <div className="hidden sm:flex -z-10 border-text dark:border-dark-text">
           <div className="absolute bottom-0 right-0  border-b-2 border-r-2 m-4 p-4  rounded-br-lg" />

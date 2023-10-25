@@ -33,7 +33,7 @@ async function HomePage() {
 
   return (
     <div
-      className={`flex flex-col w-full h-[90vh] justify-center place-content-center font-bold ${fredoka.className}`}
+      className={`flex flex-col w-full grow justify-center place-content-center font-bold ${fredoka.className}`}
     >
       <div className="flex flex-col gap-2 w-min mx-auto">
         <h1 className="text-8xl text-left">kualta</h1>
