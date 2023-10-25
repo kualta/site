@@ -41,7 +41,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
           value={value}
           checked={selectedStatuses.includes(value)}
           onChange={handleStatusChange}
-          className="mr-2 accent-primary dark:accent-dark-primary text-secondary"
+          className="mr-2 accent-secondary dark:accent-dark-text"
         />
         <span>{value}</span>
       </label>
@@ -52,7 +52,11 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   // TODO: add expand all button
   return (
     <>
-      <div className={"flex flex-wrap gap-4 p-4 justify-center items-center  text-xs sm:text-base"}>
+      <div
+        className={
+          "flex flex-wrap gap-4 p-4 justify-center items-center  text-xs sm:text-base"
+        }
+      >
         <CheckBox value="complete" />
         <CheckBox value="ongoing" />
         <CheckBox value="paused" />

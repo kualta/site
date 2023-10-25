@@ -22,7 +22,7 @@ async function TagsPage({ params }: { params: { slug: string } }) {
 
   return (
     <FadeIn>
-      <div className="mx-auto max-w-xl sm:max-w-2xl px-2">
+      <div className="flex flex-col place-items-center justify-center max-w-xl sm:max-w-2xl px-2 gap-4 mb-20">
         <div className="flex place-items-center justify-center flex-row flex-wrap gap-x-8 p-4">
           <Link href="/posts/">
             <span className="select-none">•</span>
