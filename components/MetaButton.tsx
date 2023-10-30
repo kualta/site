@@ -44,6 +44,7 @@ export default function ThemeToggle() {
   };
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
     if (isDark) {
       document.documentElement.classList.add("dark");
     } else {

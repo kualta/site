@@ -32,8 +32,6 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "components/Fonts.ts",
-    "../**.tsx",
-    "../**.ts",
     "app/kaomoji/KumojisPage.jsx",
     "app/kaomoji/page.tsx",
     "app/kaomoji/KaomojiPage.jsx",

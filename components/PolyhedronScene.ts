@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 export function setupScene(container: any) {
+  if (typeof document === "undefined") return;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, container.offsetWidth / container.offsetHeight, 0.1, 1000);
   camera.position.z = 3;

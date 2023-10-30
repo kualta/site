@@ -9,6 +9,7 @@ const Polyhedron = () => {
   const [isDarkMode, setDarkMode] = useState(true);
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
     setDarkMode(document.documentElement.classList.contains("dark"));
     const observer = new MutationObserver(() => {
       setDarkMode(document.documentElement.classList.contains("dark"));
@@ -38,7 +39,9 @@ const Polyhedron = () => {
     setSceneRef(scene);
 
     return () => {
-      scene.dispose();
+      if (scene) {
+        scene.dispose();
+      }
     };
   }, []);
 

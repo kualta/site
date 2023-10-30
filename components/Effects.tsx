@@ -12,6 +12,8 @@ export const IsChristmas = (props: PropsWithChildren) => {
 };
 
 export const Snow = () => {
+  if (typeof document === "undefined") return null;
+
   const [isDark, setDark] = useState(document.documentElement.classList.contains("dark"));
 
   useEffect(() => {
