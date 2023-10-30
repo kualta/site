@@ -23,7 +23,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <head />
       <body
-        className={`bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text place-items-center w-screen min-h-screen flex flex-col justify center relative ${fredoka.className}`}
+        className={`bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-all ease-in-out delay-150 dark:text-dark-text place-items-center w-screen min-h-screen flex flex-col justify center relative ${fredoka.className}`}
       >
         <div className="noise" />
 
