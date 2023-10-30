@@ -29,7 +29,9 @@ export default function Page({ params }: any) {
 function PostPage({ post }: { post: GrayMatterFile<string> }) {
   return (
     <article
-      className={"py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"}
+      className={
+        "z-[10] backdrop-blur-sm py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"
+      }
     >
       <Markdown>{post.content}</Markdown>
     </article>

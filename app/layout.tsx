@@ -10,9 +10,9 @@ export const metadata = {
   },
 };
 
-import { FadeIn } from "@/components/Transitions";
 import Link from "next/link";
 import { fredoka } from "styles/fonts";
+import { IsChristmas, Snow } from "@/components/Effects";
 
 export default function RootLayout({
   children,
@@ -26,9 +26,14 @@ export default function RootLayout({
         className={`bg-bg dark:bg-dark-bg text-text transition-all ease-in-out delay-150 dark:text-dark-text place-items-center w-screen min-h-screen flex flex-col justify center relative ${fredoka.className}`}
       >
         <div className="noise" />
+
+        <IsChristmas>
+          <Snow />
+        </IsChristmas>
+
         <div
           className={
-            "flex flex-row place-content-between text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit m-4 p-4"
+            "z-[100] flex flex-row place-content-between text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit m-4 p-4"
           }
         >
           <div>
@@ -47,9 +52,7 @@ export default function RootLayout({
             <ThemeToggle />
           </div>
         </div>
-        <div className="flex flex-col grow w-full max-w-2xl h-full">
-          {children}
-        </div>
+        <div className="flex flex-col grow w-full max-w-2xl h-full">{children}</div>
         <div className="hidden sm:flex -z-10 border-text dark:border-dark-text">
           <div className="absolute bottom-0 right-0  border-b-2 border-r-2 m-4 p-4  rounded-br-lg" />
           <div className="absolute bottom-0 left-0 border-b-2 border-l-2 m-4 p-4 rounded-bl-lg " />
