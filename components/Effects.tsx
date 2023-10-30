@@ -40,7 +40,7 @@ export const Snow = () => {
   const color = isDark ? "#e7e4e3" : "#191817";
 
   return (
-    <div className="fixed w-screen h-screen -z-1 top-0">
+    <div className="fixed w-screen h-screen -z-[8] top-0">
       <Snowfall speed={[2, 2]} color={color} />;
     </div>
   );
