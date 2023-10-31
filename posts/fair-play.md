@@ -1,14 +1,14 @@
 ---
-title: "fair play"
+title: "Fair Play"
 description: "eliminating multiplayer asymmetry"
 date: "2021-07-08"
 tags: ["game-design", "english"]
-preview: "/images/fair-play-preview.png"
+preview: "/images/fair-play.jpg"
 ---
 
 # Eliminating multiplayer asymmetry
 
-![/images/fair-play-preview.png](/images/fair-play-preview.png)
+![/images/fair-play.jpg](/images/fair-play.jpg)
 
 > #### On second revision 
 ##### In addition to the landscape changing, I have changed. When I wrote the first edition of this article, the title was "The art of online games balance". I chose that name because I felt that what I was describing in there was much like art. But art is subjective. Finding the objective means of balancing out multiplayer experiences was the main objective of this article all along.
@@ -68,8 +68,6 @@ Consider the Reaper's teleport ability in Overwatch. This usage of it is very st
 To make this mechanic more **engaging** and **unique** for skilled players, we might add a sequence of quick-time events (QTEs). Each QTE would progressively **increase in difficulty**, and successful completion would confer **benefits** to the player. 
 
 For example, the first successful QTE could remove the paralyzing stance at the start of the ability, the second could make the teleportation process faster, and the third could remove the loud teleportation sound, providing a player with a strategic advantage.
-
-![/images/reaper-tp.png](/images/reaper-tp.png)
 
 This illustrates the potential of **unique challenges** in enhancing gameplay experiences. However, it is essential to note that QTEs are just one example of how the **mad-fair play** could be implemented. The versatility of the concept allows game designers to create a wide range of challenges, utilizing any of the player's **real skills**.
 
