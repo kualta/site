@@ -12,11 +12,10 @@ export const IsChristmas = (props: PropsWithChildren) => {
 };
 
 export const Snow = () => {
-  if (typeof document === "undefined") return null;
-
-  const [isDark, setDark] = useState(document.documentElement.classList.contains("dark"));
+  const [isDark, setDark] = useState(true);
 
   useEffect(() => {
+  if (typeof document === "undefined") return;
     const observer = new MutationObserver((mutationsList) => {
       for (const mutation of mutationsList) {
         if (mutation.type === "attributes" && mutation.attributeName === "class") {
