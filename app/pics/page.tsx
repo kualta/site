@@ -1,5 +1,8 @@
-import { GET, getRandomImage } from "app/api/image/route";
+import { getRandomImage } from "prisma/dataFetch";
 import { ImagePage } from "./ImagePage";
+
+export const revalidate = 0;
+const dynamic = "force-dynamic";
 
 async function page() {
   const { url } = await (await getRandomImage()).json();

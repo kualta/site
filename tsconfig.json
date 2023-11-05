@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "es6",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -21,9 +25,15 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@/components/*": ["components/*"],
-      "@/styles/*": ["../styles/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@/components/*": [
+        "components/*"
+      ],
+      "@/styles/*": [
+        "../styles/*"
+      ]
     }
   },
   "include": [
@@ -36,7 +46,10 @@
     "app/kaomoji/page.tsx",
     "app/kaomoji/KaomojiPage.jsx",
     "app/api/page.tsx",
-    "components/Polyhedron.tsx"
-, "app/api/image/route.ts"  ],
-  "exclude": ["node_modules"]
+    "components/Polyhedron.tsx",
+    "prisma/route.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
