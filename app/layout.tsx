@@ -13,6 +13,7 @@ export const metadata = {
 import Link from "next/link";
 import { fredoka } from "styles/fonts";
 import { IsChristmas, Snow } from "@/components/Effects";
+import { CornersScope } from "@/components/CornersScope";
 
 export default function RootLayout({
   children,
@@ -54,10 +55,7 @@ export default function RootLayout({
         </div>
         <div className="flex flex-col grow w-full max-w-2xl h-full">{children}</div>
         <div className="hidden sm:flex -z-10 border-text dark:border-dark-text">
-          <div className="absolute bottom-0 right-0  border-b-2 border-r-2 m-4 p-4  rounded-br-lg" />
-          <div className="absolute bottom-0 left-0 border-b-2 border-l-2 m-4 p-4 rounded-bl-lg " />
-          <div className="absolute top-0 right-0  border-t-2 border-r-2 m-4 p-4 rounded-tr-lg" />
-          <div className="absolute top-0 left-0  border-t-2 border-l-2 m-4 p-4  rounded-tl-lg" />
+          <CornersScope />
         </div>
         <Analytics />
       </body>
