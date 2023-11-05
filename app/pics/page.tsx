@@ -25,9 +25,10 @@ async function page() {
           />
         </div>
       </div>
+      <h1>BUT DO YOU?</h1>
       <p className="text-xs text-secondary-text flex flex-row gap-4">
         <Link href="https://creativecommons.org/publicdomain/zero/1.0/">license</Link>
-        <Link href={"/contacts"}>contact</Link> 
+        <Link href={"/contacts"}>contact</Link>
       </p>
     </div>
   );
