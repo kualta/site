@@ -37,6 +37,6 @@
     "app/kaomoji/KaomojiPage.jsx",
     "app/api/page.tsx",
     "components/Polyhedron.tsx"
-  ],
+, "app/api/image/route.ts"  ],
   "exclude": ["node_modules"]
 }
