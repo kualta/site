@@ -14,6 +14,10 @@ const redirects: { [key: string]: string } = {
   blog: "https://kualta.dev/posts",
   post: "https://kualta.dev/posts",
   posts: "https://kualta.dev/posts",
+  pics: "https://kualta.dev/pics",
+  imgs: "https://kualta.dev/pics",
+  images: "https://kualta.dev/pics",
+  pictures: "https://kualta.dev/pics",
 };
 
 export function middleware(request: NextRequest) {
