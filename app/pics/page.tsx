@@ -1,9 +1,8 @@
 import { GET, getRandomImage } from "app/api/image/route";
 import { ImagePage } from "./ImagePage";
 
-
 async function page() {
-  const { url }: string = await (await getRandomImage()).json();
+  const { url } = await (await getRandomImage()).json();
 
   return (
     <div className="flex flex-col justify-center place-items-center gap-8 text-3xl">
