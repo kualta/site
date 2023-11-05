@@ -6,7 +6,7 @@ const supabaseUrl: string = process.env.SUPABASE_URL!;
 const supabaseKey: string = process.env.SUPABASE_KEY!;
 const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
 
-export async function GET(request: Request) {
+export async function getRandomImage(){
   try {
     const { data, error } = await supabase.storage.from("kuolluts").list();
 
@@ -24,4 +24,8 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: `Could not fetch a kuollut: ${error}` }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return getRandomImage()
 }
