@@ -1,5 +1,5 @@
 ---
-title: "Elitism and Parochial Problems"
+title: "Parochial Problems"
 description: "an elevator to the exponential"
 date: "2023-11-06"
 tags: ["philosophy", "english"]
@@ -22,19 +22,19 @@ It happened while we were waiting for the elevator to arrive.
 
 **Y:** Well, regardless of the time, people with the power will try to take advantage of people without it.
 
-**K:** Indeed, humans are inherently power-seeking creatures. But only as long as there's limited resources, you see? Once everyone becomes infinitely rich, people would become much less hostile, too. At least that's what I noticed: the less one struggles to survive, the less implications they have for exploitation...
+**K:** Indeed, humans are inherently power-seeking creatures. But only as long as there's limited resources, you see? Once everyone becomes infinitely rich, people would become much less hostile, too. At least that's what I noticed: the less one struggles to survive, the less motivation one has for exploitation...
 
 **Y:** People preached the same thing during the industrial revolution, no? - "Once we create more machines, everyone will be rich". The result? More inequality. The rich get richer, and the poor get poorer...
 
 **K:** But were they wrong though?
 
-**Y:** What do you mean?
+**Y:** Huh?
 
-**K:** The industrial revolution happened just a few centuries ago, but people were poor for much longer. Before, human progress was linear _[I draw a linear graph in the air]_, and now it's moving exponentially _[I quickly raise one of my hands]_, [double exponential](https://waitbutwhy.com/2015/01/artificial-intelligence-revolution-1.html) that is. Even the poorest of the regions live better than they used to.
+**K:** The industrial revolution happened just a few centuries ago, but people were poor for much longer. Before, human progress was linear _[I draw a linear graph in the air]_, and now it's moving exponentially _[I quickly raise one of my hands]_, [double exponential](https://waitbutwhy.com/2015/01/artificial-intelligence-revolution-1.html) that is. Even the poorest of the regions live better than they ever did.
 
-**Y:** So you're saying that people would get even richer, but what makes you think that inequality would not get even worse?!
+**Y:** So you're saying that people would get even richer, but what makes you think that inequality would not simply get worse?
 
-**K:** I think you severely underestimate the power of infinity, my friend. In a few years, all of these parochial problems would cease to exist. Once we solve alignment, everything else gets solved by default.
+**K:** I think you severely underestimate the power of infinity, my friend. In a few years, all of these parochial problems would cease to exist. Once we solve alignment, everything else gets solved, too.
 
 _[The elevator doors opened, and we both stepped inside]_
 
