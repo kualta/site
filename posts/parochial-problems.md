@@ -1,6 +1,6 @@
 ---
 title: "Elitism and Parochial Problems"
-description: "notes on scientific community"
+description: "elevator to the exponential"
 date: "2023-11-06"
 tags: ["philosophy", "humanism"]
 preview: "/images/parochial-problems/preview.png"
@@ -10,7 +10,7 @@ preview: "/images/parochial-problems/preview.png"
 
 ![/images/parochial-problems/preview.png](/images/parochial-problems/preview.png)
 
-The following was a short conversation between me (**K**) and my new friend (**Y**), who recently arrived from West Africa to pursue their 2nd Masters degree in the city where I was living at the time.
+The following was a short conversation between me (**K**) and my new friend (**Y**), who recently arrived from West Africa to pursue their 2nd Masters degree in the city where I was living at the time. 
 
 It happened while we were waiting for the elevator to arrive.
 
@@ -36,7 +36,7 @@ It happened while we were waiting for the elevator to arrive.
 
 **K:** I think you severely underestimate the power of infinity, my friend. In a few years, all of these parochial problems would cease to exist. Once we solve alignment, everything else gets solved by default.
 
-_[The elevator doors opened, and we stepped inside]_
+_[The elevator doors opened, and we both stepped inside]_
 
 <div className="text-center text-xl"> _<...>_ </div>
 
@@ -51,13 +51,9 @@ _[The elevator doors opened, and we stepped inside]_
 
 5. Pehaps I'm using the word parochial a little bit too much in my conversations. I blame _David Deutsch and [The Beginning of Infinity](https://en.wikipedia.org/wiki/The_Beginning_of_Infinity)_ for that.
 
-<br>
-
 The accelerationist score of this post is **1.0x**, I think things are going as fast as they should. Humanity will solve the problems in the order that would seem the most important to them. 
 
 No matter whether you are hopeful about the future or you believe that we are inevitably doomed, don't forget about your fellow humans in the meantime!
 
-
-<br>
 
 ### **Tune in to our show next week to find out why your life would still matter post-singularity!**
