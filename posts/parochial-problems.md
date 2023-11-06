@@ -2,7 +2,7 @@
 title: "Elitism and Parochial Problems"
 description: "elevator to the exponential"
 date: "2023-11-06"
-tags: ["philosophy", "humanism"]
+tags: ["philosophy", "english"]
 preview: "/images/parochial-problems/preview.png"
 ---
 
