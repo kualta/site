@@ -2,10 +2,17 @@ import getPostContent from "components/PostContent";
 import getPostMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
+import { Metadata } from "next";
 
-export function generateMetadata({ params }: any) {
+export function generateMetadata({ params }: any): Metadata {
   const post = getPostContent(params.slug);
-  return { title: post.data.title };
+  return { 
+    title: post.data.title,
+    description: post.data.description,
+    openGraph: {
+      images: [post.data.preview],
+    },
+  };
 }
 
 export const generateStaticParams = async () => {
