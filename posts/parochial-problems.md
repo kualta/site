@@ -12,7 +12,7 @@ preview: "/images/parochial-problems/preview.png"
 
 The following was a short conversation between me (**K**) and my new friend (**Y**), who recently arrived from West Africa to pursue their 2nd Masters degree in the city where I was living at the time. 
 
-It happened while we were waiting for the elevator to arrive.
+It happened while we were waiting for the elevator.
 
 <div className="text-center text-xl"> _<...>_ </div>
 
