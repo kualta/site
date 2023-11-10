@@ -22,7 +22,7 @@ It happened while we were waiting for the elevator.
 
 **Y:** Well, regardless of the time, people with the power will try to take advantage of people without it.
 
-**K:** Indeed, humans are inherently power-seeking creatures. But only as long as there's limited resources, you see? Once everyone becomes infinitely rich, people would become much less hostile, too. At least that's what I noticed: the less one struggles to survive, the less motivation one has for exploitation...
+**K:** Indeed, humans are inherently power-seeking creatures. But only as long as there's limited resources, you see? Once everyone becomes infinitely rich, people would become much less hostile, too. At least that's what I noticed: the less one struggles to survive, the less motivation one has for exploitation...<sup>[[1](#addendum-1)]</sup>
 
 **Y:** People preached the same thing during the industrial revolution, no? - "Once we create more machines, everyone will be rich". The result? More inequality. The rich get richer, and the poor get poorer...
 
@@ -56,4 +56,6 @@ The accelerationist score of this post is **1.0x**, I think things are going as 
 No matter whether you are hopeful about the future or you believe that we are inevitably doomed, don't forget about your fellow humans in the meantime!
 
 
-### **Tune in to our show next week to find out why your life would still matter post-singularity!**
+## Addendum
+<a name="addendum-1">1.</a> Some argumentation: We're entering a world where coercion and violence are much less rewarding. 
+The economics of violence is in decline because of decreasing cost of protecting property. 
