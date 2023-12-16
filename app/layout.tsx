@@ -4,7 +4,7 @@ import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
   title: "kualta",
-  description: "unite the universe",
+  description: "to unite the universe",
   icons: {
     icon: "/icon.png",
   },

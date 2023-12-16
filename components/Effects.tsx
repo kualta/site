@@ -6,7 +6,7 @@ import Snowfall from "react-snowfall";
 export const IsChristmas = (props: PropsWithChildren) => {
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth();
-  const itsTime = currentMonth >= 9 || currentMonth <= 0;
+  const itsTime = currentMonth >= 10 || currentMonth <= 0;
 
   return <>{itsTime && props.children}</>;
 };

@@ -1,10 +1,8 @@
 "use client";
-import { Card } from "@/components/Card";
 import { FadeIn } from "@/components/Transitions";
 import { ProjectCard } from "@/components/ProjectCard";
 import { Project } from "@prisma/client";
 import { useState } from "react";
-import { fredoka } from "styles/fonts";
 
 const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   const [selectedStatuses, setSelectedStatuses] = useState([
@@ -54,7 +52,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
     <>
       <div
         className={
-          "flex flex-wrap gap-4 p-4 justify-center items-center  text-xs sm:text-base"
+          "flex flex-wrap gap-4 p-4 justify-center items-center text-xs sm:text-base"
         }
       >
         <CheckBox value="complete" />
