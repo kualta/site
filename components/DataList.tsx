@@ -18,11 +18,7 @@ export function DataList({ data }: { data: any[] }) {
         const description = data.name ? data.description : data.label;
 
         return (
-          <a
-            className="w-fit items-center hover:underline"
-            href={link}
-            key={data.link + data.name + data.date}
-          >
+          <a className="w-fit items-center hover:underline" href={link} key={data.link + data.name + data.date}>
             <b>{name}</b>
             {" - "}
             <span>{description}</span>

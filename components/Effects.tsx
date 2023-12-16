@@ -15,7 +15,7 @@ export const Snow = () => {
   const [isDark, setDark] = useState(true);
 
   useEffect(() => {
-  if (typeof document === "undefined") return;
+    if (typeof document === "undefined") return;
     const observer = new MutationObserver((mutationsList) => {
       for (const mutation of mutationsList) {
         if (mutation.type === "attributes" && mutation.attributeName === "class") {

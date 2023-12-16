@@ -12,16 +12,12 @@ import Snowfall from "react-snowfall";
 import { IsChristmas, Snow } from "@/components/Effects";
 
 async function HomePage() {
-  const projects = await (
-    await getAllProjects()
-  )
+  const projects = await (await getAllProjects())
     .json()
     .then((projects: Project[]) => projects.filter((project: Project) => project.status !== "planned"))
     .then((projects: Project[]) => projects.filter((project: Project) => project.relevance && project.relevance > 25));
 
-  const contacts = await (
-    await getAllContacts()
-  )
+  const contacts = await (await getAllContacts())
     .json()
     .then((contacts: any) => contacts.filter((contact: Contact) => contact.is_main));
 

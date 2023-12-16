@@ -3,11 +3,7 @@
 import { PropsWithChildren, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  MdArrowBack,
-  MdOutlineDarkMode,
-  MdOutlineLightMode,
-} from "react-icons/md";
+import { MdArrowBack, MdOutlineDarkMode, MdOutlineLightMode } from "react-icons/md";
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
@@ -58,16 +54,8 @@ export default function ThemeToggle() {
 
   return (
     <MetaButton>
-      <button
-        type="button"
-        className="rounded-full flex items-center justify-center"
-        onClick={handleToggle}
-      >
-        {isDark ? (
-          <MdOutlineLightMode size={22} />
-        ) : (
-          <MdOutlineDarkMode size={22} />
-        )}
+      <button type="button" className="rounded-full flex items-center justify-center" onClick={handleToggle}>
+        {isDark ? <MdOutlineLightMode size={22} /> : <MdOutlineDarkMode size={22} />}
       </button>
     </MetaButton>
   );

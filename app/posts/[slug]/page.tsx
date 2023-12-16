@@ -6,7 +6,7 @@ import { Metadata } from "next";
 
 export function generateMetadata({ params }: any): Metadata {
   const post = getPostContent(params.slug);
-  return { 
+  return {
     title: post.data.title,
     description: post.data.description,
     openGraph: {

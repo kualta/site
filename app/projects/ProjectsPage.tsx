@@ -5,21 +5,15 @@ import { Project } from "@prisma/client";
 import { useState } from "react";
 
 const ProjectsPage = ({ projects }: { projects: Project[] }) => {
-  const [selectedStatuses, setSelectedStatuses] = useState([
-    "complete",
-    "ongoing",
-    "paused",
-    "archived",
-  ]);
+  const [selectedStatuses, setSelectedStatuses] = useState(["complete", "ongoing", "paused", "archived"]);
 
   function handleStatusChange(e: { target: { value: any } }) {
     const value = e.target.value;
     setSelectedStatuses((prevSelectedStatuses) => {
       if (prevSelectedStatuses.includes(value)) {
         return prevSelectedStatuses.filter((status) => status !== value);
-      } else {
-        return [...prevSelectedStatuses, value];
       }
+      return [...prevSelectedStatuses, value];
     });
   }
 
@@ -50,11 +44,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   // TODO: add expand all button
   return (
     <>
-      <div
-        className={
-          "flex flex-wrap gap-4 p-4 justify-center items-center text-xs sm:text-base"
-        }
-      >
+      <div className={"flex flex-wrap gap-4 p-4 justify-center items-center text-xs sm:text-base"}>
         <CheckBox value="complete" />
         <CheckBox value="ongoing" />
         <CheckBox value="paused" />

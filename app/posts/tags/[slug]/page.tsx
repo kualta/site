@@ -12,12 +12,8 @@ export const generateStaticParams = async () => {
 
 async function TagsPage({ params }: { params: { slug: string } }) {
   const filter = params.slug;
-  const postMetadata = getPostMetadata().filter(
-    (post) => post.tags.indexOf(filter) !== -1
-  );
-  const posts = postMetadata.map((post) => (
-    <PostPreview key={post.filename} {...post} />
-  ));
+  const postMetadata = getPostMetadata().filter((post) => post.tags.indexOf(filter) !== -1);
+  const posts = postMetadata.map((post) => <PostPreview key={post.filename} {...post} />);
   const tagText = params.slug.replace("-", " ").toLowerCase();
 
   return (

@@ -1,12 +1,5 @@
 import { Contact } from "@prisma/client";
-import {
-  FiAtSign,
-  FiGithub,
-  FiGlobe,
-  FiMail,
-  FiTwitter,
-  FiYoutube,
-} from "react-icons/fi";
+import { FiAtSign, FiGithub, FiGlobe, FiMail, FiTwitter, FiYoutube } from "react-icons/fi";
 
 import { RiTwitterXLine } from "react-icons/ri";
 
