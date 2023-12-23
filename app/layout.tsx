@@ -3,8 +3,32 @@ import "styles/globals.css";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata = {
+  metadataBase: new URL("https://kualta.dev"),
   title: "kualta",
-  description: "to unite the universe",
+  keywords: [
+    "kualta",
+    "kualta.dev",
+    "kualtadev",
+    "kuollut",
+    "ku",
+    "kualta website",
+    "kualta blog",
+    "ai",
+    "artificial intelligence",
+    "artificial intelligence blog",
+    "artificial intelligence website",
+    "philosophy",
+    "philosophy blog",
+    "philosophy website",
+    "kualta philosophy",
+    "kualta philosophy blog",
+    "kualta philosophy website",
+    "philosophy in the mad world",
+    "beauty in the mad world",
+  ],
+  description: "beauty in the mad world",
+  url: "https://kualta.dev",
+  image: "/icon.png",
   icons: {
     icon: "/icon.png",
   },
