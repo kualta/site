@@ -26,9 +26,12 @@ export const metadata = {
     "philosophy in the mad world",
     "beauty in the mad world",
   ],
+  category: "blog",
+  openGraph: {
+    images: '/og_image.png',
+  },
   description: "beauty in the mad world",
   url: "https://kualta.dev",
-  image: "/og_image.png",
   icons: {
     icon: "/icon.png",
   },
