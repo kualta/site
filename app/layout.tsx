@@ -28,7 +28,7 @@ export const metadata = {
   ],
   description: "beauty in the mad world",
   url: "https://kualta.dev",
-  image: "/icon.png",
+  image: "/og_image.png",
   icons: {
     icon: "/icon.png",
   },
