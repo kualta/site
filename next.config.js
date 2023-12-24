@@ -8,6 +8,11 @@ module.exports = {
         protocol: 'https',
         hostname: 'bfcgxnkknmsgxcvczwov.supabase.co',
       },
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos'
+      }
     ],
+
   },
 }

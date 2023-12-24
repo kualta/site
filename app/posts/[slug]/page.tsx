@@ -39,6 +39,8 @@ function PostPage({ post }: { post: GrayMatterFile<string> }) {
         "z-[10] max-w-2xl bg-[#f8f8f8]/90 rounded-xl dark:bg-[#181818]/90 p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"
       }
     >
+      <h1>{post.data.title}</h1>
+      <p>{post.data.description}</p>
       <Markdown>{post.content}</Markdown>
     </article>
   );

@@ -1,15 +1,26 @@
 import ThemeToggle, { BackButton } from "@/components/MetaButton";
 import "styles/globals.css";
 import { Analytics } from "@vercel/analytics/react";
+import Link from "next/link";
+import { fredoka } from "styles/fonts";
+import { IsChristmas, Snow } from "@/components/Effects";
+import { CornersScope } from "@/components/CornersScope";
 
 export const metadata = {
   metadataBase: new URL("https://kualta.dev"),
   title: "kualta",
   keywords: [
     "kualta",
+    "kualts",
     "kualta.dev",
+    "kualta.com",
+    "kualta.art",
+    "kualta gallery",
+    "kualtaagency.com",
     "kualtadev",
     "kuollut",
+    "kualta agency",
+    "kualta digital marketing",
     "ku",
     "kualta website",
     "kualta blog",
@@ -55,11 +66,6 @@ export const metadata = {
     icon: "/icon.png",
   },
 };
-
-import Link from "next/link";
-import { fredoka } from "styles/fonts";
-import { IsChristmas, Snow } from "@/components/Effects";
-import { CornersScope } from "@/components/CornersScope";
 
 export default function RootLayout({
   children,
