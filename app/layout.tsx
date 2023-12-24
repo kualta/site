@@ -53,7 +53,7 @@ export const metadata = {
   twitter: {
     card: "/og_image.png",
     title: "kualta.dev",
-    description: "beauty in the mad world",
+    description: "glimse into the void",
     creator: "@kualts",
   },
   category: "blog",
