@@ -1,14 +1,8 @@
 import { Contact, Project } from "@prisma/client";
-import { DataList, LinkHeader } from "components/DataList";
 import { getAllPosts } from "../prisma/dataFetch";
 import { getAllContacts } from "../prisma/dataFetch";
 import { getAllProjects } from "../prisma/dataFetch";
-import Polyhedron from "@/components/Polyhedron";
-import Link from "next/link";
-import { Transition } from "@headlessui/react";
-import { fredoka } from "styles/fonts";
 import ContactIcons from "@/components/ContactIcons";
-import Snowfall from "react-snowfall";
 import { IsChristmas, Snow } from "@/components/Effects";
 
 async function HomePage() {
@@ -24,9 +18,7 @@ async function HomePage() {
   const articles = await (await getAllPosts()).json();
 
   return (
-    <div
-      className={`flex flex-col w-full grow justify-center place-content-center snowflake font-bold ${fredoka.className}`}
-    >
+    <div className={"flex flex-col w-full grow justify-center place-content-center snowflake font-bold"}>
       <div className="flex flex-col gap-2 w-min mx-auto">
         <h1 className="text-8xl text-left relative">
           kualta
