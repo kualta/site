@@ -6,8 +6,6 @@ tags: ["game-design", "english"]
 preview: "/images/fair-play.jpg"
 ---
 
-# Eliminating multiplayer asymmetry
-
 ![/images/fair-play.jpg](/images/fair-play.jpg)
 
 > #### On second revision 
