@@ -14,9 +14,9 @@ preview: "/images/fair-play.jpg"
 ## Abstract
 One essential aspect of any multiplayer game is the presence of game rules which define the game space and balance players' experience. 
 
-This article discusses the challenge of creating balanced gameplay experiences in assymetric online games, where players may start with vastly different initial conditions. 
+This article discusses the challenge of creating balanced gameplay experiences in asymmetric online games, where players may start with vastly different initial conditions. 
 
-It describes the concept of **mad-fair play**, which involves creating **unique challenges** that leverage the player's **real skills** to create engaging gameplay experiences. By balancing the advantages of assymetric games with the fairness of symmetric ones, **mad-fair play** offers a unique approach to game design that can appeal to a broad range of players.
+It describes the concept of **mad-fair play**, which involves creating **unique challenges** that leverage the player's **real skills** to create engaging gameplay experiences. By balancing the advantages of asymmetric games with the fairness of symmetric ones, **mad-fair play** offers a unique approach to game design that can appeal to a broad range of players.
 
 > ##### Note: This article builds on top of the concepts introduced in the Jesse Schell's book _"The Art of Game Design"_, such as **symmetric** and **asymmetric** games, **real** and **virtual** skills. I recommend getting familiar with those first.
 
@@ -59,7 +59,7 @@ To illustrate the concept, let's modify Jesse's diagram in this chapter to inclu
 3. Want more **unique experiences** to require more of player's **real skills**
 
 ### Mad-Fair Play
-The chart presented above provides an overview of the **mad-fair play** concept and, since the new axis can go up to infinity, it shows-off its potential. To better expalain the concept, let's imagine how it could be implemented in a real game.
+The chart presented above provides an overview of the **mad-fair play** concept and, since the new axis can go up to infinity, it shows-off its potential. To better explain the concept, let's imagine how it could be implemented in a real game.
 
 Consider the Reaper's teleport ability in Overwatch. This usage of it is very straightforward: the player selects the ability using the E key and then chooses a location to teleport to. The player's character enters a preparation stance, and after a loud sound effect, teleports to the chosen location, making their presence known to their opponents. This mechanic is an example of a balanced gameplay element in a fair play game.
 

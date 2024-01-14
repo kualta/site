@@ -47,7 +47,7 @@ _[The elevator doors opened, and we both stepped inside]_
 
 ![/images/parochial-problems/hedging-bets.png](/images/parochial-problems/hedging-bets.png)
 
-5. Pehaps I'm using the word parochial a little bit too much in my conversations. I blame _David Deutsch and [The Beginning of Infinity](https://en.wikipedia.org/wiki/The_Beginning_of_Infinity)_ for that.
+5. Perhaps I'm using the word parochial a little bit too much in my conversations. I blame _David Deutsch and [The Beginning of Infinity](https://en.wikipedia.org/wiki/The_Beginning_of_Infinity)_ for that.
 
 The accelerationist score of this post is **1.0x**, I think things are going as fast as they should. Humanity will solve the problems in the order that would seem the most important to them. 
 
