@@ -36,7 +36,7 @@ function PostPage({ post }: { post: GrayMatterFile<string> }) {
   return (
     <article
       className={
-        "z-[10] max-w-2xl bg-[#f8f8f8]/90 rounded-xl dark:bg-[#181818]/90 p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"
+        "z-[10] max-w-2xl rounded-xl  p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"
       }
     >
       <h1 className="mb-2 text-center">{post.data.title}</h1>
