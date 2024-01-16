@@ -60,7 +60,7 @@ export const metadata = {
   openGraph: {
     images: "/og_image.png",
   },
-  description: "beauty in the mad world",
+  description: "glimpse into the void",
   url: "https://kualta.dev",
   icons: {
     icon: "/icon.png",

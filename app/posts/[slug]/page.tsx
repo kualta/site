@@ -12,6 +12,17 @@ export function generateMetadata({ params }: any): Metadata {
     openGraph: {
       images: [post.data.preview],
     },
+    twitter: {
+      images: [post.data.preview],
+      card: "summary_large_image",
+      title: post.data.title,
+      description: post.data.description,
+    },
+    authors: [
+      {
+        name: "kualta",
+      },
+    ],
   };
 }
 
