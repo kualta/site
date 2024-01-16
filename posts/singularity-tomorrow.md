@@ -20,7 +20,7 @@ Human brains are not naturally equipped for accurate time predictions. We evolve
 
 Our brains are capable of understanding linear growth but falter when confronted with exponential graphs, often leading to underestimations of its impact. The innate inclination to seek linear patterns in the world and limited working memory further impedes our understanding of exponentials. 
 
-##### Your prediction changes, depending on what I ask
+## Your prediction changes, depending on how I ask
 When human researchers were asked questions in "fixed-probability" framing, as in, "by which year an event has an p% cumulative probability (for p=10%, 50%, 90%)", their answers would produce a **systematically earlier prediction**, compared to "fixed-years" framing, as in "what is the cumulative probability of the event by year y (for y=10, 25, 50)." ([Grace et al., 2018a, 2022](https://arxiv.org/pdf/1705.08807.pdf)). 
 
 One might argue that the impact of framing bias is insignificant, suggesting that it can be mitigated by simply asking two groups of respondents different questions and averaging their responses. 
