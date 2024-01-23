@@ -1,10 +1,10 @@
 import { FadeIn } from "@/components/Transitions";
-import getPostMetadata from "components/PostMetadata";
+import getPostsMetadata from "components/PostMetadata";
 import PostPreview from "components/PostPreview";
 import Link from "next/link";
 
 const HomePage = () => {
-  const postMetadata = getPostMetadata();
+  const postMetadata = getPostsMetadata();
   const posts = postMetadata.map((post) => <PostPreview key={post.filename} {...post} />);
   const tagsSet = [...new Set(postMetadata.flatMap((post) => post.tags))];
   const tags = tagsSet.map((tag, i, arr) => {

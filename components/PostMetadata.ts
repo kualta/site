@@ -11,7 +11,7 @@ export interface PostMetadata {
   preview: string;
 }
 
-function getPostMetadata(): PostMetadata[] {
+function getPostsMetadata(): PostMetadata[] {
   const postsPath = path.join(process.cwd(), "/posts/");
   const files = readdirSync(postsPath);
   const markdownFiles = files.filter((file) => file.endsWith(".md"));
@@ -40,4 +40,4 @@ function getPostMetadata(): PostMetadata[] {
   return posts;
 }
 
-export default getPostMetadata;
+export default getPostsMetadata;

@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import getPostMetadata from "components/PostMetadata";
+import getPostsMetadata from "components/PostMetadata";
 import { NextResponse } from "next/server";
 import prisma from "./db";
 
@@ -14,7 +14,7 @@ export async function getAllContacts() {
 }
 
 export async function getAllPosts() {
-  const posts = getPostMetadata();
+  const posts = getPostsMetadata();
   const linkablePosts = posts.map((post) => ({
     name: post.title,
     description: post.description,
@@ -56,9 +56,6 @@ export async function getRandomImage() {
     // Return the download URL
     return NextResponse.json({ url: publicUrl }, { status: 200 });
   } catch (error) {
-    return NextResponse.json(
-      { error: `Could not fetch a kuollut: ${error}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: `Could not fetch a kuollut: ${error}` }, { status: 500 });
   }
 }

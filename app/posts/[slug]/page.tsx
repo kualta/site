@@ -1,5 +1,5 @@
-import getPostContent from "components/PostContent";
-import getPostMetadata from "components/PostMetadata";
+import { getPostContent } from "@/components/PostContent";
+import getPostsMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
 import { Metadata } from "next";
@@ -27,23 +27,28 @@ export function generateMetadata({ params }: any): Metadata {
 }
 
 export const generateStaticParams = async () => {
-  const posts = getPostMetadata();
+  const posts = getPostsMetadata();
   return posts.map((post) => ({
     slug: post.filename,
   }));
 };
 
-export default function Page({ params }: any) {
+export default function PostPage({ params }: any) {
   const post = getPostContent(params.slug);
 
   return (
     <div className="max-w-2xl w-full">
-      <PostPage post={post} />
+      {/* <TableOfContents toc={post.toc} /> */}
+      <PostContent post={post} />
     </div>
   );
 }
 
-function PostPage({ post }: { post: GrayMatterFile<string> }) {
+function TableOfContents({ toc }: { toc: any }) {
+  return <Markdown>{toc}</Markdown>
+}
+
+function PostContent({ post }: { post: GrayMatterFile<string> }) {
   return (
     <article
       className={

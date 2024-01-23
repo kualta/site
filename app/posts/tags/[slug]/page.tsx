@@ -1,10 +1,10 @@
 import { FadeIn } from "@/components/Transitions";
-import getPostMetadata from "components/PostMetadata";
+import getPostsMetadata from "components/PostMetadata";
 import PostPreview from "components/PostPreview";
 import Link from "next/link";
 
 export const generateStaticParams = async () => {
-  const posts = getPostMetadata();
+  const posts = getPostsMetadata();
   return posts.map((post) => ({
     slug: post.filename,
   }));
@@ -12,7 +12,7 @@ export const generateStaticParams = async () => {
 
 async function TagsPage({ params }: { params: { slug: string } }) {
   const filter = params.slug;
-  const postMetadata = getPostMetadata().filter((post) => post.tags.indexOf(filter) !== -1);
+  const postMetadata = getPostsMetadata().filter((post) => post.tags.indexOf(filter) !== -1);
   const posts = postMetadata.map((post) => <PostPreview key={post.filename} {...post} />);
   const tagText = params.slug.replace("-", " ").toLowerCase();
 
