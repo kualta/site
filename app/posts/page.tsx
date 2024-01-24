@@ -23,12 +23,14 @@ const HomePage = () => {
   });
 
   return (
-    <FadeIn>
-      <div className="flex flex-col place-items-center justify-center max-w-xl sm:max-w-2xl px-2 gap-4 mb-20">
-        <div className="flex place-content-center justify-center flex-row flex-wrap p-4">{tags}</div>
-        {posts}
-      </div>
-    </FadeIn>
+    <div className="max-w-2xl">
+      <FadeIn>
+        <div className="flex flex-col place-items-center justify-center px-2 gap-4 mb-20">
+          <div className="flex place-content-center justify-center flex-row flex-wrap p-4">{tags}</div>
+          {posts}
+        </div>
+      </FadeIn>
+    </div>
   );
 };
 

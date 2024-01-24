@@ -107,10 +107,13 @@ export default function RootLayout({
             <ThemeToggle />
           </div>
         </div>
-        <div className="flex flex-col grow w-full max-w-2xl h-full">{children}</div>
+
+        <div className="flex flex-col items-center grow w-full h-full">{children}</div>
+
         <div className="hidden sm:flex -z-10 border-text dark:border-dark-text">
           <CornersScope />
         </div>
+
         <Analytics />
       </body>
     </html>

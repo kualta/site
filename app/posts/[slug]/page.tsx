@@ -33,6 +33,24 @@ export const generateStaticParams = async () => {
   }));
 };
 
+function TableOfContents({ toc }: { toc: any }) {
+  return <Markdown options={{ overrides: { h2: { props: { className: "text-lg" } } } }}>{toc}</Markdown>;
+}
+
+function PostContent({ post }: { post: GrayMatterFile<string> }) {
+  return (
+    <article
+      className={
+        "z-[10] max-w-2xl rounded-xl p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"
+      }
+    >
+      <h1 className="mb-2 text-center">{post.data.title}</h1>
+      <h3 className="mb-6 mt-0 text-center">{post.data.description}</h3>
+      <Markdown>{post.content}</Markdown>
+    </article>
+  );
+}
+
 export default function PostPage({ params }: any) {
   const post = getPostContent(params.slug);
 
@@ -41,23 +59,5 @@ export default function PostPage({ params }: any) {
       {/* <TableOfContents toc={post.toc} /> */}
       <PostContent post={post} />
     </div>
-  );
-}
-
-function TableOfContents({ toc }: { toc: any }) {
-  return <Markdown>{toc}</Markdown>
-}
-
-function PostContent({ post }: { post: GrayMatterFile<string> }) {
-  return (
-    <article
-      className={
-        "z-[10] max-w-2xl rounded-xl  p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"
-      }
-    >
-      <h1 className="mb-2 text-center">{post.data.title}</h1>
-      <h3 className="mb-6 mt-0 text-center">{post.data.description}</h3>
-      <Markdown>{post.content}</Markdown>
-    </article>
   );
 }
