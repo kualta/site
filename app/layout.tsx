@@ -73,7 +73,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="scroll-smooth dark">
       <head />
       <body
         className={`bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-all 

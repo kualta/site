@@ -1,4 +1,5 @@
 import { getPostContent } from "@/components/PostContent";
+import { TableOfContents } from "@/components/TableOfContents";
 import getPostsMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
@@ -33,13 +34,6 @@ export const generateStaticParams = async () => {
   }));
 };
 
-function TableOfContents({ toc }: { toc: any }) {
-  return (
-    <div className="top-8 left-[70%] fixed hidden 2xl:flex">
-      <Markdown options={{ overrides: { h2: { props: { className: "text-lg" } } } }}>{toc}</Markdown>
-    </div>
-  );
-}
 
 function PostContent({ post }: { post: GrayMatterFile<string> }) {
   return (
@@ -60,7 +54,7 @@ export default function PostPage({ params }: any) {
 
   return (
     <div className="max-w-2xl w-full relative">
-      {/* <TableOfContents toc={post.toc} /> */}
+      <TableOfContents toc={post.toc} />
       <PostContent post={post} />
     </div>
   );

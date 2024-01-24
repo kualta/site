@@ -15,9 +15,7 @@ export const getPostContent = (slug: string) => {
       }
       return null;
     })
-    .filter((line) => line !== null)
-    .join("\n");
-    
+    .filter((line) => line !== null);
 
   return {
     ...post,
