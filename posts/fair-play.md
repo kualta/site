@@ -8,9 +8,6 @@ preview: "/images/fair-play.jpg"
 
 ![/images/fair-play.jpg](/images/fair-play.jpg)
 
-> #### On second revision 
-##### In addition to the landscape changing, I have changed. When I wrote the first edition of this article, the title was "The art of online games balance". I chose that name because I felt that what I was describing in there was much like art. But art is subjective. Finding the objective means of balancing out multiplayer experiences was the main objective of this article all along.
-
 ## Abstract
 One essential aspect of any multiplayer game is the presence of game rules which define the game space and balance players' experience. 
 

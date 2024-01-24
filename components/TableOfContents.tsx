@@ -3,7 +3,7 @@
 export function TableOfContents({ toc }: { toc: (string | null)[] }) {
   const table = toc.map((element) => {
     const link = element
-      ?.replace(/[.,\/#!$%\^&\*;:{}'=\-_`~()]/g, "")
+      ?.replace(/[.,\/#!$%\^&\*;:{}'=\_`~()]/g, "")
       .split(" ")
       .join("-")
       .slice(1)
@@ -14,11 +14,17 @@ export function TableOfContents({ toc }: { toc: (string | null)[] }) {
 
     if (element)
       return (
-        <a href={link} className="text-md" key={`${link}`}>
-          {text}
-        </a>
+        <li>
+          <a href={link} className="text-md" key={`${link}`}>
+            {text}
+          </a>
+        </li>
       );
   });
 
-  return <div className="top-10 left-[70%] fixed hidden 2xl:flex flex-col gap-2">{table}</div>;
+  return (
+    <div className="top-10 left-[70%] fixed hidden 2xl:flex flex-col gap-2">
+      <ol className="list-decimal">{table}</ol>
+    </div>
+  );
 }
