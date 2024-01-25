@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export function TableOfContents({ toc }: { toc: (string | null)[] }) {
+export default function TableOfContents({ toc }: { toc: (string | null)[] }) {
   const hash = useHash();
 
   const table = toc.map((element) => {

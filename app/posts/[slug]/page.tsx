@@ -1,9 +1,13 @@
 import { getPostContent } from "@/components/PostContent";
-import { TableOfContents } from "@/components/TableOfContents";
 import getPostsMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
 import { Metadata } from "next";
+import dynamic from "next/dynamic";
+
+const TableOfContents = dynamic(() => import("components/TableOfContents"), {
+  ssr: false,
+});
 
 export function generateMetadata({ params }: any): Metadata {
   const post = getPostContent(params.slug);
