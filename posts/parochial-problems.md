@@ -7,12 +7,13 @@ preview: "/images/parochial-problems/preview.png"
 ---
 
 ![/images/parochial-problems/preview.png](/images/parochial-problems/preview.png)
+## Preamble
 
 The following was a short conversation between me (**K**) and my new friend (**Y**), who recently arrived from West Africa to pursue their 2nd Masters degree in the city where I was living at the time. 
 
 It happened while we were waiting for the elevator.
 
-<div className="text-center text-xl"> _<...>_ </div>
+## Dialogue
 
 **Y:** History is important... You have to remember what their ancestors did to your ancestors! So you don't make the same mistakes...
 
@@ -35,8 +36,6 @@ It happened while we were waiting for the elevator.
 **K:** I think you severely underestimate the power of infinity, my friend. In a few years, all of these parochial problems would cease to exist. Once we solve alignment, everything else gets solved, too.
 
 _[The elevator doors opened, and we both stepped inside]_
-
-<div className="text-center text-xl"> _<...>_ </div>
 
 ## Takeaways
 

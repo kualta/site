@@ -45,7 +45,7 @@ I must conclude that **it is impossible** to create a completely fair **madness 
 
 It is essential to comprehend the fundamental differences between **madness play** and **fair play**. The primary distinction between the two genres lies in the utilization of the player's **real skills**, which determine the outcome of the game, versus their **virtual skils**, that demands little to no effort, but allows to empower the player. Therefore, it is necessary to explore potential solutions that bridge this gap between real and virtual skills.
 
-## Solution
+## Mad-fair Play
 To address this issue, I propose the concept of a **unique challenge** that leverages the player's **real skills** to create **unique gameplay** experiences. To better understand this concept, let's refer to _"The Art of Game Design"_, chapter 10 of which describes the relationship between a player's skill level and the level of challenge required to maintain their interest in the game.
 
 ![/images/unique_challenge.png](/images/unique_challenge.png)
@@ -55,7 +55,6 @@ To illustrate the concept, let's modify Jesse's diagram in this chapter to inclu
 2. Aim to avoid monotony and anxiety-inducing gameplay experiences.
 3. Want more **unique experiences** to require more of player's **real skills**
 
-### Mad-Fair Play
 The chart presented above provides an overview of the **mad-fair play** concept and, since the new axis can go up to infinity, it shows-off its potential. To better explain the concept, let's imagine how it could be implemented in a real game.
 
 Consider the Reaper's teleport ability in Overwatch. This usage of it is very straightforward: the player selects the ability using the E key and then chooses a location to teleport to. The player's character enters a preparation stance, and after a loud sound effect, teleports to the chosen location, making their presence known to their opponents. This mechanic is an example of a balanced gameplay element in a fair play game.
