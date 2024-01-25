@@ -5,7 +5,7 @@ import { Card } from "./Card";
 
 const PostPreview = (props: PostMetadata) => {
   return (
-    <Link href={`/posts/${props.filename}`} className="w-fit sm:w-full sm:mx-10">
+    <Link href={`/posts/${props.filename}`} className="w-fit sm:w-full sm:mx-16">
       <div>
         <Card key={props.description}>
           <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-4 w-fit">

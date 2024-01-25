@@ -34,7 +34,6 @@ export const generateStaticParams = async () => {
   }));
 };
 
-
 function PostContent({ post }: { post: GrayMatterFile<string> }) {
   return (
     <article
@@ -44,7 +43,20 @@ function PostContent({ post }: { post: GrayMatterFile<string> }) {
     >
       <h1 className="mb-2 text-center">{post.data.title}</h1>
       <h3 className="mb-6 mt-0 text-center">{post.data.description}</h3>
-      <Markdown>{post.content}</Markdown>
+      <Markdown
+        options={{
+          overrides: {
+            h1: { props: { className: "pt-6 -mt-6" } },
+            h2: { props: { className: "pt-6 -mt-6" } },
+            h3: { props: { className: "pt-6 -mt-6" } },
+            h4: { props: { className: "pt-6 -mt-6" } },
+            h5: { props: { className: "pt-6 -mt-6" } },
+            h6: { props: { className: "pt-6 -mt-6" } },
+          },
+        }}
+      >
+        {post.content}
+      </Markdown>
     </article>
   );
 }

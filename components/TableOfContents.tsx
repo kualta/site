@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 export function TableOfContents({ toc }: { toc: (string | null)[] }) {
   const hash = useHash();
@@ -27,8 +27,8 @@ export function TableOfContents({ toc }: { toc: (string | null)[] }) {
   });
 
   return (
-    <div className="top-10 left-10 text-right fixed hidden 2xl:flex flex-col gap-3">
-      <ol className="">{table}</ol>
+    <div className="top-10 left-16 fixed hidden 2xl:flex flex-col gap-3">
+      <ol className="list-decimal">{table}</ol>
     </div>
   );
 }
