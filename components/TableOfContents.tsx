@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 export function TableOfContents({ toc }: { toc: (string | null)[] }) {
+  const hash = useHash();
+
   const table = toc.map((element) => {
     const link = element
       ?.replace(/[.,\/#!$%\^&\*;:{}'=\_`~()]/g, "")
@@ -13,18 +15,8 @@ export function TableOfContents({ toc }: { toc: (string | null)[] }) {
       .replace(/^/, "#");
 
     const text = element?.replaceAll("#", "");
-    const hash = useHash();
 
     const className = hash === link ? " font-bold" : "";
-    const [isMounted, setMounted] = useState(false);
-
-    useEffect(() => {
-      if (!isMounted) {
-        setMounted(true);
-      }
-    }, [isMounted]);
-
-    if (!isMounted) return null;
 
     if (element)
       return (
@@ -43,9 +35,15 @@ export function TableOfContents({ toc }: { toc: (string | null)[] }) {
 
 export function useHash() {
   const [isMounted, setMounted] = useState(false);
-  const [hash, setHash] = useState("");
+  const [hash, setHash] = useState(window.location.hash);
 
   useEffect(() => {
+    const isClient = typeof window !== "undefined";
+
+    if (isClient) {
+      setHash(window.location.hash);
+    }
+
     const hashChange = () => {
       if (isMounted && window?.location?.hash) {
         setHash(window.location.hash);
