@@ -26,7 +26,6 @@ export function TableOfContents({ toc }: { toc: (string | null)[] }) {
 
     if (!isMounted) return null;
 
-
     if (element)
       return (
         <li key={`${link}`} className={className}>
@@ -44,11 +43,11 @@ export function TableOfContents({ toc }: { toc: (string | null)[] }) {
 
 export function useHash() {
   const [isMounted, setMounted] = useState(false);
-  const [hash, setHash] = useState(window.location.hash);
+  const [hash, setHash] = useState("");
 
   useEffect(() => {
     const hashChange = () => {
-      if (isMounted) {
+      if (isMounted && window?.location?.hash) {
         setHash(window.location.hash);
       } else {
         setMounted(true);
