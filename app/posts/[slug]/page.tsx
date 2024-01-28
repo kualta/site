@@ -1,4 +1,5 @@
 import { getPostContent } from "@/components/PostContent";
+import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
@@ -70,7 +71,9 @@ export default function PostPage({ params }: any) {
 
   return (
     <div className="max-w-2xl w-full relative">
-      <TableOfContents toc={post.toc} />
+      <FadeIn>
+        <TableOfContents toc={post.toc} />
+      </FadeIn>
       <PostContent post={post} />
     </div>
   );
