@@ -6,8 +6,8 @@ import { useState } from "react";
 import { FiCopy, FiExternalLink, FiGithub } from "react-icons/fi";
 import { MdOutlineExpandLess, MdOutlineExpandMore } from "react-icons/md";
 
-export const ProjectCard = ({ project }: { project: Project }) => {
-  const [expanded, setExpanded] = useState(false);
+export const ProjectCard = ({ project, expandAll }: { project: Project; expandAll: boolean }) => {
+  const [expanded, setExpanded] = useState(expandAll);
   const statusStyles =
     project.status === "complete" || project.status === "ongoing" ? "text-text dark:text-dark-text" : "text-secondary";
   const dateText = new Date(project.date).toLocaleDateString();
@@ -52,10 +52,10 @@ export const ProjectCard = ({ project }: { project: Project }) => {
               {project.status}
             </p>
             <button type="button" className="text-secondary-text hover:text-text dark:hover:text-dark-text -mb-1">
-              {expanded ? <MdOutlineExpandLess /> : <MdOutlineExpandMore />}
+              {expanded || expandAll ? <MdOutlineExpandLess /> : <MdOutlineExpandMore />}
             </button>
           </span>
-          {expanded ? (
+          {expanded || expandAll ? (
             <>
               <span className="gap-2 flex sm:hidden items-center">
                 <b>status: </b>
@@ -69,7 +69,7 @@ export const ProjectCard = ({ project }: { project: Project }) => {
                 <p>{dateText}</p>
               </span>
               <span className="gap-2 flex items-center">
-                <b>stack: </b>
+                <b>tech: </b>
                 <p className="flex flex-wrap gap-2">
                   <span className="border px-2 py-0.5 rounded-lg">{project.language}</span>
                   {project.tech_stack.map((v) => (
