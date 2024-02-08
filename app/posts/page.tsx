@@ -1,3 +1,4 @@
+import SubscriptionBox from "@/components/SubscriptionBox";
 import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
 import PostPreview from "components/PostPreview";
@@ -28,6 +29,7 @@ const HomePage = () => {
         <div className="flex flex-col place-items-center justify-center px-2 gap-4 mb-20">
           <div className="flex place-content-center justify-center flex-row flex-wrap p-4">{tags}</div>
           {posts}
+          <SubscriptionBox />
         </div>
       </FadeIn>
     </div>

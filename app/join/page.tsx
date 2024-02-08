@@ -1,4 +1,4 @@
-import SubscriptionPage from "./SubscribtionPage";
+import SubscriptionBox from "../../components/SubscriptionBox";
 import { FiAtSign } from "react-icons/fi";
 import { RiDiscordFill } from "react-icons/ri";
 import { TbBox } from "react-icons/tb";
@@ -14,7 +14,7 @@ export default function page() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-3xl font-bold text-center mt-8">Subscribe</h1>
-      <SubscriptionPage />
+      <SubscriptionBox />
       <p className="text-2xl p-4">Kurier will deliver latest news and events right into your mailbox.</p>
 
       <h1 className="text-3xl font-bold text-center mt-32">Join Kunet</h1>

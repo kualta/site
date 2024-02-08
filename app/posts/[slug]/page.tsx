@@ -1,4 +1,5 @@
 import { getPostContent } from "@/components/PostContent";
+import SubscriptionBox from "@/components/SubscriptionBox";
 import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
@@ -70,11 +71,12 @@ export default function PostPage({ params }: any) {
   const post = getPostContent(params.slug);
 
   return (
-    <div className="max-w-2xl w-full relative">
+    <div className="max-w-2xl w-full relative mb-10">
       <FadeIn>
         <TableOfContents toc={post.toc} />
       </FadeIn>
       <PostContent post={post} />
+      <SubscriptionBox />
     </div>
   );
 }

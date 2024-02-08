@@ -2,7 +2,7 @@
 import { Card } from "@/components/Card";
 import { useState } from "react";
 
-const SubscriptionPage = () => {
+const SubscriptionBox = () => {
   const [success, setSuccess] = useState<boolean | undefined>(undefined);
 
   const handleSubmit = (event: any) => {
@@ -52,4 +52,4 @@ const SubscriptionPage = () => {
   );
 };
 
-export default SubscriptionPage;
+export default SubscriptionBox;
