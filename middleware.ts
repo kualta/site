@@ -4,18 +4,14 @@ import { NextResponse } from "next/server";
 const redirects: { [key: string]: string } = {
   vids: "https://kualta.dev/vids",
   arts: "https://kualta.dev/arts",
-  noir: "https://kualta.dev/noir",
   git: "https://kualta.dev/repo/kualta",
   api: "https://kualta.dev/api",
-  apis: "https://kualta.dev/api",
   repo: "https://kualta.dev/repo/kualta",
-  bbdd: "https://kualta.dev/blackbox",
   moji: "https://kualta.dev/kaomoji",
   blog: "https://kualta.dev/posts",
   post: "https://kualta.dev/posts",
-  posts: "https://kualta.dev/posts",
   pics: "https://kualta.dev/pics",
-  imgs: "https://kualta.dev/pics",
+  join: "https://kualta.dev/join",
 };
 
 export function middleware(request: NextRequest) {
