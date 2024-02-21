@@ -2,7 +2,7 @@
 <a href="https://blog.kualta.dev">blog.kualta.dev</a>
 <a href="https://mail.kualta.dev/subscription/form">mail.kualta.dev</a>
 <a href="https://moji.kualta.dev">moji.kualta.dev</a>
-<a href="https://apis.kualta.dev">apis.kualta.dev</a>
+<a href="https://api.kualta.dev">api.kualta.dev</a>
 <a href="https://wasm.kualta.dev">wasm.kualta.dev</a>
 <a href="https://pomo.kualta.dev">pomo.kualta.dev</a>
 <a href="https://hemi.kualta.dev">hemi.kualta.dev</a>
