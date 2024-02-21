@@ -8,7 +8,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "format": "bunx @biomejs/biome format --write ./app/* ./components/*",
+    "lint": "bunx @biomejs/biome lint --apply-unsafe ./app/* ./components/*",
+    "check": "bunx @biomejs/biome check --apply-unsafe ./app/* ./components/*"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { fredoka } from "styles/fonts";
 import { IsChristmas, Snow } from "@/components/Effects";
 import { CornersScope } from "@/components/CornersScope";
+import { Card } from "@/components/Card";
+import { FiBell } from "react-icons/fi";
 
 export const metadata = {
   metadataBase: new URL("https://kualta.dev"),
@@ -112,6 +114,12 @@ export default function RootLayout({
 
         <div className="hidden sm:flex  border-text dark:border-dark-text">
           <CornersScope />
+        </div>
+
+        <div className="absolute top-0 right-0 p-5 m-4">
+          <Link className="active:text-secondary-text" href="/join">
+            <FiBell size={22} />
+          </Link>
         </div>
 
         <Analytics />
