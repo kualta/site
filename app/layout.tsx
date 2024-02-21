@@ -118,7 +118,7 @@ export default function RootLayout({
 
         <div className="absolute top-0 right-0 p-5 m-4">
           <Link className="active:text-secondary-text" href="/join">
-            <FiBell size={22} />
+            <FiBell size={20} />
           </Link>
         </div>
 
