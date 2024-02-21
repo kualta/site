@@ -110,7 +110,7 @@ export default function RootLayout({
 
         <div className="flex flex-col items-center grow w-full h-full">{children}</div>
 
-        <div className="hidden sm:flex -z-10 border-text dark:border-dark-text">
+        <div className="hidden sm:flex  border-text dark:border-dark-text">
           <CornersScope />
         </div>
 
