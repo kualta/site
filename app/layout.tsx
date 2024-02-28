@@ -116,7 +116,7 @@ export default function RootLayout({
           <CornersScope />
         </div>
 
-        <div className="absolute top-0 right-0 p-5 m-4">
+        <div className="hidden sm:flex absolute top-0 right-0 p-5 m-4">
           <Link className="active:text-secondary-text" href="/join">
             <FiBell size={20} />
           </Link>
