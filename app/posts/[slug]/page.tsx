@@ -28,6 +28,7 @@ export function generateMetadata({ params }: any): Metadata {
     authors: [
       {
         name: "kualta",
+        url: "https://kualta.dev/",
       },
     ],
   };
