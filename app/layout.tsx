@@ -50,14 +50,14 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    images: "/og_image.png",
+    images: "/opengraph-image.png",
     title: "kualta.dev",
     description: "glimse into the void",
     creator: "@kualts",
   },
   category: "blog",
   openGraph: {
-    images: "/og_image.png",
+    images: "/opengraph-image.png",
   },
   icons: {
     icon: "/favicon.ico",
