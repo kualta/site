@@ -2,8 +2,12 @@ import { ContactIcon } from "components/ContactIcons";
 import { Contact } from "@prisma/client";
 import { FadeIn } from "@/components/Transitions";
 import { Card } from "@/components/Card";
-import { fredoka } from "styles/fonts";
 import { getAllContacts } from "prisma/dataFetch";
+
+export const metadata = {
+  title: "contacts",
+  description: "contact kualta",
+};
 
 async function ContactsPage() {
   const contacts = await (await getAllContacts()).json();

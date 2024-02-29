@@ -7,8 +7,8 @@ import { Card } from "@/components/Card";
 import { CornersScope } from "@/components/CornersScope";
 
 export const metadata = {
-  title: "Subscribe",
-  description: "Subscribe to Kunet News",
+  title: "join",
+  description: "join kunet",
 };
 
 export default function page() {

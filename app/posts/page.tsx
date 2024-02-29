@@ -4,6 +4,11 @@ import getPostsMetadata from "components/PostMetadata";
 import PostPreview from "components/PostPreview";
 import Link from "next/link";
 
+export const metadata = {
+  title: "posts",
+  description: "kualta's blog posts",
+};
+
 const HomePage = () => {
   const postMetadata = getPostsMetadata();
   const posts = postMetadata.map((post) => <PostPreview key={post.filename} {...post} />);

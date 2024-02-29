@@ -1,5 +1,10 @@
 import { FiFileText, FiGitBranch, FiStar } from "react-icons/fi";
 
+export const metadata = {
+  title: "repos",
+  description: "github repos for user",
+};
+
 async function page({ params }: any) {
   const username = params.slug;
   const repos = await (await fetch(`https://api.github.com/users/${username}/repos`)).json();

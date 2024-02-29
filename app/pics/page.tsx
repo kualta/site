@@ -4,7 +4,11 @@ import { CornersScope } from "@/components/CornersScope";
 import Link from "next/link";
 
 export const revalidate = 0;
-// export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "pics",
+  description: "AI-generated kuolluts",
+};
 
 async function page() {
   const { url } = await (await getRandomImage()).json();

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://kualta.dev"),
   title: {
     default: "kualta",
-    template: "%s - kualta",
+    template: "%s",
   },
   description: "glimpse into the void",
   keywords: [
@@ -38,14 +38,14 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    nocache: true,
+    nocache: false,
     googleBot: {
       index: true,
       follow: true,
-      noimageindex: true,
+      noimageindex: false,
       "max-video-preview": -1,
       "max-image-preview": "large",
-      "max-snippet": -1,
+      "max-snippet": 300,
     },
   },
   twitter: {

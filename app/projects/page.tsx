@@ -2,6 +2,11 @@ import { Project } from "@prisma/client";
 import ProjectsPage from "./ProjectsPage";
 import SubscriptionBox from "@/components/SubscriptionBox";
 
+export const metadata = {
+  title: "projects",
+  description: "kualta & kunet projects",
+};
+
 async function page() {
   const projects: Project[] = await (
     await fetch("https://kualta.dev/api/projects", { next: { revalidate: 1 } })
