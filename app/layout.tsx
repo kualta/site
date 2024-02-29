@@ -5,12 +5,16 @@ import Link from "next/link";
 import { fredoka } from "styles/fonts";
 import { IsChristmas, Snow } from "@/components/Effects";
 import { CornersScope } from "@/components/CornersScope";
-import { Card } from "@/components/Card";
 import { FiBell } from "react-icons/fi";
+import { Metadata } from "next";
 
-export const metadata = {
+export const metadata: Metadata = {
   metadataBase: new URL("https://kualta.dev"),
-  title: "kualta",
+  title: {
+    default: "kualta",
+    template: "%s - kualta",
+  },
+  description: "glimpse into the void",
   keywords: [
     "kualta",
     "kualts",
@@ -18,34 +22,26 @@ export const metadata = {
     "kualta.com",
     "kualta.art",
     "kualta gallery",
-    "kualtaagency.com",
     "kualtadev",
     "kuollut",
-    "kualta agency",
-    "kualta digital marketing",
     "ku",
     "kualta website",
     "kualta blog",
-    "ai",
-    "artificial intelligence",
-    "artificial intelligence blog",
-    "artificial intelligence website",
+    "ai blog",
     "philosophy",
     "philosophy blog",
-    "philosophy website",
     "kualta philosophy",
     "kualta philosophy blog",
     "kualta philosophy website",
-    "philosophy in the mad world",
     "beauty in the mad world",
   ],
   robots: {
-    index: false,
+    index: true,
     follow: true,
     nocache: true,
     googleBot: {
       index: true,
-      follow: false,
+      follow: true,
       noimageindex: true,
       "max-video-preview": -1,
       "max-image-preview": "large",
@@ -53,7 +49,8 @@ export const metadata = {
     },
   },
   twitter: {
-    card: "/og_image.png",
+    card: "summary_large_image",
+    images: "/og_image.png",
     title: "kualta.dev",
     description: "glimse into the void",
     creator: "@kualts",
@@ -62,10 +59,8 @@ export const metadata = {
   openGraph: {
     images: "/og_image.png",
   },
-  description: "glimpse into the void",
-  url: "https://kualta.dev",
   icons: {
-    icon: "/icon.png",
+    icon: "/favicon.ico",
   },
 };
 
