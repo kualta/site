@@ -6,7 +6,7 @@ tags: ["game-design", "english"]
 preview: "/images/fair-play.jpg"
 ---
 
-![/images/fair-play.jpg](/images/fair-play.jpg)
+![/images/fair-play/preview.jpg](/images/fair-play/preview.jpg)
 
 ## Abstract
 One essential aspect of any multiplayer game is the presence of game rules which define the game space and balance players' experience. 
@@ -48,7 +48,7 @@ It is essential to comprehend the fundamental differences between **madness play
 ## Mad-fair Play
 To address this issue, I propose the concept of a **unique challenge** that leverages the player's **real skills** to create **unique gameplay** experiences. To better understand this concept, let's refer to _"The Art of Game Design"_, chapter 10 of which describes the relationship between a player's skill level and the level of challenge required to maintain their interest in the game.
 
-![/images/unique_challenge.png](/images/unique_challenge.png)
+![/images/fair-play/unique-challenge.png](/images/fair-play/unique-challenge.png)
 
 To illustrate the concept, let's modify Jesse's diagram in this chapter to include the **challenge uniqueness** axis within the **flow channel**. It lies there since we: 
 1. Need to continuously increase the amount of challenge required.

@@ -3,10 +3,10 @@ title: "Parochial Problems"
 description: "an elevator to the exponential"
 date: "2023-11-06"
 tags: ["philosophy", "english"]
-preview: "/images/parochial-problems/preview.png"
+preview: "/images/parochial-problems/preview.jpg"
 ---
 
-![/images/parochial-problems/preview.png](/images/parochial-problems/preview.png)
+![/images/parochial-problems/preview.jpg](/images/parochial-problems/preview.jpg)
 ## Preamble
 
 The following was a short conversation between me (**K**) and my new friend (**Y**), who recently arrived from West Africa to pursue their 2nd Masters degree in the city where I was living at the time. 
