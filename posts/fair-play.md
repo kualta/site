@@ -17,10 +17,6 @@ It describes the concept of **mad-fair play**, which involves creating **unique 
 
 > ##### Note: This article builds on top of the concepts introduced in the Jesse Schell's book _"The Art of Game Design"_, such as **symmetric** and **asymmetric** games, **real** and **virtual** skills. I recommend getting familiar with those first.
 
-<div>
-
-> ##### Note: This article does not focus on balancing game mechanics, but rather on balancing the rule sets that define the game space.
-
 ## Preamble
 Let's start by first categorizing existing multiplayer experiences based on their rule sets. All existing games can be split into two types.  Let's call them **fair play** and **madness play**.
 
