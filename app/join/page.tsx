@@ -5,6 +5,7 @@ import { TbBox } from "react-icons/tb";
 import { SiMatrix } from "react-icons/si";
 import { Card } from "@/components/Card";
 import { CornersScope } from "@/components/CornersScope";
+import Sticker from "@/components/Sticker";
 
 export const metadata = {
   title: "join",
@@ -22,6 +23,10 @@ export default function page() {
           Kurier will deliver latest news and events <br />
           right into your mailbox.
         </p>
+        <Sticker
+          name="kurier"
+          className="absolute w-32 h-32 md:w-48 md:h-48 -right-10 -bottom-10 md:-right-24 md:-bottom-24"
+        />
       </div>
 
       <div className="flex flex-col gap-4 p-10 mt-20 relative">
