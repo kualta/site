@@ -3,6 +3,7 @@ import { Contact } from "@prisma/client";
 import { FadeIn } from "@/components/Transitions";
 import { Card } from "@/components/Card";
 import { getAllContacts } from "prisma/dataFetch";
+import { PGPButton } from "./PGPButton";
 
 export const metadata = {
   title: "contacts",
@@ -29,6 +30,8 @@ async function ContactsPage() {
             </Card>
           );
         })}
+
+        <PGPButton />
       </div>
     </FadeIn>
   );
