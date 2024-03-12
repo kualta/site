@@ -13,7 +13,7 @@ export const ProjectCard = ({ project, expandAll }: { project: Project; expandAl
   const dateText = new Date(project.date).toLocaleDateString();
 
   return (
-    <div onClick={() => setExpanded(!expanded)} onKeyDown={() => setExpanded(!expanded)}>
+    <div onClick={() => setExpanded(!expanded)}>
       <Card>
         <div className={"min-w-0 w-full flex text-sm flex-col gap-2 -mb-1 group"}>
           <span className={"text-base -mt-2 flex group items-center gap-2 place-items-center justify-center min-w-0"}>
@@ -29,8 +29,11 @@ export const ProjectCard = ({ project, expandAll }: { project: Project; expandAl
             <p className=" truncate ">- {project.description}</p>
             {project.link && (
               <a
+                target="_blank"
+                rel="noreferrer"
                 href={project.link}
                 className="text-secondary-text hover:scale-110 hover:text-text dark:hover:text-dark-text"
+                onClick={(e) => e.stopPropagation()}
               >
                 <FiExternalLink />
               </a>
@@ -38,8 +41,11 @@ export const ProjectCard = ({ project, expandAll }: { project: Project; expandAl
             {project.git_link && (
               <>
                 <a
+                  target="_blank"
+                  rel="noreferrer"
                   href={project.git_link}
                   className="text-secondary-text hover:scale-110 hover:text-text dark:hover:text-dark-text"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <FiGithub />
                 </a>

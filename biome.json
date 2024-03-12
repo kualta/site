@@ -10,7 +10,10 @@
     "enabled": true
   },
   "files": {
-    "ignore": [".next/*", ".node_modules/*"]
+    "ignore": [
+      ".next/*",
+      ".node_modules/*"
+    ]
   },
   "linter": {
     "enabled": true,
@@ -18,6 +21,10 @@
       "recommended": true,
       "suspicious": {
         "noExplicitAny": "off"
+      },
+      "a11y": {
+        "useValidAnchor": "off",
+        "useKeyWithClickEvents": "off"
       }
     }
   }

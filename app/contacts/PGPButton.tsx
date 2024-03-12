@@ -1,8 +1,7 @@
 "use client";
 import { Card } from "@/components/Card";
-import { FiDownload, FiKey, FiLock } from "react-icons/fi";
-import { MdKey } from "react-icons/md";
-import { LuKeyRound, LuKeySquare } from "react-icons/lu";
+import { FiDownload } from "react-icons/fi";
+import { LuKeyRound } from "react-icons/lu";
 
 export function PGPButton() {
   return (
