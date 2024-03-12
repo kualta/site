@@ -78,7 +78,7 @@ export const ProjectCard = ({ project, expandAll }: { project: Project; expandAl
                 <b>tech: </b>
                 <p className="flex flex-wrap gap-2">
                   <span className="border px-2 py-0.5 rounded-lg">{project.language}</span>
-                  {project.tech_stack.map((v) => (
+                  {project.tech_stack.map((v: string) => (
                     <span key={v} className="border px-2 py-0.5 rounded-lg">
                       {v}
                     </span>
