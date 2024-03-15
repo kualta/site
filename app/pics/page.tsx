@@ -26,6 +26,7 @@ async function page() {
             width={1000}
             height={1000}
             alt="a random kuollut"
+            priority={true}
           />
         </div>
       </div>

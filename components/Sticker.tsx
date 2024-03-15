@@ -8,6 +8,7 @@ export default function Sticker(props: { name: string; width?: number; height?: 
       src={`/images/stickers/${props.name}.png`}
       width={props.width || 512}
       height={props.height || 512}
+      priority={true}
     />
   );
 }

@@ -7,6 +7,7 @@ import { IsChristmas, Snow } from "@/components/Effects";
 import { CornersScope } from "@/components/CornersScope";
 import { FiBell } from "react-icons/fi";
 import { Metadata } from "next";
+import Head from "next/head";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kualta.dev"),
@@ -38,14 +39,9 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    nocache: false,
     googleBot: {
       index: true,
       follow: true,
-      noimageindex: false,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": 300,
     },
   },
   twitter: {
@@ -71,7 +67,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="scroll-smooth dark">
-      <head />
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </Head>
       <body
         className={`bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-all 
         ease-in-out delay-150 dark:text-dark-text place-items-center w-screen 

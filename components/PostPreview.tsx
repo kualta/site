@@ -24,7 +24,13 @@ const PostPreview = (props: PostMetadata) => {
           )}
 
           <div className="grow h-36 sm:h-28 aspect-video relative">
-            <Image src={props.preview} alt={props.title} fill={true} className="rounded-xl object-contain" />
+            <Image
+              src={props.preview}
+              alt={props.title}
+              fill={true}
+              className="rounded-xl object-contain"
+              priority={true}
+            />
           </div>
 
           <div className="flex flex-col gap-1 sm:gap-2 w-full">
