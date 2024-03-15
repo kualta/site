@@ -1,7 +1,6 @@
 "use client";
 import { Project } from "@prisma/client";
 import { Card } from "./Card";
-import { fredoka } from "styles/fonts";
 import { useState } from "react";
 import { FiCopy, FiExternalLink, FiGithub } from "react-icons/fi";
 import { MdOutlineExpandLess, MdOutlineExpandMore } from "react-icons/md";

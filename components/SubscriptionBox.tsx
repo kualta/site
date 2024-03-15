@@ -30,7 +30,7 @@ const SubscriptionBox = () => {
           <form onSubmit={handleSubmit} className="listmonk-form">
             <div className="flex flex-row gap-2">
               <input
-                className="p-3 rounded-lg bg-secondary dark:bg-dark-secondary accent-primary"
+                className="p-3 rounded-lg bg-secondary dark:bg-dark-secondary accent-primary w-fit"
                 type="email"
                 name="email"
                 required
@@ -45,7 +45,7 @@ const SubscriptionBox = () => {
             </div>
           </form>
         ) : (
-          <div className="w-98">Subscribed!</div>
+          <div className="w-full">Subscribed!</div>
         )}
       </Card>
     </div>

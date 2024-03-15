@@ -17,10 +17,10 @@ async function TagsPage({ params }: { params: { slug: string } }) {
   const tagText = params.slug.replace("-", " ").toLowerCase();
 
   return (
-    <div className="max-w-xl sm:max-w-2xl">
+    <div className="max-w-2xl">
       <FadeIn>
-        <div className="flex flex-col place-items-center justify-center px-2 gap-4 mb-20">
-          <div className="flex place-items-center justify-center flex-row flex-wrap gap-x-8 p-4">
+        <div className="flex flex-col place-items-center justify-center gap-4 mb-20">
+          <div className="flex place-content-center justify-center flex-row flex-wrap p-4">
             <Link href="/posts/">
               <span className="select-none">•</span>
               <span className="px-4 ">{tagText}</span>
