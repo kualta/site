@@ -3,11 +3,12 @@ import { Card } from "@/components/Card";
 import { useState } from "react";
 import { MetaButton } from "./MetaButton";
 import Link from "next/link";
-import { FiBell } from "react-icons/fi";
+import { FiBell, FiMail } from "react-icons/fi";
+import { LuMail, LuMailCheck } from "react-icons/lu";
 
 export const SubscriptionBox = () => {
   return (
-    <div className="flex flex-row place-content-center items-center justify-center mx-auto w-fit">
+    <div className="flex gap-4 flex-row place-content-center items-center justify-center w-full p-2 pl-4">
       <MetaButton>
         <Link className="active:text-secondary-text" href="/join">
           <Card>
@@ -43,7 +44,7 @@ export const EmailSubscription = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 place-content-center items-center justify-center mx-4 w-fit">
+    <div className="flex flex-col gap-4 place-content-center items-center justify-center w-fit">
       {success === undefined ? (
         <form onSubmit={handleSubmit} className="listmonk-form">
           <div className="flex flex-row gap-2">
@@ -55,16 +56,28 @@ export const EmailSubscription = () => {
               placeholder="E-mail"
             />
             <button
-              className="bg-primary dark:bg-dark-primary p-3 rounded-lg hover:opacity-50 hover:cursor-pointer text-white"
+              className="hidden sm:flex bg-primary dark:bg-dark-primary p-3 rounded-lg hover:opacity-50 hover:cursor-pointer text-white"
               name="submit"
               type="submit"
             >
               Subscribe
             </button>
+            <button
+              className="flex sm:hidden bg-primary dark:bg-dark-primary p-3 rounded-lg hover:opacity-50 hover:cursor-pointer text-white"
+              name="submit"
+              type="submit"
+            >
+              <LuMail size={24} />
+            </button>
           </div>
         </form>
       ) : (
-        <div className="w-full">Subscribed!</div>
+        <Card>
+          <div className="w-full flex flex-row gap-4">
+            Subscribed!
+            <LuMailCheck size={24} />
+          </div>
+        </Card>
       )}
     </div>
   );
