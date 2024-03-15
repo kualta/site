@@ -11,7 +11,7 @@ const PostCard = (props: PostMetadata) => {
   const newFlair = days < 30;
 
   return (
-    <Link href={`/posts/${props.filename}`} className="sm:w-[600px] min-w-[250px] w-fit relative">
+    <Link href={`/posts/${props.filename}`} className="sm:w-[640px] min-w-[250px] w-fit relative">
       <Card key={props.description}>
         <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-4 w-fit">
           {newFlair && (
@@ -23,7 +23,7 @@ const PostCard = (props: PostMetadata) => {
             </div>
           )}
 
-          <div className="grow min-w-[250px] w-[80vw] sm:w-[350px] aspect-video relative">
+          <div className="grow min-w-[230px] w-[80vw] sm:w-[300px] aspect-video relative">
             <Image
               src={props.preview}
               alt={props.title}
