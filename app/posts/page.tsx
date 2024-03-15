@@ -1,7 +1,7 @@
 import SubscriptionBox from "@/components/SubscriptionBox";
 import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
-import PostPreview from "components/PostPreview";
+import PostCard from "@/components/PostCard";
 import Link from "next/link";
 
 export const metadata = {
@@ -11,7 +11,7 @@ export const metadata = {
 
 const HomePage = () => {
   const postMetadata = getPostsMetadata();
-  const posts = postMetadata.map((post) => <PostPreview key={post.filename} {...post} />);
+  const posts = postMetadata.map((post) => <PostCard key={post.filename} {...post} />);
   const tagsSet = [...new Set(postMetadata.flatMap((post) => post.tags))];
   const tags = tagsSet.map((tag, i, arr) => {
     const text = tag.replace("-", " ").toLowerCase();

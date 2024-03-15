@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PostMetadata } from "./PostMetadata";
 import { Card } from "./Card";
 
-const PostPreview = (props: PostMetadata) => {
+const PostCard = (props: PostMetadata) => {
   const published = new Date(props.date);
   const today = new Date();
   const diff = today.getTime() - published.getTime();
@@ -11,7 +11,7 @@ const PostPreview = (props: PostMetadata) => {
   const newFlair = days < 30;
 
   return (
-    <Link href={`/posts/${props.filename}`} className="w-fit sm:w-full sm:mx-16 relative">
+    <Link href={`/posts/${props.filename}`} className="sm:w-[550px] w-full relative">
       <Card key={props.description}>
         <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-4 w-fit">
           {newFlair && (
@@ -23,7 +23,7 @@ const PostPreview = (props: PostMetadata) => {
             </div>
           )}
 
-          <div className="grow h-36 sm:h-28 aspect-video relative">
+          <div className="grow h-56 sm:h-28 aspect-video relative">
             <Image
               src={props.preview}
               alt={props.title}
@@ -35,7 +35,7 @@ const PostPreview = (props: PostMetadata) => {
 
           <div className="flex flex-col gap-1 sm:gap-2 w-full">
             <h1 className="font-extrabold text-xl">{props.title}</h1>
-            <p className="text-base flex-grow">{props.description}</p>
+            <p className="text-base flex-grow max-w-sm">{props.description}</p>
             <p className="text-sm text-secondary-text">{props.date}</p>
           </div>
         </div>
@@ -44,4 +44,4 @@ const PostPreview = (props: PostMetadata) => {
   );
 };
 
-export default PostPreview;
+export default PostCard;
