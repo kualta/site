@@ -4,6 +4,7 @@ import { PropsWithChildren, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MdArrowBack, MdOutlineDarkMode, MdOutlineLightMode } from "react-icons/md";
+import { FiBell } from "react-icons/fi";
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
@@ -18,7 +19,7 @@ export function BackButton() {
   const isMainPage = path === "/";
 
   if (isMainPage) {
-    return <div className="w-8 h-8" />;
+    return <div className="sm:w-8 sm:h-8" />;
   }
 
   return (
@@ -30,7 +31,19 @@ export function BackButton() {
   );
 }
 
-export default function ThemeToggle() {
+export function NotificationsButton() {
+  return (
+      <div className="hidden md:flex absolute top-0 right-0 text-2xl p-8">
+        <MetaButton>
+          <Link className="active:text-secondary-text" href="/join">
+            <FiBell size={22} strokeWidth="1.7" />
+          </Link>
+        </MetaButton>
+      </div>
+  )
+}
+
+export function ThemeToggle() {
   const [isDark, setIsDark] = useState(true);
   const path = usePathname();
   const isMainPage = path === "/";
@@ -49,7 +62,7 @@ export default function ThemeToggle() {
   }, [isDark]);
 
   if (isMainPage) {
-    return <div className="w-8 h-8" />;
+    return <div className="sm:w-8 sm:h-8" />;
   }
 
   return (

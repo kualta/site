@@ -1,13 +1,11 @@
-import ThemeToggle, { BackButton } from "@/components/MetaButton";
 import "styles/globals.css";
 import { Analytics } from "@vercel/analytics/react";
-import Link from "next/link";
 import { fredoka } from "styles/fonts";
 import { IsChristmas, Snow } from "@/components/Effects";
 import { CornersScope } from "@/components/CornersScope";
-import { FiBell } from "react-icons/fi";
 import { Metadata } from "next";
 import Head from "next/head";
+import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kualta.dev"),
@@ -72,7 +70,7 @@ export default function RootLayout({
       </Head>
       <body
         className={`bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-all 
-        ease-in-out delay-150 dark:text-dark-text place-items-center w-screen 
+        ease-in-out delay-150 dark:text-dark-text place-items-center 
         min-h-screen flex flex-col justify center relative ${fredoka.className}`}
       >
         <div className="noise" />
@@ -81,38 +79,12 @@ export default function RootLayout({
           <Snow />
         </IsChristmas>
 
-        <div
-          className={
-            "z-[100] flex flex-row place-content-between text-xl sm:text-2xl tracking-wide max-w-2xl w-full h-fit m-4 p-4"
-          }
-        >
-          <div>
-            <BackButton />
-          </div>
-          <Link className="active:text-secondary-text" href="/projects">
-            projects
-          </Link>
-          <Link className="active:text-secondary-text" href="/posts">
-            posts
-          </Link>
-          <Link className="active:text-secondary-text" href="/contacts">
-            contacts
-          </Link>
-          <div>
-            <ThemeToggle />
-          </div>
-        </div>
+        <Header />
 
         <div className="flex flex-col items-center grow w-full h-full">{children}</div>
 
         <div className="hidden sm:flex  border-text dark:border-dark-text">
           <CornersScope />
-        </div>
-
-        <div className="hidden sm:flex absolute top-0 right-0 p-5 m-4">
-          <Link className="active:text-secondary-text" href="/join">
-            <FiBell size={20} />
-          </Link>
         </div>
 
         <Analytics />
