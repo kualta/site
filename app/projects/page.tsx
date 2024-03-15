@@ -1,6 +1,6 @@
 import { Project } from "@prisma/client";
 import ProjectsPage from "./ProjectsPage";
-import SubscriptionBox from "@/components/SubscriptionBox";
+import { SubscriptionBox } from "@/components/SubscriptionBox";
 
 export const metadata = {
   title: "projects",
@@ -13,7 +13,7 @@ async function page() {
   ).json();
 
   return (
-    <div className="max-w-2xl w-full mb-10">
+    <div className="max-w-2xl w-full place-items-center justify-center mb-10">
       <ProjectsPage projects={projects} />
       <SubscriptionBox />
     </div>

@@ -1,4 +1,3 @@
-import SubscriptionBox from "../../components/SubscriptionBox";
 import { FiAtSign } from "react-icons/fi";
 import { RiDiscordFill } from "react-icons/ri";
 import { TbBox } from "react-icons/tb";
@@ -6,6 +5,7 @@ import { SiMatrix } from "react-icons/si";
 import { Card } from "@/components/Card";
 import { CornersScope } from "@/components/CornersScope";
 import Sticker from "@/components/Sticker";
+import { EmailSubscription } from "@/components/SubscriptionBox";
 
 export const metadata = {
   title: "join",
@@ -15,10 +15,10 @@ export const metadata = {
 export default function page() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 p-10 mt-20 relative">
+      <div className="flex flex-col place-items-center justify-center gap-4 p-10 mt-20 relative">
         <CornersScope top_left={false} bottom_right={false} />
         <h1 className="text-3xl font-bold text-center">Subscribe</h1>
-        <SubscriptionBox />
+        <EmailSubscription />
         <p className="text-xl text-center p-4 pt-0">
           Kurier will deliver latest news and events <br />
           right into your mailbox.

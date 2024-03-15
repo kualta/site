@@ -3,7 +3,7 @@ import Image from "next/image";
 export default function Sticker(props: { name: string; width?: number; height?: number; className?: string }) {
   return (
     <Image
-      className={props.className}
+      className={`${props.className} select-none pointer-events-none `}
       alt={`${props.name} sticker`}
       src={`/images/stickers/${props.name}.png`}
       width={props.width || 512}

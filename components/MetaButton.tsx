@@ -33,14 +33,14 @@ export function BackButton() {
 
 export function NotificationsButton() {
   return (
-      <div className="hidden md:flex absolute top-0 right-0 text-2xl p-8">
-        <MetaButton>
-          <Link className="active:text-secondary-text" href="/join">
-            <FiBell size={22} strokeWidth="1.7" />
-          </Link>
-        </MetaButton>
-      </div>
-  )
+    <div className="z-10 hidden md:flex absolute top-0 right-0 text-2xl p-8">
+      <MetaButton>
+        <Link className="active:text-secondary-text" href="/join">
+          <FiBell size={22} strokeWidth="1.7" />
+        </Link>
+      </MetaButton>
+    </div>
+  );
 }
 
 export function ThemeToggle() {

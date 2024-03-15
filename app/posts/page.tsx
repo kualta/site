@@ -1,8 +1,8 @@
-import SubscriptionBox from "@/components/SubscriptionBox";
 import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
 import PostCard from "@/components/PostCard";
 import Link from "next/link";
+import { SubscriptionBox } from "@/components/SubscriptionBox";
 
 export const metadata = {
   title: "posts",

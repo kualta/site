@@ -1,5 +1,5 @@
 import { getPostContent } from "@/components/PostContent";
-import SubscriptionBox from "@/components/SubscriptionBox";
+import { SubscriptionBox } from "@/components/SubscriptionBox";
 import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
 import { GrayMatterFile } from "gray-matter";
