@@ -69,7 +69,7 @@ export default function page() {
           </div>
         </div>
         <div className="text-lg sm:text-xl place-items-center justify-center flex flex-row gap-2">
-          Follow to not <b className="drop-shadow-glow-sm">miss a thing</b>
+          Follow to not <b className="drop-shadow-glow-sm">miss a thing.</b>
         </div>
       </div>
     </div>

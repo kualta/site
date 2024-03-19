@@ -2,6 +2,16 @@ import { PrismaClient } from "@prisma/client";
 import getPostsMetadata from "components/PostMetadata";
 import { NextResponse } from "next/server";
 import prisma from "./db";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error("Missing Supabase environment variables");
+}
+
+const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
 
 export async function getAllContacts() {
   const contacts = await prisma.contact.findMany({
@@ -33,27 +43,17 @@ export async function getAllProjects() {
   return NextResponse.json(projects);
 }
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { NextApiRequest, NextApiResponse } from "next";
-
-const supabaseUrl: string = process.env.SUPABASE_URL!;
-const supabaseKey: string = process.env.SUPABASE_KEY!;
-const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey);
-
 export async function getRandomImage() {
   try {
     const { data, error } = await supabase.storage.from("kuolluts").list();
+    if (error || !data) throw error;
 
-    if (error) throw error;
+    const randomFile = data[Math.floor(Math.random() * data.length)];
 
-    const randomFile = data![Math.floor(Math.random() * data!.length)];
-
-    // Get the download URL for the random file
     const {
       data: { publicUrl },
     } = supabase.storage.from("kuolluts").getPublicUrl(randomFile.name);
 
-    // Return the download URL
     return NextResponse.json({ url: publicUrl }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: `Could not fetch a kuollut: ${error}` }, { status: 500 });

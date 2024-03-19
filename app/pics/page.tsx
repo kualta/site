@@ -1,40 +1,27 @@
 import { getRandomImage } from "prisma/dataFetch";
-import Image from "next/image";
 import { CornersScope } from "@/components/CornersScope";
-import Link from "next/link";
 
 export const revalidate = 0;
 
 export const metadata = {
   title: "pics",
   description: "AI-generated kuolluts",
+
 };
 
 async function page() {
   const { url } = await (await getRandomImage()).json();
 
   return (
-    <div className="flex flex-col justify-center place-items-center gap-8 text-3xl">
-      <h1>THIS KUOLLUT DOES NOT EXIST</h1>
-      <div className="w-70 h-70 relative ">
+    <div className="flex flex-col justify-center place-items-center place-content-center my-auto gap-2 sm:gap-8">
+      <h1 className="uppercase text-xl sm:text-3xl">this kuollut does not exist</h1>
+      <div className="relative">
         <CornersScope />
-        <div className="w-64 h-auto m-10">
-          <Image
-            src={url}
-            className="rounded-xl"
-            style={{ width: "100%", height: "auto" }}
-            width={1000}
-            height={1000}
-            alt="a random kuollut"
-            priority={true}
-          />
+        <div className="m-10">
+          <img src={url} alt="" className="rounded-xl w-56 h-56 sm:w-96 sm:h-96 aspect-square object-cover" />
         </div>
       </div>
-      <h1>BUT DO YOU?</h1>
-      <p className="text-xs text-secondary-text flex flex-row gap-4">
-        <Link href="https://creativecommons.org/publicdomain/zero/1.0/">license</Link>
-        <Link href={"/contacts"}>contact</Link>
-      </p>
+      <h1 className="uppercase text-xl sm:text-3xl">but do you?</h1>
     </div>
   );
 }
