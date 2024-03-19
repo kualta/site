@@ -19,6 +19,7 @@ const PostCard = (props: PostMetadata) => {
               className="absolute top-0 right-0 text-xs hidden sm:flex border px-2 pb-0.5 m-3
             rounded-lg text-secondary-text leading-4 -mb-1 text-text dark:text-dark-text"
             >
+
               new
             </div>
           )}

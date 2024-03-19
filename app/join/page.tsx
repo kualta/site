@@ -1,5 +1,5 @@
 import { FiAtSign } from "react-icons/fi";
-import { RiDiscordFill } from "react-icons/ri";
+import { RiDiscordFill, RiTwitterXFill, RiTwitterXLine } from "react-icons/ri";
 import { TbBox } from "react-icons/tb";
 import { SiMatrix } from "react-icons/si";
 import { Card } from "@/components/Card";
@@ -20,8 +20,7 @@ export default function page() {
         <h1 className="text-3xl font-bold text-center">Subscribe</h1>
         <EmailSubscription />
         <p className="text-xl text-center p-4 pt-0">
-          Kurier will deliver latest news and events <br />
-          right into your mailbox.
+          Kurier will deliver latest news <br /> and events right into your mailbox.
         </p>
         <Sticker
           name="kurier"
@@ -31,9 +30,18 @@ export default function page() {
 
       <div className="flex flex-col gap-4 p-10 mt-20 relative">
         <CornersScope top_right={false} bottom_left={false} />
-        <h1 className="text-3xl font-bold text-center ">Join Kunet</h1>
+        <h1 className="text-3xl font-bold text-center">Notifications</h1>
         <div className="px-4 min-w-0">
           <div className="flex flex-col sm:flex-row gap-20 py-4 sm:px-4 place-content-around items-center ">
+            <a
+              href="https://twitter.com/kualts"
+              className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Twitter
+              <RiTwitterXFill size={32} />
+            </a>
             <a
               href="https://discord.gg/DhMeQAXW4F"
               className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
@@ -53,15 +61,15 @@ export default function page() {
               <FiAtSign size={30} />
               Soon
             </div>
-            <div className="opacity-50 flex flex-col justify-center items-center gap-2">
+            {/* <div className="opacity-50 flex flex-col justify-center items-center gap-2">
               Black Box
               <TbBox size={32} />
               Soon
-            </div>
+            </div> */}
           </div>
         </div>
         <div className="text-xl place-items-center justify-center flex flex-row gap-2">
-          An open community. <b className="drop-shadow-glow">Coming soon.</b>
+          Follow to not <b className="drop-shadow-glow-sm">miss a thing</b>
         </div>
       </div>
     </div>
