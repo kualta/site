@@ -93,7 +93,10 @@ export const ProjectCard = ({ project, expandAll }: { project: Project; expandAl
                     <button
                       type="button"
                       className="text-secondary-text hover:text-text dark:hover:text-dark-text active:text-primary dark:active:text-dark-primary p-1"
-                      onClick={() => navigator.clipboard.writeText(project.git_link)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigator.clipboard.writeText(project.git_link);
+                      }}
                     >
                       <FiCopy size={15} />
                     </button>
