@@ -59,6 +59,18 @@ const Component: React.FC = () => {
       isActive: true,
     },
     {
+      title: "Unite, not unify",
+      description: "",
+      type: "paper",
+      isActive: true,
+    },
+    {
+      title: "Your Perspective",
+      description: "",
+      type: "paper",
+      isActive: true,
+    },
+    {
       title: "Black Box",
       description: "a global gaming hub",
       type: "project",
@@ -77,7 +89,7 @@ const Component: React.FC = () => {
       isActive: true,
     },
     {
-      title: "Declare the Meta State",
+      title: "The Meta State",
       description: "",
       type: "question",
       isActive: true,
@@ -85,7 +97,7 @@ const Component: React.FC = () => {
   ];
 
   return (
-    <div className="grid max-w-sm mx-auto sm:max-w-md lg:max-w-2xl">
+    <div className="grid max-w-sm mx-auto sm:max-w-md lg:max-w-2xl my-10">
       <div className="flex flex-col place-items-center justify-center">
         <TimelineLine isActive={true} height="h-full" />
         <div className="flex flex-col w-full gap-2 items-start">

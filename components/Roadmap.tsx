@@ -1,14 +1,8 @@
 "use client";
 import React from "react";
 import { RiCircleLine } from "react-icons/ri";
-import {
-  HiOutlineDocument,
-  HiOutlineDocumentText,
-  HiOutlineFlag,
-  HiOutlineQuestionMarkCircle,
-  HiQuestionMarkCircle,
-} from "react-icons/hi";
-import { FaQuestion } from "react-icons/fa";
+import { HiOutlineDocumentText } from "react-icons/hi";
+import { TbFlagQuestion } from "react-icons/tb";
 
 export const TimelineItem = ({
   isActive,
@@ -53,7 +47,7 @@ function getIconByType(type: string) {
     case "paper":
       return <HiOutlineDocumentText className="ml-1" size="20" strokeWidth={1.5} />;
     case "question":
-      return <HiOutlineFlag size="20" />;
+      return <TbFlagQuestion size="24" />;
     default:
       return <RiCircleLine size="18" />;
   }
