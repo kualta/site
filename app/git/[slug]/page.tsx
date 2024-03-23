@@ -1,7 +1,7 @@
 import { FiFileText, FiGitBranch, FiStar } from "react-icons/fi";
 
 export const metadata = {
-  title: "repos",
+  title: "GitHub repos",
   description: "github repos for user",
 };
 

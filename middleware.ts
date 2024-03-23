@@ -4,9 +4,9 @@ import { NextResponse } from "next/server";
 const redirects: { [key: string]: string } = {
   vids: "https://kualta.dev/vids",
   arts: "https://kualta.dev/arts",
-  git: "https://kualta.dev/repo/kualta",
+  git: "https://kualta.dev/git/kualta",
   api: "https://kualta.dev/api",
-  repo: "https://kualta.dev/repo/kualta",
+  repo: "https://kualta.dev/git/kualta",
   moji: "https://kualta.dev/kaomoji",
   blog: "https://kualta.dev/posts",
   post: "https://kualta.dev/posts",

@@ -46,14 +46,17 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   // TODO: add sorting options
   return (
     <>
-      <div className={"flex flex-wrap gap-4 p-4 justify-between items-center text-xs sm:text-base"}>
-        <div className="flex gap-4">
+      <div
+        className={
+          "flex flex-row flex-wrap gap-4 p-4 justify-between items-center text-xs sm:text-sm md:text-base truncate"
+        }
+      >
+        <div className="flex flex-row sm:flex-row gap-4">
           <CheckBox value="complete" />
           <CheckBox value="ongoing" />
-          <CheckBox value="paused" />
           <CheckBox value="archived" />
         </div>
-        <button className="flex gap-2 items-center px-3.5" type="button" onClick={() => setExpandAll(!expandAll)}>
+        <button className="flex gap-2 items-center pr-3.5" type="button" onClick={() => setExpandAll(!expandAll)}>
           {expandAll ? "collapse all" : "expand all"}
           {expandAll ? <MdExpandLess /> : <MdExpandMore />}
         </button>
