@@ -12,8 +12,14 @@ const Component: React.FC = () => {
   const timelineData: TimelineData[] = [
     {
       title: "Phase 0",
-      description: "Ensure the stability of communication channels",
+      description: "Setup communication channels",
       type: "phase",
+      isActive: true,
+    },
+    {
+      title: "A case for new social",
+      description: "",
+      type: "paper",
       isActive: true,
     },
     {
@@ -30,8 +36,14 @@ const Component: React.FC = () => {
     },
     {
       title: "Phase 1",
-      description: "Build the governance infrastructure",
+      description: "Setup governance infrastructure",
       type: "phase",
+      isActive: true,
+    },
+    {
+      title: "A case for new DAO",
+      description: "",
+      type: "paper",
       isActive: true,
     },
     {
@@ -54,7 +66,7 @@ const Component: React.FC = () => {
     },
     {
       title: "Black Box Meta",
-      description: "A virtual gaming hub",
+      description: "a virtual gaming hub",
       type: "project",
       isActive: true,
     },
@@ -77,12 +89,22 @@ const Component: React.FC = () => {
       <div className="flex flex-col place-items-center justify-center">
         <TimelineLine isActive={true} height="h-full" />
         <div className="flex flex-col w-full gap-2 items-start">
-          {timelineData.map((item, index) => (
-            <React.Fragment key={index}>
-              <TimelineItem isActive={item.isActive} title={item.title} description={item.description} />
-              {index !== timelineData.length - 1 && <TimelineLine isActive={item.isActive} height="h-24" />}
-            </React.Fragment>
-          ))}
+          {timelineData.map((item, index) => {
+            const height = item.type === "paper" || item.type === "phase" ? "h-12" : "h-24";
+            console.log(height);
+
+            return (
+              <React.Fragment key={item.title}>
+                <TimelineItem
+                  type={item.type}
+                  isActive={item.isActive}
+                  title={item.title}
+                  description={item.description}
+                />
+                {index !== timelineData.length - 1 && <TimelineLine isActive={item.isActive} height={height} />}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
     </div>
