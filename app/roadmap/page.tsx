@@ -1,4 +1,5 @@
 import { TimelineItem, TimelineLine } from "@/components/Roadmap";
+import { SubscriptionBox } from "@/components/SubscriptionBox";
 import React from "react";
 
 interface TimelineData {
@@ -8,11 +9,11 @@ interface TimelineData {
   type: "phase" | "project" | "paper" | "question";
 }
 
-const Component: React.FC = () => {
+const Roadmap = () => {
   const timelineData: TimelineData[] = [
     {
-      title: "Phase 0",
-      description: "Setup communication channels",
+      title: "Phase 1",
+      description: "To communicate",
       type: "phase",
       isActive: true,
     },
@@ -24,24 +25,24 @@ const Component: React.FC = () => {
     },
     {
       title: "Ping 3.0",
-      description: "decentralized social platform",
+      description: "decentralized social",
       type: "project",
       isActive: true,
     },
     {
       title: "Kunet",
-      description: "mesh social network",
+      description: "mesh network",
       type: "project",
       isActive: true,
     },
     {
-      title: "Phase 1",
-      description: "Setup governance infrastructure",
+      title: "Phase 2",
+      description: "To govern",
       type: "phase",
       isActive: true,
     },
     {
-      title: "A case for new DAO",
+      title: "True meritocracy",
       description: "",
       type: "paper",
       isActive: true,
@@ -53,8 +54,8 @@ const Component: React.FC = () => {
       isActive: true,
     },
     {
-      title: "Phase 2",
-      description: "Unite the people",
+      title: "Phase 3",
+      description: "To unite the people",
       type: "phase",
       isActive: true,
     },
@@ -78,13 +79,13 @@ const Component: React.FC = () => {
     },
     {
       title: "Black Box Meta",
-      description: "a virtual gaming hub",
+      description: "a virtual hub",
       type: "project",
       isActive: true,
     },
     {
-      title: "Phase 3",
-      description: "Unite the universe",
+      title: "Phase 4",
+      description: "To unite the universe",
       type: "phase",
       isActive: true,
     },
@@ -123,4 +124,4 @@ const Component: React.FC = () => {
   );
 };
 
-export default Component;
+export default Roadmap;
