@@ -20,8 +20,6 @@ export const Header = () => {
         </Link>
         <ThemeToggle />
       </div>
-
-      <NotificationsButton />
     </>
   );
 };

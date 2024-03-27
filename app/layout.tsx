@@ -6,6 +6,7 @@ import { CornersScope } from "@/components/CornersScope";
 import { Metadata } from "next";
 import Head from "next/head";
 import { Header } from "@/components/Header";
+import { AboutButton, NotificationsButton } from "@/components/MetaButton";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kualta.dev"),
@@ -82,6 +83,9 @@ export default function RootLayout({
         <Header />
 
         <div className="flex flex-col items-center grow w-full h-full">{children}</div>
+
+        <NotificationsButton />
+        <AboutButton />
 
         <div className="hidden sm:flex  border-text dark:border-dark-text">
           <CornersScope />

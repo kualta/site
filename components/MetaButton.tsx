@@ -3,8 +3,10 @@
 import { PropsWithChildren, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MdArrowBack, MdOutlineDarkMode, MdOutlineLightMode } from "react-icons/md";
+import { MdArrowBack, MdOutlineDarkMode, MdOutlineLightMode, MdOutlineQuestionMark } from "react-icons/md";
 import { FiBell } from "react-icons/fi";
+import { RiQuestionMark } from "react-icons/ri";
+import { TbQuestionMark } from "react-icons/tb";
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
@@ -32,11 +34,36 @@ export function BackButton() {
 }
 
 export function NotificationsButton() {
+  const path = usePathname();
+  const isJoinPage = path === "/join";
+
+  if (isJoinPage) {
+    return <div className="sm:w-8 sm:h-8" />;
+  }
+
   return (
     <div className="z-10 hidden md:flex absolute top-0 right-0 text-2xl p-8">
       <MetaButton>
         <Link className="active:text-secondary-text" href="/join">
           <FiBell size={22} strokeWidth="1.7" />
+        </Link>
+      </MetaButton>
+    </div>
+  );
+}
+
+export function AboutButton() {
+  const path = usePathname();
+  const isAboutPage = path === "/about";
+
+  if (isAboutPage) {
+    return <div className="sm:w-8 sm:h-8" />;
+  }
+  return (
+    <div className="z-10 hidden md:flex absolute bottom-0 right-0 text-2xl p-8">
+      <MetaButton>
+        <Link className="active:text-secondary-text" href="/about">
+          <TbQuestionMark size={26} />
         </Link>
       </MetaButton>
     </div>

@@ -3,8 +3,7 @@ import { FadeIn } from "@/components/Transitions";
 import { ProjectCard } from "@/components/ProjectCard";
 import { Project } from "@prisma/client";
 import { useState } from "react";
-import { MdExpandCircleDown, MdExpandLess, MdExpandMore, MdOutlineExpand } from "react-icons/md";
-import { RiExpandRightFill, RiExpandUpDownLine } from "react-icons/ri";
+import { MdExpandLess, MdExpandMore } from "react-icons/md";
 
 const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   const [selectedStatuses, setSelectedStatuses] = useState(["complete", "ongoing", "paused", "archived"]);
