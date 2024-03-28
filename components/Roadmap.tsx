@@ -1,4 +1,5 @@
 "use client";
+
 import React from "react";
 import { RiCircleLine } from "react-icons/ri";
 import { HiOutlineDocumentText } from "react-icons/hi";
@@ -19,9 +20,7 @@ export const TimelineItem = ({
       <div className={"my-2 w-6 h-6 flex place-items-center justify-center"}>{icon}</div>
       <div className={`flex flex-col justify-center placeitems-center h-full gap-1 ${text_size}`}>
         <div className={`${isActive ? "text-white dark:text-green-500" : ""}`}>{title}</div>
-        {description !== "" && (
-          <div className={`${description_size}`}> {description}</div>
-        )}
+        {description !== "" && <div className={`${description_size}`}> {description}</div>}
       </div>
     </div>
   );

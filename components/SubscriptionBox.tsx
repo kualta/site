@@ -46,7 +46,7 @@ export const EmailSubscription = () => {
   return (
     <div className="flex flex-col gap-4 place-content-center items-center justify-center w-fit">
       {success === undefined ? (
-        <form onSubmit={handleSubmit} >
+        <form onSubmit={handleSubmit}>
           <div className="flex flex-row gap-2">
             <input
               className="p-3 rounded-lg min-w-0 w-full bg-secondary dark:bg-dark-secondary accent-primary w-fit"

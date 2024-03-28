@@ -21,10 +21,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: "https://pomo.kualta.dev",
+      url: "https://kualta.dev/about",
     },
     {
-      url: "https://hemi.kualta.dev",
+      url: "https://kualta.dev/roadmap",
     },
     {
       url: "https://kualta.dev/join",
@@ -41,6 +41,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     {
       url: "https://kualta.dev/contacts",
+    },
+    {
+      url: "https://pomo.kualta.dev",
+    },
+    {
+      url: "https://hemi.kualta.dev",
     },
     ...posts,
   ];

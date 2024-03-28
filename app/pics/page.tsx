@@ -6,7 +6,6 @@ export const revalidate = 0;
 export const metadata = {
   title: "pics",
   description: "AI-generated kuolluts",
-
 };
 
 async function page() {
