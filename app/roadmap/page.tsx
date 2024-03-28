@@ -103,7 +103,7 @@ const Roadmap = () => {
         <div className="flex flex-col w-full gap-2 items-start">
           {timelineData.map((item, index) => {
             const height = item.type === "paper" || item.type === "phase" ? "h-12" : "h-24";
-            const color = item.isActive ? "text-text" : "text-secondary-text";
+            const color = item.isActive ? "dark:text-dark-text text-text" : "text-secondary-text";
 
             return (
               <div className={color} key={item.title}>
