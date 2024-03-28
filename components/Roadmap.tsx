@@ -13,14 +13,14 @@ export const TimelineItem = ({
   const text_size = type === "phase" ? "text-xl" : "text-sm";
   const description_size = type === "phase" ? "text-md" : "text-xs";
   const icon = getIconByType(type);
+  console.log(isActive);
   return (
     <div className="grid grid-cols-[24px_1fr] items-start gap-4">
       <div className={"my-2 w-6 h-6 flex place-items-center justify-center"}>{icon}</div>
-      {/* <TimelineLine isActive={isActive} height="h-full" /> */}
       <div className={`flex flex-col justify-center placeitems-center h-full gap-1 ${text_size}`}>
-        <div className={`font-medium ${isActive ? "text-green-500 dark:text-green-500" : ""}`}>{title}</div>
+        <div className={`${isActive ? "text-white dark:text-green-500" : ""}`}>{title}</div>
         {description !== "" && (
-          <div className={`text-gray-500 dark:text-gray-400 ${description_size}`}> {description}</div>
+          <div className={`${description_size}`}> {description}</div>
         )}
       </div>
     </div>
@@ -40,6 +40,7 @@ export const TimelineLine = ({
     />
   );
 };
+
 function getIconByType(type: string) {
   switch (type) {
     case "phase":

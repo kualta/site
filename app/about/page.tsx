@@ -1,12 +1,11 @@
 import { CornersScope } from "@/components/CornersScope";
-import { MetaButton } from "@/components/MetaButton";
 import { SubscriptionBox } from "@/components/SubscriptionBox";
 import Roadmap from "app/roadmap/page";
 import Image from "next/image";
 
 export const metadata = {
   title: "about",
-  description: "about kualta",
+  description: "kualta's vision",
   keywords: [
     "about kualta",
     "about kualta.dev",

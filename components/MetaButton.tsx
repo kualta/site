@@ -60,7 +60,7 @@ export function AboutButton() {
     return <div className="sm:w-8 sm:h-8" />;
   }
   return (
-    <div className="z-10 hidden md:flex absolute bottom-0 right-0 text-2xl p-8">
+    <div className="z-10 hidden md:flex absolute bottom-0 left-0 text-2xl p-8">
       <MetaButton>
         <Link className="active:text-secondary-text" href="/about">
           <TbQuestionMark size={26} />
