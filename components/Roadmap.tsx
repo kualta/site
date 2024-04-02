@@ -14,7 +14,7 @@ export const TimelineItem = ({
   const text_size = type === "phase" ? "text-xl" : "text-sm";
   const description_size = type === "phase" ? "text-md" : "text-xs";
   const icon = getIconByType(type);
-  console.log(isActive);
+
   return (
     <div className="grid grid-cols-[24px_1fr] items-start gap-4">
       <div className={"my-2 w-6 h-6 flex place-items-center justify-center"}>{icon}</div>

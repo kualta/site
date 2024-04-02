@@ -21,14 +21,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: "https://kualta.dev/join",
+      priority: 0.7,
+    },
+    {
       url: "https://kualta.dev/about",
     },
     {
       url: "https://kualta.dev/roadmap",
-    },
-    {
-      url: "https://kualta.dev/join",
-      priority: 0.7,
     },
     {
       url: "https://kualta.dev/gallery",
