@@ -51,16 +51,25 @@ export default function page() {
               Discord
               <RiDiscordFill size={32} />
             </a>
+            <a
+              href="https://lensfrens.xyz/kualta"
+              className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Lens
+              <FiAtSign size={32} />
+            </a>
             <div className="opacity-50 flex flex-col justify-center items-center gap-2">
               Matrix
               <SiMatrix size={30} />
               Soon
             </div>
-            <div className="opacity-50 flex flex-col justify-center items-center gap-2">
+            {/* <div className="opacity-50 flex flex-col justify-center items-center gap-2">
               Ping
               <FiAtSign size={30} />
               Soon
-            </div>
+            </div> */}
             {/* <div className="opacity-50 flex flex-col justify-center items-center gap-2">
               Black Box
               <TbBox size={32} />
@@ -69,7 +78,7 @@ export default function page() {
           </div>
         </div>
         <div className="text-lg sm:text-xl place-items-center justify-center flex flex-row gap-2">
-          Follow to not <b className="drop-shadow-glow-sm">miss a thing.</b>
+          Follow to not miss anything
         </div>
       </div>
     </div>
