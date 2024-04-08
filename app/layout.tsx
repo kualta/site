@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     default: "kualta",
     template: "%s",
   },
-  description: "building with love ♡",
+  description: "building with love <3",
   keywords: [
     "kualta",
     "kualts",
