@@ -11,12 +11,15 @@ export const Header = () => {
         <BackButton />
         <Link className="active:text-secondary-text" href="/projects">
           projects
+          <br />
         </Link>
         <Link className="active:text-secondary-text" href="/posts">
           posts
+          <br />
         </Link>
         <Link className="active:text-secondary-text" href="/contacts">
           contacts
+          <br />
         </Link>
         <ThemeToggle />
       </div>
