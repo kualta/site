@@ -38,3 +38,30 @@ export const LensIcon = ({ size }: { size: number }) => {
     </>
   );
 };
+
+export const EtheriumIcon = ({ size }: { size: number }) => {
+  return (
+    <>
+      <span className="dark:hidden flex">
+        {/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
+        <svg height={size} viewBox="0 0 24 24" width={size} xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="m7.46040481 11.6121684 4.53959519 2.2697976 4.5395952-2.2697976-4.5395952-6.80939276zm7.61878559 2.9662704-3.0791904 1.5395952-3.07919037-1.5395952 3.07919037 4.6187856zm-3.0791904-13.38121444 7.2018504 10.80277564-7.2018504 10.8027756-7.20185043-10.8027756z"
+            fill-rule="evenodd"
+            fill="black"
+          />
+        </svg>
+      </span>
+      <span className="dark:flex hidden">
+        {/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
+        <svg height={size} viewBox="0 0 24 24" width={size} xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="m7.46040481 11.6121684 4.53959519 2.2697976 4.5395952-2.2697976-4.5395952-6.80939276zm7.61878559 2.9662704-3.0791904 1.5395952-3.07919037-1.5395952 3.07919037 4.6187856zm-3.0791904-13.38121444 7.2018504 10.80277564-7.2018504 10.8027756-7.20185043-10.8027756z"
+            fill-rule="evenodd"
+            fill="white"
+          />
+        </svg>
+      </span>
+    </>
+  );
+};

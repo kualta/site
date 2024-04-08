@@ -3,7 +3,7 @@ import { Contact } from "@prisma/client";
 import { FadeIn } from "@/components/Transitions";
 import { Card } from "@/components/Card";
 import { getAllContacts } from "prisma/dataFetch";
-import { PGPButton } from "./PGPButton";
+import { EtheriumButton, PGPButton } from "@/components/ContactButtons";
 
 export const metadata = {
   title: "contacts",
@@ -20,7 +20,7 @@ async function ContactsPage() {
           const icon = ContactIcon(contact, 22);
           return (
             <Card key={contact.link + contact.description}>
-              <a className={"flex gap-4 p-1 px-2 items-center w-60"} href={contact.link}>
+              <a className={"flex gap-4 items-center w-60"} href={contact.link}>
                 <span>{icon}</span>
                 <div>
                   <p>{contact.label}</p>
@@ -31,6 +31,7 @@ async function ContactsPage() {
           );
         })}
 
+        <EtheriumButton />
         <PGPButton />
       </div>
     </FadeIn>

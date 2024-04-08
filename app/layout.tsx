@@ -7,6 +7,7 @@ import { Metadata } from "next";
 import Head from "next/head";
 import { Header } from "@/components/Header";
 import { AboutButton, NotificationsButton } from "@/components/MetaButton";
+import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kualta.dev"),
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
     default: "kualta",
     template: "%s",
   },
-  description: "glimpse into the void",
+  description: "building with love ♡",
   keywords: [
     "kualta",
     "kualts",
@@ -92,6 +93,13 @@ export default function RootLayout({
         </div>
 
         <Analytics />
+        <Toaster
+          toastOptions={{
+            className: `p-3 min-w-0 rounded-lg bg-secondary dark:bg-dark-secondary drop-shadow-md  
+            transition duration-100 border-2 border-secondary dark:border-dark-secondary 
+            hover:dark:border-dark-primary hover:border-primary text-text dark:text-dark-text`,
+          }}
+        />
       </body>
     </html>
   );
