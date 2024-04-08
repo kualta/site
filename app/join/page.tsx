@@ -1,11 +1,11 @@
-import { FiAtSign } from "react-icons/fi";
-import { RiDiscordFill, RiTwitterXFill, RiTwitterXLine } from "react-icons/ri";
-import { TbBox } from "react-icons/tb";
+import { IoMdFlower } from "react-icons/io";
+import { RiDiscordFill, RiTwitterXFill } from "react-icons/ri";
 import { SiMatrix } from "react-icons/si";
-import { Card } from "@/components/Card";
 import { CornersScope } from "@/components/CornersScope";
 import Sticker from "@/components/Sticker";
 import { EmailSubscription } from "@/components/SubscriptionBox";
+import { PiFlower } from "react-icons/pi";
+import { LensIcon } from "@/components/Icons";
 
 export const metadata = {
   title: "join",
@@ -40,7 +40,16 @@ export default function page() {
               rel="noreferrer"
             >
               Twitter
-              <RiTwitterXFill size={32} />
+              <RiTwitterXFill size={31} />
+            </a>
+            <a
+              href="https://lensfrens.xyz/kualta"
+              className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Lens
+              <LensIcon size={62} />
             </a>
             <a
               href="https://discord.gg/DhMeQAXW4F"
@@ -50,15 +59,6 @@ export default function page() {
             >
               Discord
               <RiDiscordFill size={32} />
-            </a>
-            <a
-              href="https://lensfrens.xyz/kualta"
-              className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Lens
-              <FiAtSign size={32} />
             </a>
             <div className="opacity-50 flex flex-col justify-center items-center gap-2">
               Matrix
