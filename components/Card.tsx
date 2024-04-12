@@ -5,7 +5,7 @@ export const Card = (props: PropsWithChildren) => {
     <div
       className="p-3 min-w-0 rounded-lg bg-secondary dark:bg-dark-secondary drop-shadow-md  
                 transition duration-100 border-2 border-secondary dark:border-dark-secondary 
-                hover:dark:border-dark-primary hover:border-primary "
+                hover:dark:border-dark-primary hover:border-primary"
     >
       {props.children}
     </div>
