@@ -35,6 +35,8 @@ export const metadata: Metadata = {
     "kualta philosophy blog",
     "kualta philosophy website",
     "beauty in the mad world",
+    "building with love",
+    "glimpse into the void",
   ],
   robots: {
     index: true,
@@ -48,7 +50,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     images: "/opengraph-image.png",
     title: "kualta.dev",
-    description: "glimse into the void",
+    description: "building with love",
     creator: "@kualts",
   },
   category: "blog",
