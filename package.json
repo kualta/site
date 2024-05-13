@@ -13,6 +13,7 @@
     "check": "bunx @biomejs/biome check --apply-unsafe ./app/* ./components/*"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.17.6",
     "@headlessui/react": "^1.7.17",
     "@prisma/client": "^5.13.0",
     "@supabase/supabase-js": "^2.38.4",
@@ -24,8 +25,8 @@
     "markdown-to-jsx": "^7.2.1",
     "next": "^14.0.1",
     "next-gallery": "^2.0.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",
     "react-icons": "^4.8.0",
     "react-responsive": "^9.0.2",
