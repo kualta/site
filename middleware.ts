@@ -12,7 +12,7 @@ const redirects: { [key: string]: string } = {
   post: "https://kualta.dev/posts",
   pics: "https://kualta.dev/pics",
   join: "https://kualta.dev/join",
-  road: "https://kualta.dev/roadmap",
+  road: "https://kualta.dev/about",
 };
 
 export function middleware(request: NextRequest) {

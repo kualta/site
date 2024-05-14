@@ -5,6 +5,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const postMetadata = getPostsMetadata();
   const posts: MetadataRoute.Sitemap = postMetadata.map((post) => ({
     url: `https://kualta.dev/posts/${post.filename}`,
+    priority: 0.9,
   }));
 
   return [
@@ -26,9 +27,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     {
       url: "https://kualta.dev/about",
-    },
-    {
-      url: "https://kualta.dev/roadmap",
+      priority: 0.6,
     },
     {
       url: "https://kualta.dev/gallery",

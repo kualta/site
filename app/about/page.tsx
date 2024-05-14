@@ -1,5 +1,3 @@
-import { Card } from "@/components/Card";
-import { CornersScope } from "@/components/CornersScope";
 import { SubscriptionBox } from "@/components/SubscriptionBox";
 import { FadeIn } from "@/components/Transitions";
 
