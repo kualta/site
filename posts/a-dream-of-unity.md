@@ -19,7 +19,7 @@ I have a dream that we will break away free from our own egos. That we will rele
 
 Imagine a world where we are **no longer bound** by the narrow confines of "I," "me," and "mine." A world where we are no longer **bound by us**. 
 
-I have a dream today. Of a world we understand that true strength lies not in asserting our own importance. And in this world, I see us rising above the meaningless competition. 
+I have a dream today. Of a time when we understand that true strength lies not in asserting our own importance. And in this world, I see us rising above the meaningless competition. 
  
 I dream of a day when we no longer measure our worth by how much we surpass others, but by how much we lift each other up. Where we understand that progress is never zero-sum.
 
