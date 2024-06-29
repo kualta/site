@@ -6,7 +6,7 @@ import { IsChristmas } from "@/components/Effects";
 async function HomePage() {
   const contacts = await (await getAllContacts())
     .json()
-    .then((contacts: any) => contacts.filter((contact: Contact) => contact.is_main));
+    .then((contacts: Contact[]) => contacts.filter((contact: Contact) => contact.is_main));
 
   return (
     <div className={"flex flex-col w-full grow justify-center place-content-center snowflake font-bold"}>
