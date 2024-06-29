@@ -6,6 +6,7 @@ import Sticker from "@/components/Sticker";
 import { EmailSubscription } from "@/components/SubscriptionBox";
 import { PiFlower } from "react-icons/pi";
 import { LensIcon } from "@/components/Icons";
+import { FiAtSign } from "react-icons/fi";
 
 export const metadata = {
   title: "join",
@@ -43,13 +44,13 @@ export default function page() {
               <RiTwitterXFill size={31} />
             </a>
             <a
-              href="https://lensfrens.xyz/kualta"
+              href="https://pingpad.io/u/kualta"
               className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
               target="_blank"
               rel="noreferrer"
             >
-              Lens
-              <LensIcon size={62} />
+              Pingpad
+              <FiAtSign size={62} />
             </a>
             <a
               href="https://discord.gg/DhMeQAXW4F"
