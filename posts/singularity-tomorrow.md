@@ -2,7 +2,7 @@
 title: "Singularity Tomorrow"
 description: "on duality of prediction culture"
 date: "2024-01-16"
-tags: ["philosophy", "english"]
+tags: ["philosophy"]
 preview: "/images/singularity-tomorrow/preview.jpg"
 ---
 

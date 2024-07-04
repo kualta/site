@@ -2,7 +2,7 @@
 title: "Fair Play"
 description: "eliminating multiplayer asymmetry"
 date: "2021-07-08"
-tags: ["game-design", "english"]
+tags: ["game-design"]
 preview: "/images/fair-play/preview.png"
 ---
 

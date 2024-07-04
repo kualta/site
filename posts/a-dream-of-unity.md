@@ -1,8 +1,8 @@
 ---
-title: "A dream of unity"
-description: "for the tomorrow citizens"
+title: "Dream Letter"
+description: "from you, for you"
 date: "2024-05-23"
-tags: ["letter", "english"]
+tags: ["letter"]
 preview: "/images/a-dream-of-unity/preview.png"
 ---
 

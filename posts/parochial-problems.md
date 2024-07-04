@@ -2,7 +2,7 @@
 title: "Parochial Problems"
 description: "an elevator to the exponential"
 date: "2023-11-06"
-tags: ["philosophy", "english"]
+tags: ["philosophy"]
 preview: "/images/parochial-problems/preview.jpg"
 ---
 
