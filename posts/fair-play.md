@@ -3,10 +3,10 @@ title: "Fair Play"
 description: "eliminating multiplayer asymmetry"
 date: "2021-07-08"
 tags: ["game-design", "english"]
-preview: "/images/fair-play/preview.jpg"
+preview: "/images/fair-play/preview.png"
 ---
 
-![/images/fair-play/preview.jpg](/images/fair-play/preview.jpg)
+![/images/fair-play/preview.png](/images/fair-play/preview.png)
 
 ## Abstract
 One essential aspect of any multiplayer game is the presence of game rules which define the game space and balance players' experience. 

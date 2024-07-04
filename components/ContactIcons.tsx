@@ -35,7 +35,7 @@ function ContactIcons(props: { contacts: Contact[]; size?: number }) {
     const icon = ContactIcon(contact, size);
     return (
       <div key={contact.link} className="hover:scale-125">
-        <a href={contact.link} key={contact.link} target="_blank" rel="noopener" aria-label={contact.platform}>
+        <a href={contact.link} key={contact.link} target="_blank" rel="noreferrer noopener" aria-label={contact.platform}>
           {icon}
         </a>
       </div>
