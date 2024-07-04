@@ -1,8 +1,8 @@
 ---
 title: "Dream Letter"
-description: "from you, for you"
+description: "of unity" 
 date: "2024-05-23"
-tags: ["letter"]
+tags: []
 preview: "/images/a-dream-of-unity/preview.png"
 ---
 
