@@ -50,7 +50,7 @@ export default function page() {
               rel="noreferrer"
             >
               Pingpad
-              <FiAtSign size={62} />
+              <FiAtSign size={34} />
             </a>
             <a
               href="https://discord.gg/DhMeQAXW4F"
