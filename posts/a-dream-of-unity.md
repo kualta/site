@@ -1,8 +1,8 @@
 ---
-title: "Dream Letter"
+title: "A Dream Letter"
 description: "of unity" 
 date: "2024-05-23"
-tags: []
+tags: ["philosophy"]
 preview: "/images/a-dream-of-unity/preview.png"
 ---
 
