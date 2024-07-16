@@ -1,6 +1,6 @@
 ---
 title: "A Dream Letter"
-description: "of unity" 
+description: "on unity" 
 date: "2024-05-23"
 tags: ["philosophy"]
 preview: "/images/a-dream-of-unity/preview.png"

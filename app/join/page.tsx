@@ -31,7 +31,7 @@ export default function page() {
 
       <div className="flex flex-col gap-4 p-10 mt-20 relative">
         <CornersScope top_right={false} bottom_left={false} />
-        <h1 className="text-3xl font-bold text-center">Notifications</h1>
+        <h1 className="text-3xl font-bold text-center">Join Us</h1>
         <div className="px-4 min-w-0">
           <div className="flex flex-wrap gap-10 sm:gap-20 py-4 sm:px-4 place-content-around items-center ">
             <a
@@ -67,11 +67,6 @@ export default function page() {
               Soon
             </div>
             {/* <div className="opacity-50 flex flex-col justify-center items-center gap-2">
-              Ping
-              <FiAtSign size={30} />
-              Soon
-            </div> */}
-            {/* <div className="opacity-50 flex flex-col justify-center items-center gap-2">
               Black Box
               <TbBox size={32} />
               Soon
@@ -79,7 +74,7 @@ export default function page() {
           </div>
         </div>
         <div className="text-lg sm:text-xl place-items-center justify-center flex flex-row gap-2">
-          Follow to not miss anything
+          We want you around.
         </div>
       </div>
     </div>
