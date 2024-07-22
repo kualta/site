@@ -17,12 +17,21 @@ const redirects: { [key: string]: string } = {
 
 export function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") ?? "";
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+
+  if (pathname === "/" && searchParams.toString() !== "") {
+    return NextResponse.redirect(new URL("/about", request.url));
+  }
 
   for (const key in redirects) {
     if (hostname.startsWith(key)) {
       return NextResponse.redirect(redirects[key]);
     }
   }
-  if (pathname.startsWith("/_next")) return NextResponse.next();
+
+  return NextResponse.next();
 }
+
+export const config = {
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+};
