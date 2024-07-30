@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     email: email,
     name: email.split("@")[0],
     status: "enabled",
-    lists: [3],
+    lists: [1],
   };
 
   const res = await fetch("https://mail.kualta.dev/api/subscribers", {
