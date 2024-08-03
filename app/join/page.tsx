@@ -61,10 +61,16 @@ export default function page() {
               Discord
               <RiDiscordFill size={32} />
             </a>
-            <div className="opacity-50 flex flex-col justify-center items-center gap-2">
+            <a
+              href="https://chat.pingpad.io/login/mtrx.pingpad.io"
+              className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
+              target="_blank"
+              rel="noreferrer"
+            >
               Matrix
               <SiMatrix size={30} />
-              Soon
+            </a>
+            <div className="opacity-50 flex flex-col justify-center items-center gap-2">
             </div>
             {/* <div className="opacity-50 flex flex-col justify-center items-center gap-2">
               Black Box
