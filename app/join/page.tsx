@@ -35,16 +35,7 @@ export default function page() {
         <div className="px-4 min-w-0">
           <div className="flex flex-wrap gap-10 sm:gap-20 py-4 sm:px-4 place-content-around items-center ">
             <a
-              href="https://twitter.com/kualts"
-              className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Twitter
-              <RiTwitterXFill size={31} />
-            </a>
-            <a
-              href="https://pingpad.io/u/kualta"
+              href="https://pingpad.io/c/pingpad"
               className="flex flex-col justify-center items-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer"
               target="_blank"
               rel="noreferrer"
@@ -70,13 +61,6 @@ export default function page() {
               Matrix
               <SiMatrix size={30} />
             </a>
-            <div className="opacity-50 flex flex-col justify-center items-center gap-2">
-            </div>
-            {/* <div className="opacity-50 flex flex-col justify-center items-center gap-2">
-              Black Box
-              <TbBox size={32} />
-              Soon
-            </div> */}
           </div>
         </div>
         <div className="text-lg sm:text-xl place-items-center justify-center flex flex-row gap-2">
