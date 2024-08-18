@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   const login = process.env.MAIL_LOGIN;
   const password = process.env.MAIL_PASSWORD;
 
   const email = request.nextUrl.searchParams.get("email");
+  const lists = request.nextUrl.searchParams.get("list") || 1;
 
   if (!email) {
     return NextResponse.json({
@@ -15,17 +16,19 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = {
-    email: email,
+    email,
     name: email.split("@")[0],
     status: "enabled",
-    lists: [1],
+    lists: [lists],
   };
+
+  const authString = Buffer.from(`${login}:${password}`).toString("base64");
 
   const res = await fetch("https://mail.kualta.dev/api/subscribers", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Basic ${btoa(`${login}:${password}`)}`,
+      Authorization: `Basic ${authString}`,
     },
     body: JSON.stringify(formData),
   });
