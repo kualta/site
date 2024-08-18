@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   const password = process.env.MAIL_PASSWORD;
 
   const email = request.nextUrl.searchParams.get("email");
-  const list = request.nextUrl.searchParams.get("list") || 1;
+  const list = Number.parseInt(request.nextUrl.searchParams.get("list") || "1");
 
   if (!email) {
     return NextResponse.json({
