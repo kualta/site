@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   const password = process.env.MAIL_PASSWORD;
 
   const email = request.nextUrl.searchParams.get("email");
-  const lists = request.nextUrl.searchParams.get("list") || 1;
+  const list = request.nextUrl.searchParams.get("list") || 1;
 
   if (!email) {
     return NextResponse.json({
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     email,
     name: email.split("@")[0],
     status: "enabled",
-    lists: [lists],
+    lists: [list],
   };
 
   const authString = Buffer.from(`${login}:${password}`).toString("base64");
