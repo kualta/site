@@ -24,7 +24,7 @@ The realization came to me at a cost, but the result feels like freedom.
 The four sights have awakened Siddhartha Gautama (the Buddha) to the realities of human suffering (old age, sickness, and death) and have inspired him to seek a solution. 
 This was approximately **2.5 centuries ago**. 
 
-Both me and you are likely to be extremely priviledged as I write this, but my personal belief is that personal sufffering for most humans has come down since then.
+Both me and you are likely to be extremely privileged as I write this, but my personal belief is that personal suffering for most humans has come down since then.
 
 That is to say, does one have to overcome dukkha? <br>
 Does one have the personal moral responsibility to do so? <br>
@@ -35,10 +35,10 @@ Unfortunately, one must be unsatisfied with the world in order to make it better
 Thus, a "founder monk" is an oxymoron. <br>
 The same unsatisfaction one is trying to overcome is essential for the other to exist. 
 
-Let's excersize a thought that tomorrow everyone becomes enlightented. Would this not quickly drive humanity to extinction?
+Let's exercise a thought that tomorrow everyone becomes enlightened. Would this not quickly drive humanity to extinction?
 The mere desire to reproduce directly leads to attachment and suffering.
 
-What if living with unsatisfaction is the only way to decrese everyone's suffering? <br>
+What if living with unsatisfaction is the only way to decrease everyone's suffering? <br>
 What if as humanity, we can continue to decrease it further?
 
 That is to say, is this not the boddhisatva ideal? <br>
