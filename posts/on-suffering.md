@@ -17,7 +17,7 @@ Should I become a founder or a monk? I know some of you can relate, as for a dri
 
 When one becomes aware of the four noble truth there arises a sense of **personal moral responsibility** to achieve enlightenment. Because why would you choose to pursue anything else if the only thing that keeps hurting you is solvable?
 
-I've came to a realization that I will probably never escape suffering - and that's okay.
+I've come to a realization that I will probably never escape suffering - and that's okay.
 The realization came to me at a cost, but the result feels like freedom.
 
 ## Duhkha
@@ -57,7 +57,7 @@ Getting closer to the middle way will help to distinguish the truth, not focusin
 ## Tathata
 Approaching the middle-way seems increasingly simpler when one arrives at "suchness"
 
-It's funny because I think western thought have arrived at this concept on it's own, through stoic efforts and, unmistakingly, memes.
+It's funny because I think western thought has arrived at this concept on it's own, through stoic efforts and, unmistakingly, memes.
 You know the power of "**it is what it is**"? Then you know tathata. 
 
 Let me quote the Sengcan:
