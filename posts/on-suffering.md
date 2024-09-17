@@ -1,5 +1,5 @@
 ---
-title: "A Founder Monk"
+title: "A Monk Founder"
 description: "on suffering"
 date: "2024-09-17"
 tags: ["philosophy", "buddhism"]
