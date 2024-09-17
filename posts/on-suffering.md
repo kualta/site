@@ -57,7 +57,7 @@ Getting closer to the middle way will help to distinguish the truth, not focusin
 ## Tathata
 Approaching the middle-way seems increasingly simpler when one arrives at "suchness"
 
-It's funny because I think western thought has arrived at this concept on it's own, through stoic efforts and, unmistakingly, memes.
+It's funny because I think western thought has arrived at this concept on it's own, through stoic efforts and, unmistakably, memes.
 You know the power of "**it is what it is**"? Then you know tathata. 
 
 Let me quote the Sengcan:
