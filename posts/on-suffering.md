@@ -1,6 +1,6 @@
 ---
-title: "On suffering"
-description: "of a founder monk"
+title: "A Founder Monk"
+description: "on suffering"
 date: "2024-09-17"
 tags: ["philosophy", "buddhism"]
 preview: "/images/on-suffering/preview.jpg"
