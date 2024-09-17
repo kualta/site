@@ -22,7 +22,7 @@ The realization came to me at a cost, but the result feels like freedom.
 
 ## Duhkha
 The four sights have awakened Siddhartha Gautama (the Buddha) to the realities of human suffering (old age, sickness, and death) and have inspired him to seek a solution. 
-This was approximately **2.5 centuries ago**. 
+This was approximately **25 centuries ago**. 
 
 Both me and you are likely to be extremely privileged as I write this, but my personal belief is that personal suffering for most humans has come down since then.
 
