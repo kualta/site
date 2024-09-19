@@ -9,7 +9,7 @@ preview: "/images/on-suffering/preview.jpg"
 ![/images/on-suffering/preview.jpg](/images/on-suffering/preview.jpg)
 
 
-> Each of you is perfect the way you are, and you can use a little improvement. <br> _- Shunryū Suzuki_ 
+> Each of you is perfect the way you are, and you can use a little improvement. <br> _- Shunryū Suzuki_
 
 
 ## Preamble
@@ -21,8 +21,8 @@ I've come to a realization that I will probably never escape suffering - and tha
 The realization came to me at a cost, but the result feels like freedom.
 
 ## Duhkha
-The four sights have awakened Siddhartha Gautama (the Buddha) to the realities of human suffering (old age, sickness, and death) and have inspired him to seek a solution. 
-This was approximately **25 centuries ago**. 
+The four sights have awakened Siddhartha Gautama (the Buddha) to the realities of human suffering (old age, sickness, and death) and have inspired him to seek a solution.
+This was approximately **25 centuries ago**.
 
 Both me and you are likely to be extremely privileged as I write this, but my personal belief is that personal suffering for most humans has come down since then.
 
@@ -31,9 +31,9 @@ Does one have the personal moral responsibility to do so? <br>
 What if one is fine with life the way it is?
 
 ## And what if everyone were to become a monk?
-Unfortunately, one must be unsatisfied with the world in order to make it better. 
+Unfortunately, one must be unsatisfied with the world in order to make it better.
 Thus, a "founder monk" is an oxymoron. <br>
-The same unsatisfaction one is trying to overcome is essential for the other to exist. 
+The same unsatisfaction one is trying to overcome is essential for the other to exist.
 
 Let's exercise a thought that tomorrow everyone becomes enlightened. Would this not quickly drive humanity to extinction?
 The mere desire to reproduce directly leads to attachment and suffering.
@@ -46,7 +46,7 @@ Would you not trade a little bit of **personal suffering** for an attempt to mak
 And if so, don't you have a moral responsibility to do so?
 
 ## Approaching the middle-way
-Answering those questions, the world is truly unsatisfactory and I think it's fine. 
+Answering those questions, the world is truly unsatisfactory and I think it's fine.
 
 As long as one is not lost in dualistic views and the pursuit of egotistic desires, one may try to build for everyone's benefit.
 
@@ -58,30 +58,27 @@ Getting closer to the middle way will help to distinguish the truth, not focusin
 Approaching the middle-way seems increasingly simpler when one arrives at "suchness"
 
 It's funny because I think western thought has arrived at this concept on it's own, through stoic efforts and, unmistakably, memes.
-You know the power of "**it is what it is**"? Then you know tathata. 
-
-Let me quote the Sengcan:
+You know the power of "it is what it is"? Then you know tathata.
 
 > Although all dualities arise from the One, <br>
-  do not cling even to this One. <br>
-  When the mind exists undisturbed in the Way, <br>
-  everything is without fault.
-
+> do not cling even to this One. <br>
+> When the mind exists undisturbed in the Way, <br>
+> everything is without fault. <br>
+> — 鑑智僧璨, 信心銘
 
 This non-judgemental view on reality, when **even suffering is appreciated**, brings pure bliss and joy to my heart.
 
 ## Conclusion
 
-Remember who you are. I'll quote _信心銘_ once again:
-
 > The Great Way is all-embracing, <br>
-  not easy, not difficult. <br>
-  Those who rely on limited views are fearful and irresolute; <br>
-  the faster they hurry, the slower they go. <br>
-  <br>
-  Clinging, they go too far, <br>
-  even an attachment to enlightenment is to go astray. <br>
-  Just let things be in their own way as they are, <br>
-  and there is neither coming nor going
+> not easy, not difficult. <br>
+> Those who rely on limited views are fearful and irresolute; <br>
+> the faster they hurry, the slower they go. <br>
+> <br>
+> Clinging, they go too far, <br>
+> even an attachment to enlightenment is to go astray. <br>
+> Just let things be in their own way as they are, <br>
+> and there is neither coming nor going <br>
+> — 鑑智僧璨, 信心銘
 
-Who knows, maybe **giving up on nirvana** would actually get you **closer** to it.
+Maybe giving up on nirvana would actually get you closer to it.
