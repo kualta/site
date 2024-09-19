@@ -30,7 +30,7 @@ That is to say, does one have to overcome dukkha? <br>
 Does one have the personal moral responsibility to do so? <br>
 What if one is fine with life the way it is?
 
-## And what if everyone were to become a monk?
+## What if everyone was a monk
 Unfortunately, one must be unsatisfied with the world in order to make it better.
 Thus, a "founder monk" is an oxymoron. <br>
 The same unsatisfaction one is trying to overcome is essential for the other to exist.
