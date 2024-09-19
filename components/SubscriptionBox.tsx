@@ -1,10 +1,10 @@
 "use client";
 import { Card } from "@/components/Card";
-import { useState } from "react";
-import { MetaButton } from "./MetaButton";
 import Link from "next/link";
-import { FiBell, FiMail } from "react-icons/fi";
+import { useState } from "react";
+import { FiBell } from "react-icons/fi";
 import { LuMail, LuMailCheck } from "react-icons/lu";
+import { MetaButton } from "./MetaButton";
 
 export const SubscriptionBox = () => {
   return (
@@ -28,7 +28,7 @@ export const EmailSubscription = () => {
   const handleSubmit = (event: any) => {
     event.preventDefault();
 
-    fetch(`/api/subscribe?email=${event.target.email.value}`, {
+    fetch(`/api/subscribe?email=${event.target.email.value}&list=4`, {
       method: "POST",
     })
       .then((res) => res.json())
@@ -49,7 +49,7 @@ export const EmailSubscription = () => {
         <form onSubmit={handleSubmit}>
           <div className="flex flex-row gap-2">
             <input
-              className="p-3 rounded-lg min-w-0 w-full bg-secondary dark:bg-dark-secondary accent-primary w-fit"
+              className="p-3 rounded-lg min-w-0 bg-secondary dark:bg-dark-secondary accent-primary w-fit"
               type="email"
               name="email"
               required
