@@ -1,9 +1,9 @@
-import { ContactIcon } from "components/ContactIcons";
-import { Contact } from "@prisma/client";
-import { FadeIn } from "@/components/Transitions";
 import { Card } from "@/components/Card";
-import { getAllContacts } from "prisma/dataFetch";
 import { EtheriumButton, PGPButton } from "@/components/ContactButtons";
+import { FadeIn } from "@/components/Transitions";
+import { Contact } from "@prisma/client";
+import { ContactIcon } from "components/ContactIcons";
+import { getAllContacts } from "prisma/dataFetch";
 
 export const metadata = {
   title: "contacts",
@@ -23,7 +23,7 @@ async function ContactsPage() {
               key={contact.link + contact.description}
               href={contact.link}
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
             >
               <Card>
                 <div className="w-60 flex gap-4">

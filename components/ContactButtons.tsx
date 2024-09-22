@@ -1,10 +1,10 @@
 "use client";
 
 import { Card } from "@/components/Card";
-import { LuKeyRound } from "react-icons/lu";
-import { FiCopy, FiDownload } from "react-icons/fi";
 import { EtheriumIcon } from "@/components/Icons";
 import toast from "react-hot-toast";
+import { FiCopy, FiDownload } from "react-icons/fi";
+import { LuKeyRound } from "react-icons/lu";
 
 export function PGPButton() {
   return (
@@ -33,18 +33,19 @@ export function PGPButton() {
 
 export function EtheriumButton() {
   const etheriumAdderess = "0xDeAd010d1c8f9B463F5dE853902761Cdbac53fb7";
+
   return (
     <button
       type="button"
       onClick={async () => {
         await navigator.clipboard.writeText(etheriumAdderess);
-        toast.success("Copied to clipboard!");
+        toast.success("Copied EVM address to clipboard!");
       }}
     >
       <Card>
         <div className={"flex justify-center flex-row gap-4 w-64"}>
           <EtheriumIcon size={22} />
-          <p className="text-left grow">0xdead010...</p>
+          <p className="text-left grow">kualta.eth</p>
           <FiCopy size={21} className="text-secondary-text -mr-0.5" />
         </div>
       </Card>
