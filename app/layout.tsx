@@ -70,10 +70,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="scroll-smooth dark">
-      <Head>
+      <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <Script defer src="https://stats.pingpad.io/script.js" data-website-id="09665935-c691-42bc-b2ba-d02329c44f3e" />
-      </Head>
+      </head>
       <body
         className={`bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-all
         ease-in-out delay-150 dark:text-dark-text place-items-center

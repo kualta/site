@@ -2,9 +2,9 @@ import { getPostContent } from "@/components/PostContent";
 import { SubscriptionBox } from "@/components/SubscriptionBox";
 import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
-import { GrayMatterFile } from "gray-matter";
+import type { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 
 const TableOfContents = dynamic(() => import("components/TableOfContents"), {
