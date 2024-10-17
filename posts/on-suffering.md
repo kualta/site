@@ -3,10 +3,10 @@ title: "A Monk Founder"
 description: "on suffering"
 date: "2024-09-17"
 tags: ["philosophy", "buddhism"]
-preview: "/images/on-suffering/preview.jpg"
+preview: "/images/on-suffering/preview.png"
 ---
 
-![/images/on-suffering/preview.jpg](/images/on-suffering/preview.jpg)
+![/images/on-suffering/preview.png](/images/on-suffering/preview.png)
 
 
 > Each of you is perfect the way you are, and you can use a little improvement. <br> _- Shunryū Suzuki_
