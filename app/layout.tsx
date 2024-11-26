@@ -72,7 +72,7 @@ export default function RootLayout({
     <html lang="en" className="scroll-smooth dark">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <Script defer src="https://stats.pingpad.io/script.js" data-website-id="f113dfb0-7fed-41ed-a176-ffe71f417b42" />
+        <Script defer src="https://stats.kualta.dev/script.js" data-website-id="f113dfb0-7fed-41ed-a176-ffe71f417b42" />
       </head>
       <body
         className={`bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-all
