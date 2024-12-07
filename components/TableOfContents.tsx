@@ -35,7 +35,7 @@ export default function TableOfContents({ toc }: { toc: (string | null)[] }) {
 
 export function useHash() {
   const [isMounted, setMounted] = useState(false);
-  const [hash, setHash] = useState(window.location.hash);
+  const [hash, setHash] = useState("");
 
   useEffect(() => {
     const isClient = typeof window !== "undefined";

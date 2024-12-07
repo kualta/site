@@ -13,21 +13,20 @@
     "check": "bunx @biomejs/biome check --apply-unsafe ./app/* ./components/*"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.17.6",
-    "@headlessui/react": "^1.7.17",
     "@prisma/client": "^5.13.0",
     "@supabase/supabase-js": "^2.38.4",
     "@types/node": "18.14.6",
-    "@types/react": "18.0.28",
-    "@types/react-dom": "18.0.11",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.1",
     "@vercel/analytics": "^1.1.1",
     "ethers": "^6.13.2",
     "gray-matter": "^4.0.3",
     "markdown-to-jsx": "^7.2.1",
-    "next": "^14.2.12",
+    "motion": "^12.0.0-alpha.2",
+    "next": "15.0.4",
     "next-gallery": "^2.0.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
     "react-hot-toast": "^2.4.1",
     "react-icons": "^4.8.0",
     "react-responsive": "^9.0.2",
@@ -46,5 +45,9 @@
     "postcss": "^8.4.31",
     "prisma": "^5.13.0",
     "tailwindcss": "^3.2.7"
+  },
+  "overrides": {
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.1"
   }
 }

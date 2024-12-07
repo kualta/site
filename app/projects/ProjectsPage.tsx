@@ -1,5 +1,4 @@
 "use client";
-import { FadeIn } from "@/components/Transitions";
 import { ProjectCard } from "@/components/ProjectCard";
 import { Project } from "@prisma/client";
 import { useState } from "react";
@@ -61,9 +60,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
         </button>
       </div>
 
-      <FadeIn>
         <div className="flex flex-col w-full gap-4 p-4">{projectsList}</div>
-      </FadeIn>
     </>
   );
 };

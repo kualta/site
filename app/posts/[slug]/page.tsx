@@ -1,17 +1,14 @@
 import { getPostContent } from "@/components/PostContent";
 import { SubscriptionBox } from "@/components/SubscriptionBox";
-import { FadeIn } from "@/components/Transitions";
+import TableOfContents from "@/components/TableOfContents";
 import getPostsMetadata from "components/PostMetadata";
 import type { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 
-const TableOfContents = dynamic(() => import("components/TableOfContents"), {
-  ssr: false,
-});
-
-export function generateMetadata({ params }: any): Metadata {
+export async function generateMetadata(props: any): Promise<Metadata> {
+  const params = await props.params;
   const post = getPostContent(params.slug);
   return {
     title: post.data.title,
@@ -68,14 +65,14 @@ function PostContent({ post }: { post: GrayMatterFile<string> }) {
   );
 }
 
-export default function PostPage({ params }: any) {
+export default async function PostPage(props: any) {
+  const params = await props.params;
   const post = getPostContent(params.slug);
 
   return (
     <div className="max-w-2xl w-full relative mb-10">
-      <FadeIn>
-        <TableOfContents toc={post.toc} />
-      </FadeIn>
+      <TableOfContents toc={post.toc} />
+
       <PostContent post={post} />
       <SubscriptionBox />
     </div>

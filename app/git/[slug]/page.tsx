@@ -5,7 +5,8 @@ export const metadata = {
   description: "github repos for user",
 };
 
-async function page({ params }: any) {
+async function page(props: any) {
+  const params = await props.params;
   const username = params.slug;
   const repos = await (await fetch(`https://api.github.com/users/${username}/repos`)).json();
 

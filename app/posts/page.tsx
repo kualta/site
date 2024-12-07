@@ -1,4 +1,3 @@
-import { FadeIn } from "@/components/Transitions";
 import getPostsMetadata from "components/PostMetadata";
 import PostCard from "@/components/PostCard";
 import Link from "next/link";
@@ -30,13 +29,11 @@ const HomePage = () => {
 
   return (
     <div className="max-w-2xl">
-      <FadeIn>
         <div className="flex flex-col place-items-center justify-center gap-4 mb-20">
           <div className="flex place-content-center justify-center flex-row flex-wrap p-4">{tags}</div>
           {posts}
           <SubscriptionBox />
         </div>
-      </FadeIn>
     </div>
   );
 };

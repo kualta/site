@@ -19,10 +19,6 @@ export function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") ?? "";
   const { pathname, searchParams } = request.nextUrl;
 
-  if (pathname === "/" && searchParams.toString() !== "") {
-    return NextResponse.redirect(new URL("/about", request.url));
-  }
-
   for (const key in redirects) {
     if (hostname.startsWith(key)) {
       return NextResponse.redirect(redirects[key]);
