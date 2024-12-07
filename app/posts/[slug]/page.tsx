@@ -1,12 +1,11 @@
 import { getPostContent } from "@/components/PostContent";
 import { SubscriptionBox } from "@/components/SubscriptionBox";
+import TableOfContents from "@/components/TableOfContents";
 import getPostsMetadata from "components/PostMetadata";
 import type { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
-
-const TableOfContents = dynamic(() => import("components/TableOfContents"), {});
 
 export async function generateMetadata(props: any): Promise<Metadata> {
   const params = await props.params;
