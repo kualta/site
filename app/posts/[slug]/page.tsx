@@ -11,7 +11,8 @@ const TableOfContents = dynamic(() => import("components/TableOfContents"), {
   ssr: false,
 });
 
-export function generateMetadata({ params }: any): Metadata {
+export async function generateMetadata(props: any): Promise<Metadata> {
+  const params = await props.params;
   const post = getPostContent(params.slug);
   return {
     title: post.data.title,
@@ -68,7 +69,8 @@ function PostContent({ post }: { post: GrayMatterFile<string> }) {
   );
 }
 
-export default function PostPage({ params }: any) {
+export default async function PostPage(props: any) {
+  const params = await props.params;
   const post = getPostContent(params.slug);
 
   return (

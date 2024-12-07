@@ -10,7 +10,8 @@ export const generateStaticParams = async () => {
   }));
 };
 
-async function TagsPage({ params }: { params: { slug: string } }) {
+async function TagsPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const filter = params.slug;
   const postMetadata = getPostsMetadata().filter((post) => post.tags.indexOf(filter) !== -1);
   const posts = postMetadata.map((post) => <PostCard key={post.filename} {...post} />);
