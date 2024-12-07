@@ -1,14 +1,13 @@
+import { AnimatePresence } from "framer-motion";
 import "styles/globals.css";
 
-import { fredoka } from "styles/fonts";
 import { IsChristmas, Snow } from "@/components/Effects";
-import { CornersScope } from "@/components/CornersScope";
-import type { Metadata } from "next";
-import Head from "next/head";
 import { Header } from "@/components/Header";
 import { AboutButton, NotificationsButton } from "@/components/MetaButton";
-import { Toaster } from "react-hot-toast";
+import type { Metadata } from "next";
 import Script from "next/script";
+import { Toaster } from "react-hot-toast";
+import { fredoka } from "styles/fonts";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kualta.dev"),
@@ -87,14 +86,10 @@ export default function RootLayout({
 
         <Header />
 
-        <div className="flex flex-col items-center grow w-full h-full">{children}</div>
-
         <NotificationsButton />
         <AboutButton />
 
-        <div className="hidden sm:flex  border-text dark:border-dark-text">
-          <CornersScope />
-        </div>
+        <AnimatePresence mode="wait">{children}</AnimatePresence>
 
         <Toaster
           toastOptions={{

@@ -1,5 +1,4 @@
 import { SubscriptionBox } from "@/components/SubscriptionBox";
-import { FadeIn } from "@/components/Transitions";
 
 export const metadata = {
   title: "about",
@@ -22,7 +21,6 @@ export const metadata = {
 
 export default function page() {
   return (
-    <FadeIn>
       <div className="my-auto flex flex-col items-center justify-center relative">
         <div style={{ pointerEvents: "none" }} className="select-none ">
           <div className="absolute top-0 right-10 rounded-lg min-w-32 w-[15vw]">
@@ -44,6 +42,5 @@ export default function page() {
           <SubscriptionBox />
         </div>
       </div>
-    </FadeIn>
   );
 }
