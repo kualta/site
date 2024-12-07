@@ -1,6 +1,7 @@
 import { AnimatePresence } from "framer-motion";
 import "styles/globals.css";
 
+import { CornersScope } from "@/components/CornersScope";
 import { IsChristmas, Snow } from "@/components/Effects";
 import { Header } from "@/components/Header";
 import { AboutButton, NotificationsButton } from "@/components/MetaButton";
@@ -90,6 +91,8 @@ export default function RootLayout({
         <AboutButton />
 
         <AnimatePresence mode="wait">{children}</AnimatePresence>
+
+        <CornersScope />
 
         <Toaster
           toastOptions={{
