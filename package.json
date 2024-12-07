@@ -13,8 +13,6 @@
     "check": "bunx @biomejs/biome check --apply-unsafe ./app/* ./components/*"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.17.6",
-    "@headlessui/react": "^1.7.17",
     "@prisma/client": "^5.13.0",
     "@supabase/supabase-js": "^2.38.4",
     "@types/node": "18.14.6",
