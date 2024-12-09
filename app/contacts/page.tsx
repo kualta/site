@@ -19,7 +19,7 @@ async function ContactsPage() {
         return (
           <a key={contact.link + contact.description} href={contact.link} target="_blank" rel="noopener noreferrer">
             <Card>
-              <div className="w-60 flex gap-4">
+              <div className="w-60 flex gap-4 items-center">
                 <span>{icon}</span>
                 <div>
                   <p>{contact.label}</p>

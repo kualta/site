@@ -1,7 +1,7 @@
-import { Contact } from "@prisma/client";
-import { getAllContacts } from "../prisma/dataFetch";
 import ContactIcons from "@/components/ContactIcons";
 import { IsChristmas } from "@/components/Effects";
+import { Contact } from "@prisma/client";
+import { getAllContacts } from "../prisma/dataFetch";
 
 async function HomePage() {
   const contacts = await (await getAllContacts())
@@ -18,7 +18,7 @@ async function HomePage() {
           </IsChristmas>
         </h1>
 
-        <div className="flex flex-row gap-2">
+        <div className="flex flex-row gap-2 items-center">
           <ContactIcons contacts={contacts} />
         </div>
       </div>
