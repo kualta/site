@@ -1,5 +1,5 @@
-import getPostsMetadata from "components/PostMetadata";
 import PostCard from "@/components/PostCard";
+import getPostsMetadata from "components/PostMetadata";
 import Link from "next/link";
 
 export const generateStaticParams = async () => {
@@ -17,17 +17,17 @@ async function TagsPage(props: { params: Promise<{ slug: string }> }) {
   const tagText = params.slug.replace("-", " ").toLowerCase();
 
   return (
-    <div className="max-w-2xl">
-        <div className="flex flex-col place-items-center justify-center gap-4 mb-20">
-          <div className="flex place-content-center justify-center flex-row flex-wrap p-4">
-            <Link href="/posts/">
-              <span className="select-none">•</span>
-              <span className="px-4 ">{tagText}</span>
-              <span className="select-none">•</span>
-            </Link>
-          </div>
-          {posts}
+    <div className="max-w-2xl min-h-[47rem]">
+      <div className="flex flex-col h-full place-items-center justify-center gap-4 mb-20">
+        <div className="flex place-content-center justify-center flex-row flex-wrap p-4">
+          <Link href="/posts/">
+            <span className="select-none">•</span>
+            <span className="px-4 ">{tagText}</span>
+            <span className="select-none">•</span>
+          </Link>
         </div>
+        {posts}
+      </div>
     </div>
   );
 }
