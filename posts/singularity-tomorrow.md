@@ -56,9 +56,7 @@ I find it quite remarkable how few people grasp the true potential of humanity's
 
 By placing too much emphasis on predictions, we risk stifling creativity, innovation, and our ability to adapt to changing circumstances.
 
+Shall we state less predictions, make more bets, and harness agency? And if so, overcoming biases starts should start with destroying your ego.
 
-## Conclusion
-State less predictions, make more bets, and harness agency. Overcoming biases starts with destroying your ego. My unwavering optimism, often bordering on the absurd, compels me to challenge conventional wisdom.
-
-When somebody laments, "It will take us years to reach the next frontier!",
-You must boldly predict, "Singularity tomorrow! Dyson sphere by friday!"
+When somebody complains, "It will take us years to reach the next frontier!",
+You must boldly predict: "Singularity tomorrow! Dyson sphere by friday!"
