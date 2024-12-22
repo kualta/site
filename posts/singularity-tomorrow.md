@@ -8,7 +8,7 @@ preview: "/images/singularity-tomorrow/preview.png"
 
 ![/images/singularity-tomorrow/preview.png](/images/singularity-tomorrow/preview.png)
 
-## Abstract
+## Preamble
 Humans are terrible at predicting accelerating future. Our brains are designed for short-term survival, not long-term planning. We struggle to understand exponential growth, our predictions are easily swayed by framing, and even when we're right, our predictions are still too small and biased to be useful.
 
 Prediction markets solve this, but they don't solve a deep underestimation of human potential. They fail to account for the unpredictable nature of human behavior and the transformative power of human agency.

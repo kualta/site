@@ -9,7 +9,7 @@ preview: "/images/fair-play/preview.png"
 ![/images/fair-play/preview.png](/images/fair-play/preview.png)
 
 
-## Abstract
+## Preamble
 This article discusses the challenge of creating balanced gameplay experiences in asymmetric online games, where players may start with vastly different initial conditions.
 
 It describes the concept of mad-fair play, which involves creating unique challenges that leverage the player's real skills to create engaging gameplay experiences. By balancing the advantages of asymmetric games with the fairness of symmetric ones, mad-fair play offers a unique approach to game design that can appeal to a broad range of players.
