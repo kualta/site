@@ -13,24 +13,24 @@ preview: "/images/on-suffering/preview.png"
 
 
 ## Preamble
-Should I become a founder or a monk? I know some of you can relate, as for a driven mind there's no in-between.
+Should I become a founder or a monk? As for a driven mind there's no in-between.
 
-When one becomes aware of the four noble truth there arises a sense of **personal moral responsibility** to achieve enlightenment. Because why would you choose to pursue anything else if the only thing that keeps hurting you is solvable?
+When one becomes aware of the four noble truth there arises a sense of personal moral responsibility to achieve enlightenment.
+Why would you choose to pursue anything else if the only thing that keeps hurting you is solvable?
 
 I've come to a realization that I will probably never escape suffering - and that's okay.
-The realization came to me at a cost, but the result feels like freedom.
 
 ## Duhkha
-The four sights have awakened Siddhartha Gautama (the Buddha) to the realities of human suffering (old age, sickness, and death) and have inspired him to seek a solution.
-This was approximately **25 centuries ago**.
-
-Both me and you are likely to be extremely privileged as I write this, but my personal belief is that personal suffering for most humans has come down since then.
+The four sights have awakened the Buddha to the realities of human suffering and have inspired him to seek a solution.
+This was approximately 25 centuries ago.
+Has personal suffering for most humans not reduce since then?
 
 That is to say, does one have to overcome dukkha? <br>
 Does one have the personal moral responsibility to do so? <br>
 What if one is fine with life the way it is?
 
-## What if everyone was a monk
+More and more often I find people that, while not being blinded by the vail of their ignorance, are completely fine with engaging in lila and accepting both suffering and happiness.
+
 Unfortunately, one must be unsatisfied with the world in order to make it better.
 Thus, a "founder monk" is an oxymoron. <br>
 The same unsatisfaction one is trying to overcome is essential for the other to exist.
@@ -42,7 +42,7 @@ What if living with unsatisfaction is the only way to decrease everyone's suffer
 What if as humanity, we can continue to decrease it further?
 
 That is to say, is this not the boddhisatva ideal? <br>
-Would you not trade a little bit of **personal suffering** for an attempt to make **everyone's** life better? <br>
+Would you not trade a little bit of personal suffering for an attempt to make everyone's life better? <br>
 And if so, don't you have a moral responsibility to do so?
 
 ## Approaching the middle-way
@@ -54,10 +54,10 @@ Perhaps this understanding is within many practitioners that don't give up on th
 
 Getting closer to the middle way will help to distinguish the truth, not focusing on it too much will help you stay grounded, this seems like the most optimal of choices.
 
-## Tathata
-Approaching the middle-way seems increasingly simpler when one arrives at "suchness"
+Approaching the middle-way seems increasingly simpler when one arrives at tathata.
 
 It's funny because I think western thought has arrived at this concept on it's own, through stoic efforts and, unmistakably, memes.
+
 You know the power of "it is what it is"? Then you know tathata.
 
 > Although all dualities arise from the One, <br>
@@ -66,9 +66,7 @@ You know the power of "it is what it is"? Then you know tathata.
 > everything is without fault. <br>
 > — 鑑智僧璨, 信心銘
 
-This non-judgemental view on reality, when **even suffering is appreciated**, brings pure bliss and joy to my heart.
-
-## Conclusion
+This non-judgemental view on reality, when even suffering is appreciated, brings pure bliss to my heart.
 
 > The Great Way is all-embracing, <br>
 > not easy, not difficult. <br>

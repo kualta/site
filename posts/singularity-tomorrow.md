@@ -21,7 +21,7 @@ Human brains are not naturally equipped for accurate time predictions. We evolve
 Our brains are capable of understanding linear growth but falter when confronted with exponential graphs, often leading to underestimations of its impact. The innate inclination to seek linear patterns in the world and limited working memory further impedes our understanding of exponentials.
 
 ## Your prediction changes, depending on how I ask
-When human researchers were asked questions in "fixed-probability" framing, as in, "by which year an event has an p% cumulative probability (for p=10%, 50%, 90%)", their answers would produce a **systematically earlier prediction**, compared to "fixed-years" framing, as in "what is the cumulative probability of the event by year y (for y=10, 25, 50)." ([Grace et al., 2018a, 2022](https://arxiv.org/pdf/1705.08807.pdf)).
+When human researchers were asked questions in "fixed-probability" framing, as in, "by which year an event has an p% cumulative probability (for p=10%, 50%, 90%)", their answers would produce a systematically earlier prediction, compared to "fixed-years" framing, as in "what is the cumulative probability of the event by year y (for y=10, 25, 50)." ([Grace et al., 2018a, 2022](https://arxiv.org/pdf/1705.08807.pdf)).
 
 One might argue that the impact of framing bias is insignificant, suggesting that it can be mitigated by simply asking two groups of respondents different questions and averaging their responses.
 
@@ -29,7 +29,7 @@ I object that pervasiveness of framing bias is much more profound.
 
 Let's ask researchers to provide their predictions for the likelihood of two distinct events: the arrival of full automation of labor (FAOL) and the achievement of human-level machine intelligence (HLMI). While FAOL refers to the automation of all occupations, HLMI pertains to the feasibility of automating all tasks. Since occupations can be viewed as complex tasks, composed of tasks, or closely related to tasks, achieving HLMI would seem to imply either having already achieved FAOL or being relatively close.
 
-Despite this logical connection, human researchers consistently predict a 50% chance of FAOL occurring **more than 60 years** later than a 50% chance of HLMI emerging. ([Grace et al., 2024](https://arxiv.org/pdf/2401.02843.pdf)).
+Despite this logical connection, human researchers consistently predict a 50% chance of FAOL occurring more than 60 years later than a 50% chance of HLMI emerging. ([Grace et al., 2024](https://arxiv.org/pdf/2401.02843.pdf)).
 
 You're biased. Limited by the amount of information you can possibly consume, you remain biased.
 
@@ -61,4 +61,4 @@ By placing too much emphasis on predictions, we risk stifling creativity, innova
 State less predictions, make more bets, and harness agency. Overcoming biases starts with destroying your ego. My unwavering optimism, often bordering on the absurd, compels me to challenge conventional wisdom.
 
 When somebody laments, "It will take us years to reach the next frontier!",
-You must boldly predict, "**Singularity tomorrow! Dyson sphere by friday!**"
+You must boldly predict, "Singularity tomorrow! Dyson sphere by friday!"

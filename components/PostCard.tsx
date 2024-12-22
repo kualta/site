@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { PostMetadata } from "./PostMetadata";
 import { Card } from "./Card";
+import { PostMetadata } from "./PostMetadata";
 
 const PostCard = (props: PostMetadata) => {
   const published = new Date(props.date);
