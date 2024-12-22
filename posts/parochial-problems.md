@@ -3,13 +3,13 @@ title: "Parochial Problems"
 description: "an elevator to the exponential"
 date: "2023-11-06"
 tags: ["philosophy"]
-preview: "/images/parochial-problems/preview.jpg"
+preview: "/images/parochial-problems/preview.png"
 ---
 
-![/images/parochial-problems/preview.jpg](/images/parochial-problems/preview.jpg)
+![/images/parochial-problems/preview.png](/images/parochial-problems/preview.png)
 ## Preamble
 
-The following was a short conversation between me (**K**) and my new friend (**Y**), who recently arrived from West Africa to pursue their 2nd Masters degree in the city where I was living at the time. 
+The following was a short conversation between me (**K**) and my new friend (**Y**), who recently arrived from West Africa to pursue their 2nd Masters degree in the city where I was living at the time.
 
 It happened while we were waiting for the elevator.
 
@@ -48,11 +48,11 @@ _[The elevator doors opened, and we both stepped inside]_
 
 5. Perhaps I'm using the word parochial a little bit too much in my conversations. I blame _David Deutsch and [The Beginning of Infinity](https://en.wikipedia.org/wiki/The_Beginning_of_Infinity)_ for that.
 
-The accelerationist score of this post is **1.0x**, I think things are going as fast as they should. Humanity will solve the problems in the order that would seem the most important to them. 
+The accelerationist score of this post is **1.0x**, I think things are going as fast as they should. Humanity will solve the problems in the order that would seem the most important to them.
 
 No matter whether you are hopeful about the future or you believe that we are inevitably doomed, don't forget about your fellow humans in the meantime!
 
 
 ## Addendum
-<a name="addendum-1">1.</a> Some argumentation: We're entering a world where coercion and violence are much less rewarding. 
-The economics of violence is in decline because of decreasing cost of protecting property. 
+<a name="addendum-1">1.</a> Some argumentation: We're entering a world where coercion and violence are much less rewarding.
+The economics of violence is in decline because of decreasing cost of protecting property.
