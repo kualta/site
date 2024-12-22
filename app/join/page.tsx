@@ -1,12 +1,9 @@
-import { IoMdFlower } from "react-icons/io";
-import { RiDiscordFill, RiTwitterXFill } from "react-icons/ri";
-import { SiMatrix } from "react-icons/si";
 import { CornersScope } from "@/components/CornersScope";
 import Sticker from "@/components/Sticker";
 import { EmailSubscription } from "@/components/SubscriptionBox";
-import { PiFlower } from "react-icons/pi";
-import { LensIcon } from "@/components/Icons";
 import { FiAtSign } from "react-icons/fi";
+import { RiDiscordFill } from "react-icons/ri";
+import { SiMatrix } from "react-icons/si";
 
 export const metadata = {
   title: "join",
@@ -16,7 +13,7 @@ export const metadata = {
 export default function page() {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col place-items-center justify-center gap-4 p-10 mt-20 relative">
+      <div className="flex flex-col place-items-center justify-center gap-4 p-10 relative">
         <CornersScope top_left={false} bottom_right={false} />
         <h1 className="text-3xl font-bold text-center">Subscribe</h1>
         <EmailSubscription />

@@ -23,13 +23,13 @@ I've come to a realization that I will probably never escape suffering - and tha
 ## Duhkha
 The four sights have awakened the Buddha to the realities of human suffering and have inspired him to seek a solution.
 This was approximately 25 centuries ago.
-Has personal suffering for most humans not reduce since then?
+What happened to the personal human suffering since then? Has it not gone down? We cured so many deseases, and improved the quality of life so dramatically for so many people.
 
-That is to say, does one have to overcome dukkha? <br>
-Does one have the personal moral responsibility to do so? <br>
-What if one is fine with life the way it is?
+These days, does one have to overcome dukkha? <br>
+Does one still have the personal moral responsibility to do so? <br>
+What if one is okay with the life the way it currently is?
 
-More and more often I find people that, while not being blinded by the vail of their ignorance, are completely fine with engaging in lila and accepting both suffering and happiness.
+More often I find people that, while not being blinded by the vail of their ignorance, are completely fine with engaging in lila and accepting both suffering and happiness.
 
 Unfortunately, one must be unsatisfied with the world in order to make it better.
 Thus, a "founder monk" is an oxymoron. <br>
