@@ -41,7 +41,7 @@ Yet crypto is a reflection of the world at large. This pattern extends far beyon
 
 In every sphere of modern life, we see the same progression: authentic cultural elements are identified, commodified, and then mass-produced until they lose all connection to their original significance.
 
-Gamblecore, memetokens, even the exit polls - all symptops of the same desease. Humanity is fed with opinions, packaged into echo chambers and discouraged from exploring.
+Gamblecore, memetokens, even the exit polls - all symptops of the same disease. Humanity is fed with opinions, packaged into echo chambers and discouraged from exploring.
 
 And why did you allow this to happen? Because it simply fills the empty space - you people have no culture.
 
@@ -61,7 +61,7 @@ When we dismiss human connection in favor of "just the facts," we don't eliminat
 Humans need connection. We need communities that can hold space for both rigorous thinking and genuine feeling. Otherwise we'll continue to lose time to this shit show we're experiencing right now.
 
 ### Immune system
-Apart from the clear symptoms the desease also has bad-faith carriers.
+Apart from the clear symptoms the disease also has bad-faith carriers.
 
 People who don't fall victims to, but rather exploit these circumstances is a truly fascinating phenomenon. Not only have we learned that a society with lack of emotions could embrace a person completely divorced from reality, but also that it will happily do so.
 

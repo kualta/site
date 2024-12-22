@@ -23,7 +23,7 @@ I've come to a realization that I will probably never escape suffering - and tha
 ## Duhkha
 The four sights have awakened the Buddha to the realities of human suffering and have inspired him to seek a solution.
 This was approximately 25 centuries ago.
-What happened to the personal human suffering since then? Has it not gone down? We cured so many deseases, and improved the quality of life so dramatically for so many people.
+What happened to the personal human suffering since then? Has it not gone down? We cured so many diseases, and improved the quality of life so dramatically for so many people.
 
 These days, does one have to overcome dukkha? <br>
 Does one still have the personal moral responsibility to do so? <br>
