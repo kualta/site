@@ -25,7 +25,7 @@ Something that used to be a localized crypto cancer have spread to the outer soc
 ### You have no culture
 Don't "gm" me. I'm not your "fren."
 
-I find it so distasteful when people blindly share behavioural traits to express belonging. The hollow substitutes for genuine bonds.
+I find it so distasteful when people blindly share behavioral traits to express belonging. The hollow substitutes for genuine bonds.
 
 Without giving this behaviour too many props, the subconscious desire behind it is surprisingly simple: to commodify everything. Even belonging.
 
@@ -41,7 +41,7 @@ Yet crypto is a reflection of the world at large. This pattern extends far beyon
 
 In every sphere of modern life, we see the same progression: authentic cultural elements are identified, commodified, and then mass-produced until they lose all connection to their original significance.
 
-Gamblecore, memetokens, even the exit polls - all symptops of the same disease. Humanity is fed with opinions, packaged into echo chambers and discouraged from exploring.
+Gamblecore, memetokens, even the exit polls - all symptoms of the same disease. Humanity is fed with opinions, packaged into echo chambers and discouraged from exploring.
 
 And why did you allow this to happen? Because it simply fills the empty space - you people have no culture.
 
@@ -52,7 +52,7 @@ It's easy to criticize the herd - the  "gm" greetings, the recycled memes and th
 
 We pride ourselves in scientific discourse and rational debate. We want fact-based discussions and logical arguments. Yet millions of hours are spent on social media expressing opinions and seeking validation. Why?
 
-Miss the addiction-enducing platforms and engagement-driven algos, this is poor folk's tale. The bigger picture is that in scientific community we 1. don't value and 2. don't allow peple to satisfy their emotional needs without dismissing their arguments.
+Miss the addiction-enducing platforms and engagement-driven algos, this is poor folk's tale. The bigger picture is that in scientific community we 1. don't value and 2. don't allow people to satisfy their emotional needs without dismissing their arguments.
 
 We are emotional beings trying to navigate an increasingly abstract world. The less we respect this truth, the more shallow our society will become.
 
@@ -67,13 +67,13 @@ People who don't fall victims to, but rather exploit these circumstances is a tr
 
 If you don't pay attention to the world of politics (good for you) there's been a clear change in the way people build trust in recent years.
 
-Not only have people been able to hijack the current discorse, but they were also able to rewrite the past in the eyes of the public and get away with all of this, by simply appealing to emotional, rather than intellectual human needs.
+Not only have people been able to hijack the current discourse, but they were also able to rewrite the past in the eyes of the public and get away with all of this, by simply appealing to emotional, rather than intellectual human needs.
 
 That's how starved we are for connection. The ability to identify people who exploit us is the first step toward societal recovery. And it's so saddening to see these men rise to power so fast.
 
 > Men who despise you, enslave you. Who regimen your lives. Tell you what to do, what to think and what to feel? Don't give yourselves to these unnatural men.
 
-The tragedy isn't just that these behaviors are hollow; it's that they actively prevent the formation of real culture. And as long as you engage or even exist alongside these behaviors - the dease will spread further.
+The tragedy isn't just that these behaviors are hollow; it's that they actively prevent the formation of real culture. And as long as you engage or even exist alongside these behaviors - the disease will spread further.
 
 A man must stand proud in their own culture. Yet it's never been easy.
 
@@ -87,7 +87,7 @@ Short-form engagement only further fuels the fire. Don't be mistaken as it is no
 
 ![/images/memetic-culture/gakonst-tweet.png](/images/memetic-culture/gakonst-tweet.png)
 
-Let me remind you that the only thing that deffers you from an animal is your ability to develop and preserve your culture.
+Let me remind you that the only thing that differs you from an animal is your ability to develop and preserve your culture.
 
 If you have no culture - I have no respect.
 
@@ -100,7 +100,7 @@ We shall not tolerate degen(erate) behaviour and we should look down upon those 
 
 Don't tolerate neatly-packaged ideas for your ears to swallow. And those who exploit your hearts for their own benefit.
 
-There's no virtue in capturing value. There's no fulfillment in that etiher.
+There's no virtue in capturing value. There's no fulfillment in that either.
 
 One must stand proud in their own understanding.
 
