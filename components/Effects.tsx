@@ -14,6 +14,8 @@ export const IsChristmas = (props: PropsWithChildren) => {
 
 export const Snow = () => {
   const [isDark, setDark] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [snowflakeImages, setSnowflakeImages] = useState<HTMLImageElement[]>([]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -37,9 +39,6 @@ export const Snow = () => {
     };
   }, []);
 
-  const [isMobile, setIsMobile] = useState(false);
-  const [snowflakeImages, setSnowflakeImages] = useState<HTMLImageElement[]>([]);
-
   useEffect(() => {
     const images = ["/snowflake.webp"].map((src) => {
       const img = document.createElement("img");
@@ -62,6 +61,8 @@ export const Snow = () => {
 
   const snowflakeCount = isMobile ? 35 : 75;
   const speed: [number, number] = isMobile ? [1, 2] : [1, 3];
+
+  if (!isDark) return null;
 
   return (
     <div className="fixed w-screen h-screen -z-[8] top-0">
