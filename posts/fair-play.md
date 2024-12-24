@@ -14,7 +14,6 @@ This article discusses the challenge of creating balanced gameplay experiences i
 
 It describes the concept of mad-fair play, which involves creating unique challenges that leverage the player's real skills to create engaging gameplay experiences. By balancing the advantages of asymmetric games with the fairness of symmetric ones, mad-fair play offers a unique approach to game design that can appeal to a broad range of players.
 
-## Preamble
 Let's start by first categorizing existing multiplayer experiences based on their rule sets. All existing games can be split into two types. Let's call them fair play and madness play.
 
 ### Fair Play

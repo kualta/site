@@ -72,7 +72,6 @@ export default async function PostPage(props: any) {
   return (
     <div className="max-w-2xl w-full relative mb-10">
       <TableOfContents toc={post.toc} />
-
       <PostContent post={post} />
       <SubscriptionBox />
     </div>

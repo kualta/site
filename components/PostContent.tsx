@@ -1,6 +1,6 @@
-import { readFileSync } from "fs";
+import { readFileSync } from "node:fs";
 import matter from "gray-matter";
-import path from "path";
+import path from "node:path";
 
 export const getPostContent = (slug: string) => {
   const postsPath = path.join(process.cwd(), "/posts/");

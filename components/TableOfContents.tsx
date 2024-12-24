@@ -27,7 +27,7 @@ export default function TableOfContents({ toc }: { toc: (string | null)[] }) {
   });
 
   return (
-    <div className="top-10 left-16 fixed hidden 2xl:flex flex-col gap-3">
+    <div className="top-10 left-16 fixed hidden lg:flex flex-col gap-3">
       <ol className="list-decimal">{table}</ol>
     </div>
   );

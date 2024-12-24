@@ -1,6 +1,6 @@
-import { readdirSync, readFileSync } from "fs";
+import { readdirSync, readFileSync } from "node:fs";
 import matter from "gray-matter";
-import path from "path";
+import path from "node:path";
 
 export interface PostMetadata {
   title: string;
