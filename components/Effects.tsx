@@ -1,11 +1,12 @@
 "use client";
 
-import { PropsWithChildren, useEffect, useState } from "react";
+import { useEffect, useState, type PropsWithChildren } from "react";
 import Snowfall from "react-snowfall";
 
 export const IsChristmas = (props: PropsWithChildren) => {
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth();
+
   const itsTime = currentMonth >= 10;
 
   return <>{itsTime && props.children}</>;
@@ -36,11 +37,35 @@ export const Snow = () => {
     };
   }, []);
 
-  const color = isDark ? "#e7e4e3" : "#191817";
+  const [isMobile, setIsMobile] = useState(false);
+  const [snowflakeImages, setSnowflakeImages] = useState<HTMLImageElement[]>([]);
+
+  useEffect(() => {
+    const images = ["/snowflake.webp"].map((src) => {
+      const img = document.createElement("img");
+      img.src = src;
+      return img;
+    });
+    setSnowflakeImages(images);
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.matchMedia("(max-width: 768px)").matches);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const snowflakeCount = isMobile ? 35 : 75;
+  const speed: [number, number] = isMobile ? [1, 2] : [1, 3];
 
   return (
     <div className="fixed w-screen h-screen -z-[8] top-0">
-      <Snowfall speed={[2, 2]} color={color} />
+      <Snowfall speed={speed} snowflakeCount={snowflakeCount} images={snowflakeImages} radius={[10, 20]} />
     </div>
   );
 };
