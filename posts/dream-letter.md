@@ -19,8 +19,6 @@ I have a dream that we will break away free from our egos and the illusion of su
 
 I dream of a day when we no longer measure our worth by how much we surpass others, but by how much we lift each other up. Where we understand that progress is never zero-sum.
 
-That classrooms will become gardens of knowledge, not theaters for cutthroat rivalry. I have a dream.
-
 I want us to recognize our greatest competitor as not our neighbour and not our neighbour overseas. To recognize that it is indeed us from the past that we're competing against.
 
 There, in that world, we together channel the competitive spirit into pushing the boundaries of what humanity can achieve.
@@ -28,8 +26,7 @@ There, in that world, we together channel the competitive spirit into pushing th
 Yet, let me be clear: this vision does not call for weakness. No, I dream of a world where each cultivates their strength.
 For it is only when we are strong within that we can truly connect with others.
 
-My friends, this dream is not distant. It is within our reach. <br>
-Remember, history began as a dream in someone's mind.
+My friends, this dream is not distant. It is within our reach. Remember, history began as a dream in someone's mind.
 
 Now I call upon you: nurture this dream. <br>
 Let it take root in your heart and grow in your actions. <br>
@@ -38,6 +35,4 @@ Compete not against each other, but alongside one another in the pursuit of this
 
 For when we release the shackles of nation, when we loosen on egos our girp, when we overcome competition - that is when we will truly be free.
 
-To create a world of genuine intents.
-
-That is my dream.
+To create a world of genuine intents - that is my dream.
