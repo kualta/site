@@ -18,25 +18,21 @@ Should I become a founder or a monk? As for a driven mind there's no in-between.
 When one becomes aware of the four noble truth there arises a sense of personal moral responsibility to achieve enlightenment.
 Why would you choose to pursue anything else if the only thing that keeps hurting you is solvable?
 
-I've come to a realization that I will probably never escape suffering - and that's okay.
-
 ## Duhkha
-The four sights have awakened the Buddha to the realities of human suffering and have inspired him to seek a solution.
-This was approximately 25 centuries ago.
-What happened to the personal human suffering since then? Has it not gone down? We cured so many diseases, and improved the quality of life so dramatically for so many people.
+Approximately 25 centuries ago the four sights have awakened the Buddha to the realities of human suffering and have inspired him to seek a solution.
 
-These days, does one have to overcome dukkha? <br>
-Does one still have the personal moral responsibility to do so? <br>
-What if one is okay with the life the way it currently is?
+Let's consider what actually happened to the personal human suffering since then? We cured so many diseases, and improved the quality of life so dramatically for so many people.
 
-More often I find people that, while not being blinded by the vail of their ignorance, are completely fine with engaging in lila and accepting both suffering and happiness.
+That is to say, does one have to overcome suffering? <br>
+What if one is okay with the life the way it currently is? 
+
+More often I find people that, while not being blinded by their ignorance, are completely fine with engaging in lila and accepting both suffering and happiness.
 
 Unfortunately, one must be unsatisfied with the world in order to make it better.
 Thus, a "founder monk" is an oxymoron. <br>
 The same unsatisfaction one is trying to overcome is essential for the other to exist.
 
-Let's exercise a thought that tomorrow everyone becomes enlightened. Would this not quickly drive humanity to extinction?
-The mere desire to reproduce directly leads to attachment and suffering.
+Let's exercise a thought that tomorrow everyone becomes enlightened. As the mere desire to reproduce directly leads to attachment and suffering, would this not quickly drive humanity to extinction?
 
 What if living with unsatisfaction is the only way to decrease everyone's suffering? <br>
 What if as humanity, we can continue to decrease it further?
@@ -46,7 +42,7 @@ Would you not trade a little bit of personal suffering for an attempt to make ev
 And if so, don't you have a moral responsibility to do so?
 
 ## Approaching the middle-way
-Answering those questions, the world is truly unsatisfactory and I think it's fine.
+Answering these questions, the world is truly unsatisfactory and I think it's fine.
 
 As long as one is not lost in dualistic views and the pursuit of egotistic desires, one may try to build for everyone's benefit.
 

@@ -9,8 +9,6 @@ preview: "/images/memetic-culture/preview.png"
 ![/images/memetic-culture/preview.png](/images/memetic-culture/preview.png)
 
 
-_big thanks to stratus and snats for proofreading this_
-
 ### Preamble
 Communities, including crypto, have long began to foster a sense of unity based on surface-level signals without sharing values or purpose.
 
@@ -105,3 +103,6 @@ There's no virtue in capturing value. There's no fulfillment in that either.
 One must stand proud in their own understanding.
 
 Stand proud, together with the rest of us.
+
+
+_big thanks to stratus and snats for proofreading this_
