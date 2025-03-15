@@ -1,7 +1,3 @@
-<a href="https://www.kualta.dev">`www.kualta.dev`</a>
-<a href="https://git.kualta.dev">`git.kualta.dev`</a>
-<a href="https://api.kualta.dev">`api.kualta.dev`</a>
-<a href="https://mail.kualta.dev/subscription/form">`mail.kualta.dev`</a>
 <a href="https://blog.kualta.dev">`blog.kualta.dev`</a>
 <a href="https://moji.kualta.dev">`moji.kualta.dev`</a>
 <a href="https://wasm.kualta.dev">`wasm.kualta.dev`</a>
@@ -10,4 +6,3 @@
 <a href="https://ping.kualta.dev">`ping.kualta.dev`</a>
 <a href="https://pics.kualta.dev">`pics.kualta.dev`</a>
 <a href="https://join.kualta.dev">`join.kualta.dev`</a>
-<a href="https://road.kualta.dev">`road.kualta.dev`</a>
