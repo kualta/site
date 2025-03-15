@@ -21,26 +21,10 @@ export const metadata = {
 
 export default function page() {
   return (
-      <div className="my-auto flex flex-col items-center justify-center relative">
-        <div style={{ pointerEvents: "none" }} className="select-none ">
-          <div className="absolute top-0 right-10 rounded-lg min-w-32 w-[15vw]">
-            <img alt="plan legend" className="hidden dark:flex" src={"/images/planku/legend-dark.png"} />
-            <img alt="plan" className="flex dark:hidden " src={"/images/planku/legend-light.png"} />
-          </div>
-          <img
-            alt="kunet plan. can't see the picture? join discord!"
-            className="hidden dark:flex object-scale-down min-h-screen"
-            src={"/images/planku/planku-dark.excalidraw.png"}
-          />
-          <img
-            alt="kunet plan. can't see the picture? join discord!"
-            className="flex dark:hidden object-scale-down  m-auto"
-            src={"/images/planku/planku-light.excalidraw.png"}
-          />
-        </div>
-        <div className="sm:mt-10">
-          <SubscriptionBox />
-        </div>
-      </div>
+    <div className="my-auto flex flex-col items-center justify-center relative">
+      <h1 className="text-3xl mb-20 font-bold text-center hover:drop-shadow-glow hover:transition-all hover:duration-300 hover:cursor-pointer">
+        ?
+      </h1>
+    </div>
   );
 }
