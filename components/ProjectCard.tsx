@@ -24,7 +24,7 @@ export const ProjectCard = ({ project, expandAll }: { project: Project; expandAl
       >
         <Card>
           <div className={"min-w-0 w-full text-sm group"}>
-            <div className={"text-base -mt-2 flex group items-center gap-2 place-items-center justify-center min-w-0"}>
+            <div className={"text-base flex group items-center gap-2 justify-center min-w-0"}>
               <b className="text-lg min-w-fit">{project.name}</b>
               {project.full_name && (
                 <span className="hidden sm:flex text-xs overflow-hidden text-elipsis truncate">

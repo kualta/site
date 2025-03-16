@@ -1,8 +1,6 @@
-import { SubscriptionBox } from "@/components/SubscriptionBox";
-
 export const metadata = {
   title: "about",
-  description: "kualta's vision",
+  description: "about kualta",
   keywords: [
     "about ku",
     "about kunet",
