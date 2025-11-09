@@ -1,4 +1,4 @@
-import { Project } from "@prisma/client";
+import { Project } from "@/types";
 import ProjectsPage from "./ProjectsPage";
 import { SubscriptionBox } from "@/components/SubscriptionBox";
 

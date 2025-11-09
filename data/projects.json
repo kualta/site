@@ -1,0 +1,234 @@
+[
+  {
+    "id": 1,
+    "name": "fuji",
+    "description": "hardcore hypercasual platformer",
+    "link": null,
+    "git_link": "https://github.com/kualta/fuji.git",
+    "language": "C#",
+    "date": "2020-09-01",
+    "status": "complete",
+    "tech_stack": [
+      "Unity"
+    ],
+    "full_name": "Fuji Bot",
+    "relevance": 50
+  },
+  {
+    "id": 2,
+    "name": "core",
+    "description": "neat game jam platformer",
+    "link": null,
+    "git_link": "https://github.com/kualta/core.git",
+    "language": "C++",
+    "date": "2021-02-22",
+    "status": "archived",
+    "tech_stack": [
+      "Core",
+      "Magnum",
+      "ImGUI",
+      "OpenGL",
+      "WASM",
+      "Core Engine"
+    ],
+    "full_name": null,
+    "relevance": 100
+  },
+  {
+    "id": 3,
+    "name": "hemi",
+    "description": "experimental typing trainer",
+    "link": "https://hemi.kualta.dev/",
+    "git_link": "https://github.com/kualta/hemi.git",
+    "language": "Rust",
+    "date": "2022-02-01",
+    "status": "complete",
+    "tech_stack": [
+      "WASM",
+      "Dioxus"
+    ],
+    "full_name": "Hemi Typer",
+    "relevance": 70
+  },
+  {
+    "id": 4,
+    "name": "pomo",
+    "description": "wasm powered pomodoro timer",
+    "link": "https://pomo.kualta.dev/",
+    "git_link": "https://github.com/kualta/pomo.git",
+    "language": "Rust",
+    "date": "2022-09-01",
+    "status": "complete",
+    "tech_stack": [
+      "WASM",
+      "Dioxus"
+    ],
+    "full_name": "Pomodoro",
+    "relevance": 50
+  },
+  {
+    "id": 5,
+    "name": "wasm",
+    "description": "wasm powered version of kualta.dev",
+    "link": "https://wasm.kualta.dev/",
+    "git_link": "https://github.com/kualta/wasm.git",
+    "language": "Rust",
+    "date": "2022-10-01",
+    "status": "complete",
+    "tech_stack": [
+      "WASM",
+      "Dioxus",
+      "Reqwest"
+    ],
+    "full_name": null,
+    "relevance": 35
+  },
+  {
+    "id": 6,
+    "name": "fpps",
+    "description": "first-person predictions shooter",
+    "link": null,
+    "git_link": "https://gitlab.com/kualta/supreme-phant",
+    "language": "C#",
+    "date": "2020-05-16",
+    "status": "archived",
+    "tech_stack": [
+      "Unity"
+    ],
+    "full_name": "Supreme Phantasma",
+    "relevance": 25
+  },
+  {
+    "id": 7,
+    "name": "cage",
+    "description": "souls-like adventure game",
+    "link": null,
+    "git_link": "https://gitlab.com/kualta/cage-man.git",
+    "language": "C#",
+    "date": "2020-02-07",
+    "status": "archived",
+    "tech_stack": [
+      "Unity"
+    ],
+    "full_name": "Cage Man",
+    "relevance": 25
+  },
+  {
+    "id": 8,
+    "name": "cape",
+    "description": "hardcore super mario world",
+    "link": null,
+    "git_link": "https://github.com/kualta/cape.git",
+    "language": "C#",
+    "date": "2020-08-28",
+    "status": "archived",
+    "tech_stack": [
+      "Unity"
+    ],
+    "full_name": "Death Scape",
+    "relevance": 5
+  },
+  {
+    "id": 9,
+    "name": "site",
+    "description": "personal website",
+    "link": "https://www.kualta.dev/",
+    "git_link": "https://github.com/kualta/site.git",
+    "language": "TypeScript",
+    "date": "2023-01-01",
+    "status": "complete",
+    "tech_stack": [
+      "React",
+      "Next.JS",
+      "TailwindCSS"
+    ],
+    "full_name": null,
+    "relevance": 65
+  },
+  {
+    "id": 10,
+    "name": "ping",
+    "description": "decentralized social",
+    "link": "https://pingpad.io/",
+    "git_link": "https://github.com/kualta/ping.git",
+    "language": "TypeScript",
+    "date": "2023-03-23",
+    "status": "ongoing",
+    "tech_stack": [
+      "React",
+      "Next.JS",
+      "Tailwind",
+      "Lens"
+    ],
+    "full_name": "Pingpad",
+    "relevance": 110
+  },
+  {
+    "id": 11,
+    "name": "boxy",
+    "description": "collection of tools for bevy",
+    "link": null,
+    "git_link": "https://github.com/kualta/boxy.git",
+    "language": "Rust",
+    "date": "2022-10-10",
+    "status": "archived",
+    "tech_stack": [
+      "Bevy"
+    ],
+    "full_name": null,
+    "relevance": 30
+  },
+  {
+    "id": 12,
+    "name": "cast",
+    "description": "crypto demand forecasting model",
+    "link": null,
+    "git_link": "https://github.com/kualta/cast.git",
+    "language": "Python",
+    "date": "2023-06-22",
+    "status": "complete",
+    "tech_stack": [
+      "binance",
+      "prophet",
+      "bokeh"
+    ],
+    "full_name": null,
+    "relevance": 25
+  },
+  {
+    "id": 14,
+    "name": "moji",
+    "description": "world's biggest kaomoji library",
+    "link": "https://moji.kualta.dev/",
+    "git_link": "https://github.com/kualta/site.git",
+    "language": "TypeScript",
+    "date": "2023-07-16",
+    "status": "complete",
+    "tech_stack": [
+      "React",
+      "Next.JS",
+      "TailwindCSS"
+    ],
+    "full_name": null,
+    "relevance": 25
+  },
+  {
+    "id": 16,
+    "name": "fntn",
+    "description": "collaborative blogging platform",
+    "link": "https://fountain.ink",
+    "git_link": "https://github.com/fountain-ink",
+    "language": "TypeScript",
+    "date": "2024-07-01",
+    "status": "ongoing",
+    "tech_stack": [
+      "React",
+      "Lens",
+      "Next.JS",
+      "TailwindCSS",
+      "Fountain"
+    ],
+    "full_name": null,
+    "relevance": 105
+  }
+]

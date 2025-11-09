@@ -33,9 +33,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: "https://kualta.dev/gallery",
     },
     {
-      url: "https://kualta.dev/pics",
-    },
-    {
       url: "https://kualta.dev/kaomoji",
     },
     {

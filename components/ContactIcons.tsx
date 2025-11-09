@@ -1,30 +1,31 @@
-import { Contact } from "@prisma/client";
+import { Contact } from "@/types";
 import { FiAtSign, FiGithub, FiGlobe, FiMail, FiYoutube } from "react-icons/fi";
-import { RiBlueskyLine, RiTwitterXLine } from "react-icons/ri";
+import { RiTwitterXLine } from "react-icons/ri";
+import { FarcasterIcon } from "./Icons";
 
 export const ContactIcon = (contact: Contact, size?: number) => {
   let icon = <></>;
   switch (contact.platform) {
     case "website":
-      icon = <FiGlobe size={size} />;
+      icon = <FiGlobe size={size ?? 22} />;
       break;
     case "github":
-      icon = <FiGithub size={size} />;
+      icon = <FiGithub size={size ?? 22} />;
       break;
     case "youtube":
-      icon = <FiYoutube size={size} />;
+      icon = <FiYoutube size={size ?? 22} />;
       break;
     case "twitter":
-      icon = <RiTwitterXLine size={size} />;
+      icon = <RiTwitterXLine size={size ?? 22} />;
       break;
-    case "bsky":
-      icon = <RiBlueskyLine size={(size ?? 22) + 4} />;
+    case "farcaster":
+      icon = <FarcasterIcon size={size ?? 20} />;
       break;
     case "ping":
       icon = <FiAtSign size={(size ?? 22) + 1} />;
       break;
     case "email":
-      icon = <FiMail size={size} />;
+      icon = <FiMail size={size ?? 22} />;
       break;
   }
   return icon;

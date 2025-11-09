@@ -1,5 +1,5 @@
 "use client";
-import { Project } from "@prisma/client";
+import { Project } from "@/types";
 import { Card } from "./Card";
 import { useState } from "react";
 import { FiCopy, FiExternalLink, FiGithub } from "react-icons/fi";

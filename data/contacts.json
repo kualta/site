@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "platform": "github",
+    "label": "kualta",
+    "link": "https://github.com/kualta",
+    "description": null,
+    "is_main": true
+  },
+  {
+    "id": 2,
+    "platform": "email",
+    "label": "contact@kualta.dev",
+    "link": "mailto:contact@kualta.dev",
+    "description": null,
+    "is_main": false
+  },
+  {
+    "id": 4,
+    "platform": "farcaster",
+    "label": "kualta.eth",
+    "link": "https://farcaster.xyz/kualta.eth",
+    "description": null,
+    "is_main": true
+  }
+]

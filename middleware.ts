@@ -5,7 +5,6 @@ const redirects: { [key: string]: string } = {
   moji: "https://kualta.dev/kaomoji",
   blog: "https://kualta.dev/posts",
   post: "https://kualta.dev/posts",
-  pics: "https://kualta.dev/pics",
   join: "https://kualta.dev/join",
 };
 

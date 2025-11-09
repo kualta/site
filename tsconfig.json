@@ -26,13 +26,22 @@
     ],
     "paths": {
       "@/*": [
-        "./src/*"
+        "./*"
       ],
       "@/components/*": [
         "components/*"
       ],
       "@/styles/*": [
         "../styles/*"
+      ],
+      "@/types": [
+        "types/index.ts"
+      ],
+      "@/lib/*": [
+        "lib/*"
+      ],
+      "@/data/*": [
+        "data/*"
       ]
     }
   },
@@ -46,8 +55,7 @@
     "app/kaomoji/page.tsx",
     "app/kaomoji/KaomojiPage.jsx",
     "app/api/page.tsx",
-    "components/Polyhedron.tsx",
-    "prisma/route.ts"
+    "components/Polyhedron.tsx"
   ],
   "exclude": [
     "node_modules"

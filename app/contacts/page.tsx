@@ -1,8 +1,8 @@
 import { Card } from "@/components/Card";
 import { EtheriumButton, PGPButton } from "@/components/ContactButtons";
-import { Contact } from "@prisma/client";
+import { Contact } from "@/types";
 import { ContactIcon } from "components/ContactIcons";
-import { getAllContacts } from "prisma/dataFetch";
+import { getAllContacts } from "@/lib/dataFetch";
 
 export const metadata = {
   title: "contacts",
@@ -15,7 +15,8 @@ async function ContactsPage() {
   return (
     <div className={"flex justify-center flex-col gap-4 w-72 ml-auto mr-auto -mt-16"}>
       {contacts.map((contact: Contact) => {
-        const icon = ContactIcon(contact, 22);
+        const icon = ContactIcon(contact);
+
         return (
           <a key={contact.link + contact.description} href={contact.link} target="_blank" rel="noopener noreferrer">
             <Card>
@@ -32,7 +33,7 @@ async function ContactsPage() {
       })}
 
       <EtheriumButton />
-      <PGPButton />
+      {/* <PGPButton /> */}
     </div>
   );
 }

@@ -20,10 +20,6 @@ module.exports = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'bfcgxnkknmsgxcvczwov.supabase.co',
-      },
-      {
-        protocol: 'https',
         hostname: 'picsum.photos'
       }
     ],

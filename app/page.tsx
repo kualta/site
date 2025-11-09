@@ -1,7 +1,7 @@
 import ContactIcons from "@/components/ContactIcons";
 import { IsChristmas } from "@/components/Effects";
-import { Contact } from "@prisma/client";
-import { getAllContacts } from "../prisma/dataFetch";
+import { Contact } from "@/types";
+import { getAllContacts } from "@/lib/dataFetch";
 
 async function HomePage() {
   const contacts = await (await getAllContacts())
