@@ -20,7 +20,7 @@ export function PGPButton() {
       }}
     >
       <Card>
-        <div className={"flex justify-center flex-row gap-4 w-64"}>
+        <div className={"flex justify-center flex-row gap-4 p-1 w-64"}>
           <LuKeyRound size={22} />
           <p className="grow text-left">PGP key</p>
           <FiDownload size={21} className="text-secondary-text -mr-0.5" />
@@ -43,7 +43,7 @@ export function EtheriumButton() {
       }}
     >
       <Card>
-        <div className={"flex justify-center flex-row gap-4 w-64"}>
+        <div className={"flex justify-center flex-row gap-4 p-1 w-64"}>
           <EtheriumIcon size={22} />
           <p className="text-left grow">kualta.eth</p>
           <FiCopy size={21} className="text-secondary-text -mr-0.5" />

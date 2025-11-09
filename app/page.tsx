@@ -6,7 +6,8 @@ import { getAllContacts } from "@/lib/dataFetch";
 async function HomePage() {
   const contacts = await (await getAllContacts())
     .json()
-    .then((contacts: Contact[]) => contacts.filter((contact: Contact) => contact.is_main));
+    .then((contacts: Contact[]) => contacts.filter((contact: Contact) => contact.is_main))
+    .then((contacts: Contact[]) => contacts.reverse());
 
   return (
     <div className={"flex flex-col w-full grow justify-center place-content-center snowflake font-bold"}>
@@ -18,7 +19,7 @@ async function HomePage() {
           </IsChristmas>
         </h1>
 
-        <div className="flex flex-row gap-2 items-center">
+        <div className="flex flex-row gap-3 items-center">
           <ContactIcons contacts={contacts} />
         </div>
       </div>

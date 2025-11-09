@@ -37,7 +37,7 @@ function ContactIcons(props: { contacts: Contact[]; size?: number }) {
   const links = props.contacts.map((contact) => {
     const icon = ContactIcon(contact, size);
     return (
-      <div key={contact.link} className="hover:scale-125">
+      <div key={contact.link} className="hover:scale-125 transition-all duration-100">
         <a
           href={contact.link}
           key={contact.link}

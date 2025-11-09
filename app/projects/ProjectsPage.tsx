@@ -2,11 +2,9 @@
 import { ProjectCard } from "@/components/ProjectCard";
 import { Project } from "@/types";
 import { useState } from "react";
-import { MdExpandLess, MdExpandMore } from "react-icons/md";
 
 const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   const [selectedStatuses, setSelectedStatuses] = useState(["complete", "ongoing", "paused", "archived"]);
-  const [expandAll, setExpandAll] = useState(false);
 
   const CheckBox = ({ value }: { value: string }) => {
     return (
@@ -38,7 +36,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
   });
 
   const projectsList = filteredProjects.map((project) => {
-    return <ProjectCard key={project.id} project={project} expandAll={expandAll} />;
+    return <ProjectCard key={project.id} project={project} />;
   });
 
   // TODO: add sorting options
@@ -46,7 +44,7 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
     <>
       <div
         className={
-          "flex flex-row flex-wrap gap-4 p-4 justify-between items-center text-xs sm:text-sm md:text-base truncate"
+          "flex flex-row flex-wrap gap-4 p-4 items-center justify-center  text-xs sm:text-sm md:text-base truncate"
         }
       >
         <div className="flex flex-row sm:flex-row gap-4">
@@ -54,13 +52,9 @@ const ProjectsPage = ({ projects }: { projects: Project[] }) => {
           <CheckBox value="ongoing" />
           <CheckBox value="archived" />
         </div>
-        <button className="flex gap-2 items-center pr-3.5" type="button" onClick={() => setExpandAll(!expandAll)}>
-          {expandAll ? "collapse all" : "expand all"}
-          {expandAll ? <MdExpandLess /> : <MdExpandMore />}
-        </button>
       </div>
 
-        <div className="flex flex-col w-full gap-4 p-4">{projectsList}</div>
+      <div className="flex flex-col w-full gap-4 p-4">{projectsList}</div>
     </>
   );
 };

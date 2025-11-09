@@ -32,12 +32,12 @@ const PostCard = (props: PostMetadata) => {
     <Link href={`/posts/${props.filename}`} className="sm:w-[640px] min-w-[250px] w-fit relative">
       <Card key={props.description}>
         <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-4 w-fit">
-          <div className="grow min-w-[230px] w-[80vw] sm:w-[300px] aspect-video relative">
+          <div className="grow min-w-[230px] w-[80vw] sm:w-[300px] aspect-video relative rounded-xl overflow-hidden">
             <Image
               src={props.preview}
               alt={props.title}
               fill={true}
-              className="rounded-xl object-contain"
+              className="object-cover"
               priority={true}
             />
           </div>

@@ -11,13 +11,13 @@
     "tech_stack": [
       "Unity"
     ],
-    "full_name": "Fuji Bot",
+    "full_name": "fuji",
     "relevance": 50
   },
   {
     "id": 2,
     "name": "core",
-    "description": "neat game jam platformer",
+    "description": "neat game engine",
     "link": null,
     "git_link": "https://github.com/kualta/core.git",
     "language": "C++",
@@ -47,7 +47,7 @@
       "WASM",
       "Dioxus"
     ],
-    "full_name": "Hemi Typer",
+    "full_name": "hemi typer",
     "relevance": 70
   },
   {
@@ -63,7 +63,6 @@
       "WASM",
       "Dioxus"
     ],
-    "full_name": "Pomodoro",
     "relevance": 50
   },
   {
@@ -95,7 +94,7 @@
     "tech_stack": [
       "Unity"
     ],
-    "full_name": "Supreme Phantasma",
+    "full_name": "supreme phantasma",
     "relevance": 25
   },
   {
@@ -110,7 +109,7 @@
     "tech_stack": [
       "Unity"
     ],
-    "full_name": "Cage Man",
+    "full_name": "cage man",
     "relevance": 25
   },
   {
@@ -125,7 +124,7 @@
     "tech_stack": [
       "Unity"
     ],
-    "full_name": "Death Scape",
+    "full_name": "death scape",
     "relevance": 5
   },
   {
@@ -144,24 +143,6 @@
     ],
     "full_name": null,
     "relevance": 65
-  },
-  {
-    "id": 10,
-    "name": "ping",
-    "description": "decentralized social",
-    "link": "https://pingpad.io/",
-    "git_link": "https://github.com/kualta/ping.git",
-    "language": "TypeScript",
-    "date": "2023-03-23",
-    "status": "ongoing",
-    "tech_stack": [
-      "React",
-      "Next.JS",
-      "Tailwind",
-      "Lens"
-    ],
-    "full_name": "Pingpad",
-    "relevance": 110
   },
   {
     "id": 11,
@@ -220,7 +201,7 @@
     "git_link": "https://github.com/fountain-ink",
     "language": "TypeScript",
     "date": "2024-07-01",
-    "status": "ongoing",
+    "status": "complete",
     "tech_stack": [
       "React",
       "Lens",
@@ -228,7 +209,65 @@
       "TailwindCSS",
       "Fountain"
     ],
-    "full_name": null,
+    "full_name": "fountain",
     "relevance": 105
+  },
+  {
+    "id": 17,
+    "name": "paper",
+    "description": "ethereum-native social",
+    "link": "https://paper.ink",
+    "git_link": "https://github.com/on-paper/ink",
+    "language": "TypeScript",
+    "date": "2024-07-01",
+    "status": "ongoing",
+    "tech_stack": [
+      "React",
+      "Lens",
+      "Next.JS",
+      "TailwindCSS"
+    ],
+    "relevance": 115
+  },
+  {
+    "id": 18,
+    "name": "cartel",
+    "description": "a global community",
+    "link": "https://cartel.sh",
+    "git_link": "https://github.com/cartel-sh",
+    "language": "TypeScript",
+    "date": "2025-07-01",
+    "status": "complete",
+    "relevance": 115
+  },
+  {
+    "id": 19,
+    "name": "bad art",
+    "description": "a serious place for unserious art",
+    "git_link": "https://github.com/cartel-sh/bad-art.git",
+    "language": "TypeScript",
+    "date": "2025-07-01",
+    "status": "archived",
+    "tech_stack": [
+      "React",
+      "Next.JS",
+      "TailwindCSS"
+    ],
+    "relevance": 100
+  },
+  {
+    "id": 20,
+    "name": "paragraph",
+    "description": "where ideas thrive",
+    "link": "https://paragraph.com",
+    "language": "TypeScript",
+    "date": "2025-10-01",
+    "status": "ongoing",
+    "tech_stack": [
+      "React",
+      "Next.JS",
+      "TailwindCSS"
+    ],
+    "relevance": 125
   }
 ]
