@@ -260,6 +260,7 @@
     "name": "paragraph",
     "description": "where ideas thrive",
     "link": "https://paragraph.com",
+    "git_link": "https://github.com/paragraph-xyz/",
     "language": "TypeScript",
     "date": "2025-10-01",
     "status": "ongoing",

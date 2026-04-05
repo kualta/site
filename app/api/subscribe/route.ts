@@ -1,62 +1,43 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
-  const apiUsername = process.env.LISTMONK_API_USERNAME;
-  const accessToken = process.env.LISTMONK_ACCESS_TOKEN;
-  const baseUrl = process.env.LISTMONK_BASE_URL || "https://mail.kualta.dev";
-
   const email = request.nextUrl.searchParams.get("email");
-  const list = Number.parseInt(request.nextUrl.searchParams.get("list") || "4");
 
   if (!email) {
     return NextResponse.json({
       error: "Email is required",
-      message: "Email is required",
       status: 400,
     });
   }
 
-  const formData = {
-    email,
-    name: email.split("@")[0],
-    status: "enabled",
-    lists: [list],
-    preconfirm_subscriptions: true,
-  };
-
-  const authString = Buffer.from(`${apiUsername}:${accessToken}`).toString("base64");
-
   try {
-    const res = await fetch(`${baseUrl}/api/subscribers`, {
+    const res = await fetch("https://api.paragraph.com/api/v1/subscribers", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Basic ${authString}`,
+        Authorization: `Bearer ${process.env.PARAGRAPH_API_KEY}`,
       },
-      body: JSON.stringify(formData),
+      body: JSON.stringify({ email }),
     });
 
-    const responseData = await res.text();
-    
+    const data = await res.json();
+
     if (!res.ok) {
-      console.error("Listmonk API error:", responseData);
+      console.error("Paragraph API error:", data);
       return NextResponse.json({
         error: "Subscription failed",
-        message: responseData,
         status: res.status,
       });
     }
 
     return NextResponse.json({
       message: "Subscribed successfully",
-      status: res.status,
-      data: JSON.parse(responseData),
+      status: 200,
     });
   } catch (error) {
-    console.error("Error connecting to Listmonk:", error);
+    console.error("Error subscribing:", error);
     return NextResponse.json({
       error: "Connection error",
-      message: error instanceof Error ? error.message : "Unknown error",
       status: 500,
     });
   }

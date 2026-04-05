@@ -1,8 +1,8 @@
 import getPostsMetadata from "@/components/PostMetadata";
 import { MetadataRoute } from "next";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const postMetadata = getPostsMetadata();
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const postMetadata = await getPostsMetadata();
   const posts: MetadataRoute.Sitemap = postMetadata.map((post) => ({
     url: `https://kualta.dev/posts/${post.filename}`,
     priority: 0.9,

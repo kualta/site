@@ -13,7 +13,7 @@ async function page() {
   const sortedProjects = [...projects].sort((a, b) => (b.relevance || 0) - (a.relevance || 0)).sort((a, b) => (a.status === "complete" ? -1 : 1)).sort((a, b) => (a.status === "ongoing" ? -1 : 1));
 
   return (
-    <div className="max-w-2xl w-full place-items-center justify-center mb-10">
+    <div className="max-w-xl w-full place-items-center justify-center mb-10">
       <ProjectsPage projects={sortedProjects} />
       <SubscriptionBox />
     </div>

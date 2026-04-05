@@ -3,16 +3,15 @@ import getPostsMetadata from "components/PostMetadata";
 import Link from "next/link";
 
 export const generateStaticParams = async () => {
-  const posts = getPostsMetadata();
-  return posts.map((post) => ({
-    slug: post.filename,
-  }));
+  const posts = await getPostsMetadata();
+  const tags = [...new Set(posts.flatMap((post) => post.tags))];
+  return tags.map((tag) => ({ slug: tag }));
 };
 
 async function TagsPage(props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
   const filter = params.slug;
-  const postMetadata = getPostsMetadata().filter((post) => post.tags.indexOf(filter) !== -1);
+  const postMetadata = (await getPostsMetadata()).filter((post) => post.tags.indexOf(filter) !== -1);
   const posts = postMetadata.map((post) => <PostCard key={post.filename} {...post} />);
   const tagText = params.slug.replace("-", " ").toLowerCase();
 

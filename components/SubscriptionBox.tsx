@@ -49,21 +49,21 @@ export const EmailSubscription = () => {
         <form onSubmit={handleSubmit}>
           <div className="flex flex-row gap-2">
             <input
-              className="p-3 rounded-lg min-w-0 bg-secondary dark:bg-dark-secondary accent-primary w-fit"
+              className="p-3 rounded-xl min-w-0 bg-secondary dark:bg-dark-secondary accent-primary w-fit"
               type="email"
               name="email"
               required
               placeholder="E-mail"
             />
             <button
-              className="hidden sm:flex bg-primary dark:bg-dark-primary p-3 rounded-lg hover:opacity-50 hover:cursor-pointer text-white"
+              className="hidden sm:flex bg-primary dark:bg-dark-primary p-3 rounded-xl hover:opacity-50 hover:cursor-pointer text-white"
               name="submit"
               type="submit"
             >
               Subscribe
             </button>
             <button
-              className="flex sm:hidden bg-primary dark:bg-dark-primary p-3 rounded-lg hover:opacity-50 hover:cursor-pointer text-white"
+              className="flex sm:hidden bg-primary dark:bg-dark-primary p-3 rounded-xl hover:opacity-50 hover:cursor-pointer text-white"
               name="submit"
               type="submit"
             >

@@ -6,13 +6,12 @@ import projectsData from "@/data/projects.json";
 
 export async function getAllContacts() {
   const contacts = contactsData as Contact[];
-  // Sort by platform alphabetically
-  const sortedContacts = [...contacts].sort((a, b) => a.platform.localeCompare(b.platform));
+  const sortedContacts = [...contacts].sort((a, b) => (a.platform.length + a.label.length) - (b.platform.length + b.label.length));
   return NextResponse.json(sortedContacts);
 }
 
 export async function getAllPosts() {
-  const posts = getPostsMetadata();
+  const posts = await getPostsMetadata();
   const linkablePosts = posts.map((post) => ({
     name: post.title,
     description: post.description,

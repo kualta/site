@@ -2,14 +2,12 @@ import { getPostContent } from "@/components/PostContent";
 import { SubscriptionBox } from "@/components/SubscriptionBox";
 import TableOfContents from "@/components/TableOfContents";
 import getPostsMetadata from "components/PostMetadata";
-import type { GrayMatterFile } from "gray-matter";
 import Markdown from "markdown-to-jsx";
 import type { Metadata } from "next";
-import dynamic from "next/dynamic";
 
 export async function generateMetadata(props: any): Promise<Metadata> {
   const params = await props.params;
-  const post = getPostContent(params.slug);
+  const post = await getPostContent(params.slug);
   return {
     title: post.data.title,
     description: post.data.description,
@@ -32,17 +30,17 @@ export async function generateMetadata(props: any): Promise<Metadata> {
 }
 
 export const generateStaticParams = async () => {
-  const posts = getPostsMetadata();
+  const posts = await getPostsMetadata();
   return posts.map((post) => ({
     slug: post.filename,
   }));
 };
 
-function PostContent({ post }: { post: GrayMatterFile<string> }) {
+function PostContent({ post }: { post: { data: any; content: string } }) {
   return (
     <article
       className={
-        "z-[10] max-w-2xl rounded-xl p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-2xl"
+        "z-[10] max-w-2xl rounded-xl p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-xl"
       }
     >
       <h1 className="mb-2 text-center">{post.data.title}</h1>
@@ -67,7 +65,7 @@ function PostContent({ post }: { post: GrayMatterFile<string> }) {
 
 export default async function PostPage(props: any) {
   const params = await props.params;
-  const post = getPostContent(params.slug);
+  const post = await getPostContent(params.slug);
 
   return (
     <div className="max-w-2xl w-full relative mb-10">

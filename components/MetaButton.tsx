@@ -10,7 +10,7 @@ import { TbQuestionMark } from "react-icons/tb";
 
 export const MetaButton = (props: PropsWithChildren) => {
   return (
-    <div className="w-8 h-8 flex items-center justify-center rounded-md active:text-secondary-text active:dark:text-secondary-text">
+    <div className="w-8 h-8 flex items-center justify-center rounded-xl active:text-secondary-text active:dark:text-secondary-text">
       {props.children}
     </div>
   );

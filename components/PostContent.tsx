@@ -1,24 +1,22 @@
-import { readFileSync } from "node:fs";
-import matter from "gray-matter";
-import path from "node:path";
+import { fetchPostBySlug } from "@/lib/paragraph";
 
-export const getPostContent = (slug: string) => {
-  const postsPath = path.join(process.cwd(), "/posts/");
-  const file = `${postsPath}${slug}.md`;
-  const content = readFileSync(file, "utf-8");
-  const post = matter(content);
-  const toc = post.content
+export const getPostContent = async (slug: string) => {
+  const post = await fetchPostBySlug(slug);
+  const markdown = post.markdown ?? "";
+
+  const toc = markdown
     .split(/\r?\n/)
-    .map((line) => {
-      if (line.startsWith("#")) {
-        return line;
-      }
-      return null;
-    })
-    .filter((line) => line !== null);
+    .filter((line) => line.startsWith("#"));
 
   return {
-    ...post,
+    data: {
+      title: post.title,
+      description: post.subtitle,
+      date: new Date(Number(post.publishedAt)).toISOString().split("T")[0],
+      tags: post.categories,
+      preview: post.imageUrl,
+    },
+    content: markdown,
     toc,
   };
 };

@@ -1,6 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
-import matter from "gray-matter";
-import path from "node:path";
+import { fetchPublicationPosts } from "@/lib/paragraph";
 
 export interface PostMetadata {
   title: string;
@@ -11,33 +9,17 @@ export interface PostMetadata {
   preview: string;
 }
 
-function getPostsMetadata(): PostMetadata[] {
-  const postsPath = path.join(process.cwd(), "/posts/");
-  const files = readdirSync(postsPath);
-  const markdownFiles = files.filter((file) => file.endsWith(".md"));
+async function getPostsMetadata(): Promise<PostMetadata[]> {
+  const posts = await fetchPublicationPosts();
 
-  const posts = markdownFiles
-    .map((file) => {
-      const fileContents = readFileSync(`${postsPath}${file}`, "utf-8");
-      const metadata = matter(fileContents);
-      const filename = file.replace(".md", "");
-
-      return {
-        title: metadata.data.title,
-        description: metadata.data.description,
-        date: metadata.data.date,
-        tags: metadata.data.tags,
-        preview: metadata.data.preview,
-        filename: filename,
-      } as PostMetadata;
-    })
-    .sort((a, b) => {
-      const first = Date.parse(a.date);
-      const second = Date.parse(b.date);
-      return second - first;
-    });
-
-  return posts;
+  return posts.map((post) => ({
+    title: post.title,
+    description: post.subtitle,
+    date: new Date(Number(post.publishedAt)).toISOString().split("T")[0],
+    tags: post.categories,
+    filename: post.slug,
+    preview: post.imageUrl,
+  }));
 }
 
 export default getPostsMetadata;
