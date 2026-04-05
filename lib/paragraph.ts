@@ -20,8 +20,9 @@ export interface ParagraphPost {
   json?: string;
 }
 
-async function getPublicationId(): Promise<string> {
+async function getPublicationId(): Promise<string | null> {
   const slug = process.env.PARAGRAPH_PUBLICATION_SLUG;
+  if (!slug) return null;
   const res = await fetch(`${API_BASE}/publications/slug/${slug}`, {
     headers: getHeaders(),
     next: { revalidate: 86400 },
@@ -35,6 +36,7 @@ async function getPublicationId(): Promise<string> {
 
 export async function fetchPublicationPosts(): Promise<ParagraphPost[]> {
   const pubId = await getPublicationId();
+  if (!pubId) return [];
   const res = await fetch(
     `${API_BASE}/publications/${pubId}/posts?includeContent=true`,
     {
