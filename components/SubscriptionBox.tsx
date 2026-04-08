@@ -44,12 +44,12 @@ export const EmailSubscription = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 place-content-center items-center justify-center w-fit">
+    <div className="flex flex-col gap-4 place-content-center items-center justify-center w-full">
       {success === undefined ? (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="w-full">
           <div className="flex flex-row gap-2">
             <input
-              className="p-3 rounded-xl min-w-0 bg-secondary dark:bg-dark-secondary accent-primary w-fit"
+              className="p-3 rounded-xl min-w-0 flex-grow bg-secondary dark:bg-dark-secondary accent-primary"
               type="email"
               name="email"
               required
@@ -72,12 +72,10 @@ export const EmailSubscription = () => {
           </div>
         </form>
       ) : (
-        <Card>
-          <div className="w-full flex flex-row gap-4">
-            Subscribed!
-            <LuMailCheck size={24} />
-          </div>
-        </Card>
+        <div className="flex flex-row gap-2 items-center justify-center w-full p-3">
+          Subscribed!
+          <LuMailCheck size={24} />
+        </div>
       )}
     </div>
   );

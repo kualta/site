@@ -22,5 +22,13 @@
     "link": "https://farcaster.xyz/kualta.eth",
     "description": null,
     "is_main": true
+  },
+  {
+    "id": 5,
+    "platform": "bluesky",
+    "label": "kualta.dev",
+    "link": "https://bsky.app/profile/kualta.dev",
+    "description": null,
+    "is_main": true
   }
 ]

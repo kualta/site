@@ -39,68 +39,36 @@ export const LensIcon = ({ size }: { size: number }) => {
   );
 };
 
-export const EtheriumIcon = ({ size }: { size: number }) => {
+export const BlueskyIcon = ({ size }: { size: number }) => {
   return (
-    <>
-      <span className="dark:hidden flex">
-        {/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
-        <svg height={size} viewBox="0 0 24 24" width={size} xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="m7.46040481 11.6121684 4.53959519 2.2697976 4.5395952-2.2697976-4.5395952-6.80939276zm7.61878559 2.9662704-3.0791904 1.5395952-3.07919037-1.5395952 3.07919037 4.6187856zm-3.0791904-13.38121444 7.2018504 10.80277564-7.2018504 10.8027756-7.20185043-10.8027756z"
-            fillRule="evenodd"
-            fill="black"
-          />
-        </svg>
-      </span>
-      <span className="dark:flex hidden">
-        {/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
-        <svg height={size} viewBox="0 0 24 24" width={size} xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="m7.46040481 11.6121684 4.53959519 2.2697976 4.5395952-2.2697976-4.5395952-6.80939276zm7.61878559 2.9662704-3.0791904 1.5395952-3.07919037-1.5395952 3.07919037 4.6187856zm-3.0791904-13.38121444 7.2018504 10.80277564-7.2018504 10.8027756-7.20185043-10.8027756z"
-            fillRule="evenodd"
-            fill="white"
-          />
-        </svg>
-      </span>
-    </>
+    // biome-ignore lint/a11y/noSvgWithoutTitle: <explanation>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M6.3 4.2c2.3 1.7 4.8 5.3 5.7 7.2.9-1.9 3.4-5.5 5.7-7.2 1.7-1.2 4.3-2.2 4.3.9 0 .6-.3 5.2-.5 5.9-.7 2.5-3.2 3.2-5.4 2.8 3.9.7 4.9 2.9 2.7 5.1-4.5 4.5-6.6-1-7-2.5-.1-.3-.1-.4-.1-.3 0-.1 0 0-.1.3-.4 1.5-2.5 7-7 2.5-2.2-2.2-1.2-4.4 2.7-5.1-2.2.4-4.7-.3-5.4-2.8-.2-.7-.5-5.3-.5-5.9 0-3.1 2.6-2.1 4.3-.9h.6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 };
 
 export const FarcasterIcon = ({ size }: { size: number }) => {
   return (
-    <>
-      <span className="dark:hidden flex">
-        {/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
-        <svg
-          width={size}
-          height={size}
-          viewBox="-20 -20 560 497"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M519.801 0V61.6809H458.172V123.31H477.054V123.331H519.801V456.795H416.57L416.507 456.49L363.832 207.03C358.81 183.251 345.667 161.736 326.827 146.434C307.988 131.133 284.255 122.71 260.006 122.71H259.8C235.551 122.71 211.818 131.133 192.979 146.434C174.139 161.736 160.996 183.259 155.974 207.03L103.239 456.795H0V123.323H42.7471V123.31H61.6262V61.6809H0V0H519.801Z"
-            stroke="black"
-            strokeWidth="35"
-          />
-        </svg>
-      </span>
-      <span className="dark:flex hidden">
-        {/* biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
-        <svg
-          width={size}
-          height={size}
-          viewBox="-20 -20 560 497"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M519.801 0V61.6809H458.172V123.31H477.054V123.331H519.801V456.795H416.57L416.507 456.49L363.832 207.03C358.81 183.251 345.667 161.736 326.827 146.434C307.988 131.133 284.255 122.71 260.006 122.71H259.8C235.551 122.71 211.818 131.133 192.979 146.434C174.139 161.736 160.996 183.259 155.974 207.03L103.239 456.795H0V123.323H42.7471V123.31H61.6262V61.6809H0V0H519.801Z"
-            stroke="white"
-            strokeWidth="35"
-          />
-        </svg>
-      </span>
-    </>
+    // biome-ignore lint/a11y/noSvgWithoutTitle: <explanation>
+    <svg
+      width={size}
+      height={size}
+      viewBox="-20 -20 560 497"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M519.801 0V61.6809H458.172V123.31H477.054V123.331H519.801V456.795H416.57L416.507 456.49L363.832 207.03C358.81 183.251 345.667 161.736 326.827 146.434C307.988 131.133 284.255 122.71 260.006 122.71H259.8C235.551 122.71 211.818 131.133 192.979 146.434C174.139 161.736 160.996 183.259 155.974 207.03L103.239 456.795H0V123.323H42.7471V123.31H61.6262V61.6809H0V0H519.801Z"
+        stroke="currentColor"
+        strokeWidth="35"
+      />
+    </svg>
   );
 };

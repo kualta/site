@@ -214,10 +214,10 @@
   },
   {
     "id": 17,
-    "name": "paper",
+    "name": "flow talk",
     "description": "ethereum-native social",
-    "link": "https://paper.ink",
-    "git_link": "https://github.com/on-paper/ink",
+    "link": "https://flow.talk",
+    "git_link": "https://github.com/flow-industries/talk/",
     "language": "TypeScript",
     "date": "2024-07-01",
     "status": "ongoing",

@@ -6,25 +6,27 @@ export const ProjectCard = ({ project }: { project: Project }) => {
   const href = project.link || project.git_link || "#";
 
   return (
-    <Link href={href} target="_blank" rel="noreferrer" className="w-full flex flex-row items-baseline gap-2 hover:opacity-70 text-lg">
-      <span className="font-medium whitespace-nowrap">{project.full_name || project.name}</span>
-      <span className="text-sm text-secondary-text truncate">{project.description}</span>
-      <span className="flex-grow border-b border-dotted border-secondary-text opacity-50" />
-      <span className="w-16 shrink-0 text-left text-sm text-secondary-text whitespace-nowrap font-mono">{project.status}</span>
+    <div className="w-full flex flex-row items-baseline gap-2 text-lg">
+      <Link href={href} target="_blank" rel="noreferrer" className="flex flex-row items-baseline gap-2 min-w-0 flex-grow hover:opacity-70">
+        <span className="font-medium whitespace-nowrap">{project.full_name || project.name}</span>
+        <span className="text-sm text-secondary-text truncate">{project.description}</span>
+        <span className="flex-grow border-b border-dotted border-secondary-text opacity-50" />
+        <span className="w-16 shrink-0 text-left text-sm text-secondary-text whitespace-nowrap font-mono">{project.status}</span>
+      </Link>
       <span className="w-5 shrink-0 flex justify-center">
         {project.git_link && (
-          <span className="text-secondary-text">
+          <Link href={project.git_link} target="_blank" rel="noreferrer" className="text-secondary-text hover:opacity-70">
             <FiGithub />
-          </span>
+          </Link>
         )}
       </span>
       <span className="w-5 shrink-0 flex justify-center">
         {project.link && (
-          <span className="text-secondary-text">
+          <Link href={project.link} target="_blank" rel="noreferrer" className="text-secondary-text hover:opacity-70">
             <FiExternalLink />
-          </span>
+          </Link>
         )}
       </span>
-    </Link>
+    </div>
   );
 };

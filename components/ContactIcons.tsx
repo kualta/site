@@ -1,7 +1,7 @@
 import { Contact } from "@/types";
 import { FiAtSign, FiGithub, FiGlobe, FiMail, FiYoutube } from "react-icons/fi";
 import { RiTwitterXLine } from "react-icons/ri";
-import { FarcasterIcon } from "./Icons";
+import { BlueskyIcon, FarcasterIcon } from "./Icons";
 
 export const ContactIcon = (contact: Contact, size?: number) => {
   let icon = <></>;
@@ -20,6 +20,9 @@ export const ContactIcon = (contact: Contact, size?: number) => {
       break;
     case "farcaster":
       icon = <FarcasterIcon size={size ?? 20} />;
+      break;
+    case "bluesky":
+      icon = <BlueskyIcon size={(size ?? 22) + 4} />;
       break;
     case "ping":
       icon = <FiAtSign size={(size ?? 22) + 1} />;

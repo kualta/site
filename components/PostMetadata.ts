@@ -9,6 +9,11 @@ export interface PostMetadata {
   preview: string;
 }
 
+function extractFirstImage(markdown: string): string | undefined {
+  const match = markdown.match(/!\[.*?\]\((.*?)\)/);
+  return match?.[1];
+}
+
 async function getPostsMetadata(): Promise<PostMetadata[]> {
   const posts = await fetchPublicationPosts();
 
@@ -18,7 +23,7 @@ async function getPostsMetadata(): Promise<PostMetadata[]> {
     date: new Date(Number(post.publishedAt)).toISOString().split("T")[0],
     tags: post.categories,
     filename: post.slug,
-    preview: post.imageUrl,
+    preview: post.imageUrl || extractFirstImage(post.markdown ?? "") || "",
   }));
 }
 
