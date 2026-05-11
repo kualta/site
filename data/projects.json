@@ -219,7 +219,7 @@
     "git_link": "https://github.com/flow-industries/paper",
     "language": "TypeScript",
     "date": "2024-07-01",
-    "status": "ongoing",
+    "status": "complete",
     "tech_stack": [
       "React",
       "Lens",
