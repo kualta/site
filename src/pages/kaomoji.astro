@@ -1,0 +1,10 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import KaomojiList from "@/components/KaomojiList.tsx";
+---
+<BaseLayout
+  title="kaomoji"
+  description="the most complete kaomoji library in the world"
+>
+  <KaomojiList client:load />
+</BaseLayout>

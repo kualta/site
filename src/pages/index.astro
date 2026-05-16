@@ -1,0 +1,26 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import ContactIcons from "@/components/ContactIcons.astro";
+import type { Contact } from "@/types";
+import contactsData from "@/data/contacts.json";
+
+const contacts = (contactsData as Contact[])
+  .filter((c) => c.is_main)
+  .reverse();
+
+const month = new Date().getMonth();
+const isChristmas = month >= 10;
+---
+<BaseLayout>
+  <div class="flex flex-col w-full grow justify-center place-content-center snowflake font-bold">
+    <div class="flex flex-col gap-2 w-min mx-auto">
+      <h1 class="text-8xl text-left relative">
+        kualta
+        {isChristmas && <img src="/santa_hat.svg" class="absolute top-1 -left-1 w-6 h-6" alt="santa hat" />}
+      </h1>
+      <div class="flex flex-row gap-3 items-center">
+        <ContactIcons contacts={contacts} />
+      </div>
+    </div>
+  </div>
+</BaseLayout>

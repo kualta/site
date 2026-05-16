@@ -1,0 +1,43 @@
+---
+import { marked } from "marked";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SubscriptionBox from "@/components/SubscriptionBox.astro";
+import TableOfContents from "@/components/TableOfContents.tsx";
+import { getPostsMetadata, getPostContent } from "@/lib/posts";
+
+export async function getStaticPaths() {
+  const posts = await getPostsMetadata();
+  return posts.map((post) => ({
+    params: { slug: post.filename },
+    props: { meta: post },
+  }));
+}
+
+const { slug } = Astro.params;
+const post = await getPostContent(slug as string);
+
+if (!post) {
+  return Astro.redirect("/404");
+}
+
+marked.setOptions({ gfm: true, breaks: false });
+const rendered = (marked.parse(post.content) as string)
+  .replace(/<(h[1-6])>/g, '<$1 class="pt-6 -mt-6">');
+---
+<BaseLayout
+  title={post.data.title}
+  description={post.data.description}
+  image={post.data.preview}
+>
+  <div class="max-w-2xl w-full relative mb-10">
+    <TableOfContents toc={post.toc} client:idle />
+    <article
+      class="z-[10] max-w-2xl rounded-xl p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-xl"
+    >
+      <h1 class="mb-2 text-center">{post.data.title}</h1>
+      <h3 class="mb-6 mt-0 text-center">{post.data.description}</h3>
+      <div set:html={rendered} />
+    </article>
+    <SubscriptionBox />
+  </div>
+</BaseLayout>

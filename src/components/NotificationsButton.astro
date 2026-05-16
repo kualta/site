@@ -1,0 +1,16 @@
+---
+import { FiBell } from "react-icons/fi";
+const path = Astro.url.pathname;
+const hide = path === "/join";
+---
+{
+  !hide && (
+    <div class="z-10 hidden md:flex absolute top-0 right-0 text-2xl p-8">
+      <div class="w-8 h-8 flex items-center justify-center rounded-xl active:text-secondary-text">
+        <a class="active:text-secondary-text" href="/join" aria-label="Subscribe">
+          <FiBell size={22} strokeWidth={1.7} />
+        </a>
+      </div>
+    </div>
+  )
+}

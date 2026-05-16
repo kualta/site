@@ -1,0 +1,28 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "moji.kualta.dev" }],
+      "destination": "https://kualta.dev/kaomoji",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "blog.kualta.dev" }],
+      "destination": "https://kualta.dev/posts",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "post.kualta.dev" }],
+      "destination": "https://kualta.dev/posts",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "join.kualta.dev" }],
+      "destination": "https://kualta.dev/join",
+      "permanent": false
+    }
+  ]
+}

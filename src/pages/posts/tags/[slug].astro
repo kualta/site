@@ -1,0 +1,32 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import PostCard from "@/components/PostCard.astro";
+import { getPostsMetadata } from "@/lib/posts";
+
+export async function getStaticPaths() {
+  const posts = await getPostsMetadata();
+  const tags = [...new Set(posts.flatMap((post) => post.tags))];
+  return tags.map((tag) => ({ params: { slug: tag } }));
+}
+
+const { slug } = Astro.params;
+const filter = slug as string;
+const postsForTag = (await getPostsMetadata()).filter(
+  (post) => post.tags.indexOf(filter) !== -1,
+);
+const tagText = filter.replace("-", " ").toLowerCase();
+---
+<BaseLayout title={`tag: ${tagText}`} description={`posts tagged ${tagText}`}>
+  <div class="max-w-2xl min-h-[47rem]">
+    <div class="flex flex-col h-full place-items-center justify-center gap-4 mb-20">
+      <div class="flex place-content-center justify-center flex-row flex-wrap p-4">
+        <a href="/posts/">
+          <span class="select-none">•</span>
+          <span class="px-4">{tagText}</span>
+          <span class="select-none">•</span>
+        </a>
+      </div>
+      {postsForTag.map((post) => <PostCard {...post} />)}
+    </div>
+  </div>
+</BaseLayout>

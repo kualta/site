@@ -11,8 +11,10 @@
   },
   "files": {
     "ignore": [
-      ".next/*",
-      ".node_modules/*"
+      "node_modules/*",
+      "dist/*",
+      ".astro/*",
+      ".vercel/*"
     ]
   },
   "linter": {

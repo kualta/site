@@ -1,0 +1,113 @@
+---
+import "@/styles/globals.css";
+import { ClientRouter } from "astro:transitions";
+import Header from "@/components/Header.astro";
+import NotificationsButton from "@/components/NotificationsButton.astro";
+import AboutButton from "@/components/AboutButton.astro";
+import CornersScope from "@/components/CornersScope.astro";
+import { Snow } from "@/components/Snow.tsx";
+import { Toaster } from "@/components/Toaster.tsx";
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  keywords?: string[];
+}
+
+const {
+  title = "kualta",
+  description = "building with love",
+  image = "/opengraph-image.png",
+  keywords = [
+    "kualta",
+    "kualts",
+    "kualta.dev",
+    "kualta.com",
+    "kualta.art",
+    "kualta gallery",
+    "kualtadev",
+    "kuollut",
+    "ku",
+    "kualta website",
+    "kualta blog",
+    "ai blog",
+    "philosophy",
+    "philosophy blog",
+    "kualta philosophy",
+    "kualta philosophy blog",
+    "kualta philosophy website",
+    "beauty in the mad world",
+    "building with love",
+    "glimpse into the void",
+  ],
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+const ogImage = new URL(image, Astro.site).toString();
+const month = new Date().getMonth();
+const isChristmas = month >= 10;
+---
+<!doctype html>
+<html lang="en" class="scroll-smooth dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="keywords" content={keywords.join(", ")} />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:creator" content="@kualts" />
+    <ClientRouter />
+    <script is:inline>
+      (function () {
+        try {
+          const stored = localStorage.getItem("theme");
+          const isDark = stored ? stored === "dark" : true;
+          document.documentElement.classList.toggle("dark", isDark);
+        } catch (_) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
+    <script
+      is:inline
+      defer
+      src="https://stats.kualta.dev/script.js"
+      data-website-id="f113dfb0-7fed-41ed-a176-ffe71f417b42"
+    ></script>
+  </head>
+  <body
+    class="bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-all
+           ease-in-out delay-150 dark:text-dark-text place-items-center
+           min-h-screen flex flex-col justify-center relative"
+  >
+    <div class="noise"></div>
+
+    {isChristmas && <Snow client:idle />}
+
+    <Header />
+
+    <NotificationsButton />
+    <AboutButton />
+
+    <main class="flex flex-col items-center justify-center grow w-full h-full">
+      <slot />
+    </main>
+
+    <CornersScope />
+
+    <Toaster client:idle />
+  </body>
+</html>

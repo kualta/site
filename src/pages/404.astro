@@ -1,0 +1,17 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+---
+<BaseLayout title="404" description="not found">
+  <div class="flex flex-col w-full grow justify-center place-content-center font-bold select-none">
+    <div class="flex flex-col sm:flex-row items-center justify-center drop-shadow-glow">
+      <h3 class="text-2xl p-8 sm:p-0">You're looking for something that simply isn't there. 404.</h3>
+      <img
+        class="select-none"
+        src="/404_image.png"
+        alt="kuollut on a throne drinking wine"
+        width="300"
+        height="300"
+      />
+    </div>
+  </div>
+</BaseLayout>

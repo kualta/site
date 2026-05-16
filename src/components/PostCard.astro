@@ -1,0 +1,15 @@
+---
+import type { PostMetadata } from "@/lib/posts";
+
+interface Props extends PostMetadata {}
+
+const props = Astro.props;
+---
+<a
+  href={`/posts/${props.filename}`}
+  class="w-full flex flex-row items-baseline gap-2 hover:opacity-70 text-lg"
+>
+  <span class="font-medium">{props.title}</span>
+  <span class="flex-grow border-b border-dotted border-secondary-text opacity-50" />
+  <span class="text-sm text-secondary-text whitespace-nowrap font-mono">{props.date}</span>
+</a>
