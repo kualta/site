@@ -27,10 +27,10 @@ const { contacts, size = 18 } = Astro.props;
         aria-label={contact.platform}
       >
         {contact.platform === "website" && <FiGlobe size={size} />}
-        {contact.platform === "github" && <FiGithub size={size} />}
+        {contact.platform === "github" && <FiGithub size={size + 2} />}
         {contact.platform === "youtube" && <FiYoutube size={size} />}
         {contact.platform === "twitter" && <RiTwitterXLine size={size} />}
-        {contact.platform === "farcaster" && <Icons name="farcaster" size={size - 2} />}
+        {contact.platform === "farcaster" && <Icons name="farcaster" size={size + 2} />}
         {contact.platform === "bluesky" && <Icons name="bluesky" size={size + 4} />}
         {contact.platform === "ping" && <FiAtSign size={size + 1} />}
         {contact.platform === "email" && <FiMail size={size} />}
