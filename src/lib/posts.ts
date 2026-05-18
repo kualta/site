@@ -4,6 +4,8 @@ export interface PostMetadata {
   title: string;
   description: string;
   date: string;
+  publishedTime: string;
+  modifiedTime: string;
   tags: string[];
   filename: string;
   preview: string;
@@ -16,14 +18,22 @@ function extractFirstImage(markdown: string): string | undefined {
 
 export async function getPostsMetadata(): Promise<PostMetadata[]> {
   const posts = await fetchPublicationPosts();
-  return posts.map((post) => ({
-    title: post.title,
-    description: post.subtitle,
-    date: new Date(Number(post.publishedAt)).toISOString().split("T")[0],
-    tags: post.categories,
-    filename: post.slug,
-    preview: post.imageUrl || extractFirstImage(post.markdown ?? "") || "",
-  }));
+  return posts.map((post) => {
+    const published = new Date(Number(post.publishedAt)).toISOString();
+    const updated = post.updatedAt
+      ? new Date(Number(post.updatedAt)).toISOString()
+      : published;
+    return {
+      title: post.title,
+      description: post.subtitle,
+      date: published.split("T")[0],
+      publishedTime: published,
+      modifiedTime: updated,
+      tags: post.categories,
+      filename: post.slug,
+      preview: post.imageUrl || extractFirstImage(post.markdown ?? "") || "",
+    };
+  });
 }
 
 export async function getPostContent(slug: string) {
@@ -32,11 +42,17 @@ export async function getPostContent(slug: string) {
   const markdown = post.markdown ?? "";
   const toc = markdown.split(/\r?\n/).filter((line) => line.startsWith("#"));
   const preview = post.imageUrl || extractFirstImage(markdown) || "";
+  const published = new Date(Number(post.publishedAt)).toISOString();
+  const updated = post.updatedAt
+    ? new Date(Number(post.updatedAt)).toISOString()
+    : published;
   return {
     data: {
       title: post.title,
       description: post.subtitle,
-      date: new Date(Number(post.publishedAt)).toISOString().split("T")[0],
+      date: published.split("T")[0],
+      publishedTime: published,
+      modifiedTime: updated,
       tags: post.categories,
       preview,
     },

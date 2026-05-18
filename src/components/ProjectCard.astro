@@ -1,6 +1,7 @@
 ---
 import type { Project } from "@/types";
 import { FiExternalLink, FiGithub } from "react-icons/fi";
+import { LuGitlab } from "react-icons/lu";
 
 interface Props {
   project: Project;
@@ -8,6 +9,7 @@ interface Props {
 
 const { project } = Astro.props;
 const href = project.link || project.git_link || "#";
+const isGitlab = project.git_link?.includes("gitlab.com");
 ---
 <div class="w-full flex flex-row items-baseline gap-2 text-lg">
   <a
@@ -23,8 +25,8 @@ const href = project.link || project.git_link || "#";
   </a>
   <span class="w-5 shrink-0 flex justify-center">
     {project.git_link && (
-      <a href={project.git_link} target="_blank" rel="noreferrer" class="text-secondary-text hover:opacity-70">
-        <FiGithub />
+      <a href={project.git_link} target="_blank" rel="noreferrer" class="text-secondary-text hover:opacity-70" aria-label={isGitlab ? "GitLab" : "GitHub"}>
+        {isGitlab ? <LuGitlab /> : <FiGithub />}
       </a>
     )}
   </span>
