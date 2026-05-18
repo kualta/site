@@ -1,0 +1,25 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import type { Contact } from "@/types";
+import contactsData from "@/data/contacts.json";
+
+const contacts = [...(contactsData as Contact[])].sort(
+  (a, b) => (a.platform.length + a.label.length) - (b.platform.length + b.label.length),
+);
+---
+<BaseLayout title="contacts" description="contact kualta">
+  <div class="max-w-xl w-full grow flex flex-col gap-4 p-4">
+    {contacts.map((contact) => (
+      <a
+        href={contact.link}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="w-full flex flex-row items-baseline gap-2 hover:opacity-70 text-lg"
+      >
+        <span class="font-medium whitespace-nowrap">{contact.platform}</span>
+        <span class="flex-grow border-b border-dotted border-secondary-text opacity-50" />
+        <span class="text-sm text-secondary-text whitespace-nowrap font-mono">{contact.label}</span>
+      </a>
+    ))}
+  </div>
+</BaseLayout>

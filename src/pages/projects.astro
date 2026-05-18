@@ -1,0 +1,20 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import ProjectCard from "@/components/ProjectCard.astro";
+import SubscriptionBox from "@/components/SubscriptionBox.astro";
+import type { Project } from "@/types";
+import projectsData from "@/data/projects.json";
+
+const projects = [...(projectsData as Project[])]
+  .sort((a, b) => (b.relevance || 0) - (a.relevance || 0))
+  .sort((a, b) => (a.status === "complete" ? -1 : 1))
+  .sort((a, b) => (a.status === "ongoing" ? -1 : 1));
+---
+<BaseLayout title="projects" description="kualta & kunet projects">
+  <div class="max-w-xl w-full place-items-center justify-center mb-10">
+    <div class="flex flex-col w-full gap-4 p-4">
+      {projects.map((project) => <ProjectCard project={project} />)}
+    </div>
+    <SubscriptionBox />
+  </div>
+</BaseLayout>

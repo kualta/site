@@ -23,6 +23,6 @@ module.exports = {
       },
     },
   },
-  content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"],
+  content: ["./src/**/*.{astro,html,js,jsx,ts,tsx,md,mdx}"],
   plugins: [require("@tailwindcss/typography")],
 };

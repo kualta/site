@@ -1,0 +1,18 @@
+---
+import { BackButton } from "./BackButton.tsx";
+import { ThemeToggle } from "./ThemeToggle.tsx";
+---
+<div
+  class="z-[100] flex flex-row place-content-around sm:place-content-between place-items-center text-xl md:text-2xl
+         tracking-wide max-w-full md:max-w-2xl w-full h-fit py-8 px-8"
+>
+  <div class="hidden sm:flex w-0 h-0 sm:w-8 sm:h-8">
+    <BackButton client:load transition:persist />
+  </div>
+  <a class="active:text-secondary-text" href="/projects">projects<br /></a>
+  <a class="active:text-secondary-text" href="/posts">posts<br /></a>
+  <a class="active:text-secondary-text" href="/contacts">contacts<br /></a>
+  <div class="hidden sm:flex w-0 h-0 sm:w-8 sm:h-8">
+    <ThemeToggle client:load transition:persist />
+  </div>
+</div>

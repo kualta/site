@@ -1,0 +1,17 @@
+---
+interface Props {
+  name: string;
+  width?: number;
+  height?: number;
+  class?: string;
+}
+const { name, width = 512, height = 512, class: className = "" } = Astro.props;
+---
+<img
+  src={`/images/stickers/${name}.png`}
+  alt={`${name} sticker`}
+  width={width}
+  height={height}
+  class={`${className} select-none pointer-events-none`}
+  loading="eager"
+/>

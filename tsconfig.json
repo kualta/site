@@ -1,63 +1,18 @@
 {
+  "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
-    "target": "es6",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "baseUrl": ".",
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
-      "@/*": [
-        "./*"
-      ],
-      "@/components/*": [
-        "components/*"
-      ],
-      "@/styles/*": [
-        "../styles/*"
-      ],
-      "@/types": [
-        "types/index.ts"
-      ],
-      "@/lib/*": [
-        "lib/*"
-      ],
-      "@/data/*": [
-        "data/*"
-      ]
+      "@/*": ["src/*"],
+      "@/components/*": ["src/components/*"],
+      "@/styles/*": ["src/styles/*"],
+      "@/types": ["src/types.ts"],
+      "@/lib/*": ["src/lib/*"],
+      "@/data/*": ["src/data/*"]
     }
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    "components/Fonts.ts",
-    "app/kaomoji/KumojisPage.jsx",
-    "app/kaomoji/page.tsx",
-    "app/kaomoji/KaomojiPage.jsx",
-    "app/api/page.tsx",
-    "components/Polyhedron.tsx"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist", "node_modules", ".next", "app", "components", "lib", "styles"]
 }
