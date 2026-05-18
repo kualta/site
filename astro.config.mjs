@@ -57,7 +57,6 @@ export default defineConfig({
           "/posts": 0.9,
           "/projects": 0.8,
           "/join": 0.7,
-          "/about": 0.6,
         };
         if (path in priorities) {
           item.priority = priorities[path];

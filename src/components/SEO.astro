@@ -15,7 +15,6 @@ const { title, description, canonical, ogImage, type, article } = Astro.props;
 const SITE_URL = Astro.site?.toString().replace(/\/$/, "") ?? "https://kualta.dev";
 const path = Astro.url.pathname.replace(/\/$/, "");
 const isHome = path === "" || path === "/";
-const isAbout = path === "/about";
 const isPostsIndex = path === "/posts";
 const isArticle = type === "article";
 
@@ -44,7 +43,7 @@ const website = {
 
 const graph: object[] = [person, website];
 
-if (isHome || isAbout) {
+if (isHome) {
   graph.push({
     "@type": "WebPage",
     "@id": canonical,

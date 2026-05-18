@@ -3,7 +3,6 @@ import "@/styles/globals.css";
 import { ClientRouter } from "astro:transitions";
 import Header from "@/components/Header.astro";
 import NotificationsButton from "@/components/NotificationsButton.astro";
-import AboutButton from "@/components/AboutButton.astro";
 import CornersScope from "@/components/CornersScope.astro";
 import { Snow } from "@/components/Snow.tsx";
 import { Toaster } from "@/components/Toaster.tsx";
@@ -66,7 +65,7 @@ const isChristmas = month >= 10;
 
     {article?.publishedTime && <meta property="article:published_time" content={article.publishedTime} />}
     {article?.modifiedTime && <meta property="article:modified_time" content={article.modifiedTime} />}
-    {article && <meta property="article:author" content={new URL("/about", Astro.site).toString()} />}
+    {article && <meta property="article:author" content={Astro.site?.toString()} />}
     {article?.section && <meta property="article:section" content={article.section} />}
     {article?.tags?.map((tag) => <meta property="article:tag" content={tag} />)}
 
@@ -104,7 +103,6 @@ const isChristmas = month >= 10;
     <Header />
 
     <NotificationsButton />
-    <AboutButton />
 
     <main class="flex flex-col items-center justify-center grow w-full h-full">
       <slot />
