@@ -3,12 +3,25 @@
   "name": "kualta-site",
   "compatibility_date": "2026-05-18",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
   "observability": {
     "enabled": true
-  }
+  },
+  "routes": [
+    { "pattern": "kualta.dev", "custom_domain": true },
+    { "pattern": "www.kualta.dev", "custom_domain": true },
+    { "pattern": "moji.kualta.dev", "custom_domain": true },
+    { "pattern": "post.kualta.dev", "custom_domain": true },
+    { "pattern": "join.kualta.dev", "custom_domain": true },
+    { "pattern": "kualta.com", "custom_domain": true },
+    { "pattern": "www.kualta.com", "custom_domain": true }
+  ]
+  // blog.kualta.dev is intentionally NOT attached — DNS points at Paragraph for the publication.
+  //
   // The Astro adapter generates the runtime wrangler.json (main + assets +
   // KV bindings) inside dist/server/ at build time. This root config provides
-  // deployment metadata only.
+  // deployment metadata.
   //
   // Secrets are set via the Cloudflare dashboard or `wrangler secret put`:
   //   wrangler secret put PARAGRAPH_API_KEY
