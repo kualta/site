@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kualta-site",
+  "compatibility_date": "2026-05-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  }
+  // The Astro adapter generates the runtime wrangler.json (main + assets +
+  // KV bindings) inside dist/server/ at build time. This root config provides
+  // deployment metadata only.
+  //
+  // Secrets are set via the Cloudflare dashboard or `wrangler secret put`:
+  //   wrangler secret put PARAGRAPH_API_KEY
+  //   wrangler secret put PARAGRAPH_PUBLICATION_SLUG
+  // For local dev, copy them into `.dev.vars` (gitignored).
+}

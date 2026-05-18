@@ -13,8 +13,10 @@
 # production
 /build
 
-# astro
+# astro / cloudflare
 .astro/
+.wrangler/
+.dev.vars
 .vercel/
 /dist/
 
