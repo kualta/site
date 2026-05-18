@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ url }) => {
+export const POST: APIRoute = async ({ url, locals }) => {
   const email = url.searchParams.get("email");
 
   if (!email) {
@@ -11,12 +11,14 @@ export const POST: APIRoute = async ({ url }) => {
     });
   }
 
+  const apiKey = locals.runtime?.env.PARAGRAPH_API_KEY ?? import.meta.env.PARAGRAPH_API_KEY;
+
   try {
     const res = await fetch("https://api.paragraph.com/api/v1/subscribers", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.PARAGRAPH_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ email }),
     });

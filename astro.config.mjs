@@ -3,7 +3,7 @@ import { loadEnv } from "vite";
 import react from "@astrojs/react";
 import tailwind from "@astrojs/tailwind";
 import sitemap from "@astrojs/sitemap";
-import vercel from "@astrojs/vercel";
+import cloudflare from "@astrojs/cloudflare";
 
 const SITE = "https://kualta.dev";
 const PARAGRAPH_API = "https://api.paragraph.com/api/v1";
@@ -41,7 +41,7 @@ const postLastmod = await fetchPostLastmod();
 export default defineConfig({
   site: SITE,
   output: "static",
-  adapter: vercel(),
+  adapter: cloudflare({ imageService: "compile" }),
   integrations: [
     react(),
     tailwind({ applyBaseStyles: false }),

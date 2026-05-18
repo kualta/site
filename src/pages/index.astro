@@ -4,6 +4,8 @@ import ContactIcons from "@/components/ContactIcons.astro";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 
+export const prerender = false;
+
 const contacts = (contactsData as Contact[])
   .filter((c) => c.is_main)
   .reverse();
