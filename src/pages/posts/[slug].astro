@@ -28,6 +28,14 @@ const rendered = (marked.parse(post.content) as string)
   title={post.data.title}
   description={post.data.description}
   image={post.data.preview}
+  imageAlt={post.data.title}
+  type="article"
+  article={{
+    publishedTime: post.data.publishedTime,
+    modifiedTime: post.data.modifiedTime,
+    tags: post.data.tags,
+    section: post.data.tags?.[0],
+  }}
 >
   <div class="max-w-2xl w-full relative mb-10">
     <TableOfContents toc={post.toc} client:idle />

@@ -1,0 +1,102 @@
+---
+import type { Article } from "@/layouts/BaseLayout.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  canonical: string;
+  ogImage: string;
+  type: "website" | "article";
+  article?: Article;
+}
+
+const { title, description, canonical, ogImage, type, article } = Astro.props;
+
+const SITE_URL = Astro.site?.toString().replace(/\/$/, "") ?? "https://kualta.dev";
+const path = Astro.url.pathname.replace(/\/$/, "");
+const isHome = path === "" || path === "/";
+const isAbout = path === "/about";
+const isPostsIndex = path === "/posts";
+const isArticle = type === "article";
+
+const person = {
+  "@type": "Person",
+  "@id": `${SITE_URL}/#person`,
+  name: "kualta",
+  url: SITE_URL,
+  sameAs: [
+    "https://github.com/kualta",
+    "https://bsky.app/profile/kualta.dev",
+    "https://farcaster.xyz/kualta.eth",
+    "https://twitter.com/kualts",
+  ],
+};
+
+const website = {
+  "@type": "WebSite",
+  "@id": `${SITE_URL}/#website`,
+  url: SITE_URL,
+  name: "kualta",
+  description: "building with love",
+  publisher: { "@id": `${SITE_URL}/#person` },
+  inLanguage: "en-US",
+};
+
+const graph: object[] = [person, website];
+
+if (isHome || isAbout) {
+  graph.push({
+    "@type": "WebPage",
+    "@id": canonical,
+    url: canonical,
+    name: title,
+    description,
+    isPartOf: { "@id": `${SITE_URL}/#website` },
+    about: { "@id": `${SITE_URL}/#person` },
+    inLanguage: "en-US",
+  });
+}
+
+if (isPostsIndex) {
+  graph.push({
+    "@type": "Blog",
+    "@id": canonical,
+    url: canonical,
+    name: title,
+    description,
+    publisher: { "@id": `${SITE_URL}/#person` },
+    inLanguage: "en-US",
+  });
+}
+
+if (isArticle && article) {
+  const slug = path.replace("/posts/", "");
+  graph.push({
+    "@type": "BlogPosting",
+    "@id": canonical,
+    url: canonical,
+    headline: title,
+    description,
+    image: [ogImage],
+    datePublished: article.publishedTime,
+    dateModified: article.modifiedTime ?? article.publishedTime,
+    author: { "@id": `${SITE_URL}/#person` },
+    publisher: { "@id": `${SITE_URL}/#person` },
+    mainEntityOfPage: { "@id": canonical },
+    keywords: article.tags?.join(", "),
+    articleSection: article.section,
+    inLanguage: "en-US",
+  });
+  graph.push({
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "kualta", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: "posts", item: `${SITE_URL}/posts` },
+      { "@type": "ListItem", position: 3, name: title, item: canonical },
+    ],
+  });
+}
+
+const jsonLd = { "@context": "https://schema.org", "@graph": graph };
+---
+<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
