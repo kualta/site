@@ -1,0 +1,21 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+
+const endpoints = [
+  "/api/contacts.json",
+  "/api/posts.json",
+  "/api/projects.json",
+  "/api/subscribe",
+];
+---
+<BaseLayout title="api" description="public api endpoints">
+  <div class="mx-auto max-w-2xl">
+    <ul class="gap-2 text-sm sm:text-base flex-col flex ml-4">
+      {endpoints.map((endpoint) => (
+        <li class="font-mono">
+          <a href={endpoint}>{endpoint}</a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</BaseLayout>

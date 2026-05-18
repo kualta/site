@@ -1,0 +1,15 @@
+---
+import Card from "./Card.astro";
+import { FiBell } from "react-icons/fi";
+import { EmailSubscription } from "./EmailSubscription.tsx";
+---
+<div class="flex gap-4 flex-row place-content-center items-center justify-center w-full max-w-xl mx-auto p-2 pl-4">
+  <div class="w-8 h-8 flex items-center justify-center rounded-xl active:text-secondary-text">
+    <a class="active:text-secondary-text" href="/join" aria-label="Subscribe">
+      <Card>
+        <FiBell size={22} strokeWidth={2} />
+      </Card>
+    </a>
+  </div>
+  <EmailSubscription client:load />
+</div>

@@ -13,6 +13,11 @@
 # production
 /build
 
+# astro
+.astro/
+.vercel/
+/dist/
+
 /.next/
 /out/
 .DS_Store

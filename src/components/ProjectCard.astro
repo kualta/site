@@ -1,0 +1,38 @@
+---
+import type { Project } from "@/types";
+import { FiExternalLink, FiGithub } from "react-icons/fi";
+
+interface Props {
+  project: Project;
+}
+
+const { project } = Astro.props;
+const href = project.link || project.git_link || "#";
+---
+<div class="w-full flex flex-row items-baseline gap-2 text-lg">
+  <a
+    href={href}
+    target="_blank"
+    rel="noreferrer"
+    class="flex flex-row items-baseline gap-2 min-w-0 flex-grow hover:opacity-70"
+  >
+    <span class="font-medium whitespace-nowrap">{project.full_name || project.name}</span>
+    <span class="text-sm text-secondary-text truncate">{project.description}</span>
+    <span class="flex-grow border-b border-dotted border-secondary-text opacity-50" />
+    <span class="w-16 shrink-0 text-left text-sm text-secondary-text whitespace-nowrap font-mono">{project.status}</span>
+  </a>
+  <span class="w-5 shrink-0 flex justify-center">
+    {project.git_link && (
+      <a href={project.git_link} target="_blank" rel="noreferrer" class="text-secondary-text hover:opacity-70">
+        <FiGithub />
+      </a>
+    )}
+  </span>
+  <span class="w-5 shrink-0 flex justify-center">
+    {project.link && (
+      <a href={project.link} target="_blank" rel="noreferrer" class="text-secondary-text hover:opacity-70">
+        <FiExternalLink />
+      </a>
+    )}
+  </span>
+</div>
