@@ -252,5 +252,19 @@
       "TailwindCSS"
     ],
     "relevance": 125
+  },
+  {
+    "id": 21,
+    "name": "iron",
+    "description": "bare-metal fleet deployment cli",
+    "git_link": "https://github.com/flow-industries/iron",
+    "language": "Rust",
+    "date": "2026-02-22",
+    "status": "archived",
+    "tech_stack": [
+      "Docker",
+      "TOML"
+    ],
+    "relevance": 110
   }
 ]
