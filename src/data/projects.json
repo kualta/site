@@ -66,23 +66,6 @@
     "relevance": 50
   },
   {
-    "id": 5,
-    "name": "wasm",
-    "description": "wasm powered version of kualta.dev",
-    "link": "https://wasm.kualta.dev/",
-    "git_link": "https://github.com/kualta/wasm.git",
-    "language": "Rust",
-    "date": "2022-10-01",
-    "status": "complete",
-    "tech_stack": [
-      "WASM",
-      "Dioxus",
-      "Reqwest"
-    ],
-    "full_name": null,
-    "relevance": 35
-  },
-  {
     "id": 6,
     "name": "fpps",
     "description": "first-person predictions shooter",
