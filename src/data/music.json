@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "slug": "lotus-glitch-garden",
+    "title": "Lotus Glitch Garden",
+    "artist": "kualta",
+    "date": "2026-07-06",
+    "duration": 309,
+    "src": "/music/lotus-glitch-garden.mp3",
+    "cover": "/music/covers/lotus-glitch-garden.jpg"
+  },
+  {
+    "id": 2,
+    "slug": "moonlit-green-cairn",
+    "title": "Moonlit Green Cairn",
+    "artist": "kualta",
+    "date": "2026-07-26",
+    "duration": 243,
+    "src": "/music/moonlit-green-cairn.mp3",
+    "cover": "/music/covers/moonlit-green-cairn.jpg"
+  },
+  {
+    "id": 3,
+    "slug": "dramamine",
+    "title": "Dramamine",
+    "artist": "kualta",
+    "date": "2025-10-31",
+    "duration": 206,
+    "src": "/music/dramamine.mp3",
+    "cover": null
+  },
+  {
+    "id": 4,
+    "slug": "pixel-heart-respawn",
+    "title": "Pixel Heart Respawn",
+    "artist": "kualta",
+    "date": "2026-01-19",
+    "duration": 221,
+    "src": "/music/pixel-heart-respawn.mp3",
+    "cover": "/music/covers/pixel-heart-respawn.jpg"
+  },
+  {
+    "id": 5,
+    "slug": "baker-street-study",
+    "title": "Baker Street Study",
+    "artist": "kualta",
+    "date": "2026-05-21",
+    "duration": 274,
+    "src": "/music/baker-street-study.mp3",
+    "cover": "/music/covers/baker-street-study.jpg"
+  },
+  {
+    "id": 6,
+    "slug": "launch-loop",
+    "title": "Launch Loop",
+    "artist": "kualta",
+    "date": "2026-07-02",
+    "duration": 120,
+    "src": "/music/launch-loop.mp3",
+    "cover": "/music/covers/launch-loop.jpg"
+  }
+]

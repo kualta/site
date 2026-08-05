@@ -7,6 +7,17 @@ export interface Contact {
   is_main: boolean;
 }
 
+export interface Track {
+  id: number;
+  slug: string;
+  title: string;
+  artist: string;
+  date: string;
+  duration: number;
+  src: string;
+  cover: string | null;
+}
+
 export interface Project {
   id: number;
   name: string;

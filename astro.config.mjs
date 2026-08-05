@@ -56,6 +56,7 @@ export default defineConfig({
           "/": 1,
           "/posts": 0.9,
           "/projects": 0.8,
+          "/music": 0.8,
           "/join": 0.7,
         };
         if (path in priorities) {

@@ -53,6 +53,139 @@ html {
   border: 1px solid transparent;
 }
 
+/* --- vinyl --- */
+
+.vinyl {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.vinyl-disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: vinyl-spin 1.8s linear infinite;
+  animation-play-state: paused;
+  will-change: transform;
+}
+
+.vinyl-disc.is-playing {
+  animation-play-state: running;
+}
+
+@keyframes vinyl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vinyl-disc {
+    animation-duration: 14s;
+  }
+}
+
+.vinyl-grooves {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      #0d0d0f 0px, #0d0d0f 1px,
+      #17171a 1px, #17171a 2px,
+      #0b0b0d 2px, #0b0b0d 3.4px
+    ),
+    radial-gradient(circle at 50% 50%, #1c1c20 0%, #101013 62%, #050506 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* the grooves turn underneath; the highlight stays put */
+.vinyl-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: conic-gradient(
+    from 210deg,
+    rgba(255, 255, 255, 0) 0deg,
+    rgba(255, 255, 255, 0.16) 32deg,
+    rgba(255, 255, 255, 0) 74deg,
+    rgba(255, 255, 255, 0) 180deg,
+    rgba(255, 255, 255, 0.09) 214deg,
+    rgba(255, 255, 255, 0) 258deg,
+    rgba(255, 255, 255, 0) 360deg
+  );
+}
+
+.vinyl-label {
+  position: absolute;
+  inset: 31%;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+
+.vinyl-label img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vinyl-label-fallback {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12%;
+  text-align: center;
+  font-size: 0.6rem;
+  line-height: 1.15;
+  color: #191817;
+  background: linear-gradient(45deg, #ff33cc, #cc77ff);
+}
+
+.vinyl-spindle {
+  position: absolute;
+  inset: 48.4%;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.dark .vinyl-spindle {
+  background: var(--bg-dark);
+}
+
+.vinyl-seek {
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--secondary-text);
+  cursor: pointer;
+}
+
+.vinyl-seek::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #ff33cc, #cc77ff);
+}
+
+.vinyl-seek::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #ff33cc, #cc77ff);
+}
+
 .noise {
 	background-image: url("/noise.png");
   background-repeat: repeat;
