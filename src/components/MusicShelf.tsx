@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { FiPause, FiPlay, FiSkipBack, FiSkipForward, FiX } from "react-icons/fi";
 import { Vinyl } from "@/components/Vinyl";
+import { ScratchDeck } from "@/lib/scratch";
 import type { Track } from "@/types";
 
 const ACTIVE_VT = "active-vinyl";
@@ -13,6 +14,7 @@ const SPIN_DOWN_MS = 900;
 const SECONDS_PER_TURN = 1.8;
 // a few degrees of slack so tapping the record does not interrupt playback
 const ENGAGE_RADIANS = 0.06;
+const MAX_SCRATCH_RATE = 8;
 
 interface Props {
   tracks: Track[];
@@ -45,7 +47,13 @@ export default function MusicShelf({ tracks }: Props) {
     resumeAfter: boolean;
     turned: number;
     engaged: boolean;
+    lastMove: number;
+    stillTimer: number;
   } | null>(null);
+  const scratchPosition = useRef(0);
+  const scratchDeck = useRef<ScratchDeck | null>(null);
+  if (!scratchDeck.current && typeof window !== "undefined") scratchDeck.current = new ScratchDeck();
+  const deck = scratchDeck.current as ScratchDeck;
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const deckRef = useRef<HTMLDivElement>(null);
@@ -120,6 +128,8 @@ export default function MusicShelf({ tracks }: Props) {
 
   const close = useCallback(() => {
     audioRef.current?.pause();
+    // a decoded track is tens of megabytes, so let it go with the deck
+    deck?.unload();
     if (prefersReducedMotion()) {
       setActiveId(null);
       setPlaying(false);
@@ -133,6 +143,21 @@ export default function MusicShelf({ tracks }: Props) {
       setPlaying(false);
     }, DECK_EXIT_MS);
   }, []);
+
+  // decode the open record in the background so the first grab can make sound
+  useEffect(() => {
+    if (!active || !deck) return;
+    scratchPosition.current = 0;
+    deck.onPosition = (seconds) => {
+      scratchPosition.current = seconds;
+      // while scratching the worklet owns the needle, so the clock follows it
+      if (scrub.current?.engaged) setTime(seconds);
+    };
+    deck.load(active.src);
+    return () => {
+      deck.setRate(0);
+    };
+  }, [active, deck]);
 
   // a turntable takes a moment to reach speed, and coasts down when it stops
   useEffect(() => {
@@ -224,6 +249,8 @@ export default function MusicShelf({ tracks }: Props) {
       resumeAfter: Boolean(audio && !audio.paused),
       turned: 0,
       engaged: false,
+      lastMove: event.timeStamp || performance.now(),
+      stillTimer: 0,
     };
     // playback keeps running until the record is actually turned, so a tap is inert
   };
@@ -238,6 +265,7 @@ export default function MusicShelf({ tracks }: Props) {
     if (delta > Math.PI) delta -= 2 * Math.PI;
     if (delta < -Math.PI) delta += 2 * Math.PI;
 
+    const now = event.timeStamp || performance.now();
     grip.lastAngle = angle;
     grip.turned += delta;
 
@@ -247,17 +275,37 @@ export default function MusicShelf({ tracks }: Props) {
       if (Math.abs(grip.turned) < ENGAGE_RADIANS) return;
       grip.engaged = true;
       grip.turned = 0;
+      grip.lastMove = now;
       grip.startTime = audio?.currentTime ?? grip.startTime;
       audio?.pause();
       setScrubbing(true);
+      // hand the needle over to the worklet, which can run backwards
+      if (deck.isLoaded) {
+        deck.resume();
+        deck.seek(grip.startTime);
+      }
       return;
     }
 
     setScrubAngle((previous) => previous + delta);
 
-    if (!audio) return;
     const total = duration || active.duration;
     const next = Math.min(total, Math.max(0, grip.startTime + (grip.turned / (2 * Math.PI)) * SECONDS_PER_TURN));
+
+    if (deck.isLoaded) {
+      // hand speed in turns per second, geared to the record's own rate
+      const elapsed = Math.max(4, now - grip.lastMove) / 1000;
+      grip.lastMove = now;
+      const rate = ((delta / (2 * Math.PI)) * SECONDS_PER_TURN) / elapsed;
+      // no hand can spin a platter faster than this, and past it it is just noise
+      deck.setRate(Math.max(-MAX_SCRATCH_RATE, Math.min(MAX_SCRATCH_RATE, rate)));
+      clearTimeout(grip.stillTimer);
+      // a hand resting on the record holds it silent
+      grip.stillTimer = window.setTimeout(() => deck.setRate(0), 90);
+      return;
+    }
+
+    if (!audio) return;
     audio.currentTime = next;
     setTime(next);
   };
@@ -268,8 +316,19 @@ export default function MusicShelf({ tracks }: Props) {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     scrub.current = null;
     if (!grip.engaged) return;
+
+    clearTimeout(grip.stillTimer);
     setScrubbing(false);
-    if (grip.resumeAfter) audioRef.current?.play().catch(() => setPlaying(false));
+
+    const audio = audioRef.current;
+    if (deck.isLoaded) {
+      deck.setRate(0);
+      // the worklet owns the true position while scratching, so hand it back
+      if (audio) audio.currentTime = scratchPosition.current;
+      setTime(scratchPosition.current);
+    }
+
+    if (grip.resumeAfter) audio?.play().catch(() => setPlaying(false));
   };
 
   const seek = (event: React.ChangeEvent<HTMLInputElement>) => {
