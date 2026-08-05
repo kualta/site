@@ -69,6 +69,23 @@ html {
   border-radius: 50%;
 }
 
+/* the record on the deck can be grabbed and turned by hand */
+.vinyl-deck {
+  cursor: grab;
+  touch-action: none;
+}
+
+.vinyl-deck.is-scrubbing {
+  cursor: grabbing;
+}
+
+/* hand rotation lives here so it composes with the playback spin below it */
+.vinyl-scrub {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
 .vinyl-disc {
   position: absolute;
   inset: 0;

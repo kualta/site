@@ -8,6 +8,11 @@ const ACTIVE_VT = "active-vinyl";
 const DECK_EXIT_MS = 180;
 const SPIN_UP_MS = 700;
 const SPIN_DOWN_MS = 900;
+// one full turn of the record moves the audio by one turn's worth of groove,
+// matching --vinyl-rpm so the hand, the label and the sound all agree
+const SECONDS_PER_TURN = 1.8;
+// a few degrees of slack so tapping the record does not interrupt playback
+const ENGAGE_RADIANS = 0.06;
 
 interface Props {
   tracks: Track[];
@@ -31,6 +36,16 @@ export default function MusicShelf({ tracks }: Props) {
   const [duration, setDuration] = useState(0);
   const [animateEnter, setAnimateEnter] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubAngle, setScrubAngle] = useState(0);
+  const scrub = useRef<{
+    pointerId: number;
+    lastAngle: number;
+    startTime: number;
+    resumeAfter: boolean;
+    turned: number;
+    engaged: boolean;
+  } | null>(null);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const deckRef = useRef<HTMLDivElement>(null);
@@ -65,6 +80,7 @@ export default function MusicShelf({ tracks }: Props) {
           setActiveId(track.id);
           setTime(0);
           setDuration(track.duration);
+          setScrubAngle(0);
           setAnimateEnter(opening && !morph && !reduced);
         });
 
@@ -121,7 +137,7 @@ export default function MusicShelf({ tracks }: Props) {
   // a turntable takes a moment to reach speed, and coasts down when it stops
   useEffect(() => {
     let frame = 0;
-    const target = playing ? 1 : 0;
+    const target = playing && !scrubbing ? 1 : 0;
 
     const ramp = (spin: Animation) => {
       // a record that just landed on the platter is always at rest first
@@ -130,7 +146,8 @@ export default function MusicShelf({ tracks }: Props) {
         spinReadyFor.current = activeId;
       }
 
-      if (prefersReducedMotion()) {
+      // a hand on the record stops it dead, it does not coast
+      if (scrubbing || prefersReducedMotion()) {
         spin.playbackRate = target;
         return;
       }
@@ -164,7 +181,7 @@ export default function MusicShelf({ tracks }: Props) {
 
     findSpin();
     return () => cancelAnimationFrame(frame);
-  }, [playing, activeId]);
+  }, [playing, activeId, scrubbing]);
 
   useEffect(() => {
     if (!active || !("mediaSession" in navigator)) return;
@@ -191,6 +208,70 @@ export default function MusicShelf({ tracks }: Props) {
     }
   }, [active, step]);
 
+  const angleAt = (element: HTMLElement, clientX: number, clientY: number) => {
+    const box = element.getBoundingClientRect();
+    return Math.atan2(clientY - (box.top + box.height / 2), clientX - (box.left + box.width / 2));
+  };
+
+  const grabRecord = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!active) return;
+    const audio = audioRef.current;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    scrub.current = {
+      pointerId: event.pointerId,
+      lastAngle: angleAt(event.currentTarget, event.clientX, event.clientY),
+      startTime: audio?.currentTime ?? 0,
+      resumeAfter: Boolean(audio && !audio.paused),
+      turned: 0,
+      engaged: false,
+    };
+    // playback keeps running until the record is actually turned, so a tap is inert
+  };
+
+  const turnRecord = (event: React.PointerEvent<HTMLDivElement>) => {
+    const grip = scrub.current;
+    if (!grip || grip.pointerId !== event.pointerId || !active) return;
+
+    const angle = angleAt(event.currentTarget, event.clientX, event.clientY);
+    let delta = angle - grip.lastAngle;
+    // crossing the -PI/PI seam should not read as a full turn backwards
+    if (delta > Math.PI) delta -= 2 * Math.PI;
+    if (delta < -Math.PI) delta += 2 * Math.PI;
+
+    grip.lastAngle = angle;
+    grip.turned += delta;
+
+    const audio = audioRef.current;
+
+    if (!grip.engaged) {
+      if (Math.abs(grip.turned) < ENGAGE_RADIANS) return;
+      grip.engaged = true;
+      grip.turned = 0;
+      grip.startTime = audio?.currentTime ?? grip.startTime;
+      audio?.pause();
+      setScrubbing(true);
+      return;
+    }
+
+    setScrubAngle((previous) => previous + delta);
+
+    if (!audio) return;
+    const total = duration || active.duration;
+    const next = Math.min(total, Math.max(0, grip.startTime + (grip.turned / (2 * Math.PI)) * SECONDS_PER_TURN));
+    audio.currentTime = next;
+    setTime(next);
+  };
+
+  const releaseRecord = (event: React.PointerEvent<HTMLDivElement>) => {
+    const grip = scrub.current;
+    if (!grip) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    scrub.current = null;
+    if (!grip.engaged) return;
+    setScrubbing(false);
+    if (grip.resumeAfter) audioRef.current?.play().catch(() => setPlaying(false));
+  };
+
   const seek = (event: React.ChangeEvent<HTMLInputElement>) => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -216,7 +297,17 @@ export default function MusicShelf({ tracks }: Props) {
           className={`flex w-full flex-col items-center gap-5 ${animateEnter ? "deck-enter" : ""} ${closing ? "deck-exit" : ""}`}
         >
           <div className="w-full max-w-[19rem]" ref={deckRef}>
-            <Vinyl track={active} deck spinning={playing} viewTransitionName={ACTIVE_VT} />
+            <Vinyl
+              track={active}
+              deck
+              spinning={playing}
+              scrubbing={scrubbing}
+              scrubAngle={scrubAngle}
+              viewTransitionName={ACTIVE_VT}
+              onPointerDown={grabRecord}
+              onPointerMove={turnRecord}
+              onPointerUp={releaseRecord}
+            />
           </div>
 
           <div className="flex w-full max-w-sm flex-col items-center gap-1 text-center">
