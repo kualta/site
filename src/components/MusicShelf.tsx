@@ -22,6 +22,7 @@ export default function MusicShelf({ tracks }: Props) {
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [animateEnter, setAnimateEnter] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const crateRefs = useRef<Record<number, HTMLButtonElement | null>>({});
@@ -41,17 +42,23 @@ export default function MusicShelf({ tracks }: Props) {
   const open = useCallback(
     (track: Track) => {
       load(track);
+
+      const opening = activeId === null;
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const source = crateRefs.current[track.id];
+      const startViewTransition = document.startViewTransition?.bind(document);
+      // the morph replaces the staggered enter, so only one of them ever runs
+      const morph = opening && !reduced && Boolean(source) && Boolean(startViewTransition);
+
       const commit = () =>
         flushSync(() => {
           setActiveId(track.id);
           setTime(0);
           setDuration(track.duration);
+          setAnimateEnter(opening && !morph && !reduced);
         });
 
-      const source = crateRefs.current[track.id];
-      const startViewTransition = document.startViewTransition?.bind(document);
-
-      if (activeId === null && source && startViewTransition) {
+      if (morph && source && startViewTransition) {
         source.style.viewTransitionName = ACTIVE_VT;
         const transition = startViewTransition(commit);
         transition.finished.finally(() => {
@@ -137,7 +144,7 @@ export default function MusicShelf({ tracks }: Props) {
       />
 
       {active && (
-        <section className="flex w-full flex-col items-center gap-5">
+        <section className={`flex w-full flex-col items-center gap-5 ${animateEnter ? "deck-enter" : ""}`}>
           <div className="w-full max-w-[19rem]">
             <Vinyl track={active} spinning={playing} viewTransitionName={ACTIVE_VT} />
           </div>
@@ -153,6 +160,7 @@ export default function MusicShelf({ tracks }: Props) {
             <span className="tabular-nums">{formatTime(time)}</span>
             <input
               className="vinyl-seek grow"
+              style={{ "--vinyl-progress": `${(time / (duration || active.duration)) * 100}%` } as React.CSSProperties}
               type="range"
               min={0}
               max={duration || active.duration}
@@ -167,7 +175,7 @@ export default function MusicShelf({ tracks }: Props) {
           <div className="flex items-center gap-5 text-xl">
             <button
               type="button"
-              className="text-secondary-text hover:opacity-70"
+              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
               onClick={() => step(-1)}
               aria-label="Previous track"
             >
@@ -175,16 +183,19 @@ export default function MusicShelf({ tracks }: Props) {
             </button>
             <button
               type="button"
-              className="active-bg flex h-12 w-12 items-center justify-center rounded-full"
+              className="active-bg flex h-12 w-12 items-center justify-center rounded-full transition-transform active:scale-[0.96]"
               onClick={toggle}
               aria-pressed={playing}
               aria-label={playing ? "Pause" : "Play"}
             >
-              {playing ? <FiPause /> : <FiPlay className="ml-0.5" />}
+              <span className="relative block h-4 w-4">
+                <FiPlay className={`icon-swap icon-play ${playing ? "" : "is-shown"}`} />
+                <FiPause className={`icon-swap ${playing ? "is-shown" : ""}`} />
+              </span>
             </button>
             <button
               type="button"
-              className="text-secondary-text hover:opacity-70"
+              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
               onClick={() => step(1)}
               aria-label="Next track"
             >
@@ -192,7 +203,7 @@ export default function MusicShelf({ tracks }: Props) {
             </button>
             <button
               type="button"
-              className="text-secondary-text hover:opacity-70"
+              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
               onClick={close}
               aria-label="Back to all records"
             >
@@ -212,7 +223,7 @@ export default function MusicShelf({ tracks }: Props) {
                 ref={(element) => {
                   crateRefs.current[track.id] = element;
                 }}
-                className="group flex w-full flex-col gap-2 text-left"
+                className="group flex w-full flex-col gap-2 text-left transition-transform active:scale-[0.96]"
                 onClick={() => open(track)}
               >
                 <Vinyl track={track} className="transition-transform duration-200 group-hover:scale-[1.04]" />

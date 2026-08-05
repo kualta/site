@@ -68,11 +68,12 @@ html {
   border-radius: 50%;
   animation: vinyl-spin 1.8s linear infinite;
   animation-play-state: paused;
-  will-change: transform;
 }
 
+/* only the record that is actually turning earns a compositing layer */
 .vinyl-disc.is-playing {
   animation-play-state: running;
+  will-change: transform;
 }
 
 @keyframes vinyl-spin {
@@ -126,7 +127,8 @@ html {
   inset: 31%;
   border-radius: 50%;
   overflow: hidden;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  /* the label always sits on black grooves, so the edge needs a light hairline */
+  box-shadow: 0 0 0 1px oklch(1 0 0 / 0.1);
 }
 
 .vinyl-label img {
@@ -166,8 +168,75 @@ html {
   appearance: none;
   height: 3px;
   border-radius: 2px;
-  background: var(--secondary-text);
   cursor: pointer;
+  background-color: var(--secondary-text);
+  background-image: linear-gradient(90deg, #ff33cc, #cc77ff);
+  background-repeat: no-repeat;
+  background-size: var(--vinyl-progress, 0%) 100%;
+}
+
+/* opening a record is infrequent and staged, so the parts arrive in order */
+.deck-enter > * {
+  animation: deck-in 320ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.deck-enter > *:nth-child(2) {
+  animation-delay: 100ms;
+}
+
+.deck-enter > *:nth-child(3) {
+  animation-delay: 200ms;
+}
+
+.deck-enter > *:nth-child(4) {
+  animation-delay: 300ms;
+}
+
+@keyframes deck-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.icon-swap {
+  --icon-nudge: 0px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateX(var(--icon-nudge)) scale(0.25);
+  transition:
+    opacity 200ms cubic-bezier(0.2, 0, 0, 1),
+    transform 200ms cubic-bezier(0.2, 0, 0, 1),
+    filter 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.icon-swap.is-shown {
+  opacity: 1;
+  filter: blur(0px);
+  transform: translateX(var(--icon-nudge)) scale(1);
+}
+
+/* the play triangle reads centered only when nudged off geometric center */
+.icon-play {
+  --icon-nudge: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-enter > * {
+    animation: none;
+  }
+
+  .icon-swap {
+    transition-duration: 1ms;
+  }
 }
 
 .vinyl-seek::-webkit-slider-thumb {
