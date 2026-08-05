@@ -5,9 +5,16 @@ import { Vinyl } from "@/components/Vinyl";
 import type { Track } from "@/types";
 
 const ACTIVE_VT = "active-vinyl";
+const DECK_EXIT_MS = 180;
+const SPIN_UP_MS = 700;
+const SPIN_DOWN_MS = 900;
 
 interface Props {
   tracks: Track[];
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function formatTime(seconds: number) {
@@ -23,8 +30,11 @@ export default function MusicShelf({ tracks }: Props) {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [animateEnter, setAnimateEnter] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const deckRef = useRef<HTMLDivElement>(null);
+  const spinReadyFor = useRef<number | null>(null);
   const crateRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   const active = tracks.find((track) => track.id === activeId) ?? null;
@@ -94,9 +104,67 @@ export default function MusicShelf({ tracks }: Props) {
 
   const close = useCallback(() => {
     audioRef.current?.pause();
-    setActiveId(null);
-    setPlaying(false);
+    if (prefersReducedMotion()) {
+      setActiveId(null);
+      setPlaying(false);
+      return;
+    }
+    // let the deck animate out before it leaves the tree
+    setClosing(true);
+    window.setTimeout(() => {
+      setClosing(false);
+      setActiveId(null);
+      setPlaying(false);
+    }, DECK_EXIT_MS);
   }, []);
+
+  // a turntable takes a moment to reach speed, and coasts down when it stops
+  useEffect(() => {
+    let frame = 0;
+    const target = playing ? 1 : 0;
+
+    const ramp = (spin: Animation) => {
+      // a record that just landed on the platter is always at rest first
+      if (spinReadyFor.current !== activeId) {
+        spin.playbackRate = 0;
+        spinReadyFor.current = activeId;
+      }
+
+      if (prefersReducedMotion()) {
+        spin.playbackRate = target;
+        return;
+      }
+
+      const from = spin.playbackRate;
+      if (from === target) return;
+
+      const duration = target > from ? SPIN_UP_MS : SPIN_DOWN_MS;
+      const started = performance.now();
+
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now - started) / duration);
+        const eased = 1 - (1 - progress) ** 3;
+        spin.playbackRate = from + (target - from) * eased;
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+
+      frame = requestAnimationFrame(tick);
+    };
+
+    // the CSS animation is not registered on the very first frame after mount
+    const findSpin = () => {
+      const disc = deckRef.current?.querySelector<HTMLElement>(".vinyl-disc");
+      const spin = disc?.getAnimations().find((animation) => animation.playState !== "idle");
+      if (spin) {
+        ramp(spin);
+        return;
+      }
+      if (deckRef.current) frame = requestAnimationFrame(findSpin);
+    };
+
+    findSpin();
+    return () => cancelAnimationFrame(frame);
+  }, [playing, activeId]);
 
   useEffect(() => {
     if (!active || !("mediaSession" in navigator)) return;
@@ -144,9 +212,11 @@ export default function MusicShelf({ tracks }: Props) {
       />
 
       {active && (
-        <section className={`flex w-full flex-col items-center gap-5 ${animateEnter ? "deck-enter" : ""}`}>
-          <div className="w-full max-w-[19rem]">
-            <Vinyl track={active} spinning={playing} viewTransitionName={ACTIVE_VT} />
+        <section
+          className={`flex w-full flex-col items-center gap-5 ${animateEnter ? "deck-enter" : ""} ${closing ? "deck-exit" : ""}`}
+        >
+          <div className="w-full max-w-[19rem]" ref={deckRef}>
+            <Vinyl track={active} deck spinning={playing} viewTransitionName={ACTIVE_VT} />
           </div>
 
           <div className="flex w-full max-w-sm flex-col items-center gap-1 text-center">
@@ -183,7 +253,7 @@ export default function MusicShelf({ tracks }: Props) {
             </button>
             <button
               type="button"
-              className="active-bg flex h-12 w-12 items-center justify-center rounded-full transition-transform active:scale-[0.96]"
+              className="play-button flex h-12 w-12 items-center justify-center rounded-full active:scale-[0.96]"
               onClick={toggle}
               aria-pressed={playing}
               aria-label={playing ? "Pause" : "Play"}
@@ -215,7 +285,7 @@ export default function MusicShelf({ tracks }: Props) {
 
       <section className="flex w-full flex-col gap-4">
         {active && <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">more records</h3>}
-        <ul className="grid w-full grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3">
+        <ul className="shelf grid w-full grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3">
           {shelf.map((track) => (
             <li key={track.id}>
               <button
@@ -223,10 +293,10 @@ export default function MusicShelf({ tracks }: Props) {
                 ref={(element) => {
                   crateRefs.current[track.id] = element;
                 }}
-                className="group flex w-full flex-col gap-2 text-left transition-transform active:scale-[0.96]"
+                className="crate-item flex w-full flex-col gap-2 text-left transition-transform active:scale-[0.96]"
                 onClick={() => open(track)}
               >
-                <Vinyl track={track} className="transition-transform duration-200 group-hover:scale-[1.04]" />
+                <Vinyl track={track} />
                 <span className="truncate text-sm font-medium">{track.title}</span>
                 <span className="-mt-2 font-mono text-xs text-secondary-text">{formatTime(track.duration)}</span>
               </button>

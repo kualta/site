@@ -55,6 +55,13 @@ html {
 
 /* --- vinyl --- */
 
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* a 33 1/3 rpm record turns once every 1.8s */
+  --vinyl-rpm: 1.8s;
+}
+
 .vinyl {
   position: relative;
   width: 100%;
@@ -66,8 +73,13 @@ html {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  animation: vinyl-spin 1.8s linear infinite;
+  animation: vinyl-spin var(--vinyl-rpm) linear infinite;
   animation-play-state: paused;
+}
+
+/* the deck keeps its animation live so JS can ramp playbackRate up and down */
+.vinyl-disc.is-deck {
+  animation-play-state: running;
 }
 
 /* only the record that is actually turning earns a compositing layer */
@@ -138,18 +150,19 @@ html {
   object-fit: cover;
 }
 
+/* a blank pressing: flat paper stock, same in both themes */
 .vinyl-label-fallback {
   display: flex;
   width: 100%;
   height: 100%;
   align-items: center;
   justify-content: center;
-  padding: 0 12%;
+  padding: 0 14%;
   text-align: center;
   font-size: 0.6rem;
   line-height: 1.15;
   color: #191817;
-  background: linear-gradient(45deg, #ff33cc, #cc77ff);
+  background-color: #e7e4e3;
 }
 
 .vinyl-spindle {
@@ -169,15 +182,87 @@ html {
   height: 3px;
   border-radius: 2px;
   cursor: pointer;
-  background-color: var(--secondary-text);
-  background-image: linear-gradient(90deg, #ff33cc, #cc77ff);
+  background-color: color-mix(in oklab, var(--secondary-text) 45%, transparent);
+  background-image: linear-gradient(var(--text), var(--text));
   background-repeat: no-repeat;
   background-size: var(--vinyl-progress, 0%) 100%;
 }
 
+.dark .vinyl-seek {
+  background-image: linear-gradient(var(--text-dark), var(--text-dark));
+}
+
+/* records settle into the crate on arrival */
+.shelf > li {
+  animation: crate-in 380ms var(--ease-out) both;
+}
+
+.shelf > li:nth-child(2) { animation-delay: 50ms; }
+.shelf > li:nth-child(3) { animation-delay: 100ms; }
+.shelf > li:nth-child(4) { animation-delay: 150ms; }
+.shelf > li:nth-child(5) { animation-delay: 200ms; }
+.shelf > li:nth-child(6) { animation-delay: 250ms; }
+.shelf > li:nth-child(n + 7) { animation-delay: 300ms; }
+
+@keyframes crate-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* lift the record out of the crate, but only where a real pointer exists */
+.crate-item .vinyl {
+  transition: transform 220ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .crate-item:hover .vinyl {
+    transform: translateY(-4px) scale(1.03);
+  }
+}
+
+/* swapping records crossfades the label instead of cutting to it */
+.vinyl-deck .vinyl-label > * {
+  animation: label-in 260ms var(--ease-out) both;
+}
+
+@keyframes label-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+/* the deck leaves faster than it arrived */
+.deck-exit {
+  animation: deck-out 180ms var(--ease-out) both;
+}
+
+@keyframes deck-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
 /* opening a record is infrequent and staged, so the parts arrive in order */
 .deck-enter > * {
-  animation: deck-in 320ms cubic-bezier(0.2, 0, 0, 1) both;
+  animation: deck-in 320ms var(--ease-out) both;
 }
 
 .deck-enter > *:nth-child(2) {
@@ -203,6 +288,24 @@ html {
   }
 }
 
+/* a solid transport key: ink on paper, inverted per theme */
+.play-button {
+  background-color: var(--text);
+  color: var(--bg);
+  transition:
+    transform 140ms var(--ease-out),
+    opacity 200ms ease;
+}
+
+.dark .play-button {
+  background-color: var(--text-dark);
+  color: var(--bg-dark);
+}
+
+.play-button:hover {
+  opacity: 0.85;
+}
+
 .icon-swap {
   --icon-nudge: 0px;
   position: absolute;
@@ -213,9 +316,9 @@ html {
   filter: blur(4px);
   transform: translateX(var(--icon-nudge)) scale(0.25);
   transition:
-    opacity 200ms cubic-bezier(0.2, 0, 0, 1),
-    transform 200ms cubic-bezier(0.2, 0, 0, 1),
-    filter 200ms cubic-bezier(0.2, 0, 0, 1);
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    filter 200ms var(--ease-out);
 }
 
 .icon-swap.is-shown {
@@ -229,13 +332,32 @@ html {
   --icon-nudge: 1px;
 }
 
+/* reduced motion keeps the fades that explain state, drops everything that moves */
 @media (prefers-reduced-motion: reduce) {
-  .deck-enter > * {
-    animation: none;
+  .deck-enter > *,
+  .deck-exit,
+  .shelf > li,
+  .vinyl-deck .vinyl-label > * {
+    animation: reduced-fade 160ms ease both;
+  }
+
+  .crate-item:hover .vinyl,
+  .vinyl-seek:active::-webkit-slider-thumb,
+  .vinyl-seek:active::-moz-range-thumb {
+    transform: none;
   }
 
   .icon-swap {
     transition-duration: 1ms;
+  }
+
+  @keyframes reduced-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
 
@@ -244,7 +366,16 @@ html {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: linear-gradient(45deg, #ff33cc, #cc77ff);
+  background-color: var(--text);
+  transition: transform 140ms var(--ease-out);
+}
+
+.dark .vinyl-seek::-webkit-slider-thumb {
+  background-color: var(--text-dark);
+}
+
+.vinyl-seek:active::-webkit-slider-thumb {
+  transform: scale(1.25);
 }
 
 .vinyl-seek::-moz-range-thumb {
@@ -252,7 +383,16 @@ html {
   height: 11px;
   border: none;
   border-radius: 50%;
-  background: linear-gradient(45deg, #ff33cc, #cc77ff);
+  background-color: var(--text);
+  transition: transform 140ms var(--ease-out);
+}
+
+.dark .vinyl-seek::-moz-range-thumb {
+  background-color: var(--text-dark);
+}
+
+.vinyl-seek:active::-moz-range-thumb {
+  transform: scale(1.25);
 }
 
 .noise {
