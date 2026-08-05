@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
-import { FiPause, FiPlay, FiSkipBack, FiSkipForward, FiX } from "react-icons/fi";
+import { FiPause, FiPlay, FiSkipBack, FiSkipForward } from "react-icons/fi";
 import { Vinyl } from "@/components/Vinyl";
 import { ScratchDeck } from "@/lib/scratch";
 import type { Track } from "@/types";
 
-const ACTIVE_VT = "active-vinyl";
-const DECK_EXIT_MS = 180;
 const SPIN_UP_MS = 700;
 const SPIN_DOWN_MS = 900;
 // one full turn of the record moves the audio by one turn's worth of groove,
@@ -32,12 +29,11 @@ function formatTime(seconds: number) {
 }
 
 export default function MusicShelf({ tracks }: Props) {
-  const [activeId, setActiveId] = useState<number | null>(null);
+  // a record is always on the platter, cued but silent until asked
+  const [activeId, setActiveId] = useState<number | null>(tracks[0]?.id ?? null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [animateEnter, setAnimateEnter] = useState(false);
-  const [closing, setClosing] = useState(false);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubAngle, setScrubAngle] = useState(0);
   const scrub = useRef<{
@@ -58,10 +54,8 @@ export default function MusicShelf({ tracks }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const deckRef = useRef<HTMLDivElement>(null);
   const spinReadyFor = useRef<number | null>(null);
-  const crateRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   const active = tracks.find((track) => track.id === activeId) ?? null;
-  const shelf = active ? tracks.filter((track) => track.id !== active.id) : tracks;
 
   const load = useCallback((track: Track) => {
     const audio = audioRef.current;
@@ -75,35 +69,12 @@ export default function MusicShelf({ tracks }: Props) {
   const open = useCallback(
     (track: Track) => {
       load(track);
-
-      const opening = activeId === null;
-      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const source = crateRefs.current[track.id];
-      const startViewTransition = document.startViewTransition?.bind(document);
-      // the morph replaces the staggered enter, so only one of them ever runs
-      const morph = opening && !reduced && Boolean(source) && Boolean(startViewTransition);
-
-      const commit = () =>
-        flushSync(() => {
-          setActiveId(track.id);
-          setTime(0);
-          setDuration(track.duration);
-          setScrubAngle(0);
-          setAnimateEnter(opening && !morph && !reduced);
-        });
-
-      if (morph && source && startViewTransition) {
-        source.style.viewTransitionName = ACTIVE_VT;
-        const transition = startViewTransition(commit);
-        transition.finished.finally(() => {
-          source.style.viewTransitionName = "";
-        });
-        return;
-      }
-
-      commit();
+      setActiveId(track.id);
+      setTime(0);
+      setDuration(track.duration);
+      setScrubAngle(0);
     },
-    [activeId, load],
+    [load],
   );
 
   const step = useCallback(
@@ -126,23 +97,11 @@ export default function MusicShelf({ tracks }: Props) {
     }
   }, []);
 
-  const close = useCallback(() => {
-    audioRef.current?.pause();
-    // a decoded track is tens of megabytes, so let it go with the deck
-    deck?.unload();
-    if (prefersReducedMotion()) {
-      setActiveId(null);
-      setPlaying(false);
-      return;
-    }
-    // let the deck animate out before it leaves the tree
-    setClosing(true);
-    window.setTimeout(() => {
-      setClosing(false);
-      setActiveId(null);
-      setPlaying(false);
-    }, DECK_EXIT_MS);
-  }, []);
+  // the cued record is loaded but never auto-played
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio && !audio.src && active) audio.src = active.src;
+  }, [active]);
 
   // decode the open record in the background so the first grab can make sound
   useEffect(() => {
@@ -158,6 +117,9 @@ export default function MusicShelf({ tracks }: Props) {
       deck.setRate(0);
     };
   }, [active, deck]);
+
+  // a decoded track is tens of megabytes, so never leave one behind
+  useEffect(() => () => deck?.unload(), [deck]);
 
   // a turntable takes a moment to reach speed, and coasts down when it stops
   useEffect(() => {
@@ -339,8 +301,10 @@ export default function MusicShelf({ tracks }: Props) {
     setTime(next);
   };
 
+  if (!active) return null;
+
   return (
-    <div className="flex w-full flex-col items-center gap-10">
+    <div className="flex w-full grow flex-col">
       <audio
         ref={audioRef}
         preload="metadata"
@@ -351,32 +315,29 @@ export default function MusicShelf({ tracks }: Props) {
         onEnded={() => step(1)}
       />
 
-      {active && (
-        <section
-          className={`flex w-full flex-col items-center gap-5 ${animateEnter ? "deck-enter" : ""} ${closing ? "deck-exit" : ""}`}
-        >
-          <div className="w-full max-w-[19rem]" ref={deckRef}>
+      <div className="grid w-full grow md:grid-cols-[minmax(0,1fr)_20rem]">
+        <section className="flex w-full flex-col items-center justify-center gap-5 p-6">
+          <div className="w-full max-w-[25rem]" ref={deckRef}>
             <Vinyl
               track={active}
               deck
               spinning={playing}
               scrubbing={scrubbing}
               scrubAngle={scrubAngle}
-              viewTransitionName={ACTIVE_VT}
               onPointerDown={grabRecord}
               onPointerMove={turnRecord}
               onPointerUp={releaseRecord}
             />
           </div>
 
-          <div className="flex w-full max-w-sm flex-col items-center gap-1 text-center">
+          <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
             <h2 className="text-2xl font-medium leading-tight">{active.title}</h2>
             <p className="text-sm text-secondary-text">
               {active.artist} · {active.date.slice(0, 4)}
             </p>
           </div>
 
-          <div className="flex w-full max-w-sm items-center gap-3 font-mono text-xs text-secondary-text">
+          <div className="flex w-full max-w-md items-center gap-3 font-mono text-xs text-secondary-text">
             <span className="tabular-nums">{formatTime(time)}</span>
             <input
               className="vinyl-seek grow"
@@ -421,39 +382,35 @@ export default function MusicShelf({ tracks }: Props) {
             >
               <FiSkipForward />
             </button>
-            <button
-              type="button"
-              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
-              onClick={close}
-              aria-label="Back to all records"
-            >
-              <FiX />
-            </button>
           </div>
         </section>
-      )}
 
-      <section className="flex w-full flex-col gap-4">
-        {active && <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">more records</h3>}
-        <ul className="shelf grid w-full grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3">
-          {shelf.map((track) => (
-            <li key={track.id}>
-              <button
-                type="button"
-                ref={(element) => {
-                  crateRefs.current[track.id] = element;
-                }}
-                className="crate-item flex w-full flex-col gap-2 text-left transition-transform active:scale-[0.96]"
-                onClick={() => open(track)}
-              >
-                <Vinyl track={track} />
-                <span className="truncate text-sm font-medium">{track.title}</span>
-                <span className="-mt-2 font-mono text-xs text-secondary-text">{formatTime(track.duration)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+        <aside className="rail flex w-full flex-col gap-3 p-6">
+          <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
+          <ul className="queue flex w-full flex-col gap-1">
+            {tracks.map((track) => (
+              <li key={track.id}>
+                <button
+                  type="button"
+                  className={`queue-item flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-transform active:scale-[0.98] ${
+                    track.id === activeId ? "is-current" : ""
+                  }`}
+                  onClick={() => open(track)}
+                  aria-current={track.id === activeId}
+                >
+                  <div className="w-12 shrink-0">
+                    <Vinyl track={track} spinning={track.id === activeId && playing} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium leading-tight">{track.title}</div>
+                    <div className="font-mono text-xs text-secondary-text">{formatTime(track.duration)}</div>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </div>
     </div>
   );
 }

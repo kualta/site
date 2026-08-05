@@ -209,22 +209,39 @@ html {
   background-image: linear-gradient(var(--text-dark), var(--text-dark));
 }
 
-/* records settle into the crate on arrival */
-.shelf > li {
-  animation: crate-in 380ms var(--ease-out) both;
+/* the records rail: pinned right, full height, its own scroll */
+.rail {
+  border-top: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
 }
 
-.shelf > li:nth-child(2) { animation-delay: 50ms; }
-.shelf > li:nth-child(3) { animation-delay: 100ms; }
-.shelf > li:nth-child(4) { animation-delay: 150ms; }
-.shelf > li:nth-child(5) { animation-delay: 200ms; }
-.shelf > li:nth-child(6) { animation-delay: 250ms; }
-.shelf > li:nth-child(n + 7) { animation-delay: 300ms; }
+@media (min-width: 768px) {
+  .rail {
+    border-top: none;
+    border-left: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
+    max-height: 100%;
+    overflow-y: auto;
+  }
+}
 
-@keyframes crate-in {
+.queue-item.is-current {
+  background-color: color-mix(in oklab, var(--secondary-text) 18%, transparent);
+}
+
+/* the column of records beside the deck */
+.queue > li {
+  animation: queue-in 300ms var(--ease-out) both;
+}
+
+.queue > li:nth-child(2) { animation-delay: 40ms; }
+.queue > li:nth-child(3) { animation-delay: 80ms; }
+.queue > li:nth-child(4) { animation-delay: 120ms; }
+.queue > li:nth-child(5) { animation-delay: 160ms; }
+.queue > li:nth-child(n + 6) { animation-delay: 200ms; }
+
+@keyframes queue-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.97);
+    transform: translateX(8px);
   }
   to {
     opacity: 1;
@@ -232,15 +249,24 @@ html {
   }
 }
 
-/* lift the record out of the crate, but only where a real pointer exists */
-.crate-item .vinyl {
-  transition: transform 220ms var(--ease-out);
+.queue-item {
+  transition:
+    transform 200ms var(--ease-out),
+    background-color 200ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .crate-item:hover .vinyl {
-    transform: translateY(-4px) scale(1.03);
+  .queue-item:hover {
+    background-color: color-mix(in oklab, var(--secondary-text) 14%, transparent);
   }
+
+  .queue-item:hover .vinyl {
+    transform: scale(1.06);
+  }
+}
+
+.queue-item .vinyl {
+  transition: transform 200ms var(--ease-out);
 }
 
 /* swapping records crossfades the label instead of cutting to it */
@@ -257,50 +283,6 @@ html {
   to {
     opacity: 1;
     filter: blur(0);
-    transform: none;
-  }
-}
-
-/* the deck leaves faster than it arrived */
-.deck-exit {
-  animation: deck-out 180ms var(--ease-out) both;
-}
-
-@keyframes deck-out {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-}
-
-/* opening a record is infrequent and staged, so the parts arrive in order */
-.deck-enter > * {
-  animation: deck-in 320ms var(--ease-out) both;
-}
-
-.deck-enter > *:nth-child(2) {
-  animation-delay: 100ms;
-}
-
-.deck-enter > *:nth-child(3) {
-  animation-delay: 200ms;
-}
-
-.deck-enter > *:nth-child(4) {
-  animation-delay: 300ms;
-}
-
-@keyframes deck-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
     transform: none;
   }
 }
@@ -351,9 +333,7 @@ html {
 
 /* reduced motion keeps the fades that explain state, drops everything that moves */
 @media (prefers-reduced-motion: reduce) {
-  .deck-enter > *,
-  .deck-exit,
-  .shelf > li,
+  .queue > li,
   .vinyl-deck .vinyl-label > * {
     animation: reduced-fade 160ms ease both;
   }

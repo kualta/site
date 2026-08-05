@@ -1,17 +1,13 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import MusicShelf from "@/components/MusicShelf.tsx";
-import SubscriptionBox from "@/components/SubscriptionBox.astro";
 import type { Track } from "@/types";
 import musicData from "@/data/music.json";
 
 const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a.date));
 ---
 <BaseLayout title="music" description="music made by kualta">
-  <div class="max-w-2xl w-full place-items-center justify-center mb-10">
-    <div class="flex flex-col w-full gap-6 p-4">
-      <MusicShelf client:load tracks={tracks} />
-    </div>
-    <SubscriptionBox />
+  <div class="flex w-full grow">
+    <MusicShelf client:load tracks={tracks} />
   </div>
 </BaseLayout>
