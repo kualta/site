@@ -16,6 +16,8 @@ export interface Track {
   /** who released it first, when this is someone else's song */
   originalArtist: string | null;
   kind: "cover" | "original";
+  /** position within its album, so multi-part works stay in order */
+  track: number | null;
   /** LRC when timestamped, plain text otherwise, read from the file's tags */
   lyrics: string | null;
   date: string;

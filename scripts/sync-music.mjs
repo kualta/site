@@ -101,6 +101,7 @@ async function main() {
       // a TOPE tag means someone else got there first
       originalArtist: previous?.originalArtist ?? common.originalartist ?? null,
       kind: previous?.kind ?? (common.originalartist ? "cover" : "original"),
+      track: previous?.track ?? common.track?.no ?? null,
       lyrics: readLyrics(metadata),
       date: previous?.date ?? (common.year ? `${common.year}-01-01` : new Date().toISOString().slice(0, 10)),
       duration: Math.round(format.duration ?? previous?.duration ?? 0),
@@ -115,7 +116,8 @@ async function main() {
     );
   }
 
-  tracks.sort((a, b) => b.date.localeCompare(a.date));
+  // newest first, but parts of one album keep their running order
+  tracks.sort((a, b) => b.date.localeCompare(a.date) || (a.track ?? 0) - (b.track ?? 0));
   await writeFile(dataFile, `${JSON.stringify(tracks, null, 2)}\n`);
   console.log(`[music] ${tracks.length} tracks, ${embedded} embedded covers, ${fellBack} fallback, wrote src/data/music.json`);
 }

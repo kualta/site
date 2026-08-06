@@ -480,8 +480,10 @@ export default function MusicShelf({ tracks }: Props) {
                     <div lang={langFor(track.title)} className="truncate text-sm font-medium leading-tight">
                       {track.title}
                     </div>
-                    {track.originalArtist && (
-                      <div className="truncate text-xs text-secondary-text">{track.originalArtist}</div>
+                    {(track.originalArtist ?? track.album) && (
+                      <div className="truncate text-xs text-secondary-text">
+                        {track.originalArtist ?? track.album}
+                      </div>
                     )}
                   </div>
                   <span className="shrink-0 font-mono text-xs tabular-nums text-secondary-text">

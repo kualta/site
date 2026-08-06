@@ -61,7 +61,11 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
   if (!track.lyrics) {
     return (
       <p className="font-mono text-xs text-secondary-text">
-        no lyrics{track.originalArtist ? "" : " — naming the original artist would let the lookup find them"}
+        {track.kind === "original"
+          ? "instrumental"
+          : track.originalArtist
+            ? "no lyrics"
+            : "no lyrics — naming the original artist would let the lookup find them"}
       </p>
     );
   }
