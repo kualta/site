@@ -361,7 +361,7 @@ export default function MusicShelf({ tracks }: Props) {
         <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-4 p-8 md:order-none md:p-12">
             <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
             <div className="flex flex-wrap gap-1.5">
-              <label className="filter-chip flex w-fit cursor-pointer select-none items-center gap-2 rounded-full px-2.5 py-1 font-mono text-xs">
+              <label className="filter-chip flex w-fit cursor-pointer select-none items-center gap-2 rounded-full py-1 pl-1 pr-2.5 font-mono text-xs">
               <input
                 type="checkbox"
                 checked={lyricsFocus}
