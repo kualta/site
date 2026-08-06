@@ -13,6 +13,9 @@ export interface Track {
   title: string;
   artist: string;
   album: string | null;
+  /** who released it first, when this is someone else's song */
+  originalArtist: string | null;
+  kind: "cover" | "original";
   date: string;
   duration: number;
   src: string;

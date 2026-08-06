@@ -13,6 +13,14 @@ const SECONDS_PER_TURN = 1.8;
 const ENGAGE_RADIANS = 0.06;
 const MAX_SCRATCH_RATE = 8;
 
+type Filter = "all" | "cover" | "original";
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "all" },
+  { key: "cover", label: "covers" },
+  { key: "original", label: "originals" },
+];
+
 interface Props {
   tracks: Track[];
 }
@@ -36,6 +44,7 @@ export default function MusicShelf({ tracks }: Props) {
   const [duration, setDuration] = useState(0);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubAngle, setScrubAngle] = useState(0);
+  const [filter, setFilter] = useState<Filter>("all");
   const scrub = useRef<{
     pointerId: number;
     lastAngle: number;
@@ -56,6 +65,9 @@ export default function MusicShelf({ tracks }: Props) {
   const spinReadyFor = useRef<string | null>(null);
 
   const active = tracks.find((track) => track.slug === activeSlug) ?? null;
+  const shown = filter === "all" ? tracks : tracks.filter((track) => track.kind === filter);
+  // stepping stays inside whatever the listener filtered to
+  const walk = shown.length > 0 ? shown : tracks;
 
   const load = useCallback((track: Track) => {
     const audio = audioRef.current;
@@ -80,11 +92,12 @@ export default function MusicShelf({ tracks }: Props) {
   const step = useCallback(
     (delta: number) => {
       if (!active) return;
-      const index = tracks.findIndex((track) => track.slug === active.slug);
-      const next = tracks[(index + delta + tracks.length) % tracks.length];
+      const index = walk.findIndex((track) => track.slug === active.slug);
+      const from = index === -1 ? 0 : index;
+      const next = walk[(from + delta + walk.length) % walk.length];
       open(next);
     },
-    [active, open, tracks],
+    [active, open, walk],
   );
 
   const toggle = useCallback(() => {
@@ -335,6 +348,9 @@ export default function MusicShelf({ tracks }: Props) {
             <p className="text-sm text-secondary-text">
               {[active.artist, active.album, active.date.slice(0, 4)].filter(Boolean).join(" · ")}
             </p>
+            {active.originalArtist && (
+              <p className="font-mono text-xs text-secondary-text">originally by {active.originalArtist}</p>
+            )}
           </div>
 
           <div className="flex w-full max-w-md items-center gap-3 font-mono text-xs text-secondary-text">
@@ -387,8 +403,22 @@ export default function MusicShelf({ tracks }: Props) {
 
         <aside className="rail flex w-full flex-col gap-3 p-6">
           <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
+
+          <div className="flex flex-wrap gap-1.5">
+            {FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${filter === key ? "is-on" : ""}`}
+                onClick={() => setFilter(key)}
+                aria-pressed={filter === key}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <ul className="queue flex w-full flex-col gap-1">
-            {tracks.map((track) => (
+            {shown.map((track) => (
               <li key={track.slug}>
                 <button
                   type="button"
@@ -409,6 +439,9 @@ export default function MusicShelf({ tracks }: Props) {
               </li>
             ))}
           </ul>
+          {shown.length === 0 && (
+            <p className="font-mono text-xs text-secondary-text">no {filter === "cover" ? "covers" : "originals"} yet</p>
+          )}
         </aside>
       </div>
     </div>

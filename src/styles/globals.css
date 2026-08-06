@@ -223,6 +223,34 @@ html {
   }
 }
 
+.filter-chip {
+  color: var(--secondary-text);
+  border: 1px solid color-mix(in oklab, var(--secondary-text) 30%, transparent);
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.filter-chip:hover {
+  color: var(--text);
+}
+
+.dark .filter-chip:hover {
+  color: var(--text-dark);
+}
+
+.filter-chip.is-on {
+  color: var(--bg);
+  background-color: var(--text);
+  border-color: transparent;
+}
+
+.dark .filter-chip.is-on {
+  color: var(--bg-dark);
+  background-color: var(--text-dark);
+}
+
 .queue-item.is-current {
   background-color: color-mix(in oklab, var(--secondary-text) 18%, transparent);
 }

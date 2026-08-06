@@ -88,6 +88,9 @@ async function main() {
       title: previous?.title ?? common.title ?? titleize(slug),
       artist: previous?.artist ?? common.artist ?? "kualta",
       album: previous?.album ?? common.album ?? null,
+      // a TOPE tag means someone else got there first
+      originalArtist: previous?.originalArtist ?? common.originalartist ?? null,
+      kind: previous?.kind ?? (common.originalartist ? "cover" : "original"),
       date: previous?.date ?? (common.year ? `${common.year}-01-01` : new Date().toISOString().slice(0, 10)),
       duration: Math.round(format.duration ?? previous?.duration ?? 0),
       src: `/music/${file}`,
