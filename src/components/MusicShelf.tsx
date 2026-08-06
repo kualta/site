@@ -219,6 +219,7 @@ export default function MusicShelf({ tracks }: Props) {
     }
   }, [active, step]);
 
+
   const angleAt = (element: HTMLElement, clientX: number, clientY: number) => {
     const box = element.getBoundingClientRect();
     return Math.atan2(clientY - (box.top + box.height / 2), clientX - (box.left + box.width / 2));
@@ -301,7 +302,12 @@ export default function MusicShelf({ tracks }: Props) {
     if (!grip) return;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     scrub.current = null;
-    if (!grip.engaged) return;
+
+    // never turned: that was a tap, not a scrub
+    if (!grip.engaged) {
+      if (event.type === "pointerup") toggle();
+      return;
+    }
 
     clearTimeout(grip.stillTimer);
     setScrubbing(false);
@@ -342,6 +348,75 @@ export default function MusicShelf({ tracks }: Props) {
     audio.currentTime = next;
     setTime(next);
   };
+
+  // keyboard control, unless the user is typing or driving the seek bar
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || (target && /^(input|textarea|select)$/i.test(target.tagName))) return;
+
+      const audio = audioRef.current;
+      if (!audio || !active) return;
+
+      const total = duration || active.duration;
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      const nudge = (by: number) => seekTo(Math.min(total, Math.max(0, audio.currentTime + by)));
+
+      switch (key) {
+        case " ":
+        case "k":
+          event.preventDefault();
+          toggle();
+          return;
+        case "ArrowRight":
+          event.preventDefault();
+          nudge(5);
+          return;
+        case "ArrowLeft":
+          event.preventDefault();
+          nudge(-5);
+          return;
+        case "l":
+          nudge(10);
+          return;
+        case "j":
+          nudge(-10);
+          return;
+        case "ArrowDown":
+        case "n":
+          event.preventDefault();
+          step(1);
+          return;
+        case "ArrowUp":
+        case "p":
+          event.preventDefault();
+          step(-1);
+          return;
+        case "Home":
+          event.preventDefault();
+          seekTo(0);
+          return;
+        case "End":
+          event.preventDefault();
+          seekTo(Math.max(0, total - 1));
+          return;
+        case "f":
+          setLyricsFocus((on) => !on);
+          return;
+        default:
+          // 0-9 jump to that tenth of the record
+          if (/^[0-9]$/.test(key)) {
+            event.preventDefault();
+            seekTo((Number(key) / 10) * total);
+          }
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, duration, seekTo, step, toggle]);
 
   if (!active) return null;
 
