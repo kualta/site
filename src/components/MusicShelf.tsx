@@ -362,9 +362,6 @@ export default function MusicShelf({ tracks }: Props) {
             <p className="text-sm text-secondary-text">
               {[active.artist, active.album, active.date.slice(0, 4)].filter(Boolean).join(" · ")}
             </p>
-            {active.originalArtist && (
-              <p className="font-mono text-xs text-secondary-text">originally by {active.originalArtist}</p>
-            )}
           </div>
 
           <div className="flex w-full max-w-md items-center gap-3 font-mono text-xs text-secondary-text">
@@ -456,8 +453,13 @@ export default function MusicShelf({ tracks }: Props) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium leading-tight">{track.title}</div>
-                    <div className="font-mono text-xs text-secondary-text">{formatTime(track.duration)}</div>
+                    {track.originalArtist && (
+                      <div className="truncate text-xs text-secondary-text">{track.originalArtist}</div>
+                    )}
                   </div>
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-secondary-text">
+                    {formatTime(track.duration)}
+                  </span>
                 </button>
               </li>
             ))}
