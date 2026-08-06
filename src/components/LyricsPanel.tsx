@@ -27,6 +27,13 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
     setEdges((previous) => (previous.top === top && previous.bottom === bottom ? previous : { top, bottom }));
   }, []);
 
+  // a new record starts its words from the top, wherever the last one ended up
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (container) container.scrollTop = 0;
+    readEdges();
+  }, [track.slug, readEdges]);
+
   useEffect(() => {
     if (current < 0 || !focus) {
       readEdges();
