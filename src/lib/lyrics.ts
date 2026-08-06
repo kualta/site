@@ -15,6 +15,8 @@ export function parseLrc(lrc: string): LyricLine[] {
     const stamps = [...raw.matchAll(/\[(\d+):(\d+)(?:\.(\d+))?\]/g)];
     if (stamps.length === 0) continue;
     const text = raw.replace(/\[[^\]]*\]/g, "").trim();
+    // silent stamps mark gaps and the end of the song; they are not words
+    if (!text) continue;
 
     for (const stamp of stamps) {
       const minutes = Number(stamp[1]);

@@ -254,19 +254,32 @@ html {
   }
 }
 
-/* the list itself dissolves at both ends of the panel */
+/* an edge only dissolves while it actually hides words */
 .lyrics-fade {
-  mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
 }
 
-/* empty space above and below the words: without it the opening and closing
-   lines are stuck against the panel edge, where the mask washes them out */
-.lyrics-runway {
-  flex: none;
-  /* the panel is roughly the viewport minus the page chrome, so this is ~45% of it */
-  height: 38vh;
-  pointer-events: none;
+.lyrics-fade.fade-top {
+  --fade-top: 14%;
+}
+
+.lyrics-fade.fade-bottom {
+  --fade-bottom: 14%;
 }
 
 .lyric-line {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Scrollable } from "@/components/Scrollable";
 import { activeLineIndex, parseLrc } from "@/lib/lyrics";
 import type { Track } from "@/types";
@@ -12,21 +12,21 @@ export function LyricsPanel({ track, time }: Props) {
   const lines = useMemo(() => (track.lyrics ? parseLrc(track.lyrics) : []), [track.lyrics]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLParagraphElement>(null);
-  const firstRef = useRef<HTMLParagraphElement>(null);
+  const [edges, setEdges] = useState({ top: false, bottom: false });
   const current = lines.length ? activeLineIndex(lines, time) : -1;
 
-  useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // only veil an edge that has words hidden behind it
+  const readEdges = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const top = container.scrollTop > 4;
+    const bottom = container.scrollTop + container.clientHeight < container.scrollHeight - 4;
+    setEdges((previous) => (previous.top === top && previous.bottom === bottom ? previous : { top, bottom }));
+  }, []);
 
-    // before the first line is sung, sit at the top of the words rather than
-    // in the empty run-up that lets later lines centre themselves
+  useEffect(() => {
     if (current < 0) {
-      const container = scrollRef.current;
-      const first = firstRef.current;
-      if (container && first) {
-        const offset = first.getBoundingClientRect().top - container.getBoundingClientRect().top;
-        container.scrollTop = container.scrollTop + offset - 8;
-      }
+      readEdges();
       return;
     }
 
@@ -35,10 +35,17 @@ export function LyricsPanel({ track, time }: Props) {
     const container = scrollRef.current;
     const line = activeRef.current;
     if (!container || !line) return;
+
     const offset = line.getBoundingClientRect().top - container.getBoundingClientRect().top;
     const top = container.scrollTop + offset - container.clientHeight / 2 + line.offsetHeight / 2;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     container.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
-  }, [current]);
+    readEdges();
+  }, [current, readEdges]);
+
+  useEffect(() => {
+    readEdges();
+  }, [readEdges]);
 
   if (!track.lyrics) {
     return (
@@ -58,22 +65,23 @@ export function LyricsPanel({ track, time }: Props) {
   }
 
   return (
-    <Scrollable className="lyrics-fade" ref={scrollRef}>
+    <Scrollable
+      ref={scrollRef}
+      onScroll={readEdges}
+      className={`lyrics-fade ${edges.top ? "fade-top" : ""} ${edges.bottom ? "fade-bottom" : ""}`}
+    >
       <div className="flex flex-col gap-2.5 text-base leading-snug">
-        {/* run-up and run-out, so the first and last lines can still centre */}
-        <div className="lyrics-runway" aria-hidden="true" />
         {lines.map((line, index) => (
           <p
             key={`${line.time}-${index}`}
-            ref={index === current ? activeRef : index === 0 ? firstRef : undefined}
+            ref={index === current ? activeRef : undefined}
             className={`lyric-line ${index === current ? "is-current" : ""}`}
             // the sung line is brightest, and the song dims away either side of it
             style={{ opacity: current < 0 ? 0.55 : Math.max(0.14, 1 - Math.abs(index - current) * 0.22) }}
           >
-            {line.text || "·"}
+            {line.text}
           </p>
         ))}
-        <div className="lyrics-runway" aria-hidden="true" />
       </div>
     </Scrollable>
   );
