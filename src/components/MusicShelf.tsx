@@ -333,17 +333,17 @@ export default function MusicShelf({ tracks }: Props) {
 
       <div
         className={`grid w-full grow md:h-[calc(100dvh-8rem)] md:min-h-0 ${
-          lyricsOpen ? "md:grid-cols-[26rem_minmax(0,1fr)_20rem]" : "md:grid-cols-[minmax(0,1fr)_20rem]"
+          lyricsOpen ? "md:grid-cols-[28rem_minmax(0,1fr)_22rem]" : "md:grid-cols-[minmax(0,1fr)_22rem]"
         }`}
       >
         {lyricsOpen && (
-          <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-3 p-6 md:order-none">
+          <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-4 p-8 md:order-none md:p-12">
             <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
             <LyricsPanel track={active} time={time} />
           </aside>
         )}
 
-        <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6">
+        <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-8">
           <div className="w-full max-w-[min(25rem,42vh)]" ref={deckRef}>
             <Vinyl
               track={active}
@@ -423,7 +423,7 @@ export default function MusicShelf({ tracks }: Props) {
           </div>
         </section>
 
-        <aside className="rail flex w-full min-h-0 flex-col gap-3 p-6">
+        <aside className="rail flex w-full min-h-0 flex-col gap-4 p-8 md:p-12">
           <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
 
           <div className="flex flex-wrap gap-1.5">

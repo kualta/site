@@ -210,14 +210,8 @@ html {
 }
 
 /* the records rail: pinned right, full height, its own scroll */
-.rail {
-  border-top: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
-}
-
 @media (min-width: 768px) {
   .rail {
-    border-top: none;
-    border-left: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
     max-height: 100%;
     overflow: hidden;
   }
@@ -253,24 +247,28 @@ html {
 }
 
 /* the words sit opposite the crate, so the deck keeps the middle */
-.lyrics-rail {
-  border-top: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
-}
-
 @media (min-width: 768px) {
   .lyrics-rail {
-    border-top: none;
-    border-right: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
     max-height: 100%;
     overflow: hidden;
   }
 }
 
+/* the list itself dissolves at both ends of the panel */
+.lyrics-fade {
+  mask-image: linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
+}
+
 .lyric-line {
-  color: color-mix(in oklab, var(--secondary-text) 75%, transparent);
+  color: var(--text);
   transition:
     color 220ms ease,
-    opacity 220ms ease;
+    opacity 320ms ease;
+}
+
+.dark .lyric-line {
+  color: var(--text-dark);
 }
 
 .lyric-line.is-current {

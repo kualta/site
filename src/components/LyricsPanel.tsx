@@ -37,13 +37,15 @@ export function LyricsPanel({ track, time }: Props) {
   }
 
   return (
-    <Scrollable>
+    <Scrollable className="lyrics-fade">
       <div className="flex flex-col gap-2.5 text-base leading-snug">
         {lines.map((line, index) => (
           <p
             key={`${line.time}-${index}`}
             ref={index === current ? activeRef : undefined}
             className={`lyric-line ${index === current ? "is-current" : ""}`}
+            // the sung line is brightest, and the song dims away either side of it
+            style={{ opacity: current < 0 ? 0.55 : Math.max(0.14, 1 - Math.abs(index - current) * 0.22) }}
           >
             {line.text || "·"}
           </p>
