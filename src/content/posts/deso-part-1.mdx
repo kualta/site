@@ -1,0 +1,121 @@
+---
+title: "Decentralized Social I"
+description: "on what not to do"
+date: "2025-12-31"
+publishedTime: "2025-12-31T06:00:00.000Z"
+modifiedTime: "2026-04-05T15:09:56.041Z"
+tags: ["deso", "ethereum"]
+preview: "/images/posts/deso-part-1/7a32ccc73c13.avif"
+---
+> "If you’re going to try, go all the way. Otherwise, don’t even start." - Charles Bukowski
+
+I have been full-time building decentralized social for the last two years. Here's what I've learnt about the people who build it and the things they often get wrong.
+
+It is incredibly easy to fall in love with this idea of decentralized social where _you the people_ own and control your own data, and not the platform.
+
+It is a mesmerisingly simple idea to take a multi-billion dollar industry and add a decentralization aspect to it, thinking once it's done people will have no choice but to use the better alternative because that's what feels ethically right to both the producer and consumer of the social media apparatus.
+
+And I think it's been really funny to see the contrast between the conviction of people building it and the absolute lack of enthusiasm from actual users.
+
+I find it adorable for both sides - how naively optimistic the builders are (me being one of them) thinking that once critical mass is reached everyone will switch from the _outdated and monopolistic_ web2 platforms and our new wonderful industry will thrive. Meanwhile actual users remain completely oblivious to the dangers of putting all of their data and lifetime into centralized servers under someone else's control.
+
+Don't get me wrong - deep, blind conviction is the only way to do it. Decentralized social is definitely worth pursuing. But it's been mostly disappointing how the real players with knowledge of how to run a business don't put any resources or effort toward a more decentralized, more user-owned alternative to their own creations from the mid-2000s.
+
+Not only is it not bothering them at all, it is actively being made fun of by most people in positions of power.
+
+And yet it is romantic to pursue something being ridiculed by the vocal majority. I think they will, inevitably, be forced to compete - or be absorbed into the shared network of protocols we are currently building.
+
+  
+
+The Network Effects
+===================
+
+If free market capitalism is good by letting people's ideas and executions compete against one another, network effects are the other side of this coin - letting nobody compete with a platform that has already established dominance in their niche. I wish I could blame some platform, but it really isn't even their doing. It's a natural human tendency to stay with your friends and use what they're already using. Inevitable. Doomed. But also the same thing that helps your startup grow if you do find PMF.
+
+Not only is it challenging to build a scalable and uncensorable network technologically, it is also absolutely unbearable to compete with the monstrosities that modern Twitter, Reddit, YouTube, Facebook, and others have grown into.
+
+You can outcompete a business. You cannot outcompete your friends who are already a decade-long users of these platforms and pull you back with every second you try to discover something new.
+
+Clear as night and day are the struggles against **network effects**, and yet we continue to build with the pursuit of something better. For that I want to commend all of my dear friends building different apps, on different protocols, on different networks.
+
+  
+
+Mastodon, ActivityPub & Matrix
+==============================
+
+I won't spend too much time discussing federated networks. I'm not particularly interested in them, and they seem to have found a niche of nerdy individuals who enjoy tinkering with new tech and running their own software on their GNU-certified fully open source brand-new Linux distros.
+
+They won't work for the same reason web1 didn't work - it assumes people care enough to run their own servers and host their own data.
+
+But people don't care. It's going to be a recurring theme in this article.
+
+No PMF is found here. We move on.
+
+  
+
+ATP & Bluesky
+=============
+
+Bluesky is an odd one out. It is the only one on this list that is not on-chain, yet has the most going for it to be a truly decentralized social network.
+
+Bluesky single-handedly made me question: does it truly have to be on-chain to be decentralized? (The answer is yes and I'll provide more arguments for it at the end, but we can pretend otherwise for now.)
+
+The Twitter exodus has been great to witness. Bluesky in a matter of days found an audience of left-leaning people who dislike Elon.
+
+Yet Bluesky is incredibly interesting from a technical perspective. It is beautifully built on top of the Internet. The maximalist crypto people often forget that when the Internet started, people were concerned with the same problems we face today.
+
+The AT Protocol (which Bluesky is built on) is incredibly well-architected, balancing Personal Data Servers with firehoses, labelers, and AppViews. It's really well thought out - in my mind it sits as a better take on previous federated networks.
+
+Although there are [arguments](https://gist.github.com/burningtree/d4aa172470293bdf2939c993cf48bbd4) that ATP infrastructure should be more ideologically neutral (which are reasonable), I think the decentralized identity built seriously on top of DNS is very pretty regardless.
+
+It's also compelling for businesses to launch on Bluesky because you don't need to prove you are your business - your domain is your public handle. Simple and beautiful.
+
+  
+
+Lens
+====
+
+I joined Lens around the same time the v2 version of the protocol went permissionless. It's the protocol I've spent most of my time building on and probably the one I have most knowledge of.
+
+First - one thing that was underappreciated is the v2 → v3 protocol migration. It was an engineering feat to migrate that much data from Polygon to zkSync. I wouldn't have bothered. They did.
+
+The protocol is quite simple and powerful. The original vision was to give you primitives out of the box - all loosely related, allowing arbitrary combinations, falling back to defaults if no custom behaviour is needed. In reality, the primitives were more limiting than enabling.
+
+Compared to Bluesky feeds (which act as arbitrary views on any collection of posts), Lens feeds are like boxes that hold only posts that were posted into them.
+
+The idea for a rule primitive was quite nice - asking for arbitrary Solidity checks to pass before allowing you to perform an action like posting into a feed or joining a group - but it never saw much adoption.
+
+Separating user wallet from user account allowed gassless posting as soon as you sign up. However, a single hop from EOA → Lens account every time you need the user's _real_ identity made the architecture hard to comprehend for both regular users and devs. We've gotten hundreds of "wdym my funds are not in my wallet" messages, and devs on Lens will probably keep getting them for years. This architectural decision was probably one of the worst ones - feeling correct on the surface but ending up more confusing than enabling. Any protocol aspiring to be Ethereum social must not work around UX flaws but rather aim to fix them.
+
+It's a big ask, so rather than a critique of the protocol it's more of a wider comment for the whole industry: in order to win, you may not bet against Ethereum.
+
+My biggest criticism of lens is that Avara (now Aave labs) clearly runs it as a lean start up, rather than giving it full time commitment it deserves.
+
+Some people think that decentralised social is a hard problem to solve - but in the reality it's not the case. In reality decentralized social is like 20 hard problems to solve. Treat it seriously and you will be rewarded - otherwise don't even start.
+
+  
+
+Farcaster
+=========
+
+Farcaster is another bet against Ethereum.
+
+![](/images/posts/deso-part-1/7a32ccc73c13.avif)
+
+Whoa wait a minute - isn't Farcaster the most popular Ethereum social?? Yes that's true, but what started as a CRDT - a highly inefficient data structure - turned into Snapchain, another unnecessary primitive that does not provide any value back to Ethereum.
+
+Let me be clear: there is no reason for Snapchain to be a blockchain-like network with custom transaction types - other than disbelief that Ethereum will scale.
+
+CRDT v1 shipped before Dencun. Snapchain shipped before Fusaka. The choices were not obvious at the time but they absolutely are now: Farcaster must be a general-purpose L2, benefiting from and contributing value back to the Ethereum ecosystem.
+
+"Farcaster lets anyone in the world create a new account with just an Ethereum wallet and an internet connection" - factually true, but practically untrue. As someone who registered an FID early on by hitting the hubs directly, I can attest that unless you use Farcaster the way Merkle intended (through their in-app wallet), it is basically impossible to communicate with the network.
+
+The reason is that the vast majority of apps don't bother integrating deeper than SIWF - which requires you to have the Merkle in-app wallet installed on your phone.
+
+Farcaster is not sufficiently decentralized. And sufficient decentralization shouldn't even be our goal. Every day we verify full Ethereum blocks in fewer and fewer seconds, bringing _true_ decentralization to Ethereum without sacrificing security or speed.
+
+It wasn't clear when Farcaster started, but it is painfully clear now: we can afford true decentralization and we don't need to settle for anything less.
+
+Never bet against Ethereum.
+
+Happy new year.

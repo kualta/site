@@ -12,11 +12,13 @@
     "check": "astro check",
     "format": "bunx @biomejs/biome format --write ./src",
     "lint": "bunx @biomejs/biome lint --apply-unsafe ./src",
-    "music:lyrics": "node scripts/fetch-lyrics.mjs"
+    "music:lyrics": "node scripts/fetch-lyrics.mjs",
+    "posts:import": "node scripts/import-paragraph.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
     "@astrojs/cloudflare": "^13.5.2",
+    "@astrojs/mdx": "6.0.3",
     "@astrojs/react": "^5.0.5",
     "@astrojs/sitemap": "^3.7.2",
     "@astrojs/tailwind": "^6.0.2",
@@ -26,8 +28,7 @@
     "@types/node": "18.14.6",
     "@types/react": "19.0.1",
     "@types/react-dom": "19.0.1",
-    "astro": "^6.3.3",
-    "marked": "^18.0.3",
+    "astro": "6.4.8",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-hot-toast": "^2.6.0",

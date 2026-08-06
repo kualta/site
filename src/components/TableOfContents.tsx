@@ -1,29 +1,27 @@
 import { useEffect, useState } from "react";
 
-interface Props {
-  toc: (string | null)[];
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
 }
 
-export default function TableOfContents({ toc }: Props) {
+interface Props {
+  headings: Heading[];
+}
+
+export default function TableOfContents({ headings }: Props) {
   const hash = useHash();
 
   return (
     <div className="top-10 left-16 fixed hidden lg:flex flex-col gap-3">
       <ol className="list-decimal">
-        {toc.map((element) => {
-          if (!element) return null;
-          const link = element
-            .replace(/[.,/#!$%^&*;:{}'=_`~()]/g, "")
-            .split(" ")
-            .join("-")
-            .slice(1)
-            .toLowerCase()
-            .replace(/^/, "#");
-          const text = element.replaceAll("#", "");
+        {headings.map((heading) => {
+          const link = `#${heading.slug}`;
           const className = hash === link ? " font-bold" : "";
           return (
-            <li key={link} className={className}>
-              <a href={link}>{text}</a>
+            <li key={heading.slug} className={className}>
+              <a href={link}>{heading.text}</a>
             </li>
           );
         })}

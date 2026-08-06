@@ -1,42 +1,27 @@
 import { defineConfig } from "astro/config";
-import { loadEnv } from "vite";
+import { readFileSync, readdirSync } from "node:fs";
+import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
 import tailwind from "@astrojs/tailwind";
 import sitemap from "@astrojs/sitemap";
 import cloudflare from "@astrojs/cloudflare";
 
 const SITE = "https://kualta.dev";
-const PARAGRAPH_API = "https://api.paragraph.com/api/v1";
-const env = { ...process.env, ...loadEnv(process.env.NODE_ENV ?? "production", process.cwd(), "PARAGRAPH_") };
+const POSTS_DIR = "./src/content/posts";
 
-async function fetchPostLastmod() {
-  const key = env.PARAGRAPH_API_KEY;
-  if (!key) return new Map();
-  const slug = env.PARAGRAPH_PUBLICATION_SLUG || "kualta";
-  try {
-    const pubRes = await fetch(`${PARAGRAPH_API}/publications/slug/${slug}`, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    if (!pubRes.ok) return new Map();
-    const pub = await pubRes.json();
-    const postsRes = await fetch(`${PARAGRAPH_API}/publications/${pub.id}/posts`, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    if (!postsRes.ok) return new Map();
-    const data = await postsRes.json();
-    const items = data.items ?? data;
-    return new Map(
-      items.map((p) => {
-        const ts = p.updatedAt ?? p.publishedAt;
-        return [p.slug, new Date(Number(ts)).toISOString()];
-      }),
-    );
-  } catch {
-    return new Map();
+/** last edit per post, read from frontmatter so the sitemap needs no network */
+function readPostLastmod() {
+  const entries = new Map();
+  for (const file of readdirSync(POSTS_DIR)) {
+    if (!/\.mdx?$/.test(file)) continue;
+    const source = readFileSync(`${POSTS_DIR}/${file}`, "utf8");
+    const stamp = source.match(/^(?:modifiedTime|publishedTime|date):\s*"?([^"\n]+)"?/m);
+    if (stamp) entries.set(file.replace(/\.mdx?$/, ""), new Date(stamp[1]).toISOString());
   }
+  return entries;
 }
 
-const postLastmod = await fetchPostLastmod();
+const postLastmod = readPostLastmod();
 
 export default defineConfig({
   site: SITE,
@@ -44,6 +29,7 @@ export default defineConfig({
   adapter: cloudflare({ imageService: "compile" }),
   integrations: [
     react(),
+    mdx(),
     tailwind({ applyBaseStyles: false }),
     sitemap({
       customPages: [
@@ -76,7 +62,6 @@ export default defineConfig({
   image: {
     remotePatterns: [
       { protocol: "https", hostname: "picsum.photos" },
-      { protocol: "https", hostname: "storage.googleapis.com" },
     ],
   },
   vite: {
