@@ -333,7 +333,7 @@ export default function MusicShelf({ tracks }: Props) {
 
       <div
         className={`grid w-full grow md:h-[calc(100dvh-8rem)] md:min-h-0 ${
-          lyricsOpen ? "md:grid-cols-[28rem_minmax(0,1fr)_22rem]" : "md:grid-cols-[minmax(0,1fr)_22rem]"
+          lyricsOpen ? "md:grid-cols-[24rem_minmax(0,1fr)_24rem]" : "md:grid-cols-[minmax(0,1fr)_24rem]"
         }`}
       >
         {lyricsOpen && (
