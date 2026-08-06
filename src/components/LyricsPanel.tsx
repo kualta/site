@@ -70,7 +70,8 @@ export function LyricsPanel({ track, time }: Props) {
       onScroll={readEdges}
       className={`lyrics-fade ${edges.top ? "fade-top" : ""} ${edges.bottom ? "fade-bottom" : ""}`}
     >
-      <div className="flex flex-col gap-2.5 text-base leading-snug">
+      {/* the words stop well short of the scrollbar rather than running into it */}
+      <div className="flex flex-col gap-2.5 pr-7 text-base leading-snug">
         {lines.map((line, index) => (
           <p
             key={`${line.time}-${index}`}
