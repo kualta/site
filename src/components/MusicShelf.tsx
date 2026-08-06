@@ -55,6 +55,7 @@ export default function MusicShelf({ tracks }: Props) {
   const seekTimer = useRef(0);
   const [filter, setFilter] = useState<Filter>("all");
   const [lyricsFocus, setLyricsFocus] = useState(true);
+  const [pane, setPane] = useState<"records" | "lyrics">("records");
   const scrub = useRef<{
     pointerId: number;
     lastAngle: number;
@@ -357,9 +358,13 @@ export default function MusicShelf({ tracks }: Props) {
       />
 
       <div
-        className="grid w-full grow md:h-[calc(100dvh-8rem)] md:min-h-0 md:grid-cols-[24rem_minmax(0,1fr)_24rem]"
+        className="grid w-full grow lg:h-[calc(100dvh-8rem)] lg:min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_19rem] xl:grid-cols-[23rem_minmax(0,1fr)_23rem]"
       >
-        <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-4 p-8 md:order-none md:p-12">
+        <aside
+          className={`lyrics-rail order-last max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:order-none lg:flex lg:max-h-none lg:p-12 ${
+            pane === "lyrics" ? "flex" : "hidden"
+          }`}
+        >
             <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
             <div className="flex flex-wrap gap-1.5">
               <label className="filter-chip flex w-fit cursor-pointer select-none items-center gap-2 rounded-full py-1 pl-1 pr-2.5 font-mono text-xs">
@@ -374,8 +379,8 @@ export default function MusicShelf({ tracks }: Props) {
             <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
         </aside>
 
-        <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-8">
-          <div className="w-full max-w-[min(25rem,42vh)]" ref={deckRef}>
+        <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6 lg:p-8">
+          <div className="w-full max-w-[min(25rem,42vh,78vw)]" ref={deckRef}>
             <Vinyl
               track={active}
               deck
@@ -444,9 +449,25 @@ export default function MusicShelf({ tracks }: Props) {
               <FiSkipForward />
             </button>
           </div>
+
+          <div className="flex gap-1.5 lg:hidden">
+            {(["records", "lyrics"] as const).map((name) => (
+              <button
+                key={name}
+                type="button"
+                className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${pane === name ? "is-on" : ""}`}
+                onClick={() => setPane(name)}
+                aria-pressed={pane === name}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
         </section>
 
-        <aside className="rail flex w-full min-h-0 flex-col gap-4 p-8 md:p-12">
+        <aside
+          className={`rail max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:flex lg:max-h-none lg:p-12 ${pane === "records" ? "flex" : "hidden"}`}
+        >
           <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
 
           <div className="flex flex-wrap gap-1.5">

@@ -295,7 +295,7 @@ html {
 }
 
 /* the records rail: pinned right, full height, its own scroll */
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .rail {
     max-height: 100%;
     overflow: hidden;
@@ -335,7 +335,7 @@ html {
 }
 
 /* the words sit opposite the crate, so the deck keeps the middle */
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .lyrics-rail {
     max-height: 100%;
     overflow: hidden;

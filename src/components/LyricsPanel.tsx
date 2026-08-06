@@ -47,6 +47,9 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
     const line = activeRef.current;
     if (!container || !line) return;
 
+    // nothing to follow if every line already fits on screen
+    if (container.scrollHeight <= container.clientHeight) return;
+
     const offset = line.getBoundingClientRect().top - container.getBoundingClientRect().top;
     const top = container.scrollTop + offset - container.clientHeight / 2 + line.offsetHeight / 2;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
