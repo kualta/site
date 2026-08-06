@@ -3,6 +3,7 @@ import { FiPause, FiPlay, FiSkipBack, FiSkipForward } from "react-icons/fi";
 import { LyricsPanel } from "@/components/LyricsPanel";
 import { Scrollable } from "@/components/Scrollable";
 import { Vinyl } from "@/components/Vinyl";
+import { AUTHOR } from "@/lib/credits";
 import { langFor } from "@/lib/script";
 import { ScratchDeck } from "@/lib/scratch";
 import type { Track } from "@/types";
@@ -480,11 +481,9 @@ export default function MusicShelf({ tracks }: Props) {
                     <div lang={langFor(track.title)} className="truncate text-sm font-medium leading-tight">
                       {track.title}
                     </div>
-                    {(track.originalArtist ?? track.album) && (
-                      <div className="truncate text-xs text-secondary-text">
-                        {track.originalArtist ?? track.album}
-                      </div>
-                    )}
+                    <div className="truncate text-xs text-secondary-text">
+                      {track.originalArtist ?? AUTHOR}
+                    </div>
                   </div>
                   <span className="shrink-0 font-mono text-xs tabular-nums text-secondary-text">
                     {formatTime(track.duration)}

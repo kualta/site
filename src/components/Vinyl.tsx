@@ -1,5 +1,23 @@
 import type { PointerEventHandler } from "react";
+import { AUTHOR } from "@/lib/credits";
 import type { Track } from "@/types";
+
+const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+const roman = (n: number) => ROMAN[n] ?? String(n);
+
+/**
+ * A long title has to shrink or it runs into the curve of the label. Size it by
+ * the longest word, since that is what cannot be broken across lines.
+ */
+function titleSize(title: string) {
+  const longest = Math.max(...title.split(/\s+/).map((word) => word.length), 1);
+  return `${Math.min(11.5, Math.max(7, 138 / longest))}cqw`;
+}
+
+/** the album sits on one line of its own, so size it by the whole string */
+function albumSize(album: string) {
+  return `${Math.min(7.4, Math.max(4.8, 118 / album.length))}cqw`;
+}
 
 interface Props {
   track: Track;
@@ -43,7 +61,25 @@ export function Vinyl({
         <div className={`vinyl-disc ${deck ? "is-deck" : ""} ${spinning ? "is-playing" : ""}`}>
           <div className="vinyl-grooves" />
           <div className="vinyl-label">
-            {track.cover ? (
+            {track.kind === "original" ? (
+              // a printed label: the spindle sits in the gap instead of through a word
+              <div key={track.slug} className="vinyl-label-print">
+                <span className="label-top">
+                  <span className="label-title" style={{ fontSize: titleSize(track.title) }}>
+                    {track.title}
+                  </span>
+                </span>
+                <span className="label-bottom">
+                  {track.album && (
+                    <span className="label-album" style={{ fontSize: albumSize(track.album) }}>
+                      {track.album}
+                    </span>
+                  )}
+                  {track.track ? <span className="label-part">part {roman(track.track)}</span> : null}
+                  <span className="label-author">{AUTHOR}</span>
+                </span>
+              </div>
+            ) : track.cover ? (
               // keyed so swapping records re-runs the label transition
               <img key={track.slug} src={track.cover} alt={`Cover art for ${track.title}`} loading="lazy" />
             ) : (
