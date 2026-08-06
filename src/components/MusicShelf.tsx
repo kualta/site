@@ -3,6 +3,7 @@ import { FiPause, FiPlay, FiSkipBack, FiSkipForward } from "react-icons/fi";
 import { LyricsPanel } from "@/components/LyricsPanel";
 import { Scrollable } from "@/components/Scrollable";
 import { Vinyl } from "@/components/Vinyl";
+import { langFor } from "@/lib/script";
 import { ScratchDeck } from "@/lib/scratch";
 import type { Track } from "@/types";
 
@@ -52,7 +53,6 @@ export default function MusicShelf({ tracks }: Props) {
   const [seeking, setSeeking] = useState(false);
   const seekTimer = useRef(0);
   const [filter, setFilter] = useState<Filter>("all");
-  const [lyricsOpen, setLyricsOpen] = useState(true);
   const [lyricsFocus, setLyricsFocus] = useState(true);
   const scrub = useRef<{
     pointerId: number;
@@ -356,25 +356,23 @@ export default function MusicShelf({ tracks }: Props) {
       />
 
       <div
-        className={`grid w-full grow md:h-[calc(100dvh-8rem)] md:min-h-0 ${
-          lyricsOpen ? "md:grid-cols-[24rem_minmax(0,1fr)_24rem]" : "md:grid-cols-[minmax(0,1fr)_24rem]"
-        }`}
+        className="grid w-full grow md:h-[calc(100dvh-8rem)] md:min-h-0 md:grid-cols-[24rem_minmax(0,1fr)_24rem]"
       >
-        {lyricsOpen && (
-          <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-4 p-8 md:order-none md:p-12">
+        <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-4 p-8 md:order-none md:p-12">
             <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
-            <label className="flex w-fit cursor-pointer select-none items-center gap-2 font-mono text-xs text-secondary-text">
+            <div className="flex flex-wrap gap-1.5">
+              <label className="flex w-fit cursor-pointer select-none items-center gap-2 rounded-full border border-transparent px-2.5 py-1 font-mono text-xs text-secondary-text">
               <input
                 type="checkbox"
                 className="focus-check"
                 checked={lyricsFocus}
                 onChange={(event) => setLyricsFocus(event.target.checked)}
               />
-              focus
-            </label>
+                focus sync
+              </label>
+            </div>
             <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
-          </aside>
-        )}
+        </aside>
 
         <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-8">
           <div className="w-full max-w-[min(25rem,42vh)]" ref={deckRef}>
@@ -392,7 +390,9 @@ export default function MusicShelf({ tracks }: Props) {
           </div>
 
           <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
-            <h2 className="text-2xl font-medium leading-tight">{active.title}</h2>
+            <h2 lang={langFor(active.title)} className="text-2xl font-medium leading-tight">
+              {active.title}
+            </h2>
             <p className="text-sm text-secondary-text">
               {[active.artist, active.album, active.date.slice(0, 4)].filter(Boolean).join(" · ")}
             </p>
@@ -443,14 +443,6 @@ export default function MusicShelf({ tracks }: Props) {
             >
               <FiSkipForward />
             </button>
-            <button
-              type="button"
-              className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${lyricsOpen ? "is-on" : ""}`}
-              onClick={() => setLyricsOpen((open) => !open)}
-              aria-pressed={lyricsOpen}
-            >
-              lyrics
-            </button>
           </div>
         </section>
 
@@ -486,7 +478,9 @@ export default function MusicShelf({ tracks }: Props) {
                     <Vinyl track={track} spinning={track.slug === activeSlug && playing} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium leading-tight">{track.title}</div>
+                    <div lang={langFor(track.title)} className="truncate text-sm font-medium leading-tight">
+                      {track.title}
+                    </div>
                     {track.originalArtist && (
                       <div className="truncate text-xs text-secondary-text">{track.originalArtist}</div>
                     )}

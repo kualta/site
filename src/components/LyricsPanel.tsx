@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Scrollable } from "@/components/Scrollable";
 import { activeLineIndex, parseLrc } from "@/lib/lyrics";
+import { langFor } from "@/lib/script";
 import type { Track } from "@/types";
 
 interface Props {
@@ -93,6 +94,7 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
             key={`${line.time}-${index}`}
             ref={index === current ? (activeRef as React.Ref<HTMLButtonElement>) : undefined}
             type="button"
+            lang={langFor(line.text)}
             className={`lyric-line text-left ${index === current ? "is-current" : ""}`}
             // the sung line is brightest, and the song dims away either side of it
             style={{ opacity: opacityFor(index) }}

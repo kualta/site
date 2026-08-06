@@ -96,7 +96,7 @@ async function main() {
       slug,
       // tags win over the filename, hand edits in music.json win over both
       title: previous?.title ?? common.title ?? titleize(slug),
-      artist: previous?.artist ?? common.artist ?? "kualta",
+      artist: previous?.artist ?? common.artist ?? "K.U",
       album: previous?.album ?? common.album ?? null,
       // a TOPE tag means someone else got there first
       originalArtist: previous?.originalArtist ?? common.originalartist ?? null,

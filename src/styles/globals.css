@@ -1,11 +1,23 @@
 @import "@fontsource/fredoka/400.css";
+/* Fredoka carries no Cyrillic and no CJK; these two cover the rest */
+@import "@fontsource/m-plus-rounded-1c/400.css";
+@import "@fontsource/m-plus-rounded-1c/500.css";
+@import "@fontsource/huninn/400.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html,
 body {
-  font-family: "Fredoka", system-ui, -apple-system, sans-serif;
+  font-family: "Fredoka", "M PLUS Rounded 1c", "Huninn", system-ui, -apple-system, sans-serif;
+}
+
+/* Han characters live in both faces, so Chinese has to ask for Huninn by name
+   or it renders in M PLUS's Japanese glyph forms */
+:lang(zh),
+:lang(zh-Hant),
+:lang(zh-TW) {
+  font-family: "Fredoka", "Huninn", "M PLUS Rounded 1c", system-ui, -apple-system, sans-serif;
 }
 
 :root {
