@@ -57,6 +57,15 @@ async function main() {
   await mkdir(coverDir, { recursive: true });
 
   const existing = await readExisting();
+
+  // the timestamped copy rides in a TXXX frame; USLT holds the plain words
+  const readLyrics = (metadata) => {
+    for (const tags of Object.values(metadata.native ?? {})) {
+      const synced = tags.find((tag) => tag.id === "TXXX:LYRICS_SYNCED");
+      if (synced?.value) return String(synced.value);
+    }
+    return metadata.common.lyrics?.[0]?.text?.trim() || null;
+  };
   const files = (await readdir(audioDir)).filter((file) => AUDIO.test(file)).sort();
   const tracks = [];
   let embedded = 0;
@@ -65,7 +74,8 @@ async function main() {
   for (const file of files) {
     const slug = slugify(path.basename(file, path.extname(file)));
     const previous = existing.get(slug);
-    const { common, format } = await parseFile(path.join(audioDir, file), { duration: true });
+    const metadata = await parseFile(path.join(audioDir, file), { duration: true });
+    const { common, format } = metadata;
 
     let cover = null;
     const picture = selectCover(common.picture);
@@ -91,6 +101,7 @@ async function main() {
       // a TOPE tag means someone else got there first
       originalArtist: previous?.originalArtist ?? common.originalartist ?? null,
       kind: previous?.kind ?? (common.originalartist ? "cover" : "original"),
+      lyrics: readLyrics(metadata),
       date: previous?.date ?? (common.year ? `${common.year}-01-01` : new Date().toISOString().slice(0, 10)),
       duration: Math.round(format.duration ?? previous?.duration ?? 0),
       src: `/music/${file}`,
@@ -98,7 +109,10 @@ async function main() {
     });
 
     const source = picture ? "embedded" : cover ? "fallback" : "none";
-    console.log(`[music] ${slug.padEnd(22)} ${String(Math.round(format.duration ?? 0)).padStart(4)}s  art: ${source}`);
+    const words = readLyrics(metadata);
+    console.log(
+      `[music] ${slug.padEnd(22)} ${String(Math.round(format.duration ?? 0)).padStart(4)}s  art: ${source.padEnd(8)} lyrics: ${words ? (words.includes("[") ? "synced" : "plain") : "none"}`,
+    );
   }
 
   tracks.sort((a, b) => b.date.localeCompare(a.date));

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FiPause, FiPlay, FiSkipBack, FiSkipForward } from "react-icons/fi";
 import { LyricsPanel } from "@/components/LyricsPanel";
+import { Scrollable } from "@/components/Scrollable";
 import { Vinyl } from "@/components/Vinyl";
 import { ScratchDeck } from "@/lib/scratch";
 import type { Track } from "@/types";
@@ -332,7 +333,7 @@ export default function MusicShelf({ tracks }: Props) {
 
       <div
         className={`grid w-full grow md:h-[calc(100dvh-8rem)] md:min-h-0 ${
-          lyricsOpen ? "md:grid-cols-[18rem_minmax(0,1fr)_20rem]" : "md:grid-cols-[minmax(0,1fr)_20rem]"
+          lyricsOpen ? "md:grid-cols-[26rem_minmax(0,1fr)_20rem]" : "md:grid-cols-[minmax(0,1fr)_20rem]"
         }`}
       >
         {lyricsOpen && (
@@ -438,6 +439,7 @@ export default function MusicShelf({ tracks }: Props) {
               </button>
             ))}
           </div>
+          <Scrollable>
           <ul className="queue flex w-full flex-col gap-1">
             {shown.map((track) => (
               <li key={track.slug}>
@@ -460,6 +462,7 @@ export default function MusicShelf({ tracks }: Props) {
               </li>
             ))}
           </ul>
+          </Scrollable>
           {shown.length === 0 && (
             <p className="font-mono text-xs text-secondary-text">no {filter === "cover" ? "covers" : "originals"} yet</p>
           )}

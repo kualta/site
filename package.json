@@ -11,7 +11,8 @@
     "preview": "astro preview",
     "check": "astro check",
     "format": "bunx @biomejs/biome format --write ./src",
-    "lint": "bunx @biomejs/biome lint --apply-unsafe ./src"
+    "lint": "bunx @biomejs/biome lint --apply-unsafe ./src",
+    "music:lyrics": "node scripts/fetch-lyrics.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
@@ -38,6 +39,7 @@
     "@tailwindcss/typography": "^0.5.9",
     "autoprefixer": "^10.4.13",
     "music-metadata": "^11.14.0",
+    "node-id3": "^0.2.9",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.2.7"
   },
