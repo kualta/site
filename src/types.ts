@@ -12,6 +12,7 @@ export interface Track {
   slug: string;
   title: string;
   artist: string;
+  album: string | null;
   date: string;
   duration: number;
   src: string;

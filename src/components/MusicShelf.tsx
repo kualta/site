@@ -30,7 +30,7 @@ function formatTime(seconds: number) {
 
 export default function MusicShelf({ tracks }: Props) {
   // a record is always on the platter, cued but silent until asked
-  const [activeId, setActiveId] = useState<number | null>(tracks[0]?.id ?? null);
+  const [activeSlug, setActiveSlug] = useState<string | null>(tracks[0]?.slug ?? null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -53,9 +53,9 @@ export default function MusicShelf({ tracks }: Props) {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const deckRef = useRef<HTMLDivElement>(null);
-  const spinReadyFor = useRef<number | null>(null);
+  const spinReadyFor = useRef<string | null>(null);
 
-  const active = tracks.find((track) => track.id === activeId) ?? null;
+  const active = tracks.find((track) => track.slug === activeSlug) ?? null;
 
   const load = useCallback((track: Track) => {
     const audio = audioRef.current;
@@ -69,7 +69,7 @@ export default function MusicShelf({ tracks }: Props) {
   const open = useCallback(
     (track: Track) => {
       load(track);
-      setActiveId(track.id);
+      setActiveSlug(track.slug);
       setTime(0);
       setDuration(track.duration);
       setScrubAngle(0);
@@ -80,7 +80,7 @@ export default function MusicShelf({ tracks }: Props) {
   const step = useCallback(
     (delta: number) => {
       if (!active) return;
-      const index = tracks.findIndex((track) => track.id === active.id);
+      const index = tracks.findIndex((track) => track.slug === active.slug);
       const next = tracks[(index + delta + tracks.length) % tracks.length];
       open(next);
     },
@@ -128,9 +128,9 @@ export default function MusicShelf({ tracks }: Props) {
 
     const ramp = (spin: Animation) => {
       // a record that just landed on the platter is always at rest first
-      if (spinReadyFor.current !== activeId) {
+      if (spinReadyFor.current !== active?.slug) {
         spin.playbackRate = 0;
-        spinReadyFor.current = activeId;
+        spinReadyFor.current = active?.slug ?? null;
       }
 
       // a hand on the record stops it dead, it does not coast
@@ -168,7 +168,7 @@ export default function MusicShelf({ tracks }: Props) {
 
     findSpin();
     return () => cancelAnimationFrame(frame);
-  }, [playing, activeId, scrubbing]);
+  }, [playing, activeSlug, scrubbing, active]);
 
   useEffect(() => {
     if (!active || !("mediaSession" in navigator)) return;
@@ -333,7 +333,7 @@ export default function MusicShelf({ tracks }: Props) {
           <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
             <h2 className="text-2xl font-medium leading-tight">{active.title}</h2>
             <p className="text-sm text-secondary-text">
-              {active.artist} · {active.date.slice(0, 4)}
+              {[active.artist, active.album, active.date.slice(0, 4)].filter(Boolean).join(" · ")}
             </p>
           </div>
 
@@ -389,17 +389,17 @@ export default function MusicShelf({ tracks }: Props) {
           <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
           <ul className="queue flex w-full flex-col gap-1">
             {tracks.map((track) => (
-              <li key={track.id}>
+              <li key={track.slug}>
                 <button
                   type="button"
                   className={`queue-item flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-transform active:scale-[0.98] ${
-                    track.id === activeId ? "is-current" : ""
+                    track.slug === activeSlug ? "is-current" : ""
                   }`}
                   onClick={() => open(track)}
-                  aria-current={track.id === activeId}
+                  aria-current={track.slug === activeSlug}
                 >
                   <div className="w-12 shrink-0">
-                    <Vinyl track={track} spinning={track.id === activeId && playing} />
+                    <Vinyl track={track} spinning={track.slug === activeSlug && playing} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium leading-tight">{track.title}</div>

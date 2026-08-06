@@ -81,11 +81,13 @@ async function main() {
     }
 
     tracks.push({
-      id: previous?.id ?? tracks.length + 1,
+      // positional, never carried over: a stale id can collide with a fresh one
+      id: tracks.length + 1,
       slug,
       // tags win over the filename, hand edits in music.json win over both
       title: previous?.title ?? common.title ?? titleize(slug),
       artist: previous?.artist ?? common.artist ?? "kualta",
+      album: previous?.album ?? common.album ?? null,
       date: previous?.date ?? (common.year ? `${common.year}-01-01` : new Date().toISOString().slice(0, 10)),
       duration: Math.round(format.duration ?? previous?.duration ?? 0),
       src: `/music/${file}`,
