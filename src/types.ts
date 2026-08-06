@@ -7,6 +7,25 @@ export interface Contact {
   is_main: boolean;
 }
 
+export interface Track {
+  id: number;
+  slug: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  /** who released it first, when this is someone else's song */
+  originalArtist: string | null;
+  kind: "cover" | "original";
+  /** position within its album, so multi-part works stay in order */
+  track: number | null;
+  /** LRC when timestamped, plain text otherwise, read from the file's tags */
+  lyrics: string | null;
+  date: string;
+  duration: number;
+  src: string;
+  cover: string | null;
+}
+
 export interface Project {
   id: number;
   name: string;

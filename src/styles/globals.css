@@ -1,11 +1,23 @@
 @import "@fontsource/fredoka/400.css";
+/* Fredoka carries no Cyrillic and no CJK; these two cover the rest */
+@import "@fontsource/m-plus-rounded-1c/500.css";
+@import "@fontsource/m-plus-rounded-1c/700.css";
+@import "@fontsource/huninn/400.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html,
 body {
-  font-family: "Fredoka", system-ui, -apple-system, sans-serif;
+  font-family: "Fredoka", "M PLUS Rounded 1c", "Huninn", system-ui, -apple-system, sans-serif;
+}
+
+/* Han characters live in both faces, so Chinese has to ask for Huninn by name
+   or it renders in M PLUS's Japanese glyph forms */
+:lang(zh),
+:lang(zh-Hant),
+:lang(zh-TW) {
+  font-family: "Fredoka", "Huninn", "M PLUS Rounded 1c", system-ui, -apple-system, sans-serif;
 }
 
 :root {
@@ -51,6 +63,577 @@ html {
   background: linear-gradient(var(--secondary), var(--secondary)) padding-box, 
               linear-gradient(45deg, #ff33ccee, #cc77ffee) border-box;
   border: 1px solid transparent;
+}
+
+/* --- vinyl --- */
+
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* a 33 1/3 rpm record turns once every 1.8s */
+  --vinyl-rpm: 1.8s;
+}
+
+.vinyl {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+/* the record on the deck can be grabbed and turned by hand */
+.vinyl-deck {
+  cursor: grab;
+  touch-action: none;
+}
+
+.vinyl-deck.is-scrubbing {
+  cursor: grabbing;
+}
+
+/* hand rotation lives here so it composes with the playback spin below it */
+.vinyl-scrub {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+/* a hand turns the record instantly; a jump in the song coasts it round */
+.vinyl-scrub.is-seeking {
+  transition: transform 620ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vinyl-scrub.is-seeking {
+    transition: none;
+  }
+}
+
+.vinyl-disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: vinyl-spin var(--vinyl-rpm) linear infinite;
+  animation-play-state: paused;
+}
+
+/* the deck keeps its animation live so JS can ramp playbackRate up and down */
+.vinyl-disc.is-deck {
+  animation-play-state: running;
+}
+
+/* only the record that is actually turning earns a compositing layer */
+.vinyl-disc.is-playing {
+  animation-play-state: running;
+  will-change: transform;
+}
+
+@keyframes vinyl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vinyl-disc {
+    animation-duration: 14s;
+  }
+}
+
+.vinyl-grooves {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      #0d0d0f 0px, #0d0d0f 1px,
+      #17171a 1px, #17171a 2px,
+      #0b0b0d 2px, #0b0b0d 3.4px
+    ),
+    radial-gradient(circle at 50% 50%, #1c1c20 0%, #101013 62%, #050506 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* the grooves turn underneath; the highlight stays put */
+.vinyl-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: conic-gradient(
+    from 210deg,
+    rgba(255, 255, 255, 0) 0deg,
+    rgba(255, 255, 255, 0.16) 32deg,
+    rgba(255, 255, 255, 0) 74deg,
+    rgba(255, 255, 255, 0) 180deg,
+    rgba(255, 255, 255, 0.09) 214deg,
+    rgba(255, 255, 255, 0) 258deg,
+    rgba(255, 255, 255, 0) 360deg
+  );
+}
+
+.vinyl-label {
+  position: absolute;
+  inset: 24%;
+  border-radius: 50%;
+  overflow: hidden;
+  /* the label always sits on black grooves, so the edge needs a light hairline */
+  box-shadow: 0 0 0 1px oklch(1 0 0 / 0.1);
+}
+
+.vinyl-label img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* a printed label, set in the score's own serif and sized off the label itself */
+.vinyl-label {
+  container-type: size;
+}
+
+.vinyl-label-print {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12%;
+  text-align: center;
+  font-family: "Times New Roman", Times, serif;
+  line-height: 1.12;
+  color: #191817;
+  background-color: #e7e4e3;
+}
+
+/* each half owns its side of the spindle, so the hole never lands on a word */
+.label-top,
+.label-bottom {
+  display: flex;
+  width: 100%;
+  height: 50%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.label-top {
+  justify-content: flex-end;
+  padding-bottom: 7cqw;
+}
+
+.label-bottom {
+  justify-content: flex-start;
+  padding-top: 7cqw;
+}
+
+.label-title {
+  /* the component sizes this by title length; this is the fallback */
+  font-size: 11.5cqw;
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.label-album {
+  font-size: 7.4cqw;
+}
+
+.label-part {
+  font-size: 6.2cqw;
+  opacity: 0.8;
+}
+
+.label-author {
+  margin-top: 2.5cqw;
+  font-size: 6.6cqw;
+  opacity: 0.75;
+}
+
+/* a blank pressing: flat paper stock, same in both themes */
+.vinyl-label-fallback {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14%;
+  text-align: center;
+  font-size: 0.6rem;
+  line-height: 1.15;
+  color: #191817;
+  background-color: #e7e4e3;
+}
+
+.vinyl-spindle {
+  position: absolute;
+  inset: 48.4%;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.dark .vinyl-spindle {
+  background: var(--bg-dark);
+}
+
+.vinyl-seek {
+  appearance: none;
+  height: 3px;
+  border-radius: 2px;
+  cursor: pointer;
+  background-color: color-mix(in oklab, var(--secondary-text) 45%, transparent);
+  background-image: linear-gradient(var(--text), var(--text));
+  background-repeat: no-repeat;
+  background-size: var(--vinyl-progress, 0%) 100%;
+}
+
+.dark .vinyl-seek {
+  background-image: linear-gradient(var(--text-dark), var(--text-dark));
+}
+
+/* the records rail: pinned right, full height, its own scroll */
+@media (min-width: 1024px) {
+  .rail {
+    max-height: 100%;
+    overflow: hidden;
+  }
+}
+
+/* the site hides scrollbars everywhere; these panels earn one back */
+.pretty-scroll {
+  overflow-y: auto;
+  /* setting one axis makes the other compute to auto, and the entry animation
+     slides rows in from the right, which would flash a horizontal scrollbar */
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--secondary-text) 45%, transparent) transparent;
+}
+
+.pretty-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.pretty-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pretty-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  /* the transparent border keeps the thumb slim without shrinking the hit area */
+  border: 3px solid transparent;
+  background-clip: content-box;
+  background-color: color-mix(in oklab, var(--secondary-text) 40%, transparent);
+  transition: background-color 200ms ease;
+}
+
+.pretty-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--secondary-text) 75%, transparent);
+}
+
+/* the words sit opposite the crate, so the deck keeps the middle */
+@media (min-width: 1024px) {
+  .lyrics-rail {
+    max-height: 100%;
+    overflow: hidden;
+  }
+}
+
+/* an edge only dissolves while it actually hides words */
+.lyrics-fade {
+  --fade-top: 0px;
+  --fade-bottom: 0px;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+}
+
+.lyrics-fade.fade-top {
+  --fade-top: 14%;
+}
+
+.lyrics-fade.fade-bottom {
+  --fade-bottom: 14%;
+}
+
+.lyric-line {
+  color: var(--text);
+  transition:
+    color 220ms ease,
+    opacity 320ms ease;
+}
+
+.dark .lyric-line {
+  color: var(--text-dark);
+}
+
+.lyric-line.is-current {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.dark .lyric-line.is-current {
+  color: var(--text-dark);
+}
+
+/* the site's checkbox: a round pill that fills in when ticked */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--secondary-text) 55%, transparent);
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 68%;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  input[type="checkbox"]:hover {
+    border-color: var(--secondary-text);
+  }
+}
+
+input[type="checkbox"]:checked {
+  border-color: transparent;
+  background-color: var(--text);
+  /* the tick is drawn in the page colour, so it reads as a hole in the pill */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3 4.9 8.6 9.4 3.7' fill='none' stroke='%23f8f8f8' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.dark input[type="checkbox"]:checked {
+  background-color: var(--text-dark);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3 4.9 8.6 9.4 3.7' fill='none' stroke='%23181818' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--secondary-text);
+  outline-offset: 2px;
+}
+
+/* a lyric is a control now, so it at least takes a pointer */
+.lyric-line {
+  cursor: pointer;
+}
+
+.filter-chip {
+  color: var(--secondary-text);
+  border: 1px solid color-mix(in oklab, var(--secondary-text) 30%, transparent);
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.filter-chip:hover {
+  color: var(--text);
+}
+
+.dark .filter-chip:hover {
+  color: var(--text-dark);
+}
+
+.filter-chip.is-on {
+  color: var(--bg);
+  background-color: var(--text);
+  border-color: transparent;
+}
+
+.dark .filter-chip.is-on {
+  color: var(--bg-dark);
+  background-color: var(--text-dark);
+}
+
+.queue-item.is-current {
+  background-color: color-mix(in oklab, var(--secondary-text) 18%, transparent);
+}
+
+/* the column of records beside the deck */
+.queue > li {
+  animation: queue-in 300ms var(--ease-out) both;
+}
+
+.queue > li:nth-child(2) { animation-delay: 40ms; }
+.queue > li:nth-child(3) { animation-delay: 80ms; }
+.queue > li:nth-child(4) { animation-delay: 120ms; }
+.queue > li:nth-child(5) { animation-delay: 160ms; }
+.queue > li:nth-child(n + 6) { animation-delay: 200ms; }
+
+@keyframes queue-in {
+  from {
+    opacity: 0;
+    /* inward from the rail's own padding: sliding the other way would push the
+       rows past the right edge and ask for a horizontal scrollbar */
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.queue-item {
+  transition:
+    transform 200ms var(--ease-out),
+    background-color 200ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .queue-item:hover {
+    background-color: color-mix(in oklab, var(--secondary-text) 14%, transparent);
+  }
+
+  .queue-item:hover .vinyl {
+    transform: scale(1.06);
+  }
+}
+
+.queue-item .vinyl {
+  transition: transform 200ms var(--ease-out);
+}
+
+/* swapping records crossfades the label instead of cutting to it */
+.vinyl-deck .vinyl-label > * {
+  animation: label-in 260ms var(--ease-out) both;
+}
+
+@keyframes label-in {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+/* a solid transport key: ink on paper, inverted per theme */
+.play-button {
+  background-color: var(--text);
+  color: var(--bg);
+  transition:
+    transform 140ms var(--ease-out),
+    opacity 200ms ease;
+}
+
+.dark .play-button {
+  background-color: var(--text-dark);
+  color: var(--bg-dark);
+}
+
+.play-button:hover {
+  opacity: 0.85;
+}
+
+.icon-swap {
+  --icon-nudge: 0px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateX(var(--icon-nudge)) scale(0.25);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    filter 200ms var(--ease-out);
+}
+
+.icon-swap.is-shown {
+  opacity: 1;
+  filter: blur(0px);
+  transform: translateX(var(--icon-nudge)) scale(1);
+}
+
+/* the play triangle reads centered only when nudged off geometric center */
+.icon-play {
+  --icon-nudge: 1px;
+}
+
+/* reduced motion keeps the fades that explain state, drops everything that moves */
+@media (prefers-reduced-motion: reduce) {
+  .queue > li,
+  .vinyl-deck .vinyl-label > * {
+    animation: reduced-fade 160ms ease both;
+  }
+
+  .crate-item:hover .vinyl,
+  .vinyl-seek:active::-webkit-slider-thumb,
+  .vinyl-seek:active::-moz-range-thumb {
+    transform: none;
+  }
+
+  .icon-swap {
+    transition-duration: 1ms;
+  }
+
+  @keyframes reduced-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+.vinyl-seek::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background-color: var(--text);
+  transition: transform 140ms var(--ease-out);
+}
+
+.dark .vinyl-seek::-webkit-slider-thumb {
+  background-color: var(--text-dark);
+}
+
+.vinyl-seek:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+
+.vinyl-seek::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--text);
+  transition: transform 140ms var(--ease-out);
+}
+
+.dark .vinyl-seek::-moz-range-thumb {
+  background-color: var(--text-dark);
+}
+
+.vinyl-seek:active::-moz-range-thumb {
+  transform: scale(1.25);
 }
 
 .noise {

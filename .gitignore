@@ -22,6 +22,9 @@
 
 /.next/
 /out/
+
+# cover art is extracted from the audio files at build time
+/public/music/covers/
 .DS_Store
 *.pem
 npm-debug.log*

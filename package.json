@@ -5,12 +5,14 @@
   "author": "kualta <contact@kualta.dev>",
   "private": true,
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "dev": "bun run music:sync && astro dev",
+    "build": "bun run music:sync && astro build",
+    "music:sync": "node scripts/sync-music.mjs",
     "preview": "astro preview",
     "check": "astro check",
     "format": "bunx @biomejs/biome format --write ./src",
-    "lint": "bunx @biomejs/biome lint --apply-unsafe ./src"
+    "lint": "bunx @biomejs/biome lint --apply-unsafe ./src",
+    "music:lyrics": "node scripts/fetch-lyrics.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
@@ -19,6 +21,8 @@
     "@astrojs/sitemap": "^3.7.2",
     "@astrojs/tailwind": "^6.0.2",
     "@fontsource/fredoka": "^5.2.10",
+    "@fontsource/huninn": "^5.3.0",
+    "@fontsource/m-plus-rounded-1c": "^5.3.0",
     "@types/node": "18.14.6",
     "@types/react": "19.0.1",
     "@types/react-dom": "19.0.1",
@@ -36,6 +40,8 @@
     "@biomejs/biome": "1.4.1",
     "@tailwindcss/typography": "^0.5.9",
     "autoprefixer": "^10.4.13",
+    "music-metadata": "^11.14.0",
+    "node-id3": "^0.2.9",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.2.7"
   },
