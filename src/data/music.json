@@ -1,5 +1,35 @@
 [
   {
+    "id": 1,
+    "slug": "almost-gone",
+    "title": "Almost Gone",
+    "artist": "My Terrible Friend",
+    "date": "2026-08-06",
+    "duration": 221,
+    "src": "/music/almost-gone.mp3",
+    "cover": "/music/covers/almost-gone.jpg"
+  },
+  {
+    "id": 3,
+    "slug": "dark-night",
+    "title": "Dark Night",
+    "artist": "kualta",
+    "date": "2026-08-06",
+    "duration": 169,
+    "src": "/music/dark-night.mp3",
+    "cover": "/music/covers/dark-night.jpg"
+  },
+  {
+    "id": 9,
+    "slug": "recently",
+    "title": "recently",
+    "artist": "kualta",
+    "date": "2026-08-06",
+    "duration": 135,
+    "src": "/music/recently.mp3",
+    "cover": "/music/covers/recently.jpg"
+  },
+  {
     "id": 2,
     "slug": "moonlit-green-cairn",
     "title": "Moonlit Green Cairn",
