@@ -305,6 +305,9 @@ html {
 /* the site hides scrollbars everywhere; these panels earn one back */
 .pretty-scroll {
   overflow-y: auto;
+  /* setting one axis makes the other compute to auto, and the entry animation
+     slides rows in from the right, which would flash a horizontal scrollbar */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklab, var(--secondary-text) 45%, transparent) transparent;
@@ -480,7 +483,9 @@ input[type="checkbox"]:focus-visible {
 @keyframes queue-in {
   from {
     opacity: 0;
-    transform: translateX(8px);
+    /* inward from the rail's own padding: sliding the other way would push the
+       rows past the right edge and ask for a horizontal scrollbar */
+    transform: translateX(-8px);
   }
   to {
     opacity: 1;
