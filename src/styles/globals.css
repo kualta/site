@@ -651,3 +651,8 @@ input[type="checkbox"]:focus-visible {
 .dark .noise {
   filter: invert(0.6);
 }
+
+/* table-of-contents links should not land flush against the top edge */
+.prose :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 1.5rem;
+}

@@ -1,4 +1,5 @@
-import { fetchPublicationPosts, fetchPostBySlug } from "./paragraph";
+import { getCollection, getEntry, render } from "astro:content";
+import type { CollectionEntry } from "astro:content";
 
 export interface PostMetadata {
   title: string;
@@ -16,47 +17,34 @@ function extractFirstImage(markdown: string): string | undefined {
   return match?.[1];
 }
 
+function toMetadata(entry: CollectionEntry<"posts">): PostMetadata {
+  const published = entry.data.publishedTime ?? new Date(entry.data.date).toISOString();
+  return {
+    title: entry.data.title,
+    description: entry.data.description,
+    date: entry.data.date,
+    publishedTime: published,
+    modifiedTime: entry.data.modifiedTime ?? published,
+    tags: entry.data.tags,
+    filename: entry.id,
+    preview: entry.data.preview || extractFirstImage(entry.body ?? "") || "",
+  };
+}
+
+/** newest first, drafts left out of the build */
+export async function getPosts(): Promise<CollectionEntry<"posts">[]> {
+  const posts = await getCollection("posts", ({ data }) => !data.draft);
+  return posts.sort((a, b) => b.data.date.localeCompare(a.data.date));
+}
+
 export async function getPostsMetadata(): Promise<PostMetadata[]> {
-  const posts = await fetchPublicationPosts();
-  return posts.map((post) => {
-    const published = new Date(Number(post.publishedAt)).toISOString();
-    const updated = post.updatedAt
-      ? new Date(Number(post.updatedAt)).toISOString()
-      : published;
-    return {
-      title: post.title,
-      description: post.subtitle,
-      date: published.split("T")[0],
-      publishedTime: published,
-      modifiedTime: updated,
-      tags: post.categories,
-      filename: post.slug,
-      preview: post.imageUrl || extractFirstImage(post.markdown ?? "") || "",
-    };
-  });
+  return (await getPosts()).map(toMetadata);
 }
 
 export async function getPostContent(slug: string) {
-  const post = await fetchPostBySlug(slug);
-  if (!post) return null;
-  const markdown = post.markdown ?? "";
-  const toc = markdown.split(/\r?\n/).filter((line) => line.startsWith("#"));
-  const preview = post.imageUrl || extractFirstImage(markdown) || "";
-  const published = new Date(Number(post.publishedAt)).toISOString();
-  const updated = post.updatedAt
-    ? new Date(Number(post.updatedAt)).toISOString()
-    : published;
-  return {
-    data: {
-      title: post.title,
-      description: post.subtitle,
-      date: published.split("T")[0],
-      publishedTime: published,
-      modifiedTime: updated,
-      tags: post.categories,
-      preview,
-    },
-    content: markdown,
-    toc,
-  };
+  const entry = await getEntry("posts", slug);
+  if (!entry || entry.data.draft) return null;
+
+  const { Content, headings } = await render(entry);
+  return { data: toMetadata(entry), entry, Content, headings };
 }
