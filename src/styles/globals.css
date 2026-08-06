@@ -656,3 +656,57 @@ input[type="checkbox"]:focus-visible {
 .prose :is(h1, h2, h3, h4, h5, h6) {
   scroll-margin-top: 1.5rem;
 }
+
+/* the header links keep their spacing and scroll once they stop fitting */
+.nav-rail {
+  --fade-left: 0px;
+  --fade-right: 0px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+
+.nav-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-rail.fade-left {
+  --fade-left: 2rem;
+}
+
+.nav-rail.fade-right {
+  --fade-right: 2rem;
+}
+
+/* min-width holds the row full-width so the links spread when there is room,
+   and max-content lets it grow past the rail so it scrolls when there is not */
+.nav-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 1.5rem;
+  min-width: 100%;
+  width: max-content;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .nav-links {
+    gap: 2rem;
+  }
+}
