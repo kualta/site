@@ -6,12 +6,15 @@ import type { Track } from "@/types";
 interface Props {
   track: Track;
   time: number;
+  /** dim the rest of the song and follow along, rather than showing a flat list */
+  focus?: boolean;
+  onSeek?: (seconds: number) => void;
 }
 
-export function LyricsPanel({ track, time }: Props) {
+export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
   const lines = useMemo(() => (track.lyrics ? parseLrc(track.lyrics) : []), [track.lyrics]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const activeRef = useRef<HTMLParagraphElement>(null);
+  const activeRef = useRef<HTMLElement>(null);
   const [edges, setEdges] = useState({ top: false, bottom: false });
   const current = lines.length ? activeLineIndex(lines, time) : -1;
 
@@ -25,7 +28,7 @@ export function LyricsPanel({ track, time }: Props) {
   }, []);
 
   useEffect(() => {
-    if (current < 0) {
+    if (current < 0 || !focus) {
       readEdges();
       return;
     }
@@ -41,7 +44,7 @@ export function LyricsPanel({ track, time }: Props) {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     container.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
     readEdges();
-  }, [current, readEdges]);
+  }, [current, focus, readEdges]);
 
   useEffect(() => {
     readEdges();
@@ -59,10 +62,16 @@ export function LyricsPanel({ track, time }: Props) {
   if (!lines.length) {
     return (
       <Scrollable>
-        <p className="whitespace-pre-line text-[0.95rem] leading-relaxed text-secondary-text">{track.lyrics}</p>
+        <p className="whitespace-pre-line pr-7 text-[0.95rem] leading-relaxed text-secondary-text">{track.lyrics}</p>
       </Scrollable>
     );
   }
+
+  const opacityFor = (index: number) => {
+    if (!focus) return 1;
+    if (current < 0) return 0.55;
+    return Math.max(0.14, 1 - Math.abs(index - current) * 0.22);
+  };
 
   return (
     <Scrollable
@@ -71,17 +80,19 @@ export function LyricsPanel({ track, time }: Props) {
       className={`lyrics-fade ${edges.top ? "fade-top" : ""} ${edges.bottom ? "fade-bottom" : ""}`}
     >
       {/* the words stop well short of the scrollbar rather than running into it */}
-      <div className="flex flex-col gap-2.5 pr-7 text-base leading-snug">
+      <div className="flex flex-col items-start gap-2.5 pr-7 text-base leading-snug">
         {lines.map((line, index) => (
-          <p
+          <button
             key={`${line.time}-${index}`}
-            ref={index === current ? activeRef : undefined}
-            className={`lyric-line ${index === current ? "is-current" : ""}`}
+            ref={index === current ? (activeRef as React.Ref<HTMLButtonElement>) : undefined}
+            type="button"
+            className={`lyric-line text-left ${index === current ? "is-current" : ""}`}
             // the sung line is brightest, and the song dims away either side of it
-            style={{ opacity: current < 0 ? 0.55 : Math.max(0.14, 1 - Math.abs(index - current) * 0.22) }}
+            style={{ opacity: opacityFor(index) }}
+            onClick={() => onSeek?.(line.time)}
           >
             {line.text}
-          </p>
+          </button>
         ))}
       </div>
     </Scrollable>

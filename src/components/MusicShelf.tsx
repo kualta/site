@@ -14,6 +14,9 @@ const SECONDS_PER_TURN = 1.8;
 // a few degrees of slack so tapping the record does not interrupt playback
 const ENGAGE_RADIANS = 0.06;
 const MAX_SCRATCH_RATE = 8;
+// a jump spins the record, but only so far before it is just a smear
+const SEEK_TURN_CAP = 3;
+const SEEK_SPIN_MS = 620;
 
 type Filter = "all" | "cover" | "original";
 
@@ -46,8 +49,11 @@ export default function MusicShelf({ tracks }: Props) {
   const [duration, setDuration] = useState(0);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubAngle, setScrubAngle] = useState(0);
+  const [seeking, setSeeking] = useState(false);
+  const seekTimer = useRef(0);
   const [filter, setFilter] = useState<Filter>("all");
   const [lyricsOpen, setLyricsOpen] = useState(true);
+  const [lyricsFocus, setLyricsFocus] = useState(true);
   const scrub = useRef<{
     pointerId: number;
     lastAngle: number;
@@ -309,6 +315,24 @@ export default function MusicShelf({ tracks }: Props) {
     if (grip.resumeAfter) audio?.play().catch(() => setPlaying(false));
   };
 
+  const seekTo = useCallback((seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const delta = seconds - audio.currentTime;
+    audio.currentTime = seconds;
+    setTime(seconds);
+
+    if (prefersReducedMotion()) return;
+
+    // the record turns by the distance skipped, capped so a long jump is not a blur
+    const turns = Math.max(-SEEK_TURN_CAP, Math.min(SEEK_TURN_CAP, delta / SECONDS_PER_TURN));
+    setScrubAngle((previous) => previous + turns * 2 * Math.PI);
+    setSeeking(true);
+    clearTimeout(seekTimer.current);
+    seekTimer.current = window.setTimeout(() => setSeeking(false), SEEK_SPIN_MS);
+  }, []);
+
   const seek = (event: React.ChangeEvent<HTMLInputElement>) => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -339,7 +363,16 @@ export default function MusicShelf({ tracks }: Props) {
         {lyricsOpen && (
           <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-4 p-8 md:order-none md:p-12">
             <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
-            <LyricsPanel track={active} time={time} />
+            <label className="flex w-fit cursor-pointer select-none items-center gap-2 font-mono text-xs text-secondary-text">
+              <input
+                type="checkbox"
+                className="focus-check"
+                checked={lyricsFocus}
+                onChange={(event) => setLyricsFocus(event.target.checked)}
+              />
+              focus
+            </label>
+            <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
           </aside>
         )}
 
@@ -350,6 +383,7 @@ export default function MusicShelf({ tracks }: Props) {
               deck
               spinning={playing}
               scrubbing={scrubbing}
+              seeking={seeking}
               scrubAngle={scrubAngle}
               onPointerDown={grabRecord}
               onPointerMove={turnRecord}

@@ -6,6 +6,7 @@ interface Props {
   spinning?: boolean;
   deck?: boolean;
   scrubbing?: boolean;
+  seeking?: boolean;
   /** extra rotation in radians, applied on top of the playback spin */
   scrubAngle?: number;
   className?: string;
@@ -20,6 +21,7 @@ export function Vinyl({
   spinning = false,
   deck = false,
   scrubbing = false,
+  seeking = false,
   scrubAngle = 0,
   className = "",
   viewTransitionName,
@@ -37,7 +39,7 @@ export function Vinyl({
       onPointerCancel={onPointerUp}
     >
       {/* the hand turns this layer; the playback animation turns the one inside it */}
-      <div className="vinyl-scrub" style={scrubAngle ? { transform: `rotate(${scrubAngle}rad)` } : undefined}>
+      <div className={`vinyl-scrub ${seeking ? "is-seeking" : ""}`} style={scrubAngle ? { transform: `rotate(${scrubAngle}rad)` } : undefined}>
         <div className={`vinyl-disc ${deck ? "is-deck" : ""} ${spinning ? "is-playing" : ""}`}>
           <div className="vinyl-grooves" />
           <div className="vinyl-label">
