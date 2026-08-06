@@ -18,23 +18,43 @@ import NodeID3 from "node-id3";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const audioDir = path.join(root, "public/music");
 const force = process.argv.includes("--force");
+const onlyFlag = process.argv.indexOf("--only");
+const only = onlyFlag === -1 ? null : process.argv[onlyFlag + 1];
 
 export const SYNCED_FRAME = "LYRICS_SYNCED";
 
+/** timestamped words beat plain ones; after that, the closest running time wins */
+function best(candidates, duration) {
+  const usable = candidates.filter((entry) => entry?.plainLyrics || entry?.syncedLyrics);
+  if (usable.length === 0) return null;
+
+  return usable.sort((a, b) => {
+    const synced = Number(Boolean(b.syncedLyrics)) - Number(Boolean(a.syncedLyrics));
+    if (synced !== 0) return synced;
+    return Math.abs((a.duration ?? 0) - duration) - Math.abs((b.duration ?? 0) - duration);
+  })[0];
+}
+
 async function lookup(artist, title, duration) {
-  const attempts = [
+  const candidates = [];
+
+  for (const query of [
     { artist_name: artist, track_name: title, duration: String(duration) },
     { artist_name: artist, track_name: title },
-  ];
-
-  for (const query of attempts) {
+  ]) {
     const response = await fetch(`https://lrclib.net/api/get?${new URLSearchParams(query)}`);
-    if (!response.ok) continue;
-    const found = await response.json();
-    if (found?.plainLyrics || found?.syncedLyrics) return found;
+    if (response.ok) candidates.push(await response.json());
   }
 
-  return null;
+  // an exact match often carries no timestamps while a sibling entry does
+  if (!candidates.some((entry) => entry?.syncedLyrics)) {
+    const search = await fetch(
+      `https://lrclib.net/api/search?${new URLSearchParams({ artist_name: artist, track_name: title })}`,
+    );
+    if (search.ok) candidates.push(...(await search.json()).slice(0, 10));
+  }
+
+  return best(candidates, duration);
 }
 
 async function main() {
@@ -45,6 +65,7 @@ async function main() {
   let missing = 0;
 
   for (const file of files) {
+    if (only && path.basename(file, ".mp3") !== only) continue;
     const full = path.join(audioDir, file);
     const { common } = await parseFile(full);
     const existing = NodeID3.read(full);

@@ -30,7 +30,7 @@
     "cover": "/music/covers/dark-night.jpg"
   },
   {
-    "id": 6,
+    "id": 7,
     "slug": "papercut",
     "title": "papercut",
     "artist": "kualta",
@@ -46,6 +46,21 @@
   },
   {
     "id": 5,
+    "slug": "exitlude",
+    "title": "Exitlude",
+    "artist": "kualta",
+    "album": "Sam's Town",
+    "originalArtist": "The Killers",
+    "kind": "cover",
+    "track": null,
+    "lyrics": "[00:00.44] Aggressively we all defend the role we play\n[00:07.37] Regrettably time's come to send you on your way\n[00:15.15] We've seen it all bonfires of trust flash floods of pain\n[00:22.00] It doesn't really matter, don't you worry, it'll all work out\n[00:28.28] No, it doesn't even matter, don't you worry 'bout what it's all about\n[00:35.63] We hope you enjoyed your stay\n[00:42.50] It's good to have you with us, even if it's just for the day\n[00:49.63] We hope you enjoyed your stay\n[00:56.37] Outside the sun is shining, seems like heaven ain't far away\n[01:03.63] It's good to have you with us\n[01:08.89] \n[01:16.00] Even if it's just for the day\n[01:20.88] \n[01:44.80] It's good to have you with us even, if it's just for the day\n[01:52.00] Outside the sun is shining, seems like heaven ain't far away\n[01:59.00] It's good to have you with us even, if it's just for the day\n[02:06.00] Outside the sun is shining, seems like heaven ain't far away\n[02:13.15] (Seems like heaven ain't far away)\n[02:17.05]",
+    "date": "2022-01-01",
+    "duration": 140,
+    "src": "/music/exitlude.mp3",
+    "cover": "/music/covers/exitlude.jpg"
+  },
+  {
+    "id": 6,
     "slug": "kyukurarin",
     "title": "きゅうくらりん",
     "artist": "kualta",
@@ -75,7 +90,7 @@
     "cover": "/music/covers/dialogue.jpg"
   },
   {
-    "id": 7,
+    "id": 8,
     "slug": "self-conscious-portrait",
     "title": "Self-Conscious Portrait",
     "artist": "kualta",
