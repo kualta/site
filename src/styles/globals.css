@@ -153,7 +153,7 @@ html {
 
 .vinyl-label {
   position: absolute;
-  inset: 31%;
+  inset: 24%;
   border-radius: 50%;
   overflow: hidden;
   /* the label always sits on black grooves, so the edge needs a light hairline */
@@ -221,6 +221,36 @@ html {
     max-height: 100%;
     overflow-y: auto;
   }
+}
+
+/* the words sit opposite the crate, so the deck keeps the middle */
+.lyrics-rail {
+  border-top: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
+}
+
+@media (min-width: 768px) {
+  .lyrics-rail {
+    border-top: none;
+    border-right: 1px solid color-mix(in oklab, var(--secondary-text) 22%, transparent);
+    max-height: 100%;
+    overflow-y: auto;
+  }
+}
+
+.lyric-line {
+  color: color-mix(in oklab, var(--secondary-text) 75%, transparent);
+  transition:
+    color 220ms ease,
+    opacity 220ms ease;
+}
+
+.lyric-line.is-current {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.dark .lyric-line.is-current {
+  color: var(--text-dark);
 }
 
 .filter-chip {

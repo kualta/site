@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FiPause, FiPlay, FiSkipBack, FiSkipForward } from "react-icons/fi";
+import { LyricsPanel } from "@/components/LyricsPanel";
 import { Vinyl } from "@/components/Vinyl";
 import { ScratchDeck } from "@/lib/scratch";
 import type { Track } from "@/types";
@@ -45,6 +46,7 @@ export default function MusicShelf({ tracks }: Props) {
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubAngle, setScrubAngle] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
+  const [lyricsOpen, setLyricsOpen] = useState(true);
   const scrub = useRef<{
     pointerId: number;
     lastAngle: number;
@@ -328,9 +330,20 @@ export default function MusicShelf({ tracks }: Props) {
         onEnded={() => step(1)}
       />
 
-      <div className="grid w-full grow md:grid-cols-[minmax(0,1fr)_20rem]">
-        <section className="flex w-full flex-col items-center justify-center gap-5 p-6">
-          <div className="w-full max-w-[25rem]" ref={deckRef}>
+      <div
+        className={`grid w-full grow md:h-[calc(100dvh-8rem)] md:min-h-0 ${
+          lyricsOpen ? "md:grid-cols-[18rem_minmax(0,1fr)_20rem]" : "md:grid-cols-[minmax(0,1fr)_20rem]"
+        }`}
+      >
+        {lyricsOpen && (
+          <aside className="lyrics-rail order-last flex w-full min-h-0 flex-col gap-3 p-6 md:order-none">
+            <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
+            <LyricsPanel track={active} time={time} />
+          </aside>
+        )}
+
+        <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6">
+          <div className="w-full max-w-[min(25rem,42vh)]" ref={deckRef}>
             <Vinyl
               track={active}
               deck
@@ -398,10 +411,18 @@ export default function MusicShelf({ tracks }: Props) {
             >
               <FiSkipForward />
             </button>
+            <button
+              type="button"
+              className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${lyricsOpen ? "is-on" : ""}`}
+              onClick={() => setLyricsOpen((open) => !open)}
+              aria-pressed={lyricsOpen}
+            >
+              lyrics
+            </button>
           </div>
         </section>
 
-        <aside className="rail flex w-full flex-col gap-3 p-6">
+        <aside className="rail flex w-full min-h-0 flex-col gap-3 p-6">
           <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
 
           <div className="flex flex-wrap gap-1.5">
