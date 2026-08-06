@@ -1,19 +1,64 @@
 ---
 import { BackButton } from "./BackButton.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
+
+const links = [
+  { href: "/projects", label: "projects" },
+  { href: "/music", label: "music" },
+  { href: "/posts", label: "posts" },
+  { href: "/contacts", label: "contacts" },
+];
+
+const path = Astro.url.pathname.replace(/\/$/, "") || "/";
 ---
 <div
-  class="z-[100] flex flex-row place-content-around sm:place-content-between place-items-center text-xl md:text-2xl
+  class="z-[100] flex flex-row place-items-center gap-3 sm:gap-4 text-xl md:text-2xl
          tracking-wide max-w-full md:max-w-2xl w-full h-fit py-8 px-8"
 >
-  <div class="hidden sm:flex w-0 h-0 sm:w-8 sm:h-8">
+  <div class="hidden sm:flex shrink-0 w-0 h-0 sm:w-8 sm:h-8">
     <BackButton client:load transition:persist />
   </div>
-  <a class="active:text-secondary-text" href="/projects">projects<br /></a>
-  <a class="active:text-secondary-text" href="/music">music<br /></a>
-  <a class="active:text-secondary-text" href="/posts">posts<br /></a>
-  <a class="active:text-secondary-text" href="/contacts">contacts<br /></a>
-  <div class="hidden sm:flex w-0 h-0 sm:w-8 sm:h-8">
+  <nav class="nav-rail min-w-0 flex-1" data-nav-rail>
+    <div class="nav-links">
+      {links.map(({ href, label }) => (
+        <a
+          class="active:text-secondary-text"
+          href={href}
+          aria-current={path === href ? "page" : undefined}
+        >{label}</a>
+      ))}
+    </div>
+  </nav>
+  <div class="hidden sm:flex shrink-0 w-0 h-0 sm:w-8 sm:h-8">
     <ThemeToggle client:load transition:persist />
   </div>
 </div>
+
+<script>
+  // the links only scroll when they no longer fit, and each edge fades only
+  // while there is something past it to scroll to
+  function setupNav() {
+    const rail = document.querySelector<HTMLElement>("[data-nav-rail]");
+    if (!rail) return;
+
+    const update = () => {
+      const hidden = rail.scrollWidth - rail.clientWidth;
+      rail.classList.toggle("fade-left", rail.scrollLeft > 2);
+      rail.classList.toggle("fade-right", rail.scrollLeft < hidden - 2);
+    };
+
+    rail.addEventListener("scroll", update, { passive: true });
+    new ResizeObserver(update).observe(rail);
+
+    // a narrow screen should open on the page you are actually reading
+    const current = rail.querySelector<HTMLElement>('a[aria-current="page"]');
+    if (current) {
+      const offset = current.offsetLeft - (rail.clientWidth - current.offsetWidth) / 2;
+      rail.scrollLeft = Math.max(0, offset);
+    }
+
+    update();
+  }
+
+  document.addEventListener("astro:page-load", setupNav);
+</script>
