@@ -30,7 +30,7 @@
     "cover": "/music/covers/dark-night.jpg"
   },
   {
-    "id": 7,
+    "id": 8,
     "slug": "papercut",
     "title": "papercut",
     "artist": "kualta",
@@ -43,6 +43,21 @@
     "duration": 135,
     "src": "/music/papercut.mp3",
     "cover": "/music/covers/papercut.jpg"
+  },
+  {
+    "id": 6,
+    "slug": "faux",
+    "title": "Faux",
+    "artist": "kualta",
+    "album": null,
+    "originalArtist": null,
+    "kind": "original",
+    "track": null,
+    "lyrics": "[00:00.60]Ayo\n[00:02.00]Yeah\n[00:03.26]It's K.U on the mic\n[00:05.44]I know you've been waiting for this your whole life\n[00:10.96]Ally turned toothless, camaraderie's fruitless,\n[00:13.52]The faux-friend said I'm worthless, but what's the purpose\n[00:16.20]Of perfidious motives, markers of merciless,\n[00:19.72]Erstwhile top dog, now futile and wordy-less.\n[00:21.92]Verse of curses hurled, hits like thunderbolts,\n[00:24.86]Undeserved? Monsieur, the truth is served.\n[00:26.80]Like swirled birds, in a single motion, no lotion,\n[00:29.96]It's time to face, bitchass, it's your demotion\n[00:32.82]No honor among connivers and thieves,\n[00:36.06]Our troth is now a cloth from which the trust bleeds.\n[00:38.24]The hourglass is emptied, through sand soft slips,\n[00:41.36]With time now the viper shows fangs and trips.\n[00:43.62]You can keep talking, but your words mean nothing\n[00:46.34]Your actions speak louder, your true self is something\n[00:49.18]Fake, homie, you can keep faking\n[00:51.32]But I won't be breaking, bitch, I won't be shaking\n[00:54.54]So chant this along, while your bitch blows me,\n[00:57.52]You're a fake homie, you're a fake homie.\n[01:00.28]The fake homie, only shows phony love\n[01:02.96]Talks like a thug but push comes to shove\n[01:05.72]The fraud friend, his craven acts abound,\n[01:08.62]His loyalty as solid as a confectioner's meringue.\n[01:11.22]When trouble comes around, pound,\n[01:13.78]This fainthearted clown flees town.\n[01:16.72]If you didn't catch by now, well, you probably should,\n[01:19.54]Let me tell you one last thing for sure:\n[01:22.08]Beneath the surface, goodness lies therein,\n[01:24.80]Come closer, son, I will forgive your sin.",
+    "date": "2023-01-01",
+    "duration": 110,
+    "src": "/music/faux.mp3",
+    "cover": "/music/covers/faux.jpg"
   },
   {
     "id": 5,
@@ -60,7 +75,7 @@
     "cover": "/music/covers/exitlude.jpg"
   },
   {
-    "id": 6,
+    "id": 7,
     "slug": "kyukurarin",
     "title": "きゅうくらりん",
     "artist": "kualta",
@@ -90,7 +105,7 @@
     "cover": "/music/covers/dialogue.jpg"
   },
   {
-    "id": 8,
+    "id": 9,
     "slug": "self-conscious-portrait",
     "title": "Self-Conscious Portrait",
     "artist": "kualta",
