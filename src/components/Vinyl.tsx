@@ -61,8 +61,9 @@ export function Vinyl({
         <div className={`vinyl-disc ${deck ? "is-deck" : ""} ${spinning ? "is-playing" : ""}`}>
           <div className="vinyl-grooves" />
           <div className="vinyl-label">
-            {track.kind === "original" ? (
-              // a printed label: the spindle sits in the gap instead of through a word
+            {track.kind === "original" && track.album ? (
+              // a printed label for an album release, since it sets the album and
+              // part; a standalone single wears its own sleeve instead
               <div key={track.slug} className="vinyl-label-print">
                 <span className="label-top">
                   <span className="label-title" style={{ fontSize: titleSize(track.title) }}>
