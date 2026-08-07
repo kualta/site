@@ -33,7 +33,7 @@ const { contacts, size = 18 } = Astro.props;
         {contact.platform === "farcaster" && <Icons name="farcaster" size={size + 2} />}
         {contact.platform === "bluesky" && <Icons name="bluesky" size={size + 4} />}
         {contact.platform === "ping" && <FiAtSign size={size + 1} />}
-        {contact.platform === "email" && <FiMail size={size} />}
+        {contact.platform === "email" && <FiMail size={size + 2} />}
       </a>
     </div>
   ))
