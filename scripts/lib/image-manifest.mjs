@@ -16,15 +16,25 @@ import { imageSize } from "./image-size.mjs";
 
 const EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg"]);
 
+/**
+ * Cover art is extracted from the audio at build time and gitignored, so
+ * including it would rewrite this file on every build. Nothing needs its size
+ * anyway: the labels are drawn into a square the stylesheet already sizes.
+ */
+const SKIP = new Set(["music/covers"]);
+
 function walk(dir, base, into) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+    const relative = path.relative(base, full).split(path.sep).join("/");
+    if (SKIP.has(relative)) continue;
+
     if (entry.isDirectory()) {
       walk(full, base, into);
     } else if (EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
       const size = imageSize(full);
       // the leading slash matches how the site refers to these: "/images/..."
-      if (size) into[`/${path.relative(base, full).split(path.sep).join("/")}`] = size;
+      if (size) into[`/${relative}`] = size;
     }
   }
 }
