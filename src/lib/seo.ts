@@ -2,7 +2,7 @@ import imageSizes from "@/data/image-sizes.json";
 
 export const SITE_URL = "https://kualta.dev";
 export const SITE_NAME = "kualta";
-export const TAGLINE = "building with love";
+export const TAGLINE = "a servant of many";
 export const TWITTER = "@kualts";
 export const DEFAULT_OG_IMAGE = "/opengraph-image.png";
 

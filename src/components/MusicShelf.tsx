@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiPause, FiPlay, FiSkipBack, FiSkipForward } from "react-icons/fi";
+import { FiPause, FiPlay, FiRepeat, FiSkipBack, FiSkipForward, FiVolume1, FiVolume2, FiVolumeX } from "react-icons/fi";
 import { LyricsPanel } from "@/components/LyricsPanel";
 import { Scrollable } from "@/components/Scrollable";
 import { Vinyl } from "@/components/Vinyl";
@@ -19,6 +19,16 @@ const MAX_SCRATCH_RATE = 8;
 // a jump spins the record, but only so far before it is just a smear
 const SEEK_TURN_CAP = 3;
 const SEEK_SPIN_MS = 620;
+// a seek that lands on the run-out would trip the end of the record and skip on
+const END_GUARD = 0.25;
+// how far off the asked-for spot counts as the element having refused the seek
+const SEEK_TOLERANCE = 1;
+// long enough for the copy to arrive; past it the clock goes back to telling the truth
+const SEEK_HOLD_MS = 15000;
+// how loud the deck was left, so the next visit starts where it was
+const VOLUME_KEY = "music:volume";
+// unmuting a fader that was dragged to zero has to land somewhere audible
+const FALLBACK_VOLUME = 0.5;
 
 type Filter = "all" | "cover" | "original";
 
@@ -69,6 +79,9 @@ export default function MusicShelf({ tracks, slug }: Props) {
   const [scrubAngle, setScrubAngle] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const seekTimer = useRef(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [repeat, setRepeat] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [lyricsFocus, setLyricsFocus] = useState(true);
   const [pane, setPane] = useState<"records" | "lyrics">("records");
@@ -82,6 +95,11 @@ export default function MusicShelf({ tracks, slug }: Props) {
     lastMove: number;
     stillTimer: number;
   } | null>(null);
+  // a spot asked for that the element would not go to, held until it can
+  const pendingSeek = useRef<number | null>(null);
+  const seekHold = useRef(0);
+  // the copy of the record the deck fetched, which any spot can be reached inside
+  const localCopy = useRef<{ slug: string; url: string } | null>(null);
   const scratchPosition = useRef(0);
   const scratchDeck = useRef<ScratchDeck | null>(null);
   if (!scratchDeck.current && typeof window !== "undefined") scratchDeck.current = new ScratchDeck();
@@ -107,6 +125,9 @@ export default function MusicShelf({ tracks, slug }: Props) {
 
   const open = useCallback(
     (track: Track) => {
+      clearTimeout(seekHold.current);
+      pendingSeek.current = null;
+      localCopy.current = null;
       load(track);
       setActiveSlug(track.slug);
       writeSlug(track.slug);
@@ -138,6 +159,63 @@ export default function MusicShelf({ tracks, slug }: Props) {
     }
   }, []);
 
+  /**
+   * Points the element at the copy the deck fetched, holding the spot and the
+   * play state. Nothing is loaded the instant a source is swapped, so the
+   * position set here becomes the one the copy opens at.
+   */
+  const adoptLocalCopy = useCallback(
+    (at: number) => {
+      const audio = audioRef.current;
+      const copy = localCopy.current;
+      if (!audio || !copy || copy.slug !== activeSlug || audio.src === copy.url) return false;
+      const resume = !audio.paused;
+      audio.src = copy.url;
+      audio.currentTime = at;
+      if (resume) audio.play().catch(() => setPlaying(false));
+      return true;
+    },
+    [activeSlug],
+  );
+
+  const level = muted ? 0 : volume;
+
+  const changeVolume = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const next = Number(event.target.value);
+    setVolume(next);
+    // dragging the fader all the way down is the same intent as muting
+    setMuted(next === 0);
+    window.localStorage.setItem(VOLUME_KEY, String(next));
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    if (!muted) {
+      setMuted(true);
+      return;
+    }
+    setMuted(false);
+    if (volume === 0) {
+      setVolume(FALLBACK_VOLUME);
+      window.localStorage.setItem(VOLUME_KEY, String(FALLBACK_VOLUME));
+    }
+  }, [muted, volume]);
+
+  // the fader drives both needles: the element and the hand-driven worklet
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = level;
+    deck?.setVolume(level);
+  }, [level, deck]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(VOLUME_KEY);
+    if (saved === null) return;
+    const stored = Number(saved);
+    if (!Number.isFinite(stored)) return;
+    const restored = Math.min(1, Math.max(0, stored));
+    setVolume(restored);
+    setMuted(restored === 0);
+  }, []);
+
   // the cued record is loaded but never auto-played
   useEffect(() => {
     const audio = audioRef.current;
@@ -157,11 +235,32 @@ export default function MusicShelf({ tracks, slug }: Props) {
       // while scratching the worklet owns the needle, so the clock follows it
       if (scrub.current?.engaged) setTime(seconds);
     };
+    deck.onSource = (src, url) => {
+      if (src !== active.src) return;
+      localCopy.current = { slug: active.slug, url };
+
+      const held = pendingSeek.current;
+      if (held !== null) {
+        // a spot was asked for that the stream would not give: this is that spot
+        if (adoptLocalCopy(held)) {
+          clearTimeout(seekHold.current);
+          pendingSeek.current = null;
+          setTime(held);
+        }
+        return;
+      }
+
+      // a silent deck can change what it is reading from without anyone hearing,
+      // and from then on every spot on the record is reachable
+      const audio = audioRef.current;
+      if (audio?.paused) adoptLocalCopy(audio.currentTime);
+    };
     deck.load(active.src);
     return () => {
       deck.setRate(0);
+      deck.onSource = null;
     };
-  }, [active, deck]);
+  }, [active, adoptLocalCopy, deck]);
 
   // a decoded track is tens of megabytes, so never leave one behind
   useEffect(() => () => deck?.unload(), [deck]);
@@ -341,37 +440,77 @@ export default function MusicShelf({ tracks, slug }: Props) {
     if (deck.isLoaded) {
       deck.setRate(0);
       // the worklet owns the true position while scratching, so hand it back
-      if (audio) audio.currentTime = scratchPosition.current;
-      setTime(scratchPosition.current);
+      place(scratchPosition.current);
     }
 
     if (grip.resumeAfter) audio?.play().catch(() => setPlaying(false));
   };
 
-  const seekTo = useCallback((seconds: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  /**
+   * Drops the needle at a spot and makes sure it stays there. A streamed file
+   * can only be entered where the element already holds sound — the host serves
+   * whole files rather than byte ranges, so anything further on is refused
+   * outright and the element stays at nought. That refusal is what used to read
+   * as the record snapping back to the beginning, so the ask is kept and landed
+   * on the local copy instead, the moment there is one.
+   */
+  const place = useCallback(
+    (seconds: number) => {
+      const audio = audioRef.current;
+      if (!audio || !active) return 0;
 
-    const delta = seconds - audio.currentTime;
-    audio.currentTime = seconds;
-    setTime(seconds);
+      const total = duration || active.duration;
+      const target = Math.min(Math.max(0, seconds), Math.max(0, total - END_GUARD));
+      audio.currentTime = target;
+      setTime(target);
 
-    if (prefersReducedMotion()) return;
+      clearTimeout(seekHold.current);
 
-    // the record turns by the distance skipped, capped so a long jump is not a blur
-    const turns = Math.max(-SEEK_TURN_CAP, Math.min(SEEK_TURN_CAP, delta / SECONDS_PER_TURN));
-    setScrubAngle((previous) => previous + turns * 2 * Math.PI);
-    setSeeking(true);
-    clearTimeout(seekTimer.current);
-    seekTimer.current = window.setTimeout(() => setSeeking(false), SEEK_SPIN_MS);
-  }, []);
+      if (Math.abs(audio.currentTime - target) <= SEEK_TOLERANCE) {
+        pendingSeek.current = null;
+        return target;
+      }
+
+      pendingSeek.current = target;
+      if (adoptLocalCopy(target)) {
+        pendingSeek.current = null;
+        return target;
+      }
+
+      // no copy to fall back on yet, and one may never come: hold the ask, but
+      // do not let a clock that has stopped telling the time hold forever
+      seekHold.current = window.setTimeout(() => {
+        if (pendingSeek.current !== target) return;
+        pendingSeek.current = null;
+        if (audioRef.current) setTime(audioRef.current.currentTime);
+      }, SEEK_HOLD_MS);
+      return target;
+    },
+    [active, adoptLocalCopy, duration],
+  );
+
+  const seekTo = useCallback(
+    (seconds: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      const from = audio.currentTime;
+      const delta = place(seconds) - from;
+
+      if (prefersReducedMotion()) return;
+
+      // the record turns by the distance skipped, capped so a long jump is not a blur
+      const turns = Math.max(-SEEK_TURN_CAP, Math.min(SEEK_TURN_CAP, delta / SECONDS_PER_TURN));
+      setScrubAngle((previous) => previous + turns * 2 * Math.PI);
+      setSeeking(true);
+      clearTimeout(seekTimer.current);
+      seekTimer.current = window.setTimeout(() => setSeeking(false), SEEK_SPIN_MS);
+    },
+    [place],
+  );
 
   const seek = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const next = Number(event.target.value);
-    audio.currentTime = next;
-    setTime(next);
+    place(Number(event.target.value));
   };
 
   // keyboard control, unless the user is typing or driving the seek bar
@@ -430,6 +569,12 @@ export default function MusicShelf({ tracks, slug }: Props) {
         case "f":
           setLyricsFocus((on) => !on);
           return;
+        case "m":
+          toggleMute();
+          return;
+        case "r":
+          setRepeat((on) => !on);
+          return;
         default:
           // 0-9 jump to that tenth of the record
           if (/^[0-9]$/.test(key)) {
@@ -441,7 +586,7 @@ export default function MusicShelf({ tracks, slug }: Props) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, duration, seekTo, step, toggle]);
+  }, [active, duration, seekTo, step, toggle, toggleMute]);
 
   if (!active) return null;
 
@@ -450,9 +595,15 @@ export default function MusicShelf({ tracks, slug }: Props) {
       <audio
         ref={audioRef}
         preload="metadata"
+        // repeat holds one record on the platter; without it the crate rolls on
+        loop={repeat}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+        // a held seek owns the clock until it lands, or the display drops back to
+        // where the element is still sitting and reads as a record starting over
+        onTimeUpdate={(event) => {
+          if (pendingSeek.current === null) setTime(event.currentTarget.currentTime);
+        }}
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
         onEnded={() => step(1)}
       />
@@ -513,34 +664,71 @@ export default function MusicShelf({ tracks, slug }: Props) {
             <span className="tabular-nums">{formatTime(duration || active.duration)}</span>
           </div>
 
-          <div className="flex items-center gap-5 text-xl">
+          <div className="grid w-full max-w-md grid-cols-[1fr_auto_1fr] items-center">
+            <div className="volume-control flex items-center gap-2 justify-self-start">
+              <button
+                type="button"
+                className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
+                onClick={toggleMute}
+                aria-pressed={muted}
+                aria-label={muted ? "Unmute" : "Mute"}
+              >
+                {level === 0 ? <FiVolumeX /> : level < 0.5 ? <FiVolume1 /> : <FiVolume2 />}
+              </button>
+              <input
+                className="vinyl-seek vinyl-volume"
+                style={{ "--vinyl-progress": `${level * 100}%` } as React.CSSProperties}
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={level}
+                onChange={changeVolume}
+                aria-label="Volume"
+              />
+            </div>
+
+            <div className="flex items-center gap-5 text-xl">
+              <button
+                type="button"
+                className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
+                onClick={() => step(-1)}
+                aria-label="Previous track"
+              >
+                <FiSkipBack />
+              </button>
+              <button
+                type="button"
+                className="play-button flex h-12 w-12 items-center justify-center rounded-full active:scale-[0.96]"
+                onClick={toggle}
+                aria-pressed={playing}
+                aria-label={playing ? "Pause" : "Play"}
+              >
+                <span className="relative block h-4 w-4">
+                  <FiPlay className={`icon-swap icon-play ${playing ? "" : "is-shown"}`} />
+                  <FiPause className={`icon-swap ${playing ? "is-shown" : ""}`} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
+                onClick={() => step(1)}
+                aria-label="Next track"
+              >
+                <FiSkipForward />
+              </button>
+            </div>
+
             <button
               type="button"
-              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
-              onClick={() => step(-1)}
-              aria-label="Previous track"
+              className={`repeat-button justify-self-end transition-transform active:scale-[0.96] ${
+                repeat ? "is-on" : "text-secondary-text hover:opacity-70"
+              }`}
+              onClick={() => setRepeat((on) => !on)}
+              aria-pressed={repeat}
+              aria-label={repeat ? "Repeat on" : "Repeat off"}
             >
-              <FiSkipBack />
-            </button>
-            <button
-              type="button"
-              className="play-button flex h-12 w-12 items-center justify-center rounded-full active:scale-[0.96]"
-              onClick={toggle}
-              aria-pressed={playing}
-              aria-label={playing ? "Pause" : "Play"}
-            >
-              <span className="relative block h-4 w-4">
-                <FiPlay className={`icon-swap icon-play ${playing ? "" : "is-shown"}`} />
-                <FiPause className={`icon-swap ${playing ? "is-shown" : ""}`} />
-              </span>
-            </button>
-            <button
-              type="button"
-              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
-              onClick={() => step(1)}
-              aria-label="Next track"
-            >
-              <FiSkipForward />
+              <FiRepeat />
             </button>
           </div>
 
