@@ -1,16 +1,20 @@
 ---
 import type { Article } from "@/layouts/BaseLayout.astro";
+import type { OgImage } from "@/lib/seo";
+import { SAME_AS, SITE_NAME, TAGLINE } from "@/lib/seo";
 
 interface Props {
   title: string;
+  documentTitle: string;
   description: string;
   canonical: string;
-  ogImage: string;
+  ogImage: OgImage;
   type: "website" | "article";
   article?: Article;
+  schema?: object[];
 }
 
-const { title, description, canonical, ogImage, type, article } = Astro.props;
+const { title, documentTitle, description, canonical, ogImage, type, article, schema = [] } = Astro.props;
 
 const SITE_URL = Astro.site?.toString().replace(/\/$/, "") ?? "https://kualta.dev";
 const path = Astro.url.pathname.replace(/\/$/, "");
@@ -21,80 +25,122 @@ const isArticle = type === "article";
 const person = {
   "@type": "Person",
   "@id": `${SITE_URL}/#person`,
-  name: "kualta",
-  url: SITE_URL,
-  sameAs: [
-    "https://github.com/kualta",
-    "https://bsky.app/profile/kualta.dev",
-    "https://farcaster.xyz/kualta.eth",
-    "https://twitter.com/kualts",
-  ],
+  name: SITE_NAME,
+  url: `${SITE_URL}/`,
+  description: TAGLINE,
+  sameAs: SAME_AS,
+};
+
+/** the blog is one entity across the site, so posts can point back at it */
+const blog = {
+  "@type": "Blog",
+  "@id": `${SITE_URL}/posts/#blog`,
+  url: `${SITE_URL}/posts/`,
+  name: `${SITE_NAME} — posts`,
+  publisher: { "@id": `${SITE_URL}/#person` },
+  inLanguage: "en-US",
 };
 
 const website = {
   "@type": "WebSite",
   "@id": `${SITE_URL}/#website`,
-  url: SITE_URL,
-  name: "kualta",
-  description: "building with love",
+  url: `${SITE_URL}/`,
+  name: SITE_NAME,
+  description: TAGLINE,
   publisher: { "@id": `${SITE_URL}/#person` },
   inLanguage: "en-US",
 };
 
-const graph: object[] = [person, website];
+/** the share card, described well enough for Google to reuse it */
+const primaryImage = {
+  "@type": "ImageObject",
+  "@id": `${canonical}#primaryimage`,
+  url: ogImage.url,
+  contentUrl: ogImage.url,
+  ...(ogImage.width ? { width: ogImage.width } : {}),
+  ...(ogImage.height ? { height: ogImage.height } : {}),
+};
 
-if (isHome) {
-  graph.push({
-    "@type": "WebPage",
-    "@id": canonical,
-    url: canonical,
-    name: title,
-    description,
-    isPartOf: { "@id": `${SITE_URL}/#website` },
-    about: { "@id": `${SITE_URL}/#person` },
-    inLanguage: "en-US",
-  });
-}
+/**
+ * Every page earns a trail, built from its own path — the posts, tag and music
+ * pages all sit two or three levels down and never said so.
+ */
+const LABELS: Record<string, string> = {
+  posts: "posts",
+  projects: "projects",
+  music: "music",
+  contacts: "contacts",
+  join: "join",
+  kaomoji: "kaomoji",
+  api: "api",
+  tags: "tags",
+};
 
-if (isPostsIndex) {
-  graph.push({
-    "@type": "Blog",
-    "@id": canonical,
-    url: canonical,
-    name: title,
-    description,
-    publisher: { "@id": `${SITE_URL}/#person` },
-    inLanguage: "en-US",
-  });
-}
+const segments = path.split("/").filter(Boolean);
+const crumbs = [{ name: SITE_NAME, item: `${SITE_URL}/` }];
+segments.forEach((segment, index) => {
+  const isLast = index === segments.length - 1;
+  const trail = `${SITE_URL}/${segments.slice(0, index + 1).join("/")}/`;
+  const label = LABELS[segment] ?? (isLast ? title : segment.replace(/-/g, " "));
+  crumbs.push({ name: label, item: trail });
+});
+
+const breadcrumb = {
+  "@type": "BreadcrumbList",
+  "@id": `${canonical}#breadcrumb`,
+  itemListElement: crumbs.map((crumb, index) => ({
+    "@type": "ListItem",
+    position: index + 1,
+    name: crumb.name,
+    item: crumb.item,
+  })),
+};
+
+const webPageType = isArticle ? "WebPage" : isHome ? "WebPage" : "CollectionPage";
+
+const page = {
+  "@type": webPageType,
+  "@id": canonical,
+  url: canonical,
+  name: documentTitle,
+  description,
+  isPartOf: { "@id": `${SITE_URL}/#website` },
+  primaryImageOfPage: { "@id": `${canonical}#primaryimage` },
+  ...(crumbs.length > 1 ? { breadcrumb: { "@id": `${canonical}#breadcrumb` } } : {}),
+  ...(isHome ? { about: { "@id": `${SITE_URL}/#person` } } : {}),
+  ...(isPostsIndex ? { mainEntity: { "@id": `${SITE_URL}/posts/#blog` } } : {}),
+  inLanguage: "en-US",
+};
+
+const graph: object[] = [person, website, primaryImage, page];
+
+// posts and the index both reference the blog, so it has to exist in both graphs
+if (isPostsIndex || isArticle) graph.push(blog);
+
+if (crumbs.length > 1) graph.push(breadcrumb);
 
 if (isArticle && article) {
-  const slug = path.replace("/posts/", "");
   graph.push({
     "@type": "BlogPosting",
-    "@id": canonical,
+    "@id": `${canonical}#article`,
     url: canonical,
     headline: title,
     description,
-    image: [ogImage],
+    image: { "@id": `${canonical}#primaryimage` },
     datePublished: article.publishedTime,
     dateModified: article.modifiedTime ?? article.publishedTime,
     author: { "@id": `${SITE_URL}/#person` },
     publisher: { "@id": `${SITE_URL}/#person` },
     mainEntityOfPage: { "@id": canonical },
-    keywords: article.tags?.join(", "),
-    articleSection: article.section,
+    isPartOf: { "@id": `${SITE_URL}/posts/#blog` },
+    ...(article.tags?.length ? { keywords: article.tags.join(", ") } : {}),
+    ...(article.section ? { articleSection: article.section } : {}),
+    ...(article.wordCount ? { wordCount: article.wordCount } : {}),
     inLanguage: "en-US",
   });
-  graph.push({
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "kualta", item: SITE_URL },
-      { "@type": "ListItem", position: 2, name: "posts", item: `${SITE_URL}/posts` },
-      { "@type": "ListItem", position: 3, name: title, item: canonical },
-    ],
-  });
 }
+
+graph.push(...schema);
 
 const jsonLd = { "@context": "https://schema.org", "@graph": graph };
 ---

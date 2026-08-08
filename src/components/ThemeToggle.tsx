@@ -6,9 +6,9 @@ function readTheme(): "dark" | "light" {
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ path: initial = "/" }: { path?: string }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [path, setPath] = useState("/");
+  const [path, setPath] = useState(initial);
 
   useEffect(() => {
     setTheme(readTheme());
@@ -37,7 +37,11 @@ export function ThemeToggle() {
   return (
     <div className="w-8 h-8 flex items-center justify-center rounded-xl active:text-secondary-text">
       <button type="button" onClick={toggle} aria-label="Toggle theme">
-        {theme === "dark" ? <MdOutlineLightMode size={22} /> : <MdOutlineDarkMode size={22} />}
+        {theme === "dark" ? (
+          <MdOutlineLightMode size={22} aria-hidden="true" />
+        ) : (
+          <MdOutlineDarkMode size={22} aria-hidden="true" />
+        )}
       </button>
     </div>
   );

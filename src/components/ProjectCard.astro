@@ -25,14 +25,26 @@ const isGitlab = project.git_link?.includes("gitlab.com");
   </a>
   <span class="w-5 shrink-0 flex justify-center">
     {project.git_link && (
-      <a href={project.git_link} target="_blank" rel="noreferrer" class="text-secondary-text hover:opacity-70" aria-label={isGitlab ? "GitLab" : "GitHub"}>
+      <a
+        href={project.git_link}
+        target="_blank"
+        rel="noreferrer"
+        class="text-secondary-text hover:opacity-70"
+        aria-label={`${project.full_name || project.name} on ${isGitlab ? "GitLab" : "GitHub"}`}
+      >
         {isGitlab ? <LuGitlab /> : <FiGithub />}
       </a>
     )}
   </span>
   <span class="w-5 shrink-0 flex justify-center">
     {project.link && (
-      <a href={project.link} target="_blank" rel="noreferrer" class="text-secondary-text hover:opacity-70">
+      <a
+        href={project.link}
+        target="_blank"
+        rel="noreferrer"
+        class="text-secondary-text hover:opacity-70"
+        aria-label={`${project.full_name || project.name} website`}
+      >
         <FiExternalLink />
       </a>
     )}

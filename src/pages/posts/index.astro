@@ -3,11 +3,33 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import PostCard from "@/components/PostCard.astro";
 import SubscriptionBox from "@/components/SubscriptionBox.astro";
 import { getPostsMetadata } from "@/lib/posts";
+import { SITE_URL } from "@/lib/seo";
 
 const posts = await getPostsMetadata();
+
+// the index is a list of articles, and saying so is what lets it show up as one
+const schema = [
+  {
+    "@type": "ItemList",
+    "@id": `${SITE_URL}/posts/#list`,
+    itemListOrder: "https://schema.org/ItemListOrderDescending",
+    numberOfItems: posts.length,
+    itemListElement: posts.map((post, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      url: `${SITE_URL}/posts/${post.filename}/`,
+      name: post.title,
+    })),
+  },
+];
 ---
-<BaseLayout title="posts" description="kualta's blog posts">
+<BaseLayout
+  title="posts"
+  description="Essays on philosophy, crypto, culture and game design, written by kualta. Long-form, occasional, and never on a schedule."
+  schema={schema}
+>
   <div class="max-w-xl w-full grow flex flex-col mb-10">
+    <h1 class="sr-only">posts</h1>
     <div class="flex flex-col gap-4 p-4">
       {posts.map((post) => <PostCard {...post} />)}
     </div>

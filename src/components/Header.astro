@@ -15,9 +15,9 @@ const path = Astro.url.pathname.replace(/\/$/, "") || "/";
          tracking-wide max-w-full md:max-w-2xl w-full h-fit py-8 px-8"
 >
   <div class="hidden sm:flex shrink-0 w-0 h-0 sm:w-8 sm:h-8">
-    <BackButton client:load transition:persist />
+    <BackButton path={path} client:load transition:persist />
   </div>
-  <nav class="nav-rail min-w-0 flex-1" data-nav-rail>
+  <nav class="nav-rail min-w-0 flex-1" data-nav-rail aria-label="Main">
     <div class="nav-links">
       {links.map(({ href, label }) => (
         <a
@@ -29,7 +29,7 @@ const path = Astro.url.pathname.replace(/\/$/, "") || "/";
     </div>
   </nav>
   <div class="hidden sm:flex shrink-0 w-0 h-0 sm:w-8 sm:h-8">
-    <ThemeToggle client:load transition:persist />
+    <ThemeToggle path={path} client:load transition:persist />
   </div>
 </div>
 
