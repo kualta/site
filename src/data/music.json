@@ -1,5 +1,20 @@
 [
   {
+    "id": 8,
+    "slug": "preacher-man",
+    "title": "PREACHER MAN",
+    "artist": "kualta",
+    "album": "BULLY",
+    "originalArtist": "Ye",
+    "kind": "cover",
+    "track": null,
+    "lyrics": "[00:00.48] And I\n[00:02.11] —ing that I hold, I—\n[00:04.64] This ring that I hold, I—\n[00:07.67] This ring that I hold, I—\n[00:10.17] Give to you (To you with love)\n[00:14.16] Break in, they ain't let us in (This ring that I hold, I-)\n[00:17.31] We passed on the settlement (This ring that I hold, I-)\n[00:20.45] This path, I don't recommend (This ring that I hold, I-)\n[00:23.32] We passed what they expected, man (I walk up to the preacher man)\n[00:26.67] I go, where they never can (Just to take your lovely hand)\n[00:29.51] I float, I don't ever land\n[00:32.15] When it's dark, you don't know where you goin'\n[00:35.49] Need a light bearer to lead you home (I walk up to the preacher man)\n[00:38.43] I go, where they never can (Just to take your lovely hand)\n[00:41.30] I float, I don't ever land (I came to you with love)\n[00:44.35] When it's dark, you don't know where you goin'\n[00:47.36] Need a light bearer to lead you home\n[00:50.21] Light 'em up, beam me up\n[00:52.99] The only G.O.A.T, the genius one\n[00:55.98] They switchin' sides, I seen it comin'\n[00:59.10] The plot twist, a convenient one\n[01:01.71] Look, nobody finna extort me (I came to you with love)\n[01:03.91] Even when they record me, I'ma keep it more G\n[01:07.73] Hand me a drink 'fore I get more deep (I came to you with love)\n[01:10.59] She hate sports 'less she watchin' from the floor seats\n[01:13.96] I hate that God didn't make a couple more of me\n[01:16.43] And all my haters in the courts, act accordingly\n[01:19.54] They imitate the sound, call it forgery (I came to you with love)\n[01:22.55] What we doin' is more important, more importantly\n[01:25.50] Look where we made it to (I walk up to the preacher man)\n[01:27.61] Made love that's unmakeable (Just to take your lovely hand)\n[01:29.45] Bonds is unbreakable\n[01:31.31] Broke rules and bent corners in hopes of breaking through\n[01:34.54] Basically, went out my way to make a way for you\n[01:37.73] Basically, we finna take 'em higher places through it\n[01:41.18] Way improved, and like a beta, we gon' stay improvin'\n[01:44.11] This the light that's gon' illuminate the way we movin'\n[01:46.83] Trust in me, we going God mode, the theory's proven\n[01:50.33] Light 'em up, beam me up\n[01:53.13] The only G.O.A.T, the genius one\n[01:56.12] They switchin' sides, I seen it comin'\n[01:59.05] The plot twist, a convenient one\n[02:01.89] I walk up to the preacher man\n[02:04.71] Just to take your lovely hand\n[02:07.68] And give to you\n[02:10.29] I came to you with love\n[02:13.95] I walk up to the preacher man\n[02:16.84] Just to take your lovely hand\n[02:19.79] And I came to you, I came to you\n[02:24.24] And I-\n[02:30.01] And I-\n[02:32.10] I walk up to the preacher man\n[02:34.85] Just to take your lovely hand\n[02:37.72] And give to you\n[02:40.13] I came to you with love\n[02:44.05] I walk up to the preacher man\n[02:46.68] Just to take your lovely hand\n[02:49.55] And I came to you with love\n[02:52.09] I came to you\n[02:53.85] And I-\n[03:00.85]",
+    "date": "2026-08-08",
+    "duration": 182,
+    "src": "/music/preacher-man.mp3",
+    "cover": "/music/covers/preacher-man.png"
+  },
+  {
     "id": 1,
     "slug": "almost-gone",
     "title": "Almost Gone",
@@ -90,7 +105,7 @@
     "cover": "/music/covers/dialogue.jpg"
   },
   {
-    "id": 8,
+    "id": 9,
     "slug": "self-conscious-portrait",
     "title": "Self-Conscious Portrait",
     "artist": "kualta",
