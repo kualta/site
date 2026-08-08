@@ -26,7 +26,7 @@ const source = [track.album, track.originalArtist].filter(Boolean).join(" · ");
 const description = [source, track.artist, track.date.slice(0, 4)].filter(Boolean).join(" · ");
 ---
 <BaseLayout
-  title={`${track.title} — kualta`}
+  title={`${track.title} - kualta`}
   description={description}
   image={track.og ?? "/opengraph-image.png"}
   imageAlt={`${track.title} by ${track.artist}`}

@@ -215,6 +215,11 @@ export default function MusicShelf({ tracks, slug }: Props) {
     return () => cancelAnimationFrame(frame);
   }, [playing, activeSlug, scrubbing, active]);
 
+  // swapping records is not a navigation, so the tab has to be renamed by hand
+  useEffect(() => {
+    if (active) document.title = `${active.title} - kualta`;
+  }, [active]);
+
   useEffect(() => {
     if (!active || !("mediaSession" in navigator)) return;
 
