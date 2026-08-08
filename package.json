@@ -13,6 +13,7 @@
     "format": "bunx @biomejs/biome format --write ./src",
     "lint": "bunx @biomejs/biome lint --apply-unsafe ./src",
     "music:lyrics": "node scripts/fetch-lyrics.mjs",
+    "music:og": "node scripts/make-og.mjs",
     "posts:import": "node scripts/import-paragraph.mjs"
   },
   "dependencies": {

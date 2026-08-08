@@ -1,0 +1,37 @@
+---
+/**
+ * One prerendered page per record, so a shared link unfurls with that record's
+ * own artwork and title. The shelf itself is the same island either way — it is
+ * simply handed the record this page was built for.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import MusicShelf from "@/components/MusicShelf.tsx";
+import type { Track } from "@/types";
+import musicData from "@/data/music.json";
+
+export async function getStaticPaths() {
+  const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a.date));
+  return tracks.map((track) => ({ params: { slug: track.slug }, props: { track, tracks } }));
+}
+
+interface Props {
+  track: Track;
+  tracks: Track[];
+}
+
+const { track, tracks } = Astro.props;
+
+// a cover credits whoever wrote it; an original just names the artist
+const byline = track.originalArtist ? `${track.artist} · ${track.originalArtist}` : track.artist;
+const description = [byline, track.album, track.date.slice(0, 4)].filter(Boolean).join(" · ");
+---
+<BaseLayout
+  title={`${track.title} — kualta`}
+  description={description}
+  image={track.og ?? "/opengraph-image.png"}
+  imageAlt={`${track.title} by ${byline}`}
+>
+  <div class="flex w-full grow">
+    <MusicShelf client:load tracks={tracks} slug={track.slug} />
+  </div>
+</BaseLayout>

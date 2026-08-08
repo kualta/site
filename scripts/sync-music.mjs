@@ -15,6 +15,7 @@ import { parseFile, selectCover } from "music-metadata";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const audioDir = path.join(root, "public/music");
 const coverDir = path.join(audioDir, "covers");
+const ogDir = path.join(audioDir, "og");
 const fallbackDir = path.join(audioDir, "fallback");
 const dataFile = path.join(root, "src/data/music.json");
 
@@ -107,6 +108,8 @@ async function main() {
       duration: Math.round(format.duration ?? previous?.duration ?? 0),
       src: `/music/${file}`,
       cover,
+      // drawn by hand with `bun run music:og`, so it may not be there yet
+      og: existsSync(path.join(ogDir, `${slug}.png`)) ? `/music/og/${slug}.png` : null,
     });
 
     const source = picture ? "embedded" : cover ? "fallback" : "none";

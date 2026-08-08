@@ -30,10 +30,25 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 interface Props {
   tracks: Track[];
+  /** the record this page is for, when it was reached by a link */
+  slug?: string;
 }
 
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Puts the record's own page in the address bar so the view can be copied and
+ * shared. Every slug is a real prerendered page, so a reload lands right back
+ * here — but swapping records is not a navigation, so it replaces the entry
+ * rather than stacking one per record.
+ */
+function writeSlug(slug: string | undefined) {
+  const path = `/music/${slug}`;
+  if (!slug || window.location.pathname === path) return;
+  // the router keeps its own state on the entry, so replace the URL and nothing else
+  window.history.replaceState(window.history.state, "", path);
 }
 
 function formatTime(seconds: number) {
@@ -43,9 +58,10 @@ function formatTime(seconds: number) {
   return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-export default function MusicShelf({ tracks }: Props) {
-  // a record is always on the platter, cued but silent until asked
-  const [activeSlug, setActiveSlug] = useState<string | null>(tracks[0]?.slug ?? null);
+export default function MusicShelf({ tracks, slug }: Props) {
+  // a record is always on the platter, cued but silent until asked. the page was
+  // built for this one, so the server and the client agree on it from the start
+  const [activeSlug, setActiveSlug] = useState<string | null>(slug ?? tracks[0]?.slug ?? null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -93,6 +109,7 @@ export default function MusicShelf({ tracks }: Props) {
     (track: Track) => {
       load(track);
       setActiveSlug(track.slug);
+      writeSlug(track.slug);
       setTime(0);
       setDuration(track.duration);
       setScrubAngle(0);
@@ -124,7 +141,11 @@ export default function MusicShelf({ tracks }: Props) {
   // the cued record is loaded but never auto-played
   useEffect(() => {
     const audio = audioRef.current;
-    if (audio && !audio.src && active) audio.src = active.src;
+    if (!audio || !active) return;
+    // a record cued by a link has to reach the deck too, or the needle and the label disagree
+    if (audio.paused && audio.currentTime === 0 && !audio.src.endsWith(active.src)) {
+      audio.src = active.src;
+    }
   }, [active]);
 
   // decode the open record in the background so the first grab can make sound
@@ -218,7 +239,6 @@ export default function MusicShelf({ tracks }: Props) {
       }
     }
   }, [active, step]);
-
 
   const angleAt = (element: HTMLElement, clientX: number, clientY: number) => {
     const box = element.getBoundingClientRect();
@@ -432,26 +452,20 @@ export default function MusicShelf({ tracks }: Props) {
         onEnded={() => step(1)}
       />
 
-      <div
-        className="grid w-full grow lg:h-[calc(100dvh-8rem)] lg:min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_19rem] xl:grid-cols-[23rem_minmax(0,1fr)_23rem]"
-      >
+      <div className="grid w-full grow lg:h-[calc(100dvh-8rem)] lg:min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_19rem] xl:grid-cols-[23rem_minmax(0,1fr)_23rem]">
         <aside
           className={`lyrics-rail order-last max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:order-none lg:flex lg:max-h-none lg:p-12 ${
             pane === "lyrics" ? "flex" : "hidden"
           }`}
         >
-            <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
-            <div className="flex flex-wrap gap-1.5">
-              <label className="filter-chip flex w-fit cursor-pointer select-none items-center gap-2 rounded-full py-1 pl-1 pr-2.5 font-mono text-xs">
-              <input
-                type="checkbox"
-                checked={lyricsFocus}
-                onChange={(event) => setLyricsFocus(event.target.checked)}
-              />
-                focus sync
-              </label>
-            </div>
-            <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
+          <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
+          <div className="flex flex-wrap gap-1.5">
+            <label className="filter-chip flex w-fit cursor-pointer select-none items-center gap-2 rounded-full py-1 pl-1 pr-2.5 font-mono text-xs">
+              <input type="checkbox" checked={lyricsFocus} onChange={(event) => setLyricsFocus(event.target.checked)} />
+              focus sync
+            </label>
+          </div>
+          <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
         </aside>
 
         <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6 lg:p-8">
@@ -541,7 +555,9 @@ export default function MusicShelf({ tracks }: Props) {
         </section>
 
         <aside
-          className={`rail max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:flex lg:max-h-none lg:p-12 ${pane === "records" ? "flex" : "hidden"}`}
+          className={`rail max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:flex lg:max-h-none lg:p-12 ${
+            pane === "records" ? "flex" : "hidden"
+          }`}
         >
           <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
 
@@ -559,38 +575,38 @@ export default function MusicShelf({ tracks }: Props) {
             ))}
           </div>
           <Scrollable>
-          <ul className="queue flex w-full flex-col gap-1">
-            {shown.map((track) => (
-              <li key={track.slug}>
-                <button
-                  type="button"
-                  className={`queue-item flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-transform active:scale-[0.98] ${
-                    track.slug === activeSlug ? "is-current" : ""
-                  }`}
-                  onClick={() => open(track)}
-                  aria-current={track.slug === activeSlug}
-                >
-                  <div className="w-12 shrink-0">
-                    <Vinyl track={track} spinning={track.slug === activeSlug && playing} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div lang={langFor(track.title)} className="truncate text-sm font-medium leading-tight">
-                      {track.title}
+            <ul className="queue flex w-full flex-col gap-1">
+              {shown.map((track) => (
+                <li key={track.slug}>
+                  <button
+                    type="button"
+                    className={`queue-item flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-transform active:scale-[0.98] ${
+                      track.slug === activeSlug ? "is-current" : ""
+                    }`}
+                    onClick={() => open(track)}
+                    aria-current={track.slug === activeSlug}
+                  >
+                    <div className="w-12 shrink-0">
+                      <Vinyl track={track} spinning={track.slug === activeSlug && playing} />
                     </div>
-                    <div className="truncate text-xs text-secondary-text">
-                      {track.originalArtist ?? AUTHOR}
+                    <div className="min-w-0 flex-1">
+                      <div lang={langFor(track.title)} className="truncate text-sm font-medium leading-tight">
+                        {track.title}
+                      </div>
+                      <div className="truncate text-xs text-secondary-text">{track.originalArtist ?? AUTHOR}</div>
                     </div>
-                  </div>
-                  <span className="shrink-0 font-mono text-xs tabular-nums text-secondary-text">
-                    {formatTime(track.duration)}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-secondary-text">
+                      {formatTime(track.duration)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </Scrollable>
           {shown.length === 0 && (
-            <p className="font-mono text-xs text-secondary-text">no {filter === "cover" ? "covers" : "originals"} yet</p>
+            <p className="font-mono text-xs text-secondary-text">
+              no {filter === "cover" ? "covers" : "originals"} yet
+            </p>
           )}
         </aside>
       </div>
