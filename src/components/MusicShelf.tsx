@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiPause, FiPlay, FiSkipBack, FiSkipForward } from "react-icons/fi";
+import { FiPause, FiPlay, FiRepeat, FiSkipBack, FiSkipForward, FiVolume1, FiVolume2, FiVolumeX } from "react-icons/fi";
 import { LyricsPanel } from "@/components/LyricsPanel";
 import { Scrollable } from "@/components/Scrollable";
 import { Vinyl } from "@/components/Vinyl";
@@ -19,6 +19,10 @@ const MAX_SCRATCH_RATE = 8;
 // a jump spins the record, but only so far before it is just a smear
 const SEEK_TURN_CAP = 3;
 const SEEK_SPIN_MS = 620;
+// how loud the deck was left, so the next visit starts where it was
+const VOLUME_KEY = "music:volume";
+// unmuting a fader that was dragged to zero has to land somewhere audible
+const FALLBACK_VOLUME = 0.5;
 
 type Filter = "all" | "cover" | "original";
 
@@ -69,6 +73,9 @@ export default function MusicShelf({ tracks, slug }: Props) {
   const [scrubAngle, setScrubAngle] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const seekTimer = useRef(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [repeat, setRepeat] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [lyricsFocus, setLyricsFocus] = useState(true);
   const [pane, setPane] = useState<"records" | "lyrics">("records");
@@ -136,6 +143,44 @@ export default function MusicShelf({ tracks, slug }: Props) {
     } else {
       audio.pause();
     }
+  }, []);
+
+  const level = muted ? 0 : volume;
+
+  const changeVolume = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const next = Number(event.target.value);
+    setVolume(next);
+    // dragging the fader all the way down is the same intent as muting
+    setMuted(next === 0);
+    window.localStorage.setItem(VOLUME_KEY, String(next));
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    if (!muted) {
+      setMuted(true);
+      return;
+    }
+    setMuted(false);
+    if (volume === 0) {
+      setVolume(FALLBACK_VOLUME);
+      window.localStorage.setItem(VOLUME_KEY, String(FALLBACK_VOLUME));
+    }
+  }, [muted, volume]);
+
+  // the fader drives both needles: the element and the hand-driven worklet
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = level;
+    deck?.setVolume(level);
+  }, [level, deck]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(VOLUME_KEY);
+    if (saved === null) return;
+    const stored = Number(saved);
+    if (!Number.isFinite(stored)) return;
+    const restored = Math.min(1, Math.max(0, stored));
+    setVolume(restored);
+    setMuted(restored === 0);
   }, []);
 
   // the cued record is loaded but never auto-played
@@ -430,6 +475,12 @@ export default function MusicShelf({ tracks, slug }: Props) {
         case "f":
           setLyricsFocus((on) => !on);
           return;
+        case "m":
+          toggleMute();
+          return;
+        case "r":
+          setRepeat((on) => !on);
+          return;
         default:
           // 0-9 jump to that tenth of the record
           if (/^[0-9]$/.test(key)) {
@@ -441,7 +492,7 @@ export default function MusicShelf({ tracks, slug }: Props) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, duration, seekTo, step, toggle]);
+  }, [active, duration, seekTo, step, toggle, toggleMute]);
 
   if (!active) return null;
 
@@ -450,6 +501,8 @@ export default function MusicShelf({ tracks, slug }: Props) {
       <audio
         ref={audioRef}
         preload="metadata"
+        // repeat holds one record on the platter; without it the crate rolls on
+        loop={repeat}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
@@ -513,34 +566,71 @@ export default function MusicShelf({ tracks, slug }: Props) {
             <span className="tabular-nums">{formatTime(duration || active.duration)}</span>
           </div>
 
-          <div className="flex items-center gap-5 text-xl">
+          <div className="grid w-full max-w-md grid-cols-[1fr_auto_1fr] items-center">
+            <div className="volume-control flex items-center gap-2 justify-self-start">
+              <button
+                type="button"
+                className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
+                onClick={toggleMute}
+                aria-pressed={muted}
+                aria-label={muted ? "Unmute" : "Mute"}
+              >
+                {level === 0 ? <FiVolumeX /> : level < 0.5 ? <FiVolume1 /> : <FiVolume2 />}
+              </button>
+              <input
+                className="vinyl-seek vinyl-volume"
+                style={{ "--vinyl-progress": `${level * 100}%` } as React.CSSProperties}
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={level}
+                onChange={changeVolume}
+                aria-label="Volume"
+              />
+            </div>
+
+            <div className="flex items-center gap-5 text-xl">
+              <button
+                type="button"
+                className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
+                onClick={() => step(-1)}
+                aria-label="Previous track"
+              >
+                <FiSkipBack />
+              </button>
+              <button
+                type="button"
+                className="play-button flex h-12 w-12 items-center justify-center rounded-full active:scale-[0.96]"
+                onClick={toggle}
+                aria-pressed={playing}
+                aria-label={playing ? "Pause" : "Play"}
+              >
+                <span className="relative block h-4 w-4">
+                  <FiPlay className={`icon-swap icon-play ${playing ? "" : "is-shown"}`} />
+                  <FiPause className={`icon-swap ${playing ? "is-shown" : ""}`} />
+                </span>
+              </button>
+              <button
+                type="button"
+                className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
+                onClick={() => step(1)}
+                aria-label="Next track"
+              >
+                <FiSkipForward />
+              </button>
+            </div>
+
             <button
               type="button"
-              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
-              onClick={() => step(-1)}
-              aria-label="Previous track"
+              className={`repeat-button justify-self-end transition-transform active:scale-[0.96] ${
+                repeat ? "is-on" : "text-secondary-text hover:opacity-70"
+              }`}
+              onClick={() => setRepeat((on) => !on)}
+              aria-pressed={repeat}
+              aria-label={repeat ? "Repeat on" : "Repeat off"}
             >
-              <FiSkipBack />
-            </button>
-            <button
-              type="button"
-              className="play-button flex h-12 w-12 items-center justify-center rounded-full active:scale-[0.96]"
-              onClick={toggle}
-              aria-pressed={playing}
-              aria-label={playing ? "Pause" : "Play"}
-            >
-              <span className="relative block h-4 w-4">
-                <FiPlay className={`icon-swap icon-play ${playing ? "" : "is-shown"}`} />
-                <FiPause className={`icon-swap ${playing ? "is-shown" : ""}`} />
-              </span>
-            </button>
-            <button
-              type="button"
-              className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
-              onClick={() => step(1)}
-              aria-label="Next track"
-            >
-              <FiSkipForward />
+              <FiRepeat />
             </button>
           </div>
 

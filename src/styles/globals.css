@@ -294,6 +294,61 @@ html {
   background-image: linear-gradient(var(--text-dark), var(--text-dark));
 }
 
+/* the fader stays folded away until the ear is reached for */
+.vinyl-volume {
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width 220ms var(--ease-out),
+    opacity 180ms ease;
+}
+
+.volume-control:focus-within .vinyl-volume {
+  width: 4.5rem;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .volume-control:hover .vinyl-volume {
+    width: 4.5rem;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* repeat reads as latched, not merely hovered, so it keeps the full ink */
+.repeat-button {
+  position: relative;
+  color: var(--secondary-text);
+  transition:
+    color 160ms ease,
+    opacity 160ms ease,
+    transform 140ms var(--ease-out);
+}
+
+.repeat-button.is-on {
+  color: var(--text);
+}
+
+.dark .repeat-button.is-on {
+  color: var(--text-dark);
+}
+
+/* the latch light: it must not move the icon when it comes on */
+.repeat-button.is-on::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 3px;
+  height: 3px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
 /* the records rail: pinned right, full height, its own scroll */
 @media (min-width: 1024px) {
   .rail {

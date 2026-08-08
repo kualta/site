@@ -6,6 +6,9 @@
 export class ScratchDeck {
   private context: AudioContext | null = null;
   private node: AudioWorkletNode | null = null;
+  private gain: GainNode | null = null;
+  // the level can be set before the deck is built, so it is kept here too
+  private level = 1;
   private ready: Promise<void> | null = null;
   private loadedSrc: string | null = null;
   private loading: Promise<boolean> | null = null;
@@ -30,9 +33,14 @@ export class ScratchDeck {
       node.port.onmessage = (event) => {
         if (event.data?.type === "position") this.onPosition?.(event.data.seconds);
       };
-      node.connect(context.destination);
+      // the hand-driven side goes through the same fader as the element
+      const gain = context.createGain();
+      gain.gain.value = this.level;
+      node.connect(gain);
+      gain.connect(context.destination);
       this.context = context;
       this.node = node;
+      this.gain = gain;
     })();
 
     return this.ready;
@@ -90,6 +98,14 @@ export class ScratchDeck {
 
   setRate(rate: number) {
     this.node?.port.postMessage({ type: "rate", rate });
+  }
+
+  setVolume(level: number) {
+    this.level = level;
+    // a step would click; a short ramp is how a fader actually moves
+    if (this.gain && this.context) {
+      this.gain.gain.setTargetAtTime(level, this.context.currentTime, 0.01);
+    }
   }
 
   unload() {
