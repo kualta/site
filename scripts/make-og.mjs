@@ -57,6 +57,8 @@ function fit(text, size, min) {
 
 async function card(cover, track) {
   const art = await sharp(cover).resize(ART, ART, { fit: "cover" }).toBuffer();
+  // png, explicitly: toBuffer keeps the input format, and most artwork is jpeg,
+  // which has no alpha to punch the corners out of — they come back black
   const rounded = await sharp(art)
     .composite([
       {
@@ -64,6 +66,7 @@ async function card(cover, track) {
         blend: "dest-in",
       },
     ])
+    .png()
     .toBuffer();
 
   // the record's own colours carry the card, pushed back far enough to read over
