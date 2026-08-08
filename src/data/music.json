@@ -1,6 +1,6 @@
 [
   {
-    "id": 8,
+    "id": 9,
     "slug": "preacher-man",
     "title": "PREACHER MAN",
     "artist": "kualta",
@@ -76,7 +76,8 @@
     "date": "2023-01-01",
     "duration": 110,
     "src": "/music/faux.mp3",
-    "cover": "/music/covers/faux.jpg"
+    "cover": "/music/covers/faux.jpg",
+    "og": "/music/og/faux.png"
   },
   {
     "id": 5,
@@ -127,7 +128,7 @@
     "og": "/music/og/dialogue.png"
   },
   {
-    "id": 9,
+    "id": 10,
     "slug": "self-conscious-portrait",
     "title": "Self-Conscious Portrait",
     "artist": "kualta",
