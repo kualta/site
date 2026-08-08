@@ -27,8 +27,9 @@ const TEXT_X = ART_X + ART + 60;
 const TEXT_W = WIDTH - TEXT_X - 80;
 
 // the rounded 1c stack the site uses is not installed, so fall back to whatever
-// the machine has that covers Latin, Cyrillic and Japanese alike
-const FONTS = "'Hiragino Maru Gothic ProN','Hiragino Sans','Helvetica Neue',Arial,sans-serif";
+// the machine has. the Western face goes first on purpose: the Japanese ones also
+// carry Cyrillic, but at nearly full width, which sets Тёмная Ночь like a ransom note
+const FONTS = "'Helvetica Neue',Arial,'Hiragino Maru Gothic ProN','Hiragino Sans',sans-serif";
 
 const slugify = (name) =>
   name
@@ -73,15 +74,15 @@ async function card(cover, track) {
     .toBuffer();
 
   const title = fit(track.title, 62, 34);
-  const byline = fit(track.byline, 30, 22);
-  const meta = fit(track.meta, 26, 20);
+  const source = fit(track.source, 30, 22);
+  const credit = fit(track.credit, 26, 20);
 
   const text = `<svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
     <rect width="${WIDTH}" height="${HEIGHT}" fill="#0b0b0c" fill-opacity="0.46"/>
     <g font-family="${FONTS}" fill="#f5f5f4">
       <text x="${TEXT_X}" y="296" font-size="${title.size}" font-weight="600">${escape(title.text)}</text>
-      <text x="${TEXT_X}" y="352" font-size="${byline.size}" fill="#d4d4d8">${escape(byline.text)}</text>
-      <text x="${TEXT_X}" y="396" font-size="${meta.size}" fill="#a1a1aa">${escape(meta.text)}</text>
+      <text x="${TEXT_X}" y="352" font-size="${source.size}" fill="#d4d4d8">${escape(source.text)}</text>
+      <text x="${TEXT_X}" y="396" font-size="${credit.size}" fill="#a1a1aa">${escape(credit.text)}</text>
       <text x="${WIDTH - 80}" y="${HEIGHT - 54}" font-size="24" fill="#8b8b93" text-anchor="end">kualta.dev</text>
     </g>
   </svg>`;
@@ -114,12 +115,11 @@ async function main() {
       continue;
     }
 
-    // a cover credits whoever wrote it; an original just names the artist
-    const artist = common.artist ?? "kualta";
-    const byline = common.originalartist ? `${artist} · ${common.originalartist}` : artist;
-    const meta = [common.album, common.year].filter(Boolean).join(" · ");
+    // where the song came from first, then whose record this is
+    const source = [common.album, common.originalartist].filter(Boolean).join(" · ");
+    const credit = [common.artist ?? "kualta", common.year].filter(Boolean).join(" · ");
 
-    const png = await card(picture.data, { title: common.title ?? slug, byline, meta });
+    const png = await card(picture.data, { title: common.title ?? slug, source, credit });
     await writeFile(path.join(outDir, `${slug}.png`), png);
 
     drawn += 1;

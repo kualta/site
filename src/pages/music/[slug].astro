@@ -21,15 +21,15 @@ interface Props {
 
 const { track, tracks } = Astro.props;
 
-// a cover credits whoever wrote it; an original just names the artist
-const byline = track.originalArtist ? `${track.artist} · ${track.originalArtist}` : track.artist;
-const description = [byline, track.album, track.date.slice(0, 4)].filter(Boolean).join(" · ");
+// where the song came from first, then whose record this is, matching the share card
+const source = [track.album, track.originalArtist].filter(Boolean).join(" · ");
+const description = [source, track.artist, track.date.slice(0, 4)].filter(Boolean).join(" · ");
 ---
 <BaseLayout
   title={`${track.title} — kualta`}
   description={description}
   image={track.og ?? "/opengraph-image.png"}
-  imageAlt={`${track.title} by ${byline}`}
+  imageAlt={`${track.title} by ${track.artist}`}
 >
   <div class="flex w-full grow">
     <MusicShelf client:load tracks={tracks} slug={track.slug} />
