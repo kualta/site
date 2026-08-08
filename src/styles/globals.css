@@ -281,12 +281,19 @@ html {
 
 .vinyl-seek {
   appearance: none;
+  /* a 3px ribbon is a hard thing to hit, so the padding is reach, not paint:
+     the box grows to a finger's worth and the sliver stays a sliver */
+  box-sizing: content-box;
   height: 3px;
+  padding-block: 8px;
+  margin-block: -8px;
   border-radius: 2px;
   cursor: pointer;
   background-color: color-mix(in oklab, var(--secondary-text) 45%, transparent);
   background-image: linear-gradient(var(--text), var(--text));
   background-repeat: no-repeat;
+  background-origin: content-box;
+  background-clip: content-box;
   background-size: var(--vinyl-progress, 0%) 100%;
 }
 

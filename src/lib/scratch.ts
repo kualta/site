@@ -12,8 +12,11 @@ export class ScratchDeck {
   private ready: Promise<void> | null = null;
   private loadedSrc: string | null = null;
   private loading: Promise<boolean> | null = null;
+  private objectUrl: string | null = null;
 
   onPosition: ((seconds: number) => void) | null = null;
+  /** the whole track, held locally, once it has been fetched */
+  onSource: ((src: string, url: string) => void) | null = null;
 
   get isLoaded() {
     return this.node !== null && this.loadedSrc !== null;
@@ -48,19 +51,34 @@ export class ScratchDeck {
 
   /** Fetch and decode a track so the next grab is instant. Safe to call repeatedly. */
   async load(src: string) {
-    if (this.loadedSrc === src) return true;
+    if (this.loadedSrc === src) {
+      // a track already in hand still has to be offered, or a fresh listener never hears of it
+      if (this.objectUrl) this.onSource?.(src, this.objectUrl);
+      return true;
+    }
     if (this.loading) await this.loading;
-    if (this.loadedSrc === src) return true;
+    if (this.loadedSrc === src) {
+      if (this.objectUrl) this.onSource?.(src, this.objectUrl);
+      return true;
+    }
 
     this.loading = (async () => {
       try {
+        // the whole file first, and in one piece: the copy is worth having even
+        // if the worklet never comes up, since the element can seek inside it
+        const response = await fetch(src);
+        const blob = await response.blob();
+        this.releaseUrl();
+        this.objectUrl = URL.createObjectURL(blob);
+        this.onSource?.(src, this.objectUrl);
+
         await this.setup();
         const context = this.context;
         const node = this.node;
         if (!context || !node) return false;
 
-        const response = await fetch(src);
-        const encoded = await response.arrayBuffer();
+        // decodeAudioData empties the buffer it is handed, so read the blob again
+        const encoded = await blob.arrayBuffer();
         const buffer = await context.decodeAudioData(encoded);
 
         const channels: Float32Array[] = [];
@@ -111,5 +129,16 @@ export class ScratchDeck {
   unload() {
     this.node?.port.postMessage({ type: "unload" });
     this.loadedSrc = null;
+    this.releaseUrl();
+  }
+
+  /**
+   * Drops the local copy. The player only ever points the element at the copy
+   * of the record on the platter, and a new one is fetched before the old one
+   * is let go, so nothing is playing out of what this revokes.
+   */
+  private releaseUrl() {
+    if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
+    this.objectUrl = null;
   }
 }
