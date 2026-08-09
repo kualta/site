@@ -56,9 +56,9 @@ export const GET: APIRoute = async ({ site }) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
-    <title>${esc(`${SITE_NAME} — posts`)}</title>
+    <title>${esc(`${SITE_NAME} - posts`)}</title>
     <link>${esc(`${base}/posts/`)}</link>
-    <description>${esc(`Essays by ${SITE_NAME} — ${TAGLINE}.`)}</description>
+    <description>${esc(`Essays by ${SITE_NAME}, ${TAGLINE}.`)}</description>
     <language>en-us</language>
     <lastBuildDate>${new Date(newest).toUTCString()}</lastBuildDate>
     <atom:link href="${esc(`${base}/rss.xml`)}" rel="self" type="application/rss+xml" />

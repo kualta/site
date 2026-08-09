@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { MdArrowBack } from "react-icons/md";
 
 /**
- * `path` arrives from the server so the link is in the markup on first paint —
- * it used to start as "/" on every page, which rendered an empty box and left
+ * `path` arrives from the server so the link is in the markup on first paint.
+ * It used to start as "/" on every page, which rendered an empty box and left
  * the site with no link home for anything that does not run scripts.
  */
 export function BackButton({ path: initial = "/" }: { path?: string }) {

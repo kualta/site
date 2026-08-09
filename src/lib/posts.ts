@@ -47,7 +47,7 @@ function toSummary(entry: CollectionEntry<"posts">, plain: string): string {
 
   const subtitle = entry.data.description?.trim();
   const opening = plain.slice(0, 400);
-  const lead = subtitle ? `${entry.data.title} — ${subtitle}. ${opening}` : opening;
+  const lead = subtitle ? `${entry.data.title}: ${subtitle}. ${opening}` : opening;
 
   if (lead.length <= 158) return lead;
   const cut = lead.slice(0, 158);

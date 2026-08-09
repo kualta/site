@@ -18,7 +18,7 @@ const postsForTag = (await getPostsMetadata()).filter(
 const tagText = filter.replace("-", " ").toLowerCase();
 
 const titles = postsForTag.map((post) => post.title).join(", ");
-const description = `Every post on ${tagText} — ${titles}.`;
+const description = `Every post tagged ${tagText} on kualta's blog: ${titles}. Long-form essays on philosophy, crypto, culture and game design.`;
 
 const schema = [
   {

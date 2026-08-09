@@ -22,13 +22,13 @@ interface Props {
 
 const { track, tracks } = Astro.props;
 
-// where the song came from first, then whose record this is, matching the share card
-const source = [track.album, track.originalArtist].filter(Boolean).join(" · ");
-const credit = [source, track.artist, track.date.slice(0, 4)].filter(Boolean).join(" · ");
-
-const kind = track.kind === "cover" ? "A cover" : "An original";
+// a sentence rather than a list of fields, so it stands on its own in a result
+// instead of being padded out with the site's boilerplate
+const kind = track.kind === "cover" ? "a cover" : "an original";
+const album = track.album ? ` from ${track.album}` : "";
 const origin = track.originalArtist ? `, first recorded by ${track.originalArtist}` : "";
-const description = `${kind} by ${track.artist}${origin}. ${credit}. Listen on kualta.dev.`;
+const year = track.date.slice(0, 4);
+const description = `${track.title}, ${kind} by ${track.artist}${album}${origin}, ${year}. Play it on kualta.dev, alongside the rest of the shelf.`;
 
 /** ISO 8601 duration, the only form schema.org reads */
 const isoDuration = (seconds: number) =>
@@ -66,7 +66,7 @@ const schema = [
   imageAlt={`${track.title} by ${track.artist}`}
   schema={schema}
 >
-  <h1 class="sr-only">{track.title} — {track.artist}</h1>
+  <h1 class="sr-only">{track.title} by {track.artist}</h1>
   <div class="flex w-full grow">
     <MusicShelf client:load tracks={tracks} slug={track.slug} />
   </div>

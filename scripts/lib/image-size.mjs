@@ -2,7 +2,7 @@
  * Reads pixel dimensions straight out of an image header.
  *
  * The site ships its images from `public/`, so Astro never touches them and
- * never learns how big they are — which is how `og:image:width` came to claim
+ * never learns how big they are. That is how `og:image:width` came to claim
  * 1200x630 for files that are 2048x1152, and how every in-post image shipped
  * without width/height and shifted the page as it loaded.
  *
@@ -38,7 +38,7 @@ function gif(buffer) {
 
 function jpeg(buffer) {
   // walk the segment chain to the frame header, which is the only place the
-  // real dimensions live — thumbnails in EXIF would otherwise win
+  // real dimensions live; thumbnails in EXIF would otherwise win
   let offset = 2;
   while (offset + 9 < buffer.length) {
     if (buffer[offset] !== 0xff) {
@@ -141,7 +141,7 @@ function svg(buffer) {
 /**
  * @param {string} file absolute path to an image
  * @returns {{width: number, height: number} | null} null when the format is
- *   unknown or the header is malformed — callers fall back to shipping no
+ *   unknown or the header is malformed. Callers fall back to shipping no
  *   dimensions at all, which is what happened before this existed
  */
 export function imageSize(file) {

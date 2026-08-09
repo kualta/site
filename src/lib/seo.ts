@@ -15,12 +15,12 @@ export const SAME_AS = [
 ];
 
 /**
- * Every tab and every result reads "<page> — kualta", so a bare "posts" or
+ * Every tab and every result reads "<page> - kualta", so a bare "posts" or
  * "music" is never adrift from whose posts and whose music it is.
  */
 export function pageTitle(title?: string): string {
-  if (!title || title === SITE_NAME) return `${SITE_NAME} — ${TAGLINE}`;
-  return title.endsWith(SITE_NAME) ? title : `${title} — ${SITE_NAME}`;
+  if (!title || title === SITE_NAME) return `${SITE_NAME} - ${TAGLINE}`;
+  return title.endsWith(SITE_NAME) ? title : `${title} - ${SITE_NAME}`;
 }
 
 /**
@@ -32,10 +32,15 @@ export function pageDescription(description?: string, title?: string): string {
   const text = description?.trim();
   if (text && text.length >= 70) return clamp(text);
 
-  const subject = title && title !== SITE_NAME ? `${title} — ` : "";
-  const lead = text ? `${subject}${text}` : subject.replace(/ — $/, "");
+  // naming the page again in front of text that already names it reads as a
+  // stutter, which is how "tag: buddhism: Every post on buddhism" happened
+  const named = !title || title === SITE_NAME || text?.toLowerCase().includes(title.toLowerCase());
+  const subject = named ? "" : `${title}: `;
+  const lead = text ? `${subject}${text}` : subject.replace(/: $/, "") || title || "";
   const suffix = `${SITE_NAME}'s corner of the web: essays on philosophy, crypto and game design, side projects, and music.`;
-  return clamp(lead ? `${lead}. ${suffix}` : suffix);
+  // the lead may already end in a full stop, and two of them read as a typo
+  const joined = lead ? `${lead.replace(/[.!?]+$/, "")}. ${suffix}` : suffix;
+  return clamp(joined);
 }
 
 /** results stop showing the description somewhere past 160 characters */

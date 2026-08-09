@@ -3,7 +3,7 @@
  * `src/data/image-sizes.json`.
  *
  * The layout needs an image's real dimensions to declare og:image:width, and it
- * has to do that for the homepage too — which renders on demand on a worker,
+ * has to do that for the homepage too, which renders on demand on a worker
  * where `public/` does not exist as files. So the sizes are baked into a plain
  * JSON import instead of being read at request time.
  *
