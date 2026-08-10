@@ -5,6 +5,8 @@ import react from "@astrojs/react";
 import tailwind from "@astrojs/tailwind";
 import sitemap from "@astrojs/sitemap";
 import cloudflare from "@astrojs/cloudflare";
+import { buildImageManifest } from "./scripts/lib/image-manifest.mjs";
+import { rehypePostContent } from "./scripts/lib/rehype-post-content.mjs";
 
 const SITE = "https://kualta.dev";
 const POSTS_DIR = "./src/content/posts";
@@ -23,6 +25,10 @@ function readPostLastmod() {
 
 const postLastmod = readPostLastmod();
 
+// sizes for every file in public/, so the layout can declare real og:image
+// dimensions without reading the disk at request time
+buildImageManifest();
+
 export default defineConfig({
   site: SITE,
   output: "static",
@@ -36,6 +42,9 @@ export default defineConfig({
         "https://pomo.kualta.dev",
         "https://hemi.kualta.dev",
       ],
+      // robots.txt disallows /api/, so listing it here only earns a
+      // "blocked by robots.txt" report in Search Console
+      filter: (page) => !page.startsWith(`${SITE}/api`),
       serialize(item) {
         const path = item.url.replace(SITE, "").replace(/\/$/, "") || "/";
         const priorities = {
@@ -47,8 +56,13 @@ export default defineConfig({
         };
         if (path in priorities) {
           item.priority = priorities[path];
+        } else if (path.startsWith("/posts/tags/")) {
+          // listings of posts already reachable from /posts
+          item.priority = 0.4;
         } else if (path.startsWith("/posts/")) {
           item.priority = 0.9;
+        } else if (path.startsWith("/music/")) {
+          item.priority = 0.6;
         }
         const postMatch = path.match(/^\/posts\/([^/]+)$/);
         if (postMatch) {
@@ -59,6 +73,9 @@ export default defineConfig({
       },
     }),
   ],
+  markdown: {
+    rehypePlugins: [rehypePostContent({ root: process.cwd() })],
+  },
   image: {
     remotePatterns: [
       { protocol: "https", hostname: "picsum.photos" },

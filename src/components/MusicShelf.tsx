@@ -614,7 +614,7 @@ export default function MusicShelf({ tracks, slug }: Props) {
             pane === "lyrics" ? "flex" : "hidden"
           }`}
         >
-          <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h3>
+          <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h2>
           <div className="flex flex-wrap gap-1.5">
             <label className="filter-chip flex w-fit cursor-pointer select-none items-center gap-2 rounded-full py-1 pl-1 pr-2.5 font-mono text-xs">
               <input type="checkbox" checked={lyricsFocus} onChange={(event) => setLyricsFocus(event.target.checked)} />
@@ -752,7 +752,7 @@ export default function MusicShelf({ tracks, slug }: Props) {
             pane === "records" ? "flex" : "hidden"
           }`}
         >
-          <h3 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h3>
+          <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h2>
 
           <div className="flex flex-wrap gap-1.5">
             {FILTERS.map(({ key, label }) => (

@@ -9,9 +9,11 @@ const { name, width = 512, height = 512, class: className = "" } = Astro.props;
 ---
 <img
   src={`/images/stickers/${name}.png`}
-  alt={`${name} sticker`}
+  alt=""
   width={width}
   height={height}
   class={`${className} select-none pointer-events-none`}
-  loading="eager"
+  loading="lazy"
+  decoding="async"
+  aria-hidden="true"
 />

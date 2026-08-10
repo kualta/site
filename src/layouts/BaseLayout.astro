@@ -1,5 +1,6 @@
 ---
 import "@/styles/globals.css";
+import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?url";
 import { ClientRouter } from "astro:transitions";
 import Header from "@/components/Header.astro";
 import NotificationsButton from "@/components/NotificationsButton.astro";
@@ -7,12 +8,14 @@ import CornersScope from "@/components/CornersScope.astro";
 import { Snow } from "@/components/Snow.tsx";
 import { Toaster } from "@/components/Toaster.tsx";
 import SEO from "@/components/SEO.astro";
+import { SITE_NAME, TWITTER, ogImage, pageDescription, pageTitle } from "@/lib/seo";
 
 export interface Article {
   publishedTime: string;
   modifiedTime?: string;
   tags?: string[];
   section?: string;
+  wordCount?: number;
 }
 
 interface Props {
@@ -23,44 +26,62 @@ interface Props {
   type?: "website" | "article";
   article?: Article;
   noindex?: boolean;
+  /** extra schema.org nodes for whatever this page actually is */
+  schema?: object[];
 }
 
 const {
-  title = "kualta",
-  description = "a servant of many",
-  image = "/opengraph-image.png",
+  title,
+  description,
+  image,
   imageAlt = "kualta.dev",
   type = "website",
   article,
   noindex = false,
+  schema = [],
 } = Astro.props;
 
+const documentTitle = pageTitle(title);
+const metaDescription = pageDescription(description, title);
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
-const ogImage = new URL(image, Astro.site).toString();
+const og = ogImage(image, Astro.site);
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
+
+// large thumbnails and full snippets have to be opted into; without them Google
+// is free to crop the share card down to a favicon and clip the summary
+const robots = noindex
+  ? "noindex, nofollow"
+  : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 ---
 <!doctype html>
 <html lang="en" class="scroll-smooth dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title}</title>
-    <meta name="description" content={description} />
+    <title>{documentTitle}</title>
+    <meta name="description" content={metaDescription} />
     <link rel="icon" href="/favicon.ico" />
     <link rel="canonical" href={canonical} />
-    <meta name="robots" content={noindex ? "noindex, nofollow" : "index, follow"} />
-    <meta name="author" content="kualta" />
+    <meta name="robots" content={robots} />
+    <meta name="author" content={SITE_NAME} />
+    <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f8f8f8" media="(prefers-color-scheme: light)" />
 
-    <meta property="og:site_name" content="kualta" />
+    <!-- the page is set in this face, so waiting for the stylesheet to ask for it costs a repaint -->
+    <link rel="preload" href={fredoka} as="font" type="font/woff2" crossorigin />
+    <link rel="alternate" type="application/rss+xml" title={`${SITE_NAME} - posts`} href="/rss.xml" />
+
+    <meta property="og:site_name" content={SITE_NAME} />
     <meta property="og:locale" content="en_US" />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
+    <meta property="og:title" content={documentTitle} />
+    <meta property="og:description" content={metaDescription} />
     <meta property="og:url" content={canonical} />
     <meta property="og:type" content={type} />
-    <meta property="og:image" content={ogImage} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image" content={og.url} />
+    {og.width && <meta property="og:image:width" content={String(og.width)} />}
+    {og.height && <meta property="og:image:height" content={String(og.height)} />}
+    {og.type && <meta property="og:image:type" content={og.type} />}
     <meta property="og:image:alt" content={imageAlt} />
 
     {article?.publishedTime && <meta property="article:published_time" content={article.publishedTime} />}
@@ -70,13 +91,23 @@ const isChristmas = month >= 10;
     {article?.tags?.map((tag) => <meta property="article:tag" content={tag} />)}
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@kualts" />
-    <meta name="twitter:creator" content="@kualts" />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:site" content={TWITTER} />
+    <meta name="twitter:creator" content={TWITTER} />
+    <meta name="twitter:title" content={documentTitle} />
+    <meta name="twitter:description" content={metaDescription} />
+    <meta name="twitter:image" content={og.url} />
+    <meta name="twitter:image:alt" content={imageAlt} />
 
-    <SEO title={title} description={description} canonical={canonical} ogImage={ogImage} type={type} article={article} />
+    <SEO
+      title={title ?? SITE_NAME}
+      documentTitle={documentTitle}
+      description={metaDescription}
+      canonical={canonical}
+      ogImage={og}
+      type={type}
+      article={article}
+      schema={schema}
+    />
 
     <ClientRouter />
     <script is:inline>
