@@ -19,7 +19,7 @@ export const SAME_AS = [
  * "music" is never adrift from whose posts and whose music it is.
  */
 export function pageTitle(title?: string): string {
-  if (!title || title === SITE_NAME) return `${SITE_NAME} - ${TAGLINE}`;
+  if (!title || title === SITE_NAME) return SITE_NAME;
   return title.endsWith(SITE_NAME) ? title : `${title} - ${SITE_NAME}`;
 }
 
