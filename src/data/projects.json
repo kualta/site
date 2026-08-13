@@ -270,7 +270,7 @@
   {
     "id": 22,
     "name": "game",
-    "description": "source-style movement shooter",
+    "description": "meditation and study-with-me shared space",
     "link": "https://flow.game",
     "language": "GDScript",
     "date": "2026-01-18",
@@ -284,26 +284,9 @@
     "relevance": 120
   },
   {
-    "id": 23,
-    "name": "talk",
-    "description": "in-room chat for flow rooms",
-    "link": "https://flow.talk",
-    "language": "TypeScript",
-    "date": "2026-05-03",
-    "status": "ongoing",
-    "tech_stack": [
-      "React",
-      "TanStack Start",
-      "Vite",
-      "Bun"
-    ],
-    "full_name": "flow talk",
-    "relevance": 115
-  },
-  {
     "id": 24,
     "name": "ui",
-    "description": "base-ui based component and styling system",
+    "description": "flow component and styling system",
     "link": "https://ui.flow.industries",
     "git_link": "https://github.com/flow-industries/ui",
     "language": "TypeScript",
@@ -320,7 +303,7 @@
   {
     "id": 25,
     "name": "pixl",
-    "description": "real pixel art snapped to a true grid",
+    "description": "local pixel art generation snapped to a grid",
     "link": "https://crates.io/crates/flow-pixl",
     "git_link": "https://github.com/flow-industries/pixl",
     "language": "Rust",
