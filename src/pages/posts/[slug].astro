@@ -20,7 +20,7 @@ const { Content, headings } = post;
 ---
 <BaseLayout
   title={post.data.title}
-  description={post.data.description}
+  description={post.data.summary}
   image={post.data.preview}
   imageAlt={post.data.title}
   type="article"
@@ -29,6 +29,7 @@ const { Content, headings } = post;
     modifiedTime: post.data.modifiedTime,
     tags: post.data.tags,
     section: post.data.tags?.[0],
+    wordCount: post.data.wordCount,
   }}
 >
   <div class="max-w-2xl w-full relative mb-10">
@@ -37,8 +38,15 @@ const { Content, headings } = post;
       class="z-[10] max-w-2xl rounded-xl p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-xl"
     >
       <h1 class="mb-2 text-center">{post.data.title}</h1>
-      <h3 class="mb-6 mt-0 text-center">{post.data.description}</h3>
+      <p class="post-subtitle mb-6 mt-0 text-center">{post.data.description}</p>
       <Content />
+      {post.data.tags.length > 0 && (
+        <nav aria-label="Tags" class="not-prose flex flex-row flex-wrap gap-3 pt-10 text-sm text-secondary-text">
+          {post.data.tags.map((tag) => (
+            <a href={`/posts/tags/${tag}/`} class="hover:opacity-70" rel="tag">#{tag}</a>
+          ))}
+        </nav>
+      )}
     </article>
     <SubscriptionBox />
   </div>

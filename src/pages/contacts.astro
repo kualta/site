@@ -2,18 +2,32 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
+import { SITE_URL } from "@/lib/seo";
 
 const contacts = [...(contactsData as Contact[])].sort(
   (a, b) => (a.platform.length + a.label.length) - (b.platform.length + b.label.length),
 );
+
+const schema = [
+  {
+    "@type": "ContactPage",
+    "@id": `${SITE_URL}/contacts/#contact`,
+    mainEntity: { "@id": `${SITE_URL}/#person` },
+  },
+];
 ---
-<BaseLayout title="contacts" description="contact kualta">
+<BaseLayout
+  title="contacts"
+  description="Every way to reach kualta: email, GitHub, Bluesky, Farcaster, Twitter and the rest, with a PGP key for the things that need one."
+  schema={schema}
+>
   <div class="max-w-xl w-full grow flex flex-col gap-4 p-4">
+    <h1 class="sr-only">contacts</h1>
     {contacts.map((contact) => (
       <a
         href={contact.link}
         target="_blank"
-        rel="noopener noreferrer"
+        rel="noopener noreferrer me"
         class="w-full flex flex-row items-baseline gap-2 hover:opacity-70 text-lg"
       >
         <span class="font-medium whitespace-nowrap">{contact.platform}</span>

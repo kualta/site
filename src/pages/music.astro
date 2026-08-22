@@ -3,10 +3,30 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import MusicShelf from "@/components/MusicShelf.tsx";
 import type { Track } from "@/types";
 import musicData from "@/data/music.json";
+import { SITE_URL } from "@/lib/seo";
 
 const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a.date));
+
+const schema = [
+  {
+    "@type": "ItemList",
+    "@id": `${SITE_URL}/music/#list`,
+    numberOfItems: tracks.length,
+    itemListElement: tracks.map((track, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      url: `${SITE_URL}/music/${track.slug}/`,
+      name: track.title,
+    })),
+  },
+];
 ---
-<BaseLayout title="music" description="music made by kualta">
+<BaseLayout
+  title="music"
+  description="Songs recorded by kualta: originals and covers, all of them playable here, in a shelf you can flip through."
+  schema={schema}
+>
+  <h1 class="sr-only">music</h1>
   <div class="flex w-full grow">
     <MusicShelf client:load tracks={tracks} />
   </div>

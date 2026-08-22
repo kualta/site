@@ -27,9 +27,11 @@ export const onRequest = defineMiddleware((ctx, next) => {
     return Response.redirect(target, 301);
   }
 
+  // permanent: these subdomains have no content of their own and never will,
+  // so the destination is the one that should hold the ranking
   for (const key in subdomainRedirects) {
     if (hostname.startsWith(`${key}.`)) {
-      return Response.redirect(`https://${CANONICAL_HOST}${subdomainRedirects[key]}`, 302);
+      return Response.redirect(`https://${CANONICAL_HOST}${subdomainRedirects[key]}`, 301);
     }
   }
 

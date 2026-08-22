@@ -4,6 +4,8 @@ import ContactIcons from "@/components/ContactIcons.astro";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 
+// rendered per request so the middleware can send www and kualta.com to the
+// canonical apex; every other route is prerendered
 export const prerender = false;
 
 const contacts = (contactsData as Contact[])
@@ -13,12 +15,21 @@ const contacts = (contactsData as Contact[])
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
 ---
-<BaseLayout>
+<BaseLayout description="kualta builds software, writes essays on philosophy, crypto and game design, and records music. Everything lives here.">
   <div class="flex flex-col w-full grow justify-center place-content-center snowflake font-bold">
     <div class="flex flex-col gap-2 w-min mx-auto">
       <h1 class="text-8xl text-left relative">
         kualta
-        {isChristmas && <img src="/santa_hat.svg" class="absolute top-1 -left-1 w-6 h-6" alt="santa hat" />}
+        {isChristmas && (
+          <img
+            src="/santa_hat.svg"
+            class="absolute top-1 -left-1 w-6 h-6"
+            alt="santa hat"
+            width="277"
+            height="233"
+            decoding="async"
+          />
+        )}
       </h1>
       <div class="flex flex-row gap-3 items-center">
         <ContactIcons contacts={contacts} />

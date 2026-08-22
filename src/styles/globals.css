@@ -281,12 +281,19 @@ html {
 
 .vinyl-seek {
   appearance: none;
+  /* a 3px ribbon is a hard thing to hit, so the padding is reach, not paint:
+     the box grows to a finger's worth and the sliver stays a sliver */
+  box-sizing: content-box;
   height: 3px;
+  padding-block: 8px;
+  margin-block: -8px;
   border-radius: 2px;
   cursor: pointer;
   background-color: color-mix(in oklab, var(--secondary-text) 45%, transparent);
   background-image: linear-gradient(var(--text), var(--text));
   background-repeat: no-repeat;
+  background-origin: content-box;
+  background-clip: content-box;
   background-size: var(--vinyl-progress, 0%) 100%;
 }
 
@@ -710,6 +717,28 @@ input[type="checkbox"]:focus-visible {
 /* table-of-contents links should not land flush against the top edge */
 .prose :is(h1, h2, h3, h4, h5, h6) {
   scroll-margin-top: 1.5rem;
+}
+
+/* the subtitle under a post title reads as a heading and is not one; it keeps
+   the size it had as an h3 */
+.prose .post-subtitle {
+  font-size: 1.25em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--tw-prose-headings);
+}
+
+.dark .prose .post-subtitle {
+  color: var(--tw-prose-invert-headings);
+}
+
+/* section headings became h2 so each post's outline runs h1 -> h2 instead of
+   skipping a level; the type scale stays where it was */
+.prose > h2 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
 }
 
 /* the header links keep their spacing and scroll once they stop fitting */

@@ -266,5 +266,54 @@
       "TOML"
     ],
     "relevance": 110
+  },
+  {
+    "id": 22,
+    "name": "game",
+    "description": "meditation and study-with-me shared space",
+    "link": "https://flow.game",
+    "language": "GDScript",
+    "date": "2026-01-18",
+    "status": "ongoing",
+    "tech_stack": [
+      "Godot",
+      "Bevy",
+      "React"
+    ],
+    "full_name": "flow game",
+    "relevance": 120
+  },
+  {
+    "id": 24,
+    "name": "ui",
+    "description": "flow component and styling system",
+    "link": "https://ui.flow.industries",
+    "git_link": "https://github.com/flow-industries/ui",
+    "language": "TypeScript",
+    "date": "2026-04-09",
+    "status": "complete",
+    "tech_stack": [
+      "Base UI",
+      "React",
+      "TailwindCSS"
+    ],
+    "full_name": "flow ui",
+    "relevance": 116
+  },
+  {
+    "id": 25,
+    "name": "pixl",
+    "description": "local pixel art generation snapped to a grid",
+    "link": "https://crates.io/crates/flow-pixl",
+    "git_link": "https://github.com/flow-industries/pixl",
+    "language": "Rust",
+    "date": "2026-06-14",
+    "status": "archived",
+    "tech_stack": [
+      "SDXL",
+      "Metal",
+      "CUDA"
+    ],
+    "relevance": 108
   }
 ]

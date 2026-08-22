@@ -8,6 +8,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import MusicShelf from "@/components/MusicShelf.tsx";
 import type { Track } from "@/types";
 import musicData from "@/data/music.json";
+import { SITE_URL } from "@/lib/seo";
 
 export async function getStaticPaths() {
   const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a.date));
@@ -21,16 +22,51 @@ interface Props {
 
 const { track, tracks } = Astro.props;
 
-// where the song came from first, then whose record this is, matching the share card
-const source = [track.album, track.originalArtist].filter(Boolean).join(" · ");
-const description = [source, track.artist, track.date.slice(0, 4)].filter(Boolean).join(" · ");
+// a sentence rather than a list of fields, so it stands on its own in a result
+// instead of being padded out with the site's boilerplate
+const kind = track.kind === "cover" ? "a cover" : "an original";
+const album = track.album ? ` from ${track.album}` : "";
+const origin = track.originalArtist ? `, first recorded by ${track.originalArtist}` : "";
+const year = track.date.slice(0, 4);
+const description = `${track.title}, ${kind} by ${track.artist}${album}${origin}, ${year}. Play it on kualta.dev, alongside the rest of the shelf.`;
+
+/** ISO 8601 duration, the only form schema.org reads */
+const isoDuration = (seconds: number) =>
+  `PT${Math.floor(seconds / 60)}M${String(Math.round(seconds % 60)).padStart(2, "0")}S`;
+
+const url = `${SITE_URL}/music/${track.slug}/`;
+
+const schema = [
+  {
+    "@type": "MusicRecording",
+    "@id": `${url}#recording`,
+    name: track.title,
+    url,
+    byArtist: { "@type": "MusicGroup", name: track.artist },
+    ...(track.album ? { inAlbum: { "@type": "MusicAlbum", name: track.album } } : {}),
+    ...(track.duration ? { duration: isoDuration(track.duration) } : {}),
+    ...(track.track ? { position: track.track } : {}),
+    datePublished: track.date,
+    audio: {
+      "@type": "AudioObject",
+      contentUrl: `${SITE_URL}${track.src}`,
+      encodingFormat: "audio/mpeg",
+      ...(track.duration ? { duration: isoDuration(track.duration) } : {}),
+    },
+    ...(track.originalArtist
+      ? { recordingOf: { "@type": "MusicComposition", name: track.title, composer: { "@type": "Person", name: track.originalArtist } } }
+      : {}),
+  },
+];
 ---
 <BaseLayout
-  title={`${track.title} - kualta`}
+  title={track.title}
   description={description}
   image={track.og ?? "/opengraph-image.png"}
   imageAlt={`${track.title} by ${track.artist}`}
+  schema={schema}
 >
+  <h1 class="sr-only">{track.title} by {track.artist}</h1>
   <div class="flex w-full grow">
     <MusicShelf client:load tracks={tracks} slug={track.slug} />
   </div>
