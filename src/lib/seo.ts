@@ -30,6 +30,7 @@ export function pageTitle(title?: string): string {
  */
 export function pageDescription(description?: string, title?: string): string {
   const text = description?.trim();
+  if (text === TAGLINE) return TAGLINE;
   if (text && text.length >= 70) return clamp(text);
 
   // naming the page again in front of text that already names it reads as a
@@ -37,7 +38,7 @@ export function pageDescription(description?: string, title?: string): string {
   const named = !title || title === SITE_NAME || text?.toLowerCase().includes(title.toLowerCase());
   const subject = named ? "" : `${title}: `;
   const lead = text ? `${subject}${text}` : subject.replace(/: $/, "") || title || "";
-  const suffix = `${SITE_NAME}'s corner of the web: essays on philosophy, crypto and game design, side projects, and music.`;
+  const suffix = `${SITE_NAME}, ${TAGLINE}.`;
   // the lead may already end in a full stop, and two of them read as a typo
   const joined = lead ? `${lead.replace(/[.!?]+$/, "")}. ${suffix}` : suffix;
   return clamp(joined);

@@ -3,6 +3,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
+import { TAGLINE } from "@/lib/seo";
 
 // rendered per request so the middleware can send www and kualta.com to the
 // canonical apex; every other route is prerendered
@@ -15,7 +16,7 @@ const contacts = (contactsData as Contact[])
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
 ---
-<BaseLayout description="kualta builds software, writes essays on philosophy, crypto and game design, and records music. Everything lives here.">
+<BaseLayout description={TAGLINE}>
   <div class="flex flex-col w-full grow justify-center place-content-center snowflake font-bold">
     <div class="flex flex-col gap-2 w-min mx-auto">
       <h1 class="text-8xl text-left relative">
