@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local Cloudflare runtime development.
+GITHUB_ACTIVITY_TOKEN=

@@ -1,6 +1,7 @@
 ---
 import type { Project } from "@/types";
-import { FiExternalLink, FiGithub } from "react-icons/fi";
+import IconTooltip from "@/components/IconTooltip.astro";
+import { FiArchive, FiExternalLink, FiGithub } from "react-icons/fi";
 import { LuGitlab } from "react-icons/lu";
 
 interface Props {
@@ -11,7 +12,10 @@ const { project } = Astro.props;
 const href = project.link || project.git_link || "#";
 const isGitlab = project.git_link?.includes("gitlab.com");
 ---
-<div class="w-full flex flex-row items-baseline gap-2 text-lg">
+<div
+  class="flex w-full min-w-0 flex-row items-baseline gap-2 rounded-xl bg-secondary px-4 py-2 text-lg
+         drop-shadow-sm dark:bg-dark-secondary"
+>
   <a
     href={href}
     target="_blank"
@@ -19,34 +23,44 @@ const isGitlab = project.git_link?.includes("gitlab.com");
     class="flex flex-row items-baseline gap-2 min-w-0 flex-grow hover:opacity-70"
   >
     <span class="font-medium whitespace-nowrap">{project.full_name || project.name}</span>
-    <span class="text-sm text-secondary-text truncate">{project.description}</span>
-    <span class="flex-grow border-b border-dotted border-secondary-text opacity-50" />
-    <span class="w-16 shrink-0 text-left text-sm text-secondary-text whitespace-nowrap font-mono">{project.status}</span>
+    <span class="min-w-0 truncate text-sm text-secondary-text">{project.description}</span>
   </a>
+  <span class="relative flex w-5 shrink-0 justify-center text-secondary-text">
+    {project.status === "archived" && (
+      <IconTooltip label="archived">
+        <FiArchive aria-hidden="true" />
+        <span class="sr-only">archived</span>
+      </IconTooltip>
+    )}
+  </span>
   <span class="w-5 shrink-0 flex justify-center">
     {project.git_link && (
-      <a
-        href={project.git_link}
-        target="_blank"
-        rel="noreferrer"
-        class="text-secondary-text hover:opacity-70"
-        aria-label={`${project.full_name || project.name} on ${isGitlab ? "GitLab" : "GitHub"}`}
-      >
-        {isGitlab ? <LuGitlab /> : <FiGithub />}
-      </a>
+      <IconTooltip label={isGitlab ? "GitLab" : "GitHub"}>
+        <a
+          href={project.git_link}
+          target="_blank"
+          rel="noreferrer"
+          class="text-secondary-text hover:opacity-70"
+          aria-label={`${project.full_name || project.name} on ${isGitlab ? "GitLab" : "GitHub"}`}
+        >
+          {isGitlab ? <LuGitlab /> : <FiGithub />}
+        </a>
+      </IconTooltip>
     )}
   </span>
   <span class="w-5 shrink-0 flex justify-center">
     {project.link && (
-      <a
-        href={project.link}
-        target="_blank"
-        rel="noreferrer"
-        class="text-secondary-text hover:opacity-70"
-        aria-label={`${project.full_name || project.name} website`}
-      >
-        <FiExternalLink />
-      </a>
+      <IconTooltip label="website">
+        <a
+          href={project.link}
+          target="_blank"
+          rel="noreferrer"
+          class="text-secondary-text hover:opacity-70"
+          aria-label={`${project.full_name || project.name} website`}
+        >
+          <FiExternalLink />
+        </a>
+      </IconTooltip>
     )}
   </span>
 </div>

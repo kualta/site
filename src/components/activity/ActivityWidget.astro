@@ -1,0 +1,378 @@
+---
+import { formatLastSeenTime, PRESENCE_BANDS, PRESENCE_PARTS, type ActivityFeed } from "@/lib/activity";
+import ActivityRows from "./ActivityRows.astro";
+
+interface Props {
+  feed: ActivityFeed;
+}
+
+const { feed } = Astro.props;
+const lastSeenText = feed.lastSeenAt ? formatLastSeenTime(feed.lastSeenAt) : null;
+const presence = PRESENCE_PARTS[feed.presence];
+const currentBand = PRESENCE_BANDS.find(({ state }) => state === feed.presence);
+const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked for a day";
+---
+<section
+  class="flex w-full min-w-0 flex-col gap-3"
+  aria-labelledby="activity-presence"
+  data-activity-widget
+  data-last-seen={feed.lastSeenAt ?? undefined}
+  data-trusted-until={feed.trustedUntil ?? undefined}
+>
+  <div class="min-w-0">
+    <h2 id="activity-presence" class="text-balance text-base font-bold">
+      <span class="presence-trigger relative inline-block">
+        <span
+          class="cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
+                 dark:focus-visible:ring-dark-primary"
+          tabindex="0"
+          aria-describedby="presence-explainer"
+        >
+          <span data-presence-lead>{presence.lead}</span>{" "}
+          <span class="presence-live" data-presence-status>{presence.status}</span>
+        </span>
+        <span
+          id="presence-explainer"
+          role="tooltip"
+          class="presence-tooltip rounded-xl bg-secondary p-3 text-xs font-normal
+                 text-secondary-text drop-shadow-sm dark:bg-dark-secondary"
+        >
+          When was kualta last seen
+          <span class="mt-1 block text-text dark:text-dark-text" data-presence-detail>
+            {presenceDetail}
+          </span>
+        </span>
+      </span>
+    </h2>
+    <div class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-secondary-text">
+      {
+        feed.lastSeenAt && lastSeenText && (
+          <time datetime={feed.lastSeenAt} class="tabular-nums" data-activity-last-seen>
+            {lastSeenText}
+          </time>
+        )
+      }
+      <span hidden={!feed.delayed} data-signals-delayed>signals delayed</span>
+    </div>
+  </div>
+  {
+    feed.events.length > 0 && (
+      <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>
+        <ActivityRows
+          events={feed.events}
+          completeSince={feed.completeSince}
+          limitedBy={feed.coverageLimitedBy}
+        />
+      </ol>
+    )
+  }
+</section>
+
+<style>
+  /* the status is the one thing on the page still happening, so it reads as
+     running rather than printed — a dim band drifts through the words, close
+     enough to the text colour that you notice it only if you look */
+  .presence-live {
+    --presence-ink: var(--text);
+    background-image: linear-gradient(
+      115deg,
+      var(--presence-ink) 0%,
+      var(--presence-ink) 42%,
+      var(--secondary-text) 50%,
+      var(--presence-ink) 58%,
+      var(--presence-ink) 100%
+    );
+    background-size: 300% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: presence-sweep 8s linear infinite;
+  }
+
+  :global(.dark) .presence-live {
+    --presence-ink: var(--text-dark);
+  }
+
+  @keyframes presence-sweep {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -150% 0;
+    }
+  }
+
+  /* the sweep is decoration; the words still sit still for anyone who asked for
+     that, and the gradient's own text colour keeps them readable */
+  @media (prefers-reduced-motion: reduce) {
+    .presence-live {
+      animation: none;
+      background-position: 100% 0;
+    }
+  }
+
+  .presence-tooltip {
+    position: absolute;
+    inset-block-start: calc(100% + 0.5rem);
+    inset-inline-start: 0;
+    z-index: 20;
+    width: 16rem;
+    max-width: min(90vw, 16rem);
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      opacity 150ms ease,
+      visibility 150ms;
+  }
+
+  .presence-trigger:hover .presence-tooltip,
+  .presence-trigger:focus-within .presence-tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .presence-tooltip {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import {
+    formatLastSeenTime,
+    formatRelativeTime,
+    getPresenceState,
+    PRESENCE_BANDS,
+    PRESENCE_PARTS,
+  } from "@/lib/activity/presence";
+  import type { PresenceState } from "@/lib/activity/types";
+
+  const ROWS_ENDPOINT = "/activity/rows";
+  const POLL_MS = 60_000;
+  const MAX_POLL_BACKOFF = 8;
+
+  let activityClock: number | undefined;
+  let pollTimer: number | undefined;
+  let pollFailures = 0;
+
+  interface RowsResponse {
+    rows: HTMLLIElement[];
+    meta: HTMLElement | null;
+  }
+
+  async function fetchRows(query: string): Promise<RowsResponse> {
+    const response = await fetch(`${ROWS_ENDPOINT}${query}`, { headers: { accept: "text/html" } });
+    if (!response.ok) throw new Error(`activity rows responded ${response.status}`);
+
+    const template = document.createElement("template");
+    template.innerHTML = await response.text();
+    return {
+      rows: [...template.content.querySelectorAll("li")],
+      meta: template.content.querySelector<HTMLElement>("[data-activity-meta]"),
+    };
+  }
+
+  function rowSignature(rows: Element[]): string {
+    return rows
+      .map((row) => {
+        const element = row as HTMLElement;
+        return `${element.dataset.activityRow ?? "boundary"}:${element.dataset.activityCount ?? ""}`;
+      })
+      .join(",");
+  }
+
+  function distanceToBottom(): number {
+    return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+  }
+
+  /** keeps the reader's place when rows are added above what they are looking at */
+  function preserveScroll(mutate: () => void): void {
+    const scrolled = window.scrollY;
+    const { scrollHeight } = document.documentElement;
+    mutate();
+
+    const shift = document.documentElement.scrollHeight - scrollHeight;
+    // at the top of the page there is nothing to keep in place, and scrolling
+    // there would fight the snap that holds the name in view
+    if (scrolled > 0 && shift !== 0) window.scrollTo({ top: scrolled + shift, behavior: "instant" });
+  }
+
+  function applyMeta(list: HTMLOListElement, meta: HTMLElement | null): void {
+    const widget = list.closest<HTMLElement>("[data-activity-widget]");
+    if (!widget || !meta) return;
+
+    if (meta.dataset.lastSeen) {
+      widget.dataset.lastSeen = meta.dataset.lastSeen;
+      // the line under the name is one of these too, and it lives outside the widget
+      for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
+        time.dateTime = meta.dataset.lastSeen;
+      }
+    }
+    if (meta.dataset.trustedUntil) widget.dataset.trustedUntil = meta.dataset.trustedUntil;
+
+    const delayed = widget.querySelector<HTMLElement>("[data-signals-delayed]");
+    if (delayed) delayed.hidden = meta.dataset.delayed !== "true";
+  }
+
+  async function loadOlderRows(list: HTMLOListElement): Promise<boolean> {
+    if (list.dataset.activityExhausted === "true") return false;
+
+    const loaded = [...list.querySelectorAll<HTMLLIElement>("li[data-activity-cursor]")];
+    const cursor = loaded[loaded.length - 1]?.dataset.activityCursor;
+    if (!cursor) return false;
+
+    const { rows } = await fetchRows(`?before=${encodeURIComponent(cursor)}`);
+    if (!rows.length) {
+      list.dataset.activityExhausted = "true";
+      return false;
+    }
+
+    list.append(...rows);
+    updateActivityClock();
+    return true;
+  }
+
+  /**
+   * Re-syncs the newest rows against the server. A fresh event can join the top
+   * group and change its id, so the overlapping window is replaced wholesale
+   * rather than diffed row by row.
+   */
+  async function syncNewestRows(list: HTMLOListElement): Promise<void> {
+    const { rows, meta } = await fetchRows("");
+    applyMeta(list, meta);
+    if (!rows.length) return;
+
+    const existing = [...list.children] as HTMLElement[];
+    const anchorId = rows[rows.length - 1]?.dataset.activityRow;
+    const anchorIndex = existing.findIndex((row) => row.dataset.activityRow === anchorId);
+    if (anchorIndex >= 0 && rowSignature(existing.slice(0, anchorIndex + 1)) === rowSignature(rows)) return;
+
+    preserveScroll(() => {
+      if (anchorIndex < 0) {
+        // the feed moved past everything on screen, so start it over
+        list.replaceChildren(...rows);
+        list.dataset.activityExhausted = "false";
+        return;
+      }
+
+      for (const row of existing.slice(0, anchorIndex + 1)) row.remove();
+      list.prepend(...rows);
+    });
+    updateActivityClock();
+  }
+
+  async function fillActivityList(list: HTMLOListElement): Promise<void> {
+    if (list.dataset.activityLoading === "true") return;
+    list.dataset.activityLoading = "true";
+
+    try {
+      // keep a screen of feed below the fold so the scroll never hits an end
+      while (distanceToBottom() <= window.innerHeight) {
+        if (!(await loadOlderRows(list))) return;
+      }
+    } catch {
+      // a failed page only means the reader can retry by scrolling again
+    } finally {
+      list.dataset.activityLoading = "false";
+    }
+  }
+
+  function schedulePoll(list: HTMLOListElement): void {
+    window.clearTimeout(pollTimer);
+    const backoff = Math.min(2 ** pollFailures, MAX_POLL_BACKOFF);
+    pollTimer = window.setTimeout(() => void pollActivity(list), POLL_MS * backoff);
+  }
+
+  async function pollActivity(list: HTMLOListElement): Promise<void> {
+    if (document.visibilityState !== "visible" || !list.isConnected) return;
+
+    try {
+      await syncNewestRows(list);
+      pollFailures = 0;
+    } catch {
+      pollFailures += 1;
+    }
+    schedulePoll(list);
+  }
+
+  /** the tooltip quotes the band the status currently sits in, so it moves with it */
+  function describePresence(widget: HTMLElement, state: PresenceState): void {
+    const detail = widget.querySelector<HTMLElement>("[data-presence-detail]");
+    if (!detail) return;
+
+    const band = PRESENCE_BANDS.find((candidate) => candidate.state === state);
+    detail.textContent = band ? `${band.within} ago` : "not checked for a day";
+  }
+
+  /** only the status half carries the sweep, so the two halves are set apart */
+  function writePresence(widget: HTMLElement, state: PresenceState): void {
+    const lead = widget.querySelector<HTMLElement>("[data-presence-lead]");
+    const status = widget.querySelector<HTMLElement>("[data-presence-status]");
+    if (lead) lead.textContent = PRESENCE_PARTS[state].lead;
+    if (status) status.textContent = PRESENCE_PARTS[state].status;
+  }
+
+  function updateActivityWidget(widget: HTMLElement, now: number): void {
+    const delayed = widget.querySelector<HTMLElement>("[data-signals-delayed]");
+    const trustedUntil = Date.parse(widget.dataset.trustedUntil ?? "");
+
+    if (!Number.isFinite(trustedUntil) || now > trustedUntil) {
+      writePresence(widget, "unknown");
+      describePresence(widget, "unknown");
+      if (delayed) delayed.hidden = false;
+      return;
+    }
+
+    const lastSeenAt = widget.dataset.lastSeen;
+    if (!lastSeenAt) return;
+
+    const state = getPresenceState(lastSeenAt, now);
+    writePresence(widget, state);
+    describePresence(widget, state);
+  }
+
+  function updateActivityClock(): void {
+    const now = Date.now();
+    for (const widget of document.querySelectorAll<HTMLElement>("[data-activity-widget]")) {
+      updateActivityWidget(widget, now);
+    }
+
+    for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-relative-time]")) {
+      time.textContent = formatRelativeTime(time.dateTime, now);
+    }
+
+    for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
+      time.textContent = formatLastSeenTime(time.dateTime, now);
+    }
+  }
+
+  function initializeActivityList(list: HTMLOListElement): void {
+    if (list.dataset.activityReady !== "true") {
+      list.dataset.activityReady = "true";
+      window.addEventListener("scroll", () => void fillActivityList(list), { passive: true });
+      window.addEventListener("resize", () => void fillActivityList(list), { passive: true });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") void pollActivity(list);
+        else window.clearTimeout(pollTimer);
+      });
+    }
+
+    void fillActivityList(list);
+    schedulePoll(list);
+  }
+
+  function initializeActivityWidget(): void {
+    if (activityClock) window.clearInterval(activityClock);
+    window.clearTimeout(pollTimer);
+    updateActivityClock();
+    activityClock = window.setInterval(updateActivityClock, 60_000);
+
+    for (const list of document.querySelectorAll<HTMLOListElement>("[data-activity-list]")) {
+      initializeActivityList(list);
+    }
+  }
+
+  document.addEventListener("astro:page-load", initializeActivityWidget);
+  initializeActivityWidget();
+</script>

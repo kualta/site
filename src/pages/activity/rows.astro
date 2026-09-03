@@ -1,0 +1,50 @@
+---
+import ActivityRows from "@/components/activity/ActivityRows.astro";
+import { decodeActivityCursor, getActivityFeed, getActivityHistory, waitUntilFrom } from "@/lib/activity";
+import { env } from "cloudflare:workers";
+
+// serves both halves of the feed's paging: the newest rows for the live poll,
+// and older pages as the reader scrolls past what the page shipped with
+export const prerender = false;
+export const partial = true;
+
+const ROW_LIMIT = 20;
+const before = Astro.url.searchParams.get("before");
+const cache = env.ACTIVITY_CACHE;
+
+// paging reads history only; the newest rows go through the feed, so the poll
+// is also what keeps the stored data warm
+const feed = before
+  ? null
+  : await getActivityFeed({
+      cache,
+      githubToken: env.GITHUB_ACTIVITY_TOKEN,
+      waitUntil: waitUntilFrom(Astro.locals.cfContext),
+    });
+const page = feed ?? (await getActivityHistory({ cache, before, limit: ROW_LIMIT * 5 }));
+
+const from = decodeActivityCursor(before);
+const boundarySeen = Boolean(
+  from && page.completeSince && Date.parse(from.occurredAt) < Date.parse(page.completeSince),
+);
+
+Astro.response.headers.set("cache-control", "public, max-age=30");
+---
+{
+  feed && (
+    <span
+      hidden
+      data-activity-meta
+      data-last-seen={feed.lastSeenAt ?? undefined}
+      data-trusted-until={feed.trustedUntil ?? undefined}
+      data-delayed={feed.delayed ? "true" : "false"}
+    />
+  )
+}
+<ActivityRows
+  events={page.events}
+  completeSince={page.completeSince}
+  limitedBy={page.coverageLimitedBy}
+  boundarySeen={boundarySeen}
+  limit={ROW_LIMIT}
+/>

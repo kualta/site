@@ -1,8 +1,12 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
+import ActivityWidget from "@/components/activity/ActivityWidget.astro";
+import { formatLastSeenTime, getActivityFeed, waitUntilFrom } from "@/lib/activity";
+import { FiChevronDown } from "react-icons/fi";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
+import { env } from "cloudflare:workers";
 
 // rendered per request so the middleware can send www and kualta.com to the
 // canonical apex; every other route is prerendered
@@ -14,26 +18,81 @@ const contacts = (contactsData as Contact[])
 
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
+// the refresh runs after the response, so a visitor is never held behind
+// GitHub and Bluesky; the widget polls for whatever it turns up
+const activity = await getActivityFeed({
+  cache: env.ACTIVITY_CACHE,
+  githubToken: env.GITHUB_ACTIVITY_TOKEN,
+  waitUntil: waitUntilFrom(Astro.locals.cfContext),
+});
+const lastSeenText = activity.lastSeenAt ? formatLastSeenTime(activity.lastSeenAt) : null;
 ---
 <BaseLayout description="kualta builds software, writes essays on philosophy, crypto and game design, and records music. Everything lives here.">
-  <div class="flex flex-col w-full grow justify-center place-content-center snowflake font-bold">
-    <div class="flex flex-col gap-2 w-min mx-auto">
-      <h1 class="text-8xl text-left relative">
-        kualta
-        {isChristmas && (
-          <img
-            src="/santa_hat.svg"
-            class="absolute top-1 -left-1 w-6 h-6"
-            alt="santa hat"
-            width="277"
-            height="233"
-            decoding="async"
-          />
-        )}
-      </h1>
-      <div class="flex flex-row gap-3 items-center">
-        <ContactIcons contacts={contacts} />
+  <div class="snowflake flex w-full grow flex-col">
+    <!-- 6rem is the header above main, so the name gets the first screen exactly.
+         scroll-mt-24 cancels that offset again for snapping: without it the first
+         screen's resting place would be a header's height down the page -->
+    <section
+      class="flex min-h-[calc(100dvh-6rem)] w-full scroll-mt-24 flex-col items-center px-4 pb-8"
+      data-activity-screen
+    >
+      <div class="flex grow flex-col items-center justify-center">
+        <div class="flex w-min flex-col gap-2 font-bold">
+          <h1 class="relative text-left text-8xl text-balance">
+            kualta
+            {isChristmas && (
+              <img
+                src="/santa_hat.svg"
+                class="absolute top-1 -left-1 size-6"
+                alt="santa hat"
+                width="277"
+                height="233"
+                decoding="async"
+              />
+            )}
+          </h1>
+          <div class="flex flex-row items-center gap-3">
+            <ContactIcons contacts={contacts} />
+          </div>
+        </div>
       </div>
-    </div>
+      {
+        lastSeenText && (
+          <a
+            href="#activity"
+            class="flex shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
+                   transition-opacity hover:opacity-70"
+          >
+            <time datetime={activity.lastSeenAt} class="tabular-nums" data-activity-last-seen>
+              {lastSeenText}
+            </time>
+            <FiChevronDown className="animate-bounce motion-reduce:animate-none" size={18} aria-hidden="true" />
+            <span class="sr-only">Jump to recent activity</span>
+          </a>
+        )
+      }
+    </section>
+
+    <section
+      id="activity"
+      class="mx-auto w-full max-w-[min(92vw,42rem)] px-4 pt-8 pb-16"
+      aria-label="Kualta's recent activity"
+      data-activity-screen
+    >
+      <ActivityWidget feed={activity} />
+    </section>
   </div>
+
+  <style is:global>
+    /* the two screens are the only places the page comes to rest, so one scroll
+       down carries the whole way to the feed; the feed is taller than the
+       viewport, which leaves reading through it unsnapped */
+    html:has([data-activity-screen]) {
+      scroll-snap-type: y mandatory;
+    }
+
+    [data-activity-screen] {
+      scroll-snap-align: start;
+    }
+  </style>
 </BaseLayout>

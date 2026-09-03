@@ -1,0 +1,48 @@
+---
+import {
+  encodeActivityCursor,
+  groupActivityEvents,
+  type ActivityEvent,
+  type ActivitySource,
+} from "@/lib/activity";
+import ActivityItem from "./ActivityItem.astro";
+
+interface Props {
+  events: ActivityEvent[];
+  /** below this the feed no longer has every source, so it says so */
+  completeSince?: string | null;
+  limitedBy?: ActivitySource | null;
+  /** set when an earlier page already crossed the boundary */
+  boundarySeen?: boolean;
+  /** capped after grouping, so a burst is never split across two pages */
+  limit?: number;
+}
+
+const { events, completeSince = null, limitedBy = null, boundarySeen = false, limit } = Astro.props;
+const grouped = groupActivityEvents(events);
+const rows = limit ? grouped.slice(0, limit) : grouped;
+const boundary = completeSince && !boundarySeen ? Date.parse(completeSince) : null;
+const boundaryIndex =
+  boundary === null ? -1 : rows.findIndex((row) => Date.parse(row.occurredAt) < boundary);
+---
+{
+  rows.map((row, index) => (
+    <>
+      {index === boundaryIndex && (
+        <li class="flex w-full items-center gap-3 py-1 text-xs text-secondary-text" data-activity-boundary>
+          <span class="h-px flex-1 bg-current opacity-20" />
+          <span>{limitedBy ?? "full"} history ends here</span>
+          <span class="h-px flex-1 bg-current opacity-20" />
+        </li>
+      )}
+      <li
+        class="w-full min-w-0"
+        data-activity-row={row.id}
+        data-activity-count={row.events.length}
+        data-activity-cursor={encodeActivityCursor(row.events[row.events.length - 1])}
+      >
+        <ActivityItem group={row} />
+      </li>
+    </>
+  ))
+}
