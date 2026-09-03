@@ -40,13 +40,6 @@ const { Content, headings } = post;
       <h1 class="mb-2 text-center">{post.data.title}</h1>
       <p class="post-subtitle mb-6 mt-0 text-center">{post.data.description}</p>
       <Content />
-      {post.data.tags.length > 0 && (
-        <nav aria-label="Tags" class="not-prose flex flex-row flex-wrap gap-3 pt-10 text-sm text-secondary-text">
-          {post.data.tags.map((tag) => (
-            <a href={`/posts/tags/${tag}/`} class="hover:opacity-70" rel="tag">#{tag}</a>
-          ))}
-        </nav>
-      )}
     </article>
     <SubscriptionBox />
   </div>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { PointerEventHandler } from "react";
 import { AUTHOR } from "@/lib/credits";
 import type { Track } from "@/types";
@@ -47,6 +48,11 @@ export function Vinyl({
   onPointerMove,
   onPointerUp,
 }: Props) {
+  // the server-rendered deck would otherwise turn at full speed from the first
+  // paint until hydration parks it, spinning a record nobody has played yet
+  const [live, setLive] = useState(false);
+  useEffect(() => setLive(true), []);
+
   return (
     <div
       className={`vinyl ${deck ? "vinyl-deck" : ""} ${scrubbing ? "is-scrubbing" : ""} ${className}`}
@@ -58,7 +64,7 @@ export function Vinyl({
     >
       {/* the hand turns this layer; the playback animation turns the one inside it */}
       <div className={`vinyl-scrub ${seeking ? "is-seeking" : ""}`} style={scrubAngle ? { transform: `rotate(${scrubAngle}rad)` } : undefined}>
-        <div className={`vinyl-disc ${deck ? "is-deck" : ""} ${spinning ? "is-playing" : ""}`}>
+        <div className={`vinyl-disc ${deck ? "is-deck" : ""} ${deck && live ? "is-live" : ""} ${spinning ? "is-playing" : ""}`}>
           <div className="vinyl-grooves" />
           <div className="vinyl-label">
             {track.kind === "original" && track.album ? (

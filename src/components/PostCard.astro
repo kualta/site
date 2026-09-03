@@ -4,12 +4,14 @@ import type { PostMetadata } from "@/lib/posts";
 interface Props extends PostMetadata {}
 
 const props = Astro.props;
+// the list is ordered by date already, so the day and month only add noise
+const year = props.date.match(/^\d{4}/)?.[0] ?? props.date;
 ---
 <a
   href={`/posts/${props.filename}`}
-  class="w-full flex flex-row items-baseline gap-2 hover:opacity-70 text-lg"
+  class="flex w-full min-w-0 flex-row items-baseline gap-2 rounded-xl bg-secondary px-4 py-2 text-lg
+         drop-shadow-sm hover:opacity-70 dark:bg-dark-secondary"
 >
-  <span class="font-medium">{props.title}</span>
-  <span class="flex-grow border-b border-dotted border-secondary-text opacity-50" />
-  <span class="text-sm text-secondary-text whitespace-nowrap font-mono">{props.date}</span>
+  <span class="min-w-0 truncate font-medium">{props.title}</span>
+  <span class="ml-auto shrink-0 whitespace-nowrap font-mono text-sm text-secondary-text">{year}</span>
 </a>

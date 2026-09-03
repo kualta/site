@@ -1,0 +1,254 @@
+---
+import { BlueskyPost } from "@astro-community/astro-embed-bluesky";
+import { FiRepeat } from "react-icons/fi";
+import {
+  canRenderBlueskyPost,
+  formatAbsoluteTime,
+  formatDay,
+  formatRelativeTime,
+  type ActivityGroup,
+} from "@/lib/activity";
+
+interface Props {
+  group: ActivityGroup;
+}
+
+const { group } = Astro.props;
+const [event] = group.events;
+if (event.source !== "bluesky") throw new Error("Bluesky renderer received another source");
+
+const absoluteTime = formatAbsoluteTime(event.occurredAt);
+const authorName = event.author.displayName
+  ? `${event.author.displayName} (@${event.author.handle})`
+  : `@${event.author.handle}`;
+const renderCard = canRenderBlueskyPost(event.post);
+// a repost otherwise reads as someone else's post appearing out of nowhere
+const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : null;
+---
+<article class="w-full min-w-0">
+  {
+    renderCard ? (
+      <div
+        class="site-bluesky-card relative w-full min-w-0 overflow-hidden rounded-xl bg-secondary
+               drop-shadow-sm dark:bg-dark-secondary"
+        data-reposted={repostedOn ? "true" : undefined}
+      >
+        {repostedOn && (
+          <p class="flex items-center gap-1.5 px-4 pt-4 text-xs text-secondary-text">
+            <FiRepeat className="shrink-0" size={12} aria-hidden="true" />
+            <span>
+              kualta reposted on <time datetime={event.occurredAt}>{repostedOn}</time>
+            </span>
+          </p>
+        )}
+        <BlueskyPost post={event.post} />
+        <a
+          href={event.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          class="site-bluesky-time font-mono text-xs tabular-nums text-secondary-text"
+          aria-label={`View this Bluesky activity from ${absoluteTime}`}
+        >
+          <time
+            datetime={event.occurredAt}
+            title={absoluteTime}
+            data-activity-relative-time
+          >
+            {formatRelativeTime(event.occurredAt)}
+          </time>
+        </a>
+      </div>
+    ) : (
+      <div
+        class="flex w-full items-center justify-between gap-3 rounded-xl bg-secondary p-4
+               text-sm drop-shadow-sm dark:bg-dark-secondary"
+        data-bluesky-fallback
+      >
+        <span class="min-w-0 truncate text-secondary-text">Post available on Bluesky</span>
+        <span class="flex shrink-0 items-baseline gap-2">
+          <a
+            href={event.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            class="hover:opacity-70"
+          >
+            {authorName}
+          </a>
+          <time
+            datetime={event.occurredAt}
+            title={absoluteTime}
+            class="whitespace-nowrap font-mono text-xs tabular-nums text-secondary-text"
+            data-activity-relative-time
+          >
+            {formatRelativeTime(event.occurredAt)}
+          </time>
+        </span>
+      </div>
+    )
+  }
+</article>
+
+<style is:global>
+  /* the embed is themed to the same flat card the GitHub rows use: no outline,
+     one radius, one padding; nested embeds keep their border to stay readable */
+  .site-bluesky-card .bluesky-post-container {
+    --bluesky-color-text: var(--text);
+    --bluesky-color-text-secondary: var(--secondary-text);
+    --bluesky-color-border: color-mix(in oklab, var(--secondary-text) 24%, transparent);
+    --bluesky-color-background: transparent;
+    --bluesky-color-background-hover: var(--primary);
+    --bluesky-color-link: var(--text);
+    --bluesky-font-family: "Fredoka", "M PLUS Rounded 1c", "Huninn", system-ui, sans-serif;
+    --bluesky-font-size-sm: 0.75rem;
+    --bluesky-font-size-base: 0.75rem;
+    --bluesky-font-size-lg: 0.875rem;
+    --bluesky-icon-size-lg: 1.25rem;
+    --bluesky-content-max-width: 100%;
+    --bluesky-content-min-width: 0px;
+    --bluesky-card-border: none;
+    --bluesky-radius-lg: 0.75rem;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .dark .site-bluesky-card .bluesky-post-container {
+    --bluesky-color-text: var(--text-dark);
+    --bluesky-color-text-secondary: var(--secondary-text);
+    --bluesky-color-border: color-mix(in oklab, var(--secondary-text) 24%, transparent);
+    --bluesky-color-background-hover: var(--primary-dark);
+    --bluesky-color-link: var(--text-dark);
+  }
+
+  .site-bluesky-card .bluesky-post-container .timestamp {
+    display: none;
+  }
+
+  .site-bluesky-card .bluesky-post-container .post-content {
+    --bluesky-card-border: 1px solid var(--bluesky-color-border);
+    --bluesky-color-background: var(--secondary);
+    padding: 1rem;
+  }
+
+  .dark .site-bluesky-card .bluesky-post-container .post-content {
+    --bluesky-color-background: var(--secondary-dark);
+  }
+
+  /* the embed aligns the name block to the top of the avatar, which reads as
+     lifted next to a round image; centring the two settles the row */
+  .site-bluesky-card .bluesky-post-container .post-header {
+    padding-inline-end: 2.5rem;
+    align-items: center;
+  }
+
+  /* the repost line already carries the card's top padding */
+  .site-bluesky-card[data-reposted] .bluesky-post-container .post-content {
+    padding-top: 0.5rem;
+  }
+
+  .site-bluesky-card .bluesky-post-container .logo-link {
+    display: none;
+  }
+
+  .site-bluesky-time {
+    position: absolute;
+    inset-block-start: 1rem;
+    inset-inline-end: 1rem;
+    z-index: 1;
+    line-height: 1.2;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .site-bluesky-time:hover {
+    opacity: 0.7;
+  }
+
+  /* the embed crops every image container to 1.91/1, which cuts the top and
+     bottom off anything portrait; nothing here is cropped to fit a box */
+  .site-bluesky-card .bluesky-post-container .image-grid-container {
+    aspect-ratio: auto;
+    margin-block-start: 0.5rem;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid-item {
+    background-color: transparent;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid-item img {
+    border-radius: var(--bluesky-radius-md);
+  }
+
+  /* one image sizes to itself, capped by height rather than trimmed */
+  .site-bluesky-card .bluesky-post-container .image-grid--1,
+  .site-bluesky-card .bluesky-post-container .image-grid--1 .image-grid-item {
+    height: auto;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid--1 .image-grid-item img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 32rem;
+    margin-inline: 0;
+    object-fit: contain;
+  }
+
+  /* several images become a row you scroll, each still whole, rather than a
+     grid of tiles that each get cropped square */
+  .site-bluesky-card .bluesky-post-container .image-grid:not(.image-grid--1) {
+    display: flex;
+    height: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    border-radius: 0;
+    /* the site hides scrollbars everywhere; this row earns one back */
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--secondary-text) 45%, transparent) transparent;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid:not(.image-grid--1)::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid:not(.image-grid--1)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid:not(.image-grid--1)::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    /* the transparent border keeps the thumb slim without shrinking the hit area */
+    border: 3px solid transparent;
+    background-clip: content-box;
+    background-color: color-mix(in oklab, var(--secondary-text) 40%, transparent);
+    transition: background-color 200ms ease;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid:not(.image-grid--1)::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--secondary-text) 75%, transparent);
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid:not(.image-grid--1) .image-grid-item {
+    flex: 0 0 auto;
+    width: auto;
+    height: 20rem;
+  }
+
+  .site-bluesky-card .bluesky-post-container .image-grid:not(.image-grid--1) .image-grid-item img {
+    width: auto;
+    height: 100%;
+    max-width: none;
+    object-fit: contain;
+  }
+
+  /* the gap belongs to whatever follows the text, so a plain post ends on the
+     card's own padding instead of the text's leftover margin */
+  .site-bluesky-card .bluesky-post-container .post-text {
+    margin-bottom: 0;
+  }
+
+  .site-bluesky-card .bluesky-post-container .post-text + * {
+    margin-top: var(--bluesky-space-sm);
+  }
+</style>

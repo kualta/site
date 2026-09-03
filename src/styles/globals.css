@@ -117,8 +117,10 @@ html {
   animation-play-state: paused;
 }
 
-/* the deck keeps its animation live so JS can ramp playbackRate up and down */
-.vinyl-disc.is-deck {
+/* the deck keeps its animation live so JS can ramp playbackRate up and down —
+   but only once JS is there to hold it at rest, or the record turns on its own
+   between first paint and hydration */
+.vinyl-disc.is-deck.is-live {
   animation-play-state: running;
 }
 

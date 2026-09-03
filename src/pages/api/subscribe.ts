@@ -1,8 +1,9 @@
 import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ url, locals }) => {
+export const POST: APIRoute = async ({ url }) => {
   const email = url.searchParams.get("email");
 
   if (!email) {
@@ -11,7 +12,7 @@ export const POST: APIRoute = async ({ url, locals }) => {
     });
   }
 
-  const apiKey = locals.runtime?.env.PARAGRAPH_API_KEY ?? import.meta.env.PARAGRAPH_API_KEY;
+  const apiKey = env.PARAGRAPH_API_KEY ?? import.meta.env.PARAGRAPH_API_KEY;
 
   try {
     const res = await fetch("https://api.paragraph.com/api/v1/subscribers", {

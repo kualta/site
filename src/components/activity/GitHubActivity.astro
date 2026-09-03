@@ -1,0 +1,70 @@
+---
+import { FiGithub } from "react-icons/fi";
+import {
+  describeGitHubActivity,
+  describeGitHubActivityGroup,
+  formatAbsoluteTime,
+  formatRelativeTime,
+  type ActivityGroup,
+  type GitHubActivity,
+} from "@/lib/activity";
+
+interface Props {
+  group: ActivityGroup;
+}
+
+const { group } = Astro.props;
+const events = group.events.filter((event): event is GitHubActivity => event.source === "github");
+if (events.length !== group.events.length) throw new Error("GitHub renderer received another source");
+
+const [newest] = events;
+const oldest = events[events.length - 1];
+const description = events.length > 1 ? describeGitHubActivityGroup(events) : describeGitHubActivity(newest);
+// a calendar row already names the days it covers, so a multiplier there would
+// only count the ones that happened to have activity
+const collapsedCount = newest.kind === "contributions" ? 0 : events.length;
+const absoluteTime =
+  events.length > 1
+    ? `${formatAbsoluteTime(oldest.occurredAt)} – ${formatAbsoluteTime(newest.occurredAt)}`
+    : formatAbsoluteTime(newest.occurredAt);
+---
+<article
+  class="flex w-full min-w-0 items-start gap-3 rounded-xl bg-secondary p-4
+         text-sm drop-shadow-sm dark:bg-dark-secondary"
+>
+  <FiGithub className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
+  <div class="flex min-w-0 flex-1 flex-col gap-1">
+    <div class="flex min-w-0 items-baseline gap-2">
+      {
+        description.url ? (
+          <a
+            href={description.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            class="min-w-0 truncate hover:opacity-70"
+          >
+            {description.text}
+          </a>
+        ) : (
+          <span class="min-w-0 truncate">{description.text}</span>
+        )
+      }
+      {
+        collapsedCount > 1 && (
+          <span class="relative shrink-0 font-mono text-xs tabular-nums text-secondary-text">
+            <span aria-hidden="true">×{collapsedCount}</span>
+            <span class="sr-only">across {collapsedCount} events</span>
+          </span>
+        )
+      }
+      <time
+        datetime={newest.occurredAt}
+        title={absoluteTime}
+        class="ml-auto shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-secondary-text"
+        data-activity-relative-time
+      >
+        {formatRelativeTime(newest.occurredAt)}
+      </time>
+    </div>
+  </div>
+</article>
