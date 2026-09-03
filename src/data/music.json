@@ -1,22 +1,6 @@
 [
   {
-    "id": 2,
-    "slug": "bully",
-    "title": "BULLY",
-    "artist": "kualta",
-    "album": "BULLY",
-    "originalArtist": "Ye",
-    "kind": "cover",
-    "track": null,
-    "lyrics": "[00:02.10] Ha-ha!\n[00:12.82] You made a kingdom fall in love\n[00:15.44] I'll take the pill, it's small enough\n[00:17.88] Too late, my system's run amok\n[00:20.36] I wanna beat somebody up\n[00:24.22] Like a bully, hmm, mm-mm\n[00:29.52] (Like a bully)\n[00:32.78] You think I'ma riot (Riot)\n[00:35.29] I see the facade\n[00:37.60] You wish I'd be quiet (Quiet)\n[00:39.93] Don't preach to a god (In denial of it all)\n[00:43.27] A god (Baby, tell me what it costs you)\n[00:45.47] To a god, to tell the truth\n[00:49.69] Yeah, obey, hey\n[00:53.02] Baby, do what I say\n[00:55.49] Like it ain't no other way\n[00:57.78] Baby, do what I say\n[00:59.97] I said obey, hey\n[01:02.43] Baby, do what I say\n[01:04.74] Like it ain't no other way\n[01:07.25] Baby, do what I say\n[01:09.97] When a masterpiece turn into catastrophe\n[01:14.86] They get mad at me for livin' out my fantasy\n[01:19.40] All the castles in thе sky come down crashin'\n[01:22.88] Every timе I speak my mind\n[01:29.74] All the people, swear my ego\n[01:34.66] Needs a repo, but I won't let go\n[01:39.01] In denial of it all\n[01:41.37] Baby, tell me what it costs you\n[01:45.48] To tell the truth\n[01:47.11] Yeah, obey, hey\n[01:50.58] Baby, do what I say\n[01:52.91] Like it ain't no other way\n[01:55.25] Baby, do what I say\n[01:57.55] I said obey, hey\n[01:59.96] Baby, do what I say\n[02:02.38] Like it ain't no other way\n[02:04.87] Baby, do what I say\n[02:07.75]",
-    "date": "2026-08-22",
-    "duration": 151,
-    "src": "/music/bully.mp3",
-    "cover": "/music/covers/bully.png",
-    "og": "/music/og/bully.png"
-  },
-  {
-    "id": 10,
+    "id": 9,
     "slug": "preacher-man",
     "title": "PREACHER MAN",
     "artist": "kualta",
@@ -40,7 +24,7 @@
     "originalArtist": "My Terrible Friend",
     "kind": "cover",
     "track": null,
-    "lyrics": "[00:10.50] Fate got me running back\n[00:14.85] To the same old thing\n[00:20.40] Just a chain smoking heart attack\n[00:25.38] Hope the phone don't ring\n[00:30.86] 'Cause I'm almost gone\n[00:34.58] Yeah, I'm almost gone\n[00:38.67] And it's all the same to you anyway\n[00:57.43] Babe, why you holding back?\n[01:02.10] Do the words still sting?\n[01:07.24] Fill a painkiller almanac\n[01:12.40] It won't change a thing\n[01:17.32] 'Cause I'm almost gone\n[01:21.63] Yeah, I'm almost gone\n[01:25.44] And it's all the same to you anyway\n[01:44.54] Trip on my shoelace, pack my stuff\n[01:46.61] Don't know what I want but can't enough\n[01:49.67] Of the same old thing\n[01:54.68] Close the drapes and drain the bath\n[01:57.57] Think I found the problem, can't do the math\n[01:59.59] There's a song to sing\n[02:04.67] When I'm almost gone\n[02:08.46] Yeah, I'm almost gone\n[02:12.49] And it's all the same to you anyway\n[02:20.95] Faith dies\n[02:26.33] So slow\n[02:31.43] Goodbye\n[02:36.99] You know\n[02:41.27] That I have loved you\n[02:46.55] And I must leave you\n[02:52.06] And I will haunt your soul\n[03:02.25] 'Cause I'm almost gone\n[03:07.75] Yeah, I'm almost gone\n[03:13.11] Yeah, I'm almost gone\n[03:18.56] Yeah, I'm almost gone\n[03:23.52] And it's all the same to you anyways\n[03:36.58]",
+    "lyrics": "[00:11.50] Fate got me running back\n[00:15.85] To the same old thing\n[00:21.40] Just a chain smoking heart attack\n[00:26.38] Hope the phone don't ring\n[00:31.86] 'Cause I'm almost gone\n[00:35.58] Yeah, I'm almost gone\n[00:39.67] And it's all the same to you anyway\n[00:58.43] Babe, why you holding back?\n[01:03.10] Do the words still sting?\n[01:08.24] Fill a painkiller almanac\n[01:13.40] It won't change a thing\n[01:18.32] 'Cause I'm almost gone\n[01:22.63] Yeah, I'm almost gone\n[01:26.44] And it's all the same to you anyway\n[01:45.54] Trip on my shoelace, pack my stuff\n[01:47.61] Don't know what I want but can't enough\n[01:50.67] Of the same old thing\n[01:55.68] Close the drapes and drain the bath\n[01:58.57] Think I found the problem, can't do the math\n[02:00.59] There's a song to sing\n[02:05.67] When I'm almost gone\n[02:09.46] Yeah, I'm almost gone\n[02:13.49] And it's all the same to you anyway\n[02:21.95] Faith dies\n[02:27.33] So slow\n[02:32.43] Goodbye\n[02:37.99] You know\n[02:42.27] That I have loved you\n[02:47.55] And I must leave you\n[02:53.06] And I will haunt your soul\n[03:03.25] 'Cause I'm almost gone\n[03:08.75] Yeah, I'm almost gone\n[03:14.11] Yeah, I'm almost gone\n[03:19.56] Yeah, I'm almost gone\n[03:24.52] And it's all the same to you anyways\n[03:37.58]",
     "date": "2026-08-06",
     "duration": 221,
     "src": "/music/almost-gone.mp3",
@@ -48,7 +32,7 @@
     "og": "/music/og/almost-gone.png"
   },
   {
-    "id": 3,
+    "id": 2,
     "slug": "dark-night",
     "title": "Тёмная Ночь",
     "artist": "kualta",
@@ -64,7 +48,7 @@
     "og": "/music/og/dark-night.png"
   },
   {
-    "id": 9,
+    "id": 8,
     "slug": "papercut",
     "title": "papercut",
     "artist": "kualta",
@@ -80,7 +64,7 @@
     "og": "/music/og/papercut.png"
   },
   {
-    "id": 7,
+    "id": 6,
     "slug": "faux",
     "title": "Faux",
     "artist": "kualta",
@@ -96,7 +80,7 @@
     "og": "/music/og/faux.png"
   },
   {
-    "id": 6,
+    "id": 5,
     "slug": "exitlude",
     "title": "Exitlude",
     "artist": "kualta",
@@ -112,7 +96,7 @@
     "og": "/music/og/exitlude.png"
   },
   {
-    "id": 8,
+    "id": 7,
     "slug": "kyukurarin",
     "title": "きゅうくらりん",
     "artist": "kualta",
@@ -128,7 +112,7 @@
     "og": "/music/og/kyukurarin.png"
   },
   {
-    "id": 4,
+    "id": 3,
     "slug": "dialogue",
     "title": "Dialogue",
     "artist": "kualta",
@@ -144,7 +128,7 @@
     "og": "/music/og/dialogue.png"
   },
   {
-    "id": 11,
+    "id": 10,
     "slug": "self-conscious-portrait",
     "title": "Self-Conscious Portrait",
     "artist": "kualta",
@@ -160,7 +144,7 @@
     "og": "/music/og/self-conscious-portrait.png"
   },
   {
-    "id": 5,
+    "id": 4,
     "slug": "embrace-it",
     "title": "Embrace it",
     "artist": "kualta",

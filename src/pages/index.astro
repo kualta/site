@@ -6,6 +6,7 @@ import { formatLastSeenTime, getActivityFeed, waitUntilFrom } from "@/lib/activi
 import { FiChevronDown } from "react-icons/fi";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
+import { TAGLINE } from "@/lib/seo";
 import { env } from "cloudflare:workers";
 
 // rendered per request so the middleware can send www and kualta.com to the
@@ -27,7 +28,7 @@ const activity = await getActivityFeed({
 });
 const lastSeenText = activity.lastSeenAt ? formatLastSeenTime(activity.lastSeenAt) : null;
 ---
-<BaseLayout description="kualta builds software, writes essays on philosophy, crypto and game design, and records music. Everything lives here.">
+<BaseLayout description={TAGLINE}>
   <div class="snowflake flex w-full grow flex-col">
     <!-- 6rem is the header above main, so the name gets the first screen exactly.
          scroll-mt-24 cancels that offset again for snapping: without it the first
