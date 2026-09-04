@@ -56,7 +56,20 @@ export function mergeIntoArchive(
 ): ActivityEvent[] {
   const byId = new Map<string, ActivityEvent>();
   for (const event of archived) byId.set(event.id, event);
-  for (const event of fresh) byId.set(event.id, event);
+  for (const event of fresh) {
+    const previous = byId.get(event.id);
+    const unchangedContribution =
+      previous?.source === "github" &&
+      previous.kind === "contributions" &&
+      event.source === "github" &&
+      event.kind === "contributions" &&
+      previous.count === event.count;
+
+    // Today's calendar cell is timestamped when we observe it. Keep that time
+    // stable until the count changes so routine polling does not look like new
+    // activity or force another KV write.
+    byId.set(event.id, unchangedContribution ? previous : event);
+  }
 
   const horizon = now.getTime() - MAX_AGE_MS;
   const kept: ActivityEvent[] = [];
@@ -93,7 +106,9 @@ export function collapsePastDays(events: readonly ActivityEvent[], now: Date = n
     const day = event.occurredAt.slice(0, 10);
     const lane = laneOf(event);
 
-    if (lane === "github:contributions") return day !== today;
+    // The aggregate can include private work an access-limited events token
+    // cannot see, so it remains the authoritative daily total.
+    if (lane === "github:contributions") return true;
     if (lane === "github:event") return day === today || !summarised.has(day);
     return true;
   });
