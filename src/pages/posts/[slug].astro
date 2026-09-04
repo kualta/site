@@ -1,7 +1,7 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import SubscriptionBox from "@/components/SubscriptionBox.astro";
-import TableOfContents from "@/components/TableOfContents.tsx";
+import TableOfContents, { POST_TITLE_ID } from "@/components/TableOfContents.tsx";
 import { getPosts, getPostContent } from "@/lib/posts";
 
 export async function getStaticPaths() {
@@ -33,11 +33,12 @@ const { Content, headings } = post;
   }}
 >
   <div class="max-w-2xl w-full relative mb-10">
-    <TableOfContents headings={headings} client:idle />
+    <TableOfContents headings={headings} title={post.data.title} client:idle />
     <article
       class="z-[10] max-w-2xl rounded-xl p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-xl"
+      data-post-body
     >
-      <h1 class="mb-2 text-center">{post.data.title}</h1>
+      <h1 id={POST_TITLE_ID} class="mb-2 text-center">{post.data.title}</h1>
       <p class="post-subtitle mb-6 mt-0 text-center">{post.data.description}</p>
       <Content />
     </article>
