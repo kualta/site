@@ -87,6 +87,24 @@ describe("mergeIntoArchive", () => {
     expect(merged[0]).toEqual(edited);
   });
 
+  test("only advances a contribution day when its count changes", () => {
+    const observed = {
+      ...contributionDay("2026-08-30", 40),
+      occurredAt: "2026-08-30T10:00:00.000Z",
+    };
+    const unchanged = {
+      ...contributionDay("2026-08-30", 40),
+      occurredAt: "2026-08-30T12:00:00.000Z",
+    };
+    const increased = {
+      ...contributionDay("2026-08-30", 41),
+      occurredAt: "2026-08-30T12:05:00.000Z",
+    };
+
+    expect(mergeIntoArchive([observed], [unchanged], NOW)[0]).toEqual(observed);
+    expect(mergeIntoArchive([observed], [increased], NOW)[0]).toEqual(increased);
+  });
+
   test("drops events past the retention horizon", () => {
     const ancient = githubEvent("ancient", new Date(NOW.getTime() - 21 * 365 * 24 * 60 * 60 * 1000).toISOString());
     const merged = mergeIntoArchive([ancient], [githubEvent("new", hoursAgo(1))], NOW);
@@ -184,7 +202,7 @@ describe("activity cursors", () => {
 });
 
 describe("contribution days", () => {
-  test("reads today event by event and leaves its total out", () => {
+  test("keeps today's event detail and authoritative total", () => {
     const events = [
       githubEvent("push", "2026-08-30T09:00:00.000Z"),
       contributionDay("2026-08-30", 40),
@@ -193,6 +211,16 @@ describe("contribution days", () => {
 
     expect(collapsePastDays(events, NOW).map(({ id }) => id)).toEqual([
       githubEvent("push", "2026-08-30T09:00:00.000Z").id,
+      "github:contributions:2026-08-30",
+      "github:contributions:2026-08-29",
+    ]);
+  });
+
+  test("keeps today's total when detailed events are not visible", () => {
+    const events = [contributionDay("2026-08-30", 40), contributionDay("2026-08-29", 63)];
+
+    expect(collapsePastDays(events, NOW).map(({ id }) => id)).toEqual([
+      "github:contributions:2026-08-30",
       "github:contributions:2026-08-29",
     ]);
   });

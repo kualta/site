@@ -2,7 +2,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
 import ActivityWidget from "@/components/activity/ActivityWidget.astro";
-import { formatLastSeenTime, getActivityFeed, waitUntilFrom } from "@/lib/activity";
+import { formatLastSeenTime, getActivityFeed } from "@/lib/activity";
 import { FiChevronDown } from "react-icons/fi";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
@@ -19,14 +19,15 @@ const contacts = (contactsData as Contact[])
 
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
-// the refresh runs after the response, so a visitor is never held behind
-// GitHub and Bluesky; the widget polls for whatever it turns up
+// Wait for a due refresh so a new visitor receives the latest snapshot rather
+// than the value that happened to be cached before their request.
 const activity = await getActivityFeed({
   cache: env.ACTIVITY_CACHE,
   githubToken: env.GITHUB_ACTIVITY_TOKEN,
-  waitUntil: waitUntilFrom(Astro.locals.cfContext),
 });
 const lastSeenText = activity.lastSeenAt ? formatLastSeenTime(activity.lastSeenAt) : null;
+
+Astro.response.headers.set("cache-control", "no-store");
 ---
 <BaseLayout description={TAGLINE}>
   <div class="snowflake flex w-full grow flex-col">

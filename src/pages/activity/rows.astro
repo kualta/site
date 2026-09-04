@@ -1,6 +1,6 @@
 ---
 import ActivityRows from "@/components/activity/ActivityRows.astro";
-import { decodeActivityCursor, getActivityFeed, getActivityHistory, waitUntilFrom } from "@/lib/activity";
+import { decodeActivityCursor, getActivityFeed, getActivityHistory } from "@/lib/activity";
 import { env } from "cloudflare:workers";
 
 // serves both halves of the feed's paging: the newest rows for the live poll,
@@ -19,7 +19,6 @@ const feed = before
   : await getActivityFeed({
       cache,
       githubToken: env.GITHUB_ACTIVITY_TOKEN,
-      waitUntil: waitUntilFrom(Astro.locals.cfContext),
     });
 const page = feed ?? (await getActivityHistory({ cache, before, limit: ROW_LIMIT * 5 }));
 
@@ -28,7 +27,7 @@ const boundarySeen = Boolean(
   from && page.completeSince && Date.parse(from.occurredAt) < Date.parse(page.completeSince),
 );
 
-Astro.response.headers.set("cache-control", "public, max-age=30");
+Astro.response.headers.set("cache-control", "no-store");
 ---
 {
   feed && (
