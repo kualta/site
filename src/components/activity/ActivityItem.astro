@@ -1,0 +1,17 @@
+---
+import type { ActivityGroup } from "@/lib/activity";
+import BlueskyActivity from "./BlueskyActivity.astro";
+import GitHubActivity from "./GitHubActivity.astro";
+
+interface Props {
+  group: ActivityGroup;
+}
+
+const { group } = Astro.props;
+const renderers = {
+  github: GitHubActivity,
+  bluesky: BlueskyActivity,
+};
+const Renderer = renderers[group.events[0].source];
+---
+<Renderer group={group} />

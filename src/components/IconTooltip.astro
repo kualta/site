@@ -1,0 +1,46 @@
+---
+interface Props {
+  label: string;
+}
+
+const { label } = Astro.props;
+---
+<span class="tooltip-host relative inline-flex items-center justify-center">
+  <slot />
+  <!-- links carry the same words in their aria-label, so this is decoration
+       for the eye only and stays out of the accessibility tree -->
+  <span
+    class="tooltip-bubble rounded-lg bg-secondary px-2 py-1 font-mono text-xs font-normal
+           whitespace-nowrap text-secondary-text drop-shadow-md dark:bg-dark-secondary"
+    aria-hidden="true"
+  >
+    {label}
+  </span>
+</span>
+
+<style>
+  .tooltip-bubble {
+    position: absolute;
+    inset-block-end: calc(100% + 0.375rem);
+    inset-inline-start: 50%;
+    z-index: 20;
+    transform: translateX(-50%);
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      opacity 120ms ease,
+      visibility 120ms;
+  }
+
+  .tooltip-host:hover .tooltip-bubble,
+  .tooltip-host:focus-within .tooltip-bubble {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tooltip-bubble {
+      transition: none;
+    }
+  }
+</style>

@@ -42,6 +42,10 @@ html::-webkit-scrollbar {
 html {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none;  /* IE 10+ */
+  /* a hard flick past either end rubber-bands the whole document, and the page
+     furniture is pinned to the body, so the corners slide off with it and the
+     bounce reads as the layout coming apart */
+  overscroll-behavior-y: none;
 }
 
 ::selection {
@@ -117,8 +121,10 @@ html {
   animation-play-state: paused;
 }
 
-/* the deck keeps its animation live so JS can ramp playbackRate up and down */
-.vinyl-disc.is-deck {
+/* the deck keeps its animation live so JS can ramp playbackRate up and down —
+   but only once JS is there to hold it at rest, or the record turns on its own
+   between first paint and hydration */
+.vinyl-disc.is-deck.is-live {
   animation-play-state: running;
 }
 
@@ -792,5 +798,154 @@ input[type="checkbox"]:focus-visible {
 @media (min-width: 640px) {
   .nav-links {
     gap: 2rem;
+  }
+}
+
+/* --- table of contents --- */
+
+/* the rail shows itself in full on arrival, withdraws to a column of ticks, and
+   comes back for a pointer or a scroll; every rule below keys off those flags */
+.toc {
+  --toc-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* the labels sit over the page's own margin, so they need something to sit on */
+.toc-scrim {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background-image: linear-gradient(to left, transparent, var(--bg));
+  /* the wash has to die out before both edges or it reads as a panel */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 15%, #000 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 15%, #000 85%, transparent 100%);
+  transition: opacity 220ms var(--toc-ease);
+}
+
+/* the page's noise reads through the dark wash, so the panel stays a vignette */
+.dark .toc-scrim {
+  background-image: linear-gradient(
+    to left,
+    transparent,
+    color-mix(in oklab, var(--bg-dark) 82%, transparent)
+  );
+}
+
+.toc[data-open] .toc-scrim {
+  opacity: 1;
+}
+
+/* the pointer only has to reach the edge of the page, not a 2px line */
+.toc-reach {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 140px;
+  pointer-events: auto;
+}
+
+.toc-bar {
+  width: 2px;
+  opacity: 0;
+  transition:
+    width 350ms var(--toc-ease),
+    opacity 500ms var(--toc-ease);
+}
+
+/* it fades in quickly and out slowly: arriving is news, leaving is not */
+.toc[data-visible] .toc-bar {
+  opacity: 1;
+  transition-duration: 350ms, 200ms;
+}
+
+.toc[data-open] .toc-bar {
+  width: 3px;
+}
+
+.toc-track {
+  position: absolute;
+  inset-inline: 0;
+  border-radius: 999px;
+  background-color: color-mix(in oklab, var(--text) 16%, transparent);
+  transition: background-color 300ms ease;
+}
+
+.dark .toc-track {
+  background-color: color-mix(in oklab, var(--text-dark) 16%, transparent);
+}
+
+.toc[data-open] .toc-track {
+  background-color: color-mix(in oklab, var(--text) 30%, transparent);
+}
+
+.dark .toc[data-open] .toc-track {
+  background-color: color-mix(in oklab, var(--text-dark) 30%, transparent);
+}
+
+.toc-fill {
+  position: absolute;
+  inset-inline: 0;
+  border-radius: 999px;
+  background-color: var(--text);
+  transition: opacity 200ms ease-out;
+}
+
+.dark .toc-fill {
+  background-color: var(--text-dark);
+}
+
+.toc-label {
+  opacity: 0;
+  /* they slide out of the rail rather than appearing beside it */
+  transform: translate(-4px, -50%);
+  pointer-events: none;
+  transition:
+    opacity 220ms var(--toc-ease),
+    transform 260ms var(--toc-ease);
+}
+
+.toc[data-open] .toc-label {
+  opacity: 1;
+  transform: translate(0, -50%);
+  pointer-events: auto;
+}
+
+.toc-label a {
+  font-size: 12px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--secondary-text);
+  transition: color 200ms ease;
+}
+
+/* a chapter already behind you keeps the full ink; the ones ahead stay quiet */
+.toc-label.is-read a {
+  color: var(--text);
+}
+
+.dark .toc-label.is-read a {
+  color: var(--text-dark);
+}
+
+/* the palette's pink is a background tint, near enough to white to read as ink
+   only on the dark page; light mode borrows its hue and takes the depth it needs */
+.toc-label a:hover {
+  color: oklch(from var(--primary) 0.62 0.14 h);
+}
+
+.dark .toc-label a:hover {
+  color: var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toc-scrim,
+  .toc-bar,
+  .toc-track,
+  .toc-fill,
+  .toc-label {
+    transition-duration: 1ms;
+  }
+
+  .toc-label {
+    transform: translate(0, -50%);
   }
 }

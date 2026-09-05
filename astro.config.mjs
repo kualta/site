@@ -82,6 +82,21 @@ export default defineConfig({
     ],
   },
   vite: {
+    plugins: [
+      {
+        // This package ships Astro source. Cloudflare's SSR optimizer would
+        // otherwise treat its `.astro` component as plain JavaScript.
+        name: "exclude-astro-embed-source-from-optimizer",
+        configEnvironment(environmentName) {
+          if (!["astro", "ssr", "prerender"].includes(environmentName)) return;
+          return {
+            optimizeDeps: {
+              exclude: ["@astro-community/astro-embed-bluesky"],
+            },
+          };
+        },
+      },
+    ],
     server: {
       headers: {
         "Access-Control-Allow-Origin": "*",

@@ -1,12 +1,25 @@
 /// <reference types="astro/client" />
 
-type Runtime = import("@astrojs/cloudflare").Runtime<{
-  PARAGRAPH_API_KEY?: string;
-  PARAGRAPH_PUBLICATION_SLUG?: string;
-}>;
+declare namespace Cloudflare {
+  interface Env {
+    ACTIVITY_CACHE?: import("@/lib/activity").ActivityCacheStore;
+    GITHUB_ACTIVITY_TOKEN?: string;
+    PARAGRAPH_API_KEY?: string;
+    PARAGRAPH_PUBLICATION_SLUG?: string;
+  }
+}
+
+declare module "cloudflare:workers" {
+  export const env: Cloudflare.Env;
+}
+
+// the adapter puts the Worker's ExecutionContext on locals, which is what lets
+// a page hand work to `waitUntil` and answer before that work finishes
+type CloudflareRuntime = import("@astrojs/cloudflare").Runtime;
 
 declare namespace App {
-  interface Locals extends Runtime {}
+  // biome-ignore lint/suspicious/noEmptyInterface: declaration merging needs an interface, not an alias
+  interface Locals extends CloudflareRuntime {}
 }
 
 interface ImportMetaEnv {

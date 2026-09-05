@@ -5,6 +5,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
+  "kv_namespaces": [
+    { "binding": "ACTIVITY_CACHE", "id": "2b4fd9e1881247b0aa2d7a030a5e1961" }
+  ],
   "observability": {
     "enabled": true
   },
@@ -24,6 +27,7 @@
   // deployment metadata.
   //
   // Secrets are set via the Cloudflare dashboard or `wrangler secret put`:
+  //   wrangler secret put GITHUB_ACTIVITY_TOKEN
   //   wrangler secret put PARAGRAPH_API_KEY
   //   wrangler secret put PARAGRAPH_PUBLICATION_SLUG
   // For local dev, copy them into `.dev.vars` (gitignored).

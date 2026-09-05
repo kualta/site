@@ -6,10 +6,11 @@
   "private": true,
   "scripts": {
     "dev": "bun run music:sync && astro dev",
-    "build": "bun run music:sync && astro build",
+    "build": "bun run music:sync && astro build && node scripts/scrub-build-secrets.mjs",
     "music:sync": "node scripts/sync-music.mjs",
     "preview": "astro preview",
     "check": "astro check",
+    "test": "bun test",
     "format": "bunx @biomejs/biome format --write ./src",
     "lint": "bunx @biomejs/biome lint --apply-unsafe ./src",
     "music:lyrics": "node scripts/fetch-lyrics.mjs",
@@ -17,12 +18,15 @@
     "posts:import": "node scripts/import-paragraph.mjs"
   },
   "dependencies": {
+    "@astro-community/astro-embed-bluesky": "0.2.3",
     "@astrojs/check": "^0.9.9",
     "@astrojs/cloudflare": "^13.5.2",
     "@astrojs/mdx": "6.0.3",
     "@astrojs/react": "^5.0.5",
     "@astrojs/sitemap": "^3.7.2",
     "@astrojs/tailwind": "^6.0.2",
+    "@atcute/bluesky": "^4.0.20",
+    "@atcute/lexicons": "^2.1.0",
     "@fontsource/fredoka": "^5.2.10",
     "@fontsource/huninn": "^5.3.0",
     "@fontsource/m-plus-rounded-1c": "^5.3.0",
@@ -41,6 +45,7 @@
   "devDependencies": {
     "@biomejs/biome": "1.4.1",
     "@tailwindcss/typography": "^0.5.9",
+    "@types/bun": "^1.4.0",
     "autoprefixer": "^10.4.13",
     "music-metadata": "^11.14.0",
     "node-id3": "^0.2.9",
