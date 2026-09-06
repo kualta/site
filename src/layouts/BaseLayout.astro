@@ -21,6 +21,7 @@ export interface Article {
 interface Props {
   title?: string;
   description?: string;
+  exactDescription?: boolean;
   image?: string;
   imageAlt?: string;
   type?: "website" | "article";
@@ -33,6 +34,7 @@ interface Props {
 const {
   title,
   description,
+  exactDescription = false,
   image,
   imageAlt = "kualta.dev",
   type = "website",
@@ -42,7 +44,7 @@ const {
 } = Astro.props;
 
 const documentTitle = pageTitle(title);
-const metaDescription = pageDescription(description, title);
+const metaDescription = exactDescription ? description : pageDescription(description, title);
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const og = ogImage(image, Astro.site);
 const month = new Date().getMonth();
