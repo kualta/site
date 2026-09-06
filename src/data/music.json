@@ -1,5 +1,21 @@
 [
   {
+    "id": 10,
+    "slug": "rises-the-moon",
+    "title": "rises the moon",
+    "artist": "kualta",
+    "album": "recently",
+    "originalArtist": "liana flores",
+    "kind": "cover",
+    "track": null,
+    "lyrics": "[00:11.82] Days seem sometimes as if they'll never end\n[00:17.26] Sun digs its heels to taunt you\n[00:22.47] But after sunlit days, one thing stays the same\n[00:26.65] Rises the moon\n[00:30.84] \n[00:33.37] Days fade into a watercolour blur\n[00:38.80] Memories swim and haunt you\n[00:43.87] But look into the lake, shimmering like smoke\n[00:47.93] Rises the moon\n[00:54.70] Oh-oh, close your weary eyes\n[01:02.37] I promise you that soon the autumn comes\n[01:04.76] To darken fading summer skies\n[01:12.72] Breathe, breathe, breathe\n[01:18.28] \n[01:25.81] Days pull you down just like a sinking ship\n[01:30.85] Floating is getting harder\n[01:36.11] But tread the water, child, and know that meanwhile\n[01:40.17] Rises the moon\n[01:46.51] Days pull you up just like a daffodil\n[01:51.66] Uprooted from its garden\n[01:56.98] They'll tell you what you owe, but know even so\n[02:00.99] Rises the moon\n[02:07.47] You'll be visited by sleep\n[02:14.91] I promise you that soon the autumn comes\n[02:17.44] To steal away each dream you keep\n[02:25.51] Breathe, breathe, breathe\n[02:32.86]",
+    "date": "2026-09-06",
+    "duration": 162,
+    "src": "/music/rises-the-moon.mp3",
+    "cover": "/music/covers/rises-the-moon.jpg",
+    "og": "/music/og/rises-the-moon.png"
+  },
+  {
     "id": 9,
     "slug": "preacher-man",
     "title": "PREACHER MAN",
@@ -128,7 +144,7 @@
     "og": "/music/og/dialogue.png"
   },
   {
-    "id": 10,
+    "id": 11,
     "slug": "self-conscious-portrait",
     "title": "Self-Conscious Portrait",
     "artist": "kualta",
