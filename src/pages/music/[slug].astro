@@ -22,13 +22,8 @@ interface Props {
 
 const { track, tracks } = Astro.props;
 
-// a sentence rather than a list of fields, so it stands on its own in a result
-// instead of being padded out with the site's boilerplate
 const kind = track.kind === "cover" ? "a cover" : "an original";
-const album = track.album ? ` from ${track.album}` : "";
-const origin = track.originalArtist ? `, first recorded by ${track.originalArtist}` : "";
-const year = track.date.slice(0, 4);
-const description = `${track.title}, ${kind} by ${track.artist}${album}${origin}, ${year}. Play it on kualta.dev, alongside the rest of the shelf.`;
+const description = `${track.title}, ${kind} by ${track.artist}`;
 
 /** ISO 8601 duration, the only form schema.org reads */
 const isoDuration = (seconds: number) =>
@@ -62,6 +57,7 @@ const schema = [
 <BaseLayout
   title={track.title}
   description={description}
+  exactDescription
   image={track.og ?? "/opengraph-image.png"}
   imageAlt={`${track.title} by ${track.artist}`}
   schema={schema}
