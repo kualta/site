@@ -949,3 +949,97 @@ input[type="checkbox"]:focus-visible {
     transform: translate(0, -50%);
   }
 }
+
+.music-player-collapsed {
+  display: contents;
+}
+
+.music-full[hidden] {
+  display: none;
+}
+
+.music-deck,
+.music-mini {
+  transform-origin: top left;
+}
+
+.music-mini {
+  position: fixed;
+  z-index: 110;
+  right: max(1.5rem, env(safe-area-inset-right));
+  bottom: max(1.5rem, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: min(23rem, calc(100vw - 3rem));
+  padding: 1rem 1rem 1.5rem;
+  border: 1px solid color-mix(in oklab, var(--secondary-text) 25%, transparent);
+  border-radius: 1.25rem;
+  background: var(--bg);
+  box-shadow: 0 8px 32px #0002;
+}
+
+.dark .music-mini {
+  background: var(--secondary-dark);
+  box-shadow: 0 8px 32px #0004;
+}
+
+.music-mini-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.75rem;
+  color: var(--secondary-text);
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .music-mini-button:hover {
+    color: var(--text);
+    background-color: color-mix(in oklab, var(--secondary-text) 20%, transparent);
+  }
+
+  .dark .music-mini-button:hover {
+    color: var(--text-dark);
+  }
+}
+
+.music-mini :is(button, a):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.music-mini-seek {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 1.5rem;
+  width: calc(100% - 3rem);
+}
+
+@media (min-width: 1024px) {
+  .music-mini {
+    right: max(3rem, env(safe-area-inset-right));
+    bottom: max(3rem, env(safe-area-inset-bottom));
+  }
+}
+
+.music-deck,
+.music-mini {
+  view-transition-name: music-player;
+}
+
+::view-transition-group(music-player) {
+  animation-duration: 480ms;
+  animation-timing-function: var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(music-player),
+  ::view-transition-old(music-player),
+  ::view-transition-new(music-player) {
+    animation-duration: 1ms;
+  }
+}

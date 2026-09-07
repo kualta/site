@@ -2,6 +2,9 @@
 import "@/styles/globals.css";
 import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?url";
 import { ClientRouter } from "astro:transitions";
+import MusicShelf from "@/components/MusicShelf.tsx";
+import musicData from "@/data/music.json";
+import type { Track } from "@/types";
 import Header from "@/components/Header.astro";
 import NotificationsButton from "@/components/NotificationsButton.astro";
 import CornersScope from "@/components/CornersScope.astro";
@@ -43,8 +46,14 @@ const {
   schema = [],
 } = Astro.props;
 
+const musicPage = /^\/music(?:\/|$)/.test(Astro.url.pathname);
+const musicSlug = musicPage ? Astro.url.pathname.split("/")[2] || undefined : undefined;
+const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a.date));
+
 const documentTitle = pageTitle(title);
-const metaDescription = exactDescription ? description : pageDescription(description, title);
+const metaDescription = exactDescription && description !== undefined
+  ? description
+  : pageDescription(description, title);
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const og = ogImage(image, Astro.site);
 const month = new Date().getMonth();
@@ -139,6 +148,7 @@ const robots = noindex
 
     <main class="flex flex-col items-center justify-center grow w-full h-full">
       <slot />
+      <MusicShelf client:load transition:persist="music-player" transition:persist-props tracks={tracks} slug={musicSlug} musicPage={musicPage} />
     </main>
 
     <CornersScope />
