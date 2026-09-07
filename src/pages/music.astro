@@ -1,6 +1,5 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import MusicShelf from "@/components/MusicShelf.tsx";
 import type { Track } from "@/types";
 import musicData from "@/data/music.json";
 import { SITE_URL } from "@/lib/seo";
@@ -27,7 +26,4 @@ const schema = [
   schema={schema}
 >
   <h1 class="sr-only">music</h1>
-  <div class="flex w-full grow">
-    <MusicShelf client:load tracks={tracks} />
-  </div>
 </BaseLayout>

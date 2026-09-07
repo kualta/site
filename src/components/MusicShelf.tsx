@@ -1,5 +1,16 @@
+import { flushSync } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiPause, FiPlay, FiRepeat, FiSkipBack, FiSkipForward, FiVolume1, FiVolume2, FiVolumeX } from "react-icons/fi";
+import {
+  FiPause,
+  FiPlay,
+  FiRepeat,
+  FiSkipBack,
+  FiSkipForward,
+  FiVolume1,
+  FiVolume2,
+  FiVolumeX,
+  FiX,
+} from "react-icons/fi";
 import { LyricsPanel } from "@/components/LyricsPanel";
 import { Scrollable } from "@/components/Scrollable";
 import { Vinyl } from "@/components/Vinyl";
@@ -42,6 +53,7 @@ interface Props {
   tracks: Track[];
   /** the record this page is for, when it was reached by a link */
   slug?: string;
+  musicPage: boolean;
 }
 
 function prefersReducedMotion() {
@@ -56,7 +68,7 @@ function prefersReducedMotion() {
  */
 function writeSlug(slug: string | undefined) {
   const path = `/music/${slug}`;
-  if (!slug || window.location.pathname === path) return;
+  if (!/^\/music(?:\/|$)/.test(window.location.pathname) || !slug || window.location.pathname === path) return;
   // the router keeps its own state on the entry, so replace the URL and nothing else
   window.history.replaceState(window.history.state, "", path);
 }
@@ -68,10 +80,15 @@ function formatTime(seconds: number) {
   return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-export default function MusicShelf({ tracks, slug }: Props) {
+export default function MusicShelf({ tracks, slug, musicPage }: Props) {
   // a record is always on the platter, cued but silent until asked. the page was
   // built for this one, so the server and the client agree on it from the start
   const [activeSlug, setActiveSlug] = useState<string | null>(slug ?? tracks[0]?.slug ?? null);
+  const [expanded, setExpanded] = useState(musicPage);
+  const [visited, setVisited] = useState(musicPage);
+  const [started, setStarted] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const surfaceRef = useRef<HTMLElement>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -219,16 +236,16 @@ export default function MusicShelf({ tracks, slug }: Props) {
   // the cued record is loaded but never auto-played
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !active) return;
+    if (!audio || !active || !visited) return;
     // a record cued by a link has to reach the deck too, or the needle and the label disagree
     if (audio.paused && audio.currentTime === 0 && !audio.src.endsWith(active.src)) {
       audio.src = active.src;
     }
-  }, [active]);
+  }, [active, visited]);
 
   // decode the open record in the background so the first grab can make sound
   useEffect(() => {
-    if (!active || !deck) return;
+    if (!active || !deck || !visited) return;
     scratchPosition.current = 0;
     deck.onPosition = (seconds) => {
       scratchPosition.current = seconds;
@@ -260,13 +277,14 @@ export default function MusicShelf({ tracks, slug }: Props) {
       deck.setRate(0);
       deck.onSource = null;
     };
-  }, [active, adoptLocalCopy, deck]);
+  }, [active, adoptLocalCopy, deck, visited]);
 
   // a decoded track is tens of megabytes, so never leave one behind
   useEffect(() => () => deck?.unload(), [deck]);
 
   // a turntable takes a moment to reach speed, and coasts down when it stops
   useEffect(() => {
+    if (!expanded) return;
     let frame = 0;
     const target = playing && !scrubbing ? 1 : 0;
 
@@ -312,15 +330,15 @@ export default function MusicShelf({ tracks, slug }: Props) {
 
     findSpin();
     return () => cancelAnimationFrame(frame);
-  }, [playing, activeSlug, scrubbing, active]);
+  }, [playing, activeSlug, scrubbing, active, expanded]);
 
   // swapping records is not a navigation, so the tab has to be renamed by hand
   useEffect(() => {
-    if (active) document.title = `${active.title} - kualta`;
-  }, [active]);
+    if (active && expanded) document.title = `${active.title} - kualta`;
+  }, [active, expanded]);
 
   useEffect(() => {
-    if (!active || !("mediaSession" in navigator)) return;
+    if (!active || !visited || !("mediaSession" in navigator)) return;
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: active.title,
@@ -342,7 +360,7 @@ export default function MusicShelf({ tracks, slug }: Props) {
         // action unsupported in this browser, nothing to do
       }
     }
-  }, [active, step]);
+  }, [active, step, visited]);
 
   const angleAt = (element: HTMLElement, clientX: number, clientY: number) => {
     const box = element.getBoundingClientRect();
@@ -516,10 +534,11 @@ export default function MusicShelf({ tracks, slug }: Props) {
   // keyboard control, unless the user is typing or driving the seek bar
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (!expanded) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       const target = event.target as HTMLElement | null;
-      if (target?.isContentEditable || (target && /^(input|textarea|select)$/i.test(target.tagName))) return;
+      if (target?.isContentEditable || (target && /^(input|textarea|select|button|a)$/i.test(target.tagName))) return;
 
       const audio = audioRef.current;
       if (!audio || !active) return;
@@ -586,18 +605,67 @@ export default function MusicShelf({ tracks, slug }: Props) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, duration, seekTo, step, toggle, toggleMute]);
+  }, [active, duration, expanded, seekTo, step, toggle, toggleMute]);
+
+  useEffect(() => {
+    let previous: DOMRect | undefined;
+    const beforeSwap = () => {
+      previous = surfaceRef.current?.getBoundingClientRect();
+    };
+    const afterSwap = () => {
+      const onMusic = /^\/music(?:\/|$)/.test(window.location.pathname);
+      const requested = tracks.find((track) => track.slug === window.location.pathname.split("/")[2]);
+      flushSync(() => {
+        setExpanded(onMusic);
+        if (onMusic) {
+          setVisited(true);
+          setDismissed(false);
+          if (requested && requested.slug !== activeSlug) {
+            if (started) open(requested);
+            else setActiveSlug(requested.slug);
+          }
+        }
+      });
+      // Native view transitions carry the deck between layouts; older browsers use FLIP.
+      const surface = surfaceRef.current;
+      if (!surface || !previous?.width || prefersReducedMotion() || typeof document.startViewTransition === "function") return;
+      const next = surface.getBoundingClientRect();
+      if (!next.width) return;
+      surface.animate(
+        [
+          {
+            transform: `translate(${previous.x - next.x}px, ${previous.y - next.y}px) scale(${
+              previous.width / next.width
+            }, ${previous.height / next.height})`,
+            opacity: 0.65,
+          },
+          { transform: "none", opacity: 1 },
+        ],
+        { duration: 480, easing: "cubic-bezier(0.23, 1, 0.32, 1)" },
+      );
+    };
+    document.addEventListener("astro:before-swap", beforeSwap);
+    document.addEventListener("astro:after-swap", afterSwap);
+    return () => {
+      document.removeEventListener("astro:before-swap", beforeSwap);
+      document.removeEventListener("astro:after-swap", afterSwap);
+    };
+  }, [activeSlug, open, started, tracks]);
 
   if (!active) return null;
 
   return (
-    <div className="flex w-full grow flex-col">
+    <div className={expanded ? "flex w-full grow flex-col" : "music-player-collapsed"}>
       <audio
         ref={audioRef}
         preload="metadata"
         // repeat holds one record on the platter; without it the crate rolls on
         loop={repeat}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          setStarted(true);
+          setDismissed(false);
+        }}
         onPause={() => setPlaying(false)}
         // a held seek owns the clock until it lands, or the display drops back to
         // where the element is still sitting and reads as a record starting over
@@ -608,7 +676,62 @@ export default function MusicShelf({ tracks, slug }: Props) {
         onEnded={() => step(1)}
       />
 
-      <div className="grid w-full grow lg:h-[calc(100dvh-8rem)] lg:min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_19rem] xl:grid-cols-[23rem_minmax(0,1fr)_23rem]">
+      {!expanded && started && !dismissed && (
+        <section ref={surfaceRef} className="music-mini" aria-label="Music player">
+          <a
+            href={`/music/${active.slug}/`}
+            className="flex min-w-0 flex-1 items-center gap-3"
+            aria-label={`Open ${active.title} in music`}
+          >
+            <div className="w-12 shrink-0">
+              <Vinyl track={active} spinning={playing} />
+            </div>
+            <div className="min-w-0">
+              <div lang={langFor(active.title)} className="truncate text-sm font-medium">
+                {active.title}
+              </div>
+              <div className="truncate text-xs text-secondary-text">{active.artist}</div>
+            </div>
+          </a>
+          <button
+            type="button"
+            className="play-button flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+            onClick={toggle}
+            aria-label={playing ? "Pause" : "Play"}
+          >
+            {playing ? <FiPause /> : <FiPlay />}
+          </button>
+          <button type="button" className="music-mini-button" onClick={() => step(1)} aria-label="Next track">
+            <FiSkipForward />
+          </button>
+          <button
+            type="button"
+            className="music-mini-button"
+            onClick={() => {
+              audioRef.current?.pause();
+              setDismissed(true);
+            }}
+            aria-label="Close player"
+          >
+            <FiX />
+          </button>
+          <input
+            className="vinyl-seek music-mini-seek"
+            type="range"
+            min={0}
+            max={duration || active.duration}
+            step={0.1}
+            value={Math.min(time, duration || active.duration)}
+            onChange={seek}
+            aria-label={`Seek within ${active.title}`}
+            style={{ "--vinyl-progress": `${(time / (duration || active.duration)) * 100}%` } as React.CSSProperties}
+          />
+        </section>
+      )}
+      <div
+        hidden={!expanded}
+        className="music-full grid w-full grow lg:h-[calc(100dvh-8rem)] lg:min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_19rem] xl:grid-cols-[23rem_minmax(0,1fr)_23rem]"
+      >
         <aside
           className={`lyrics-rail order-last max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:order-none lg:flex lg:max-h-none lg:p-12 ${
             pane === "lyrics" ? "flex" : "hidden"
@@ -624,7 +747,10 @@ export default function MusicShelf({ tracks, slug }: Props) {
           <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
         </aside>
 
-        <section className="flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6 lg:p-8">
+        <section
+          ref={expanded ? surfaceRef : undefined}
+          className="music-deck flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6 lg:p-8"
+        >
           <div className="w-full max-w-[min(25rem,42vh,78vw)]" ref={deckRef}>
             <Vinyl
               track={active}

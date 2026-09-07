@@ -5,7 +5,6 @@
  * simply handed the record this page was built for.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import MusicShelf from "@/components/MusicShelf.tsx";
 import type { Track } from "@/types";
 import musicData from "@/data/music.json";
 import { SITE_URL } from "@/lib/seo";
@@ -20,7 +19,7 @@ interface Props {
   tracks: Track[];
 }
 
-const { track, tracks } = Astro.props;
+const { track } = Astro.props;
 
 const kind = track.kind === "cover" ? "a cover" : "an original";
 const description = `${track.title}, ${kind} by ${track.artist}`;
@@ -63,7 +62,4 @@ const schema = [
   schema={schema}
 >
   <h1 class="sr-only">{track.title} by {track.artist}</h1>
-  <div class="flex w-full grow">
-    <MusicShelf client:load tracks={tracks} slug={track.slug} />
-  </div>
 </BaseLayout>
