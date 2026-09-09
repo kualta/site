@@ -144,14 +144,28 @@ const robots = noindex
 
     <Header />
 
-    <NotificationsButton />
-
     <main class="flex flex-col items-center justify-center grow w-full h-full">
       <slot />
       <MusicShelf client:load transition:persist="music-player" transition:persist-props tracks={tracks} slug={musicSlug} musicPage={musicPage} />
     </main>
 
-    <CornersScope />
+    <CornersScope bottom_left={false} bottom_right={false} />
+    <div class="page-bottom" data-home={Astro.url.pathname === "/" ? "true" : undefined}>
+      <CornersScope top_left={false} top_right={false} />
+      <NotificationsButton />
+    </div>
+    <script>
+      document.addEventListener("astro:page-load", () => {
+        const bottom = document.querySelector<HTMLElement>('.page-bottom[data-home="true"]');
+        if (!bottom) return;
+        const update = () => bottom.toggleAttribute("data-scrolled", window.scrollY > 8);
+        update();
+        window.addEventListener("scroll", update, { passive: true });
+        document.addEventListener("astro:before-swap", () => {
+          window.removeEventListener("scroll", update);
+        }, { once: true });
+      });
+    </script>
 
     <Toaster client:idle />
   </body>

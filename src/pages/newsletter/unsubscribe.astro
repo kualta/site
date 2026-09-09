@@ -23,7 +23,7 @@ if (Astro.request.method === 'POST' && (!id || !env.NEWSLETTER_DB)) Astro.respon
     <h1 class="text-3xl">{completed ? "You're unsubscribed." : 'Unsubscribe'}</h1>
     {completed ? <p>You won’t receive any more newsletter emails.</p> : failed ? <p>Couldn’t save that change. Please try again.</p> :
       !id ? <p>Use the unsubscribe link at the bottom of an email.</p> : null}
-    {!completed && id && <form method="POST"><button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4" type="submit">Unsubscribe</button></form>}
+    {!completed && id && <form method="POST"><button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80" type="submit">Unsubscribe</button></form>}
     <a href="/" class="inline-block underline">Back to the site</a>
   </section>
 </BaseLayout>

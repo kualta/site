@@ -12,6 +12,15 @@ body {
   font-family: "Fredoka", "M PLUS Rounded 1c", "Huninn", system-ui, -apple-system, sans-serif;
 }
 
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.dark :focus-visible {
+  outline-color: var(--text-dark);
+}
+
 /* Han characters live in both faces, so Chinese has to ask for Huninn by name
    or it renders in M PLUS's Japanese glyph forms */
 :lang(zh),
@@ -495,10 +504,6 @@ input[type="checkbox"]:checked {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3 4.9 8.6 9.4 3.7' fill='none' stroke='%23181818' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
-input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--secondary-text);
-  outline-offset: 2px;
-}
 
 /* a lyric is a control now, so it at least takes a pointer */
 .lyric-line {
@@ -1007,10 +1012,6 @@ input[type="checkbox"]:focus-visible {
   }
 }
 
-.music-mini :is(button, a):focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 3px;
-}
 
 .music-mini-seek {
   position: absolute;
@@ -1044,13 +1045,13 @@ input[type="checkbox"]:focus-visible {
   }
 }
 
-/* The signup form expands to the right of the top-left bell. */
+/* The signup form shares the bottom corners’ page anchor. */
 .newsletter-dock {
   --newsletter-control-size: 2.75rem;
   position: absolute;
   z-index: 110;
   left: calc(1.5rem + env(safe-area-inset-left));
-  top: calc(1.5rem + env(safe-area-inset-top));
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
   display: flex;
   align-items: flex-start;
   padding: 0.25rem;
@@ -1065,7 +1066,7 @@ input[type="checkbox"]:focus-visible {
   border-radius: 0.85rem;
 }
 .newsletter-toggle:hover { opacity: 0.65; }
-.newsletter-expand { overflow: hidden; }
+.newsletter-expand { overflow: hidden; padding-block: 4px; margin-block: -4px; }
 .newsletter-panel { width: min(21rem, calc(100vw - 7rem - env(safe-area-inset-left) - env(safe-area-inset-right))); padding: 0 0.5rem 0 0.25rem; }
 .newsletter-dock .newsletter-fields :is(input, button) {
   height: var(--newsletter-control-size);
@@ -1080,10 +1081,11 @@ input[type="checkbox"]:focus-visible {
   padding: 0.65rem 0.75rem;
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   border-radius: 0.7rem;
-  background: transparent;
+  background: var(--secondary);
   font: inherit;
   color: inherit;
 }
+.dark .newsletter-fields input { background: var(--secondary-dark); }
 .newsletter-fields input::placeholder { color: inherit; opacity: 0.55; }
 .newsletter-fields button {
   display: flex;
@@ -1103,17 +1105,14 @@ input[type="checkbox"]:focus-visible {
 .newsletter-message { margin: 0.5rem 0 0; font-size: 0.75rem; line-height: 1.4; opacity: 0.75; }
 .newsletter-message:empty { display: none; }
 .newsletter-message[data-error="true"] { opacity: 1; }
-.newsletter-dock button:focus-visible,
-.newsletter-fields :is(input, button):focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-/* Keep navigation below the expanding form on narrower screens. */
-@media (max-width: 1470px) {
-  body:has(.newsletter-dock) .site-header {
-    height: calc(12rem + env(safe-area-inset-top));
-    padding-top: calc(8rem + env(safe-area-inset-top));
-    flex-shrink: 0;
-  }
-  body:has(.newsletter-dock) [data-activity-screen]:first-child {
-    min-height: calc(100dvh - 12rem - env(safe-area-inset-top));
-    scroll-margin-top: calc(12rem + env(safe-area-inset-top));
-  }
+
+.page-bottom {
+  position: absolute;
+  inset: auto 0 0;
+  height: 0;
 }
+.page-bottom[data-home="true"]:not([data-scrolled]) {
+  top: 100dvh;
+  bottom: auto;
+}
+body:has(.newsletter-dock) > main { padding-bottom: 6rem; }

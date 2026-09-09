@@ -20,7 +20,7 @@ const valid = /^[a-f0-9-]{72}$/.test(token);
     {completed ? <p>New essays, occasionally. See you in your inbox.</p> : failed || !valid ?
       <p>This link has expired or has already been used. <a href="/join" class="underline">Request a new link</a>.</p> :
       <form method="POST"><p class="mb-6">One more click to get new essays from kualta.</p>
-        <button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4" type="submit">Confirm subscription</button>
+        <button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80" type="submit">Confirm subscription</button>
       </form>}
     <a href="/" class="inline-block underline">Back to the site</a>
   </section>

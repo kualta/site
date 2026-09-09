@@ -1,7 +1,6 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ProjectCard from "@/components/ProjectCard.astro";
-import SubscriptionBox from "@/components/SubscriptionBox.astro";
 import type { Project } from "@/types";
 import projectsData from "@/data/projects.json";
 import { SITE_URL } from "@/lib/seo";
@@ -42,6 +41,5 @@ const schema = [
     <div class="flex flex-col w-full gap-2 p-4">
       {projects.map((project) => <ProjectCard project={project} />)}
     </div>
-    <SubscriptionBox />
   </div>
 </BaseLayout>

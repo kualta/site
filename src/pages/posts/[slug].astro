@@ -1,6 +1,5 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import SubscriptionBox from "@/components/SubscriptionBox.astro";
 import TableOfContents, { POST_TITLE_ID } from "@/components/TableOfContents.tsx";
 import { getPosts, getPostContent } from "@/lib/posts";
 
@@ -42,6 +41,5 @@ const { Content, headings } = post;
       <p class="post-subtitle mb-6 mt-0 text-center">{post.data.description}</p>
       <Content />
     </article>
-    <SubscriptionBox />
   </div>
 </BaseLayout>
