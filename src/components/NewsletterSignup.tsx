@@ -6,32 +6,33 @@ import { EmailSubscription } from "./EmailSubscription";
 export function NewsletterSignup() {
   const [open, setOpen] = useState(false);
   const [focusOnOpen, setFocusOnOpen] = useState(false);
-  const interacted = useRef(false);
   const reducedMotion = useReducedMotion();
   const trigger = useRef<HTMLButtonElement>(null);
   const id = useId();
 
   useEffect(() => {
-    function openNearEnd() {
+    let wasNearEnd = false;
+    function updateNearEnd() {
       const remaining = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
-      if (remaining > 240 || interacted.current) return;
-      interacted.current = true;
-      setOpen(true);
+      const nearEnd = remaining <= 240;
+      if (nearEnd === wasNearEnd) return;
+      wasNearEnd = nearEnd;
+      setFocusOnOpen(false);
+      setOpen(nearEnd);
     }
-    openNearEnd();
-    window.addEventListener("scroll", openNearEnd, { passive: true });
-    window.addEventListener("resize", openNearEnd);
-    const observer = new ResizeObserver(openNearEnd);
+    updateNearEnd();
+    window.addEventListener("scroll", updateNearEnd, { passive: true });
+    window.addEventListener("resize", updateNearEnd);
+    const observer = new ResizeObserver(updateNearEnd);
     observer.observe(document.body);
     return () => {
-      window.removeEventListener("scroll", openNearEnd);
-      window.removeEventListener("resize", openNearEnd);
+      window.removeEventListener("scroll", updateNearEnd);
+      window.removeEventListener("resize", updateNearEnd);
       observer.disconnect();
     };
   }, []);
 
   function close() {
-    interacted.current = true;
     setOpen(false);
     trigger.current?.focus();
   }
@@ -54,7 +55,6 @@ export function NewsletterSignup() {
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={() => {
-          interacted.current = true;
           if (open) close();
           else {
             setFocusOnOpen(true);

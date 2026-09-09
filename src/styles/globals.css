@@ -1115,4 +1115,21 @@ input[type="checkbox"]:checked {
   top: 100dvh;
   bottom: auto;
 }
+.page-bottom[data-home="true"]:not([data-scrolled]) .page-bottom-corner {
+  visibility: hidden;
+}
+.home-screen-corners {
+  position: absolute;
+  inset: 100dvh 0 auto;
+  height: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+body:has(.page-bottom[data-scrolled]) .home-screen-corners {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-screen-corners { transition: none; }
+}
 body:has(.newsletter-dock) > main { padding-bottom: 6rem; }

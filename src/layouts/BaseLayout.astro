@@ -150,8 +150,13 @@ const robots = noindex
     </main>
 
     <CornersScope bottom_left={false} bottom_right={false} />
+    {Astro.url.pathname === "/" && (
+      <div class="home-screen-corners" aria-hidden="true">
+        <CornersScope top_left={false} top_right={false} />
+      </div>
+    )}
     <div class="page-bottom" data-home={Astro.url.pathname === "/" ? "true" : undefined}>
-      <CornersScope top_left={false} top_right={false} />
+      <CornersScope top_left={false} top_right={false} class="page-bottom-corner" />
       <NotificationsButton />
     </div>
     <script>
