@@ -62,8 +62,8 @@ Astro.response.headers.set("cache-control", "no-store");
         lastSeenText && (
           <a
             href="#activity"
-            class="flex shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
-                   transition-opacity hover:opacity-70"
+            class="home-activity-link flex shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
+                   hover:opacity-70"
           >
             <time datetime={activity.lastSeenAt} class="tabular-nums" data-activity-last-seen>
               {lastSeenText}
