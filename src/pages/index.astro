@@ -3,7 +3,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
 import ActivityWidget from "@/components/activity/ActivityWidget.astro";
 import { formatLastSeenTime, getActivityFeed } from "@/lib/activity";
-import { FiChevronDown } from "react-icons/fi";
+import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 import { TAGLINE } from "@/lib/seo";
@@ -85,6 +85,25 @@ Astro.response.headers.set("cache-control", "no-store");
     </section>
   </div>
 
+  <button type="button" class="feed-back-top" aria-label="Go back up">
+    <FiChevronUp size={18} aria-hidden="true" />
+    <span>go back up</span>
+  </button>
+
+  <script>
+    document.addEventListener("astro:page-load", () => {
+      const button = document.querySelector<HTMLButtonElement>(".feed-back-top");
+      if (!button) return;
+      button.addEventListener("click", () => {
+        window.scrollTo({
+          top: 0,
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        });
+        document.querySelector<HTMLAnchorElement>(".site-header a")?.focus({ preventScroll: true });
+      });
+    });
+  </script>
+
   <style is:global>
     /* the two screens are the only places the page comes to rest, so one scroll
        down carries the whole way to the feed; the feed is taller than the
@@ -96,5 +115,6 @@ Astro.response.headers.set("cache-control", "no-store");
     [data-activity-screen] {
       scroll-snap-align: start;
     }
+
   </style>
 </BaseLayout>

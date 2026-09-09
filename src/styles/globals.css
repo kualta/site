@@ -1140,3 +1140,33 @@ body:has(.page-bottom[data-scrolled]) .home-activity-link {
   .home-screen-corners, .home-activity-link { transition: none; }
 }
 body:has(.newsletter-dock) > main { padding-bottom: 6rem; }
+
+.feed-back-top {
+  position: fixed;
+  top: calc(1.5rem + env(safe-area-inset-top));
+  right: calc(1.5rem + env(safe-area-inset-right));
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.85rem;
+  background: var(--secondary);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-12px);
+  transition: opacity 200ms ease-out, transform 200ms ease-out, visibility 200ms;
+}
+
+.dark .feed-back-top { background: var(--secondary-dark); }
+body:has(.page-bottom[data-scrolled]) .feed-back-top {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+body:has(.page-bottom[data-scrolled]) .feed-back-top:hover { opacity: 0.7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-back-top { transition: none; }
+}
