@@ -373,6 +373,10 @@ describe("subscription notifications", () => {
         "Newsletter subscribed: legacy@example.com",
       ]);
       expect(JSON.parse(String(request.mock.calls[0][1]?.body)).allowed_mentions).toEqual({ parse: [] });
+      expect(request.mock.calls[0][1]?.redirect).toBe("manual");
+      expect(new Headers(request.mock.calls[0][1]?.headers).get("User-Agent")).toBe(
+        "DiscordBot (https://kualta.dev, 1.0)",
+      );
     } finally {
       request.mockRestore();
     }
@@ -424,7 +428,11 @@ describe("subscription notifications", () => {
       expect(requests[0].url).toContain("wait=true");
       release();
       await Promise.all(jobs);
-      expect(log).toHaveBeenCalledWith("newsletter_notification_failed", { provider: "discord", event: "subscribed" });
+      expect(log).toHaveBeenCalledWith("newsletter_notification_failed", {
+        provider: "discord",
+        event: "subscribed",
+        failure: "http_503",
+      });
     } finally {
       release();
       request.mockRestore();
