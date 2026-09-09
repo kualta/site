@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { admin } from "./newsletter/admin";
 import { feedback } from "./newsletter/feedback";
 import { parseIssue, prepareIssue, sendBatch } from "./newsletter/issues";
+import { notifySubscription } from "./newsletter/notifications";
 import { plunkSender, SendError } from "./newsletter/plunk";
 import { digest, token, verifyToken } from "./newsletter/security";
 import { confirm, subscribe, unsubscribe } from "./newsletter/subscriptions";
@@ -328,6 +329,106 @@ describe("Plunk adapter", () => {
         expect(error).toBeInstanceOf(SendError);
         expect((error as SendError).uncertain).toBe(true);
       }
+    }
+  });
+});
+
+function mockFetch(implementation: (url: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+  return spyOn(globalThis, "fetch").mockImplementation(Object.assign(implementation, { preconnect: fetch.preconnect }));
+}
+
+describe("subscription notifications", () => {
+  test("notifies each committed transition once and preserves suppression", async () => {
+    const { env, sqlite, seed } = setup();
+    const notified: string[] = [];
+    const request = mockFetch(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      notified.push(body.content);
+      return Response.json({ id: "message" });
+    });
+    const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
+    try {
+      expect((await subscribe(signup(), configured)).status).toBe(200);
+      sqlite.exec("DELETE FROM newsletter_rate_limits");
+      await subscribe(signup(), configured);
+      const { id } = sqlite.query("SELECT id FROM newsletter_subscribers").get() as { id: string };
+      await unsubscribe(configured, id);
+      await unsubscribe(configured, id);
+      sqlite.exec("DELETE FROM newsletter_rate_limits");
+      await subscribe(signup(), configured);
+      const blocked = seed("suppressed", "blocked@example.com");
+      await subscribe(signup({ email: "blocked@example.com" }), configured);
+      await unsubscribe(configured, blocked);
+      const legacy = seed("pending", "legacy@example.com");
+      const confirmation = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+      sqlite
+        .query("UPDATE newsletter_subscribers SET confirmation_hash=?,confirmation_expires=? WHERE id=?")
+        .run(await digest(confirmation), Math.floor(Date.now() / 1000) + 60, legacy);
+      expect(await confirm(configured, confirmation)).toBe(true);
+      expect(await confirm(configured, confirmation)).toBe(false);
+      expect(notified).toEqual([
+        "Newsletter subscribed: reader@example.com",
+        "Newsletter unsubscribed: reader@example.com",
+        "Newsletter subscribed: reader@example.com",
+        "Newsletter subscribed: legacy@example.com",
+      ]);
+      expect(JSON.parse(String(request.mock.calls[0][1]?.body)).allowed_mentions).toEqual({ parse: [] });
+    } finally {
+      request.mockRestore();
+    }
+  });
+
+  test("provider failures do not undo signup or unsubscribe and do not leak secrets", async () => {
+    const { env, sqlite } = setup();
+    const request = spyOn(globalThis, "fetch").mockRejectedValue(new Error("secret-url"));
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
+    try {
+      expect((await subscribe(signup(), configured)).status).toBe(200);
+      const { id } = sqlite.query("SELECT id FROM newsletter_subscribers").get() as { id: string };
+      await unsubscribe(configured, id);
+      expect(sqlite.query("SELECT status FROM newsletter_subscribers").get()).toEqual({ status: "unsubscribed" });
+      expect(log).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("secret-url");
+      expect(JSON.stringify(log.mock.calls)).not.toContain("reader@example.com");
+    } finally {
+      request.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  test("schedules Discord in background and handles a rejected request", async () => {
+    const jobs: Promise<unknown>[] = [];
+    const requests: { url: string; body: Record<string, unknown> }[] = [];
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const request = mockFetch(async (url, init) => {
+      requests.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+      await pending;
+      return new Response("unavailable", { status: 503 });
+    });
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await notifySubscription(
+        {
+          NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token",
+        },
+        "subscribed",
+        "reader@example.com",
+        (work) => jobs.push(work),
+      );
+      expect(jobs).toHaveLength(1);
+      expect(requests).toHaveLength(1);
+      expect(requests[0].url).toContain("wait=true");
+      release();
+      await Promise.all(jobs);
+      expect(log).toHaveBeenCalledWith("newsletter_notification_failed", { provider: "discord", event: "subscribed" });
+    } finally {
+      release();
+      request.mockRestore();
+      log.mockRestore();
     }
   });
 });

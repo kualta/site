@@ -1,5 +1,5 @@
 ---
-import { env } from 'cloudflare:workers';
+import { env, waitUntil } from 'cloudflare:workers';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { confirm } from '@/lib/newsletter/subscriptions';
 export const prerender = false;
@@ -9,7 +9,7 @@ const token = Astro.url.searchParams.get('token') || '';
 let completed = false;
 let failed = false;
 if (Astro.request.method === 'POST') {
-  try { completed = await confirm(env,token); failed = !completed; }
+  try { completed = await confirm(env,token,waitUntil); failed = !completed; }
   catch { failed = true; Astro.response.status = 503; }
 }
 const valid = /^[a-f0-9-]{72}$/.test(token);

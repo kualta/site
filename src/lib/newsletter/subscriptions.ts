@@ -1,9 +1,10 @@
+import { notifySubscription, type WaitUntil } from "./notifications";
 import { digest, json, normalizeEmail, readJson, record, sign } from "./security";
 import { rateLimit } from "./store";
 import type { NewsletterEnv } from "./types";
 
 const accepted = () => json(200, { message: "You’re subscribed." });
-export async function subscribe(request: Request, env: NewsletterEnv): Promise<Response> {
+export async function subscribe(request: Request, env: NewsletterEnv, waitUntil?: WaitUntil): Promise<Response> {
   const requestOrigin = request.headers.get("Origin");
   if (requestOrigin && requestOrigin !== new URL(request.url).origin)
     return json(403, { message: "Please subscribe from this site." });
@@ -29,7 +30,7 @@ export async function subscribe(request: Request, env: NewsletterEnv): Promise<R
       return json(429, { message: "Please try again later." });
     if (!(await rateLimit(db, `email:${await sign(secret, "email", email)}`, 1, 600, now))) return accepted();
     // A fresh signup is consent; provider suppressions always take precedence.
-    await db
+    const result = await db
       .prepare(`INSERT INTO newsletter_subscribers (id,email,status,created_at,consent_at)
       VALUES (?,?,'active',?,?) ON CONFLICT(email) DO UPDATE SET
       status='active', consent_at=excluded.consent_at, unsubscribed_at=NULL,
@@ -37,27 +38,31 @@ export async function subscribe(request: Request, env: NewsletterEnv): Promise<R
       WHERE status IN ('pending','unsubscribed')`)
       .bind(crypto.randomUUID(), email, now, now)
       .run();
+    if (result.meta.changes) await notifySubscription(env, "subscribed", email, waitUntil);
     return accepted();
   } catch {
     return json(503, { message: "Signup is temporarily unavailable. Please try again later." });
   }
 }
-export async function confirm(env: NewsletterEnv, value: string): Promise<boolean> {
+export async function confirm(env: NewsletterEnv, value: string, waitUntil?: WaitUntil): Promise<boolean> {
   if (!env.NEWSLETTER_DB || !/^[a-f0-9-]{72}$/.test(value)) return false;
   const now = Math.floor(Date.now() / 1000);
   const result = await env.NEWSLETTER_DB.prepare(`UPDATE newsletter_subscribers SET status='active',
     consent_at=?, confirmed_at=?, unsubscribed_at=NULL, confirmation_hash=NULL, confirmation_expires=NULL
-    WHERE confirmation_hash=? AND confirmation_expires>=? AND status IN ('pending','unsubscribed')`)
+    WHERE confirmation_hash=? AND confirmation_expires>=? AND status IN ('pending','unsubscribed') RETURNING email`)
     .bind(now, now, await digest(value), now)
-    .run();
-  return result.meta.changes === 1;
+    .first<{ email: string }>();
+  if (result) await notifySubscription(env, "subscribed", result.email, waitUntil);
+  return !!result;
 }
 
-export async function unsubscribe(env: NewsletterEnv, id: string): Promise<void> {
+export async function unsubscribe(env: NewsletterEnv, id: string, waitUntil?: WaitUntil): Promise<void> {
   if (!env.NEWSLETTER_DB) throw new Error("Newsletter unavailable");
-  await env.NEWSLETTER_DB.prepare(`UPDATE newsletter_subscribers SET
+  const changed = await env.NEWSLETTER_DB.prepare(`UPDATE newsletter_subscribers SET
     status=CASE WHEN status='suppressed' THEN 'suppressed' ELSE 'unsubscribed' END,
-    unsubscribed_at=COALESCE(unsubscribed_at,?), confirmation_hash=NULL,confirmation_expires=NULL WHERE id=?`)
+    unsubscribed_at=COALESCE(unsubscribed_at,?), confirmation_hash=NULL,confirmation_expires=NULL
+    WHERE id=? AND status IN ('active','pending','suppressed') RETURNING email,status`)
     .bind(Math.floor(Date.now() / 1000), id)
-    .run();
+    .first<{ email: string; status: string }>();
+  if (changed?.status === "unsubscribed") await notifySubscription(env, "unsubscribed", changed.email, waitUntil);
 }

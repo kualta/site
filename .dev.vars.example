@@ -8,3 +8,6 @@ NEWSLETTER_ADMIN_SECRET=
 NEWSLETTER_WEBHOOK_SECRET=
 # Override only for local email link/admin testing.
 # NEWSLETTER_ORIGIN=http://localhost:4321
+
+# Optional Discord subscription alerts.
+NEWSLETTER_DISCORD_WEBHOOK_URL=

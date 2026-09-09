@@ -163,3 +163,18 @@ chosen test recipient.
 Provider references: [send API](https://docs.useplunk.com/api-reference/public-api/sendEmail),
 [feedback](https://docs.useplunk.com/guides/webhooks),
 [workflow API](https://docs.useplunk.com/api-reference/overview).
+
+
+### Subscription alerts
+
+Set `NEWSLETTER_DISCORD_WEBHOOK_URL` as a Cloudflare Worker secret for Discord alerts.
+Use `bunx wrangler secret put <NAME> --config wrangler.jsonc` and put the same names
+in `.dev.vars` for local testing. Keep these values out of source control.
+
+Alerts contain the subscriber email and `subscribed` or `unsubscribed`. They fire
+only after an actual database transition, including re-subscription and legacy
+confirmation. Duplicate requests and suppressed signups do not generate alerts.
+Cloudflare `waitUntil` sends them in the background with a five-second timeout.
+Delivery is best effort: failures are logged as `newsletter_notification_failed`
+without addresses or credentials, and never prevent signup or unsubscribe.
+There is no queue or automatic retry.

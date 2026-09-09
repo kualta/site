@@ -14,6 +14,7 @@ export interface NewsletterEnv {
   NEWSLETTER_TOKEN_SECRET?: string;
   NEWSLETTER_ADMIN_SECRET?: string;
   NEWSLETTER_WEBHOOK_SECRET?: string;
+  NEWSLETTER_DISCORD_WEBHOOK_URL?: string;
   NEWSLETTER_ORIGIN?: string;
 }
 export interface Subscriber {

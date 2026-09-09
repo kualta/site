@@ -9,6 +9,7 @@ declare namespace Cloudflare {
     NEWSLETTER_TOKEN_SECRET?: string;
     NEWSLETTER_ADMIN_SECRET?: string;
     NEWSLETTER_WEBHOOK_SECRET?: string;
+    NEWSLETTER_DISCORD_WEBHOOK_URL?: string;
     NEWSLETTER_ORIGIN?: string;
     PARAGRAPH_API_KEY?: string;
     PARAGRAPH_PUBLICATION_SLUG?: string;
@@ -17,6 +18,7 @@ declare namespace Cloudflare {
 
 declare module "cloudflare:workers" {
   export const env: Cloudflare.Env;
+  export function waitUntil(work: Promise<unknown>): void;
 }
 
 // the adapter puts the Worker's ExecutionContext on locals, which is what lets

@@ -1,5 +1,5 @@
 ---
-import { env } from 'cloudflare:workers';
+import { env, waitUntil } from 'cloudflare:workers';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { unsubscribe } from '@/lib/newsletter/subscriptions';
 import { verifyToken } from '@/lib/newsletter/security';
@@ -12,7 +12,7 @@ let completed = false;
 let failed = false;
 if (Astro.request.method === 'POST' && id && env.NEWSLETTER_DB) {
   try {
-    await unsubscribe(env,id);
+    await unsubscribe(env,id,waitUntil);
     completed = true;
   } catch { failed = true; Astro.response.status = 503; }
 }
