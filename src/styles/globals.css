@@ -1046,10 +1046,11 @@ input[type="checkbox"]:focus-visible {
 
 /* The signup form expands to the right of the top-left bell. */
 .newsletter-dock {
-  position: fixed;
+  --newsletter-control-size: 2.75rem;
+  position: absolute;
   z-index: 110;
-  left: max(0.75rem, env(safe-area-inset-left));
-  top: max(0.75rem, env(safe-area-inset-top));
+  left: calc(1.5rem + env(safe-area-inset-left));
+  top: calc(1.5rem + env(safe-area-inset-top));
   display: flex;
   align-items: flex-start;
   padding: 0.25rem;
@@ -1058,14 +1059,18 @@ input[type="checkbox"]:focus-visible {
 .newsletter-toggle {
   display: grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: var(--newsletter-control-size);
+  height: var(--newsletter-control-size);
   flex-shrink: 0;
   border-radius: 0.85rem;
 }
 .newsletter-toggle:hover { opacity: 0.65; }
 .newsletter-expand { overflow: hidden; }
-.newsletter-panel { width: min(21rem, calc(100vw - 7rem)); padding: 0.25rem 0.5rem 0.25rem 0.25rem; }
+.newsletter-panel { width: min(21rem, calc(100vw - 7rem - env(safe-area-inset-left) - env(safe-area-inset-right))); padding: 0 0.5rem 0 0.25rem; }
+.newsletter-dock .newsletter-fields :is(input, button) {
+  height: var(--newsletter-control-size);
+  padding-block: 0;
+}
 .newsletter-form { width: 100%; min-width: 0; }
 .newsletter-fields { display: flex; gap: 0.4rem; }
 .newsletter-fields input {
