@@ -471,7 +471,7 @@ describe("email open notifications", () => {
       await Promise.all([pixel(), provider(), pixel()]);
       expect(request).toHaveBeenCalledTimes(1);
       expect(JSON.parse(String(request.mock.calls[0][1]?.body)).content).toBe(
-        "Newsletter open detected: reader@example.com\nPost: An essay",
+        "`reader@example.com` opened `An essay`",
       );
       expect(
         (sqlite.query("SELECT opened_at FROM newsletter_deliveries").get() as { opened_at: number }).opened_at,

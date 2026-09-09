@@ -22,7 +22,10 @@ export async function notifyNewsletter(
           "Content-Type": "application/json",
           "User-Agent": "DiscordBot (https://kualta.dev, 1.0)",
         },
-        body: JSON.stringify({ content: `Newsletter ${event}: ${detail}`, allowed_mentions: { parse: [] } }),
+        body: JSON.stringify({
+          content: event === "open detected" ? detail : `Newsletter ${event}: ${detail}`,
+          allowed_mentions: { parse: [] },
+        }),
         signal: AbortSignal.timeout(5000),
         redirect: "manual",
       });

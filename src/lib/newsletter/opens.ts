@@ -19,5 +19,5 @@ export async function recordOpen(env: NewsletterEnv, id: string, at: number, wai
     .first<{ email: string; content: string }>();
   if (!row) return;
   const issue = JSON.parse(row.content) as { title: string };
-  await notifyNewsletter(env, "open detected", `${row.email}\nPost: ${issue.title}`, waitUntil);
+  await notifyNewsletter(env, "open detected", `\`${row.email}\` opened \`${issue.title}\``, waitUntil);
 }
