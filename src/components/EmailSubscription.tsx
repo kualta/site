@@ -43,9 +43,9 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true }: P
     }
   }
 
-  let buttonLabel = "Join";
-  if (state === "pending") buttonLabel = "Joining…";
-  if (state === "success") buttonLabel = "Joined";
+  let buttonLabel = "Subscribe";
+  if (state === "pending") buttonLabel = "Subscribing…";
+  if (state === "success") buttonLabel = "Subscribed";
 
   return (
     <form onSubmit={handleSubmit} className="newsletter-form" aria-busy={state === "pending"}>

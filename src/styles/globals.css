@@ -1139,7 +1139,7 @@ body:has(.page-bottom[data-scrolled]) .home-activity-link {
 @media (prefers-reduced-motion: reduce) {
   .home-screen-corners, .home-activity-link { transition: none; }
 }
-body:has(.newsletter-dock) > main { padding-bottom: 6rem; }
+body:has(.newsletter-dock):not([data-music-page]) > main { padding-bottom: 6rem; }
 
 .feed-back-top {
   position: fixed;
