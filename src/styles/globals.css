@@ -1043,3 +1043,72 @@ input[type="checkbox"]:focus-visible {
     animation-duration: 1ms;
   }
 }
+
+/* The signup form expands to the right of the top-left bell. */
+.newsletter-dock {
+  position: fixed;
+  z-index: 110;
+  left: max(0.75rem, env(safe-area-inset-left));
+  top: max(0.75rem, env(safe-area-inset-top));
+  display: flex;
+  align-items: flex-start;
+  padding: 0.25rem;
+  background: transparent;
+}
+.newsletter-toggle {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border-radius: 0.85rem;
+}
+.newsletter-toggle:hover { opacity: 0.65; }
+.newsletter-expand { overflow: hidden; }
+.newsletter-panel { width: min(21rem, calc(100vw - 7rem)); padding: 0.25rem 0.5rem 0.25rem 0.25rem; }
+.newsletter-form { width: 100%; min-width: 0; }
+.newsletter-fields { display: flex; gap: 0.4rem; }
+.newsletter-fields input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.7rem;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+.newsletter-fields input::placeholder { color: inherit; opacity: 0.55; }
+.newsletter-fields button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.7rem;
+  background: var(--text);
+  color: var(--bg);
+  font: inherit;
+  white-space: nowrap;
+}
+.dark .newsletter-fields button { background: var(--text-dark); color: var(--bg-dark); }
+.newsletter-fields button:disabled { opacity: 0.65; cursor: default; }
+.newsletter-fields button:not(:disabled):hover { opacity: 0.8; }
+.newsletter-message { margin: 0.5rem 0 0; font-size: 0.75rem; line-height: 1.4; opacity: 0.75; }
+.newsletter-message:empty { display: none; }
+.newsletter-message[data-error="true"] { opacity: 1; }
+.newsletter-dock button:focus-visible,
+.newsletter-fields :is(input, button):focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+/* Keep navigation below the expanding form on narrower screens. */
+@media (max-width: 1470px) {
+  body:has(.newsletter-dock) .site-header {
+    height: calc(12rem + env(safe-area-inset-top));
+    padding-top: calc(8rem + env(safe-area-inset-top));
+    flex-shrink: 0;
+  }
+  body:has(.newsletter-dock) [data-activity-screen]:first-child {
+    min-height: calc(100dvh - 12rem - env(safe-area-inset-top));
+    scroll-margin-top: calc(12rem + env(safe-area-inset-top));
+  }
+}

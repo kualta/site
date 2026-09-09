@@ -1,2 +1,10 @@
 # Copy to .dev.vars for local Cloudflare runtime development.
 GITHUB_ACTIVITY_TOKEN=
+PLUNK_SECRET_KEY=
+
+# Generate independent random values (at least 32 characters) for each.
+NEWSLETTER_TOKEN_SECRET=
+NEWSLETTER_ADMIN_SECRET=
+NEWSLETTER_WEBHOOK_SECRET=
+# Override only for local email link/admin testing.
+# NEWSLETTER_ORIGIN=http://localhost:4321

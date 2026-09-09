@@ -1,0 +1,29 @@
+---
+import { env } from 'cloudflare:workers';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { unsubscribe } from '@/lib/newsletter/subscriptions';
+import { verifyToken } from '@/lib/newsletter/security';
+export const prerender = false;
+Astro.response.headers.set('Cache-Control','no-store');
+Astro.response.headers.set('Referrer-Policy','no-referrer');
+const token = Astro.url.searchParams.get('token') || '';
+const id = env.NEWSLETTER_TOKEN_SECRET ? await verifyToken(env.NEWSLETTER_TOKEN_SECRET,'unsubscribe',token) : null;
+let completed = false;
+let failed = false;
+if (Astro.request.method === 'POST' && id && env.NEWSLETTER_DB) {
+  try {
+    await unsubscribe(env,id);
+    completed = true;
+  } catch { failed = true; Astro.response.status = 503; }
+}
+if (Astro.request.method === 'POST' && (!id || !env.NEWSLETTER_DB)) Astro.response.status = id ? 503 : 400;
+---
+<BaseLayout title="Unsubscribe" noindex>
+  <section class="max-w-md w-full px-6 pb-24 space-y-6 text-center">
+    <h1 class="text-3xl">{completed ? "You're unsubscribed." : 'Unsubscribe'}</h1>
+    {completed ? <p>You won’t receive any more newsletter emails.</p> : failed ? <p>Couldn’t save that change. Please try again.</p> :
+      !id ? <p>Use the unsubscribe link at the bottom of an email.</p> : null}
+    {!completed && id && <form method="POST"><button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4" type="submit">Unsubscribe</button></form>}
+    <a href="/" class="inline-block underline">Back to the site</a>
+  </section>
+</BaseLayout>

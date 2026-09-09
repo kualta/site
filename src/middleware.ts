@@ -1,4 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
+import { forbiddenFormOrigin } from "@/lib/request-origin";
 
 const CANONICAL_HOST = "kualta.dev";
 
@@ -19,6 +20,7 @@ const aliasHosts = new Set([
 
 export const onRequest = defineMiddleware((ctx, next) => {
   if (ctx.isPrerendered) return next();
+  if (forbiddenFormOrigin(ctx.request)) return new Response("Cross-site form submissions are forbidden", { status: 403 });
 
   const hostname = (ctx.request.headers.get("host") ?? "").toLowerCase();
 

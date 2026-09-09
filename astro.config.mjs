@@ -32,6 +32,9 @@ buildImageManifest();
 export default defineConfig({
   site: SITE,
   output: "static",
+  // The equivalent origin guard lives in middleware, with a signed RFC 8058
+  // unsubscribe exception for mail clients that do not send an Origin header.
+  security: { checkOrigin: false },
   adapter: cloudflare({ imageService: "compile" }),
   integrations: [
     react(),
@@ -44,7 +47,7 @@ export default defineConfig({
       ],
       // robots.txt disallows /api/, so listing it here only earns a
       // "blocked by robots.txt" report in Search Console
-      filter: (page) => !page.startsWith(`${SITE}/api`),
+      filter: (page) => !page.startsWith(`${SITE}/api`) && !page.startsWith(`${SITE}/newsletter/`),
       serialize(item) {
         const path = item.url.replace(SITE, "").replace(/\/$/, "") || "/";
         const priorities = {
@@ -92,6 +95,9 @@ export default defineConfig({
           return {
             optimizeDeps: {
               exclude: ["@astro-community/astro-embed-bluesky"],
+              // Prebundle the renderer helper and content schema before workerd
+              // loads React, avoiding a second React instance during discovery.
+              include: ["picomatch", "astro/zod", "react-icons/ri"],
             },
           };
         },

@@ -1,62 +1,82 @@
-import { useState } from "react";
-import { LuMail, LuMailCheck } from "react-icons/lu";
+import { useEffect, useId, useRef, useState } from "react";
+import { LuCheck } from "react-icons/lu";
 
-export function EmailSubscription() {
-  const [success, setSuccess] = useState<boolean | undefined>(undefined);
+interface Props {
+  focusOnMount?: boolean;
+  showHelper?: boolean;
+}
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+export function EmailSubscription({ focusOnMount = false, showHelper = true }: Props) {
+  const id = useId();
+  const pending = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusOnMount) inputRef.current?.focus({ preventScroll: true });
+  }, [focusOnMount]);
+  const [state, setState] = useState<"idle" | "pending" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending.current) return;
     const form = event.currentTarget;
-    const email = (form.elements.namedItem("email") as HTMLInputElement)?.value;
-    if (!email) return;
-
+    const email = new FormData(form).get("email");
+    pending.current = true;
+    setState("pending");
+    setMessage("");
     try {
-      const res = await fetch(`/api/subscribe?email=${encodeURIComponent(email)}`, {
+      const response = await fetch("/api/subscribe", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
-      const data = await res.json();
-      setSuccess(data.status === 200);
-    } catch {
-      setSuccess(false);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Couldn't subscribe. Please try again.");
+      setState("success");
+      setMessage(data.message || "You’re subscribed.");
+      form.reset();
+    } catch (error) {
+      setState("error");
+      setMessage(error instanceof Error ? error.message : "Couldn't subscribe. Please try again.");
+    } finally {
+      pending.current = false;
     }
-    form.reset();
-  };
+  }
+
+  let buttonLabel = "Join";
+  if (state === "pending") buttonLabel = "Joining…";
+  if (state === "success") buttonLabel = "Joined";
 
   return (
-    <div className="flex flex-col gap-4 place-content-center items-center justify-center w-full">
-      {success === undefined ? (
-        <form onSubmit={handleSubmit} className="w-full">
-          <div className="flex flex-row gap-2">
-            <input
-              className="p-3 rounded-xl min-w-0 flex-grow bg-secondary dark:bg-dark-secondary accent-primary"
-              type="email"
-              name="email"
-              required
-              placeholder="E-mail"
-            />
-            <button
-              className="hidden sm:flex bg-primary dark:bg-dark-primary p-3 rounded-xl hover:opacity-50 hover:cursor-pointer text-white"
-              name="submit"
-              type="submit"
-            >
-              Subscribe
-            </button>
-            <button
-              className="flex sm:hidden bg-primary dark:bg-dark-primary p-3 rounded-xl hover:opacity-50 hover:cursor-pointer text-white"
-              name="submit"
-              type="submit"
-              aria-label="Subscribe"
-            >
-              <LuMail size={24} />
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="flex flex-row gap-2 items-center justify-center w-full p-3">
-          Subscribed!
-          <LuMailCheck size={24} />
-        </div>
-      )}
-    </div>
+    <form onSubmit={handleSubmit} className="newsletter-form" aria-busy={state === "pending"}>
+      <label htmlFor={id} className="sr-only">
+        Email address
+      </label>
+      <div className="newsletter-fields">
+        <input
+          ref={inputRef}
+          id={id}
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          maxLength={254}
+          placeholder="Your email"
+          aria-describedby={`${id}-message`}
+          readOnly={state === "pending" || state === "success"}
+        />
+        <button
+          type="submit"
+          disabled={state === "pending" || state === "success"}
+          aria-label={state === "success" ? "Subscribed" : "Subscribe"}
+        >
+          <span>{buttonLabel}</span>
+          {state === "success" && <LuCheck aria-hidden="true" />}
+        </button>
+      </div>
+      <p id={`${id}-message`} className="newsletter-message" role="status" data-error={state === "error"}>
+        {message || (showHelper ? "New essays, occasionally. Unsubscribe anytime." : "")}
+      </p>
+    </form>
   );
 }
