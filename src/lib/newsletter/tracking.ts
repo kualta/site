@@ -1,8 +1,15 @@
+import { recordOpen } from "./opens";
+import type { WaitUntil } from "./notifications";
 import { verifyToken } from "./security";
 import type { NewsletterEnv } from "./types";
 
 const pixel = Uint8Array.from(atob("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"), (c) => c.charCodeAt(0));
-export async function track(request: Request, env: NewsletterEnv, type: "open" | "click"): Promise<Response> {
+export async function track(
+  request: Request,
+  env: NewsletterEnv,
+  type: "open" | "click",
+  waitUntil?: WaitUntil,
+): Promise<Response> {
   const headers = {
     "Cache-Control": "no-store, max-age=0",
     "Referrer-Policy": "no-referrer",
@@ -24,11 +31,14 @@ export async function track(request: Request, env: NewsletterEnv, type: "open" |
           .first<{ content: string }>();
         if (row) {
           target = JSON.parse(row.content).articleUrl;
-          // Only a fixed column selected by our route, never request input.
-          const column = type === "open" ? "opened_at" : "clicked_at";
-          await env.NEWSLETTER_DB.prepare(`UPDATE newsletter_deliveries SET ${column}=COALESCE(${column},?) WHERE id=?`)
-            .bind(Math.floor(Date.now() / 1000), id)
-            .run();
+          const now = Math.floor(Date.now() / 1000);
+          if (type === "open") await recordOpen(env, id, now, waitUntil);
+          else
+            await env.NEWSLETTER_DB.prepare(
+              `UPDATE newsletter_deliveries SET clicked_at=COALESCE(clicked_at,?) WHERE id=?`,
+            )
+              .bind(now, id)
+              .run();
         }
       }
     }

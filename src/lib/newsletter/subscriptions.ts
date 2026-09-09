@@ -1,4 +1,4 @@
-import { notifySubscription, type WaitUntil } from "./notifications";
+import { notifyNewsletter, type WaitUntil } from "./notifications";
 import { digest, json, normalizeEmail, readJson, record, sign } from "./security";
 import { rateLimit } from "./store";
 import type { NewsletterEnv } from "./types";
@@ -38,7 +38,7 @@ export async function subscribe(request: Request, env: NewsletterEnv, waitUntil?
       WHERE status IN ('pending','unsubscribed')`)
       .bind(crypto.randomUUID(), email, now, now)
       .run();
-    if (result.meta.changes) await notifySubscription(env, "subscribed", email, waitUntil);
+    if (result.meta.changes) await notifyNewsletter(env, "subscribed", email, waitUntil);
     return accepted();
   } catch {
     return json(503, { message: "Signup is temporarily unavailable. Please try again later." });
@@ -52,7 +52,7 @@ export async function confirm(env: NewsletterEnv, value: string, waitUntil?: Wai
     WHERE confirmation_hash=? AND confirmation_expires>=? AND status IN ('pending','unsubscribed') RETURNING email`)
     .bind(now, now, await digest(value), now)
     .first<{ email: string }>();
-  if (result) await notifySubscription(env, "subscribed", result.email, waitUntil);
+  if (result) await notifyNewsletter(env, "subscribed", result.email, waitUntil);
   return !!result;
 }
 
@@ -64,5 +64,5 @@ export async function unsubscribe(env: NewsletterEnv, id: string, waitUntil?: Wa
     WHERE id=? AND status IN ('active','pending','suppressed') RETURNING email,status`)
     .bind(Math.floor(Date.now() / 1000), id)
     .first<{ email: string; status: string }>();
-  if (changed?.status === "unsubscribed") await notifySubscription(env, "unsubscribed", changed.email, waitUntil);
+  if (changed?.status === "unsubscribed") await notifyNewsletter(env, "unsubscribed", changed.email, waitUntil);
 }

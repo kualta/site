@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { admin } from "./newsletter/admin";
 import { feedback } from "./newsletter/feedback";
 import { parseIssue, prepareIssue, sendBatch } from "./newsletter/issues";
-import { notifySubscription } from "./newsletter/notifications";
+import { notifyNewsletter } from "./newsletter/notifications";
 import { plunkSender, SendError } from "./newsletter/plunk";
 import { digest, token, verifyToken } from "./newsletter/security";
 import { confirm, subscribe, unsubscribe } from "./newsletter/subscriptions";
@@ -415,7 +415,7 @@ describe("subscription notifications", () => {
     });
     const log = spyOn(console, "error").mockImplementation(() => {});
     try {
-      await notifySubscription(
+      await notifyNewsletter(
         {
           NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token",
         },
@@ -437,6 +437,77 @@ describe("subscription notifications", () => {
       release();
       request.mockRestore();
       log.mockRestore();
+    }
+  });
+});
+
+describe("email open notifications", () => {
+  test.each(["pixel-first", "provider-first", "concurrent"])("deduplicates %s opens across sources", async (order) => {
+    const { db, env, seed, sqlite } = setup();
+    seed();
+    await prepareIssue(db, issue);
+    await sendBatch(env, issue.id, async () => "open-provider");
+    const { id } = sqlite.query("SELECT id FROM newsletter_deliveries").get() as { id: string };
+    const signed = await token(env.NEWSLETTER_TOKEN_SECRET, "open", id);
+    const pixelRequest = () => new Request(`https://kualta.dev/api/newsletter/open?token=${signed}`);
+    const providerRequest = () =>
+      new Request("https://kualta.dev/api/newsletter/feedback?type=open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.NEWSLETTER_WEBHOOK_SECRET}` },
+        body: JSON.stringify({ event: { emailId: "open-provider", openedAt: new Date().toISOString() } }),
+      });
+    const request = mockFetch(async () => Response.json({ id: "open-message" }));
+    const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
+    try {
+      const pixel = () => track(pixelRequest(), configured, "open");
+      const provider = () => feedback(providerRequest(), configured);
+      if (order === "pixel-first") {
+        await pixel();
+        await provider();
+      } else if (order === "provider-first") {
+        await provider();
+        await pixel();
+      } else await Promise.all([pixel(), provider()]);
+      await Promise.all([pixel(), provider(), pixel()]);
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(String(request.mock.calls[0][1]?.body)).content).toBe(
+        "Newsletter open detected: reader@example.com\nPost: An essay",
+      );
+      expect(
+        (sqlite.query("SELECT opened_at FROM newsletter_deliveries").get() as { opened_at: number }).opened_at,
+      ).toBeGreaterThan(0);
+    } finally {
+      request.mockRestore();
+    }
+  });
+
+  test("retains early provider opens until the send is recorded", async () => {
+    const { db, env, seed } = setup();
+    seed();
+    await prepareIssue(db, issue);
+    const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
+    const request = mockFetch(async () => Response.json({ id: "early-open-message" }));
+    try {
+      await feedback(
+        new Request("https://kualta.dev/api/newsletter/feedback?type=open", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.NEWSLETTER_WEBHOOK_SECRET}` },
+          body: JSON.stringify({ event: { emailId: "early-open", openedAt: new Date().toISOString() } }),
+        }),
+        configured,
+      );
+      expect(request).toHaveBeenCalledTimes(0);
+      await sendBatch(configured, issue.id, async () => "early-open");
+      expect(request).toHaveBeenCalledTimes(1);
+      const invalid = await track(
+        new Request("https://kualta.dev/api/newsletter/open?token=invalid"),
+        configured,
+        "open",
+      );
+      expect(invalid.headers.get("Content-Type")).toBe("image/gif");
+      expect(request).toHaveBeenCalledTimes(1);
+    } finally {
+      request.mockRestore();
     }
   });
 });

@@ -85,7 +85,7 @@ export async function admin(request: Request, env: NewsletterEnv): Promise<Respo
           .prepare("UPDATE newsletter_deliveries SET state='sent',provider_id=?,sent_at=? WHERE id=?")
           .bind(providerId, now, id)
           .run();
-        await applyFeedback(db, providerId);
+        await applyFeedback(env, providerId);
         return json(200, { id, state: "sent" });
       } catch (error) {
         const state = error instanceof SendError && !error.uncertain ? "failed" : "unknown";
@@ -115,7 +115,7 @@ export async function admin(request: Request, env: NewsletterEnv): Promise<Respo
         )
         .run();
       if (!changed.meta.changes) throw new Error("Delivery is not unresolved, or its send is still in flight.");
-      if (input.state === "sent") await applyFeedback(db, input.providerId as string);
+      if (input.state === "sent") await applyFeedback(env, input.providerId as string);
       return json(200, { resolved: input.id, state: input.state });
     }
     if (input.action === "import") {

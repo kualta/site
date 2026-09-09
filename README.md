@@ -178,3 +178,10 @@ Cloudflare `waitUntil` sends them in the background with a five-second timeout.
 Delivery is best effort: failures are logged as `newsletter_notification_failed`
 without addresses or credentials, and never prevent signup or unsubscribe.
 There is no queue or automatic retry.
+
+The same Discord webhook receives `Newsletter open detected` with the recipient
+and post title on the first recorded open of each delivery (including previews).
+The tracking pixel and Plunk open callbacks share an atomic `opened_at` update,
+so reloads, retries, and overlapping reports produce one alert. Existing opens
+are not replayed. Opens are estimates: email privacy proxies can preload images,
+and blocked images can hide a real open.

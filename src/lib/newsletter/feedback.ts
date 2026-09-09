@@ -1,3 +1,4 @@
+import type { WaitUntil } from "./notifications";
 import { authorized, json, readJson, record } from "./security";
 import { applyFeedback } from "./store";
 import type { NewsletterEnv } from "./types";
@@ -9,7 +10,7 @@ const fields: Record<string, string> = {
   bounce: "bouncedAt",
   complaint: "complainedAt",
 };
-export async function feedback(request: Request, env: NewsletterEnv): Promise<Response> {
+export async function feedback(request: Request, env: NewsletterEnv, waitUntil?: WaitUntil): Promise<Response> {
   if (!authorized(request, env.NEWSLETTER_WEBHOOK_SECRET)) return json(401, { message: "Unauthorized" });
   if (!env.NEWSLETTER_DB) return json(503, { message: "Unavailable" });
   if (request.method === "GET") return json(200, { ok: true });
@@ -30,7 +31,7 @@ export async function feedback(request: Request, env: NewsletterEnv): Promise<Re
       ON CONFLICT(provider_id,type) DO UPDATE SET occurred_at=MIN(occurred_at,excluded.occurred_at), permanent=MAX(permanent,excluded.permanent)`)
       .bind(event.emailId, type, at, permanent ? 1 : 0)
       .run();
-    await applyFeedback(env.NEWSLETTER_DB, event.emailId);
+    await applyFeedback(env, event.emailId, waitUntil);
     return json(200, { ok: true });
   } catch {
     return json(400, { message: "Unable to process feedback" });

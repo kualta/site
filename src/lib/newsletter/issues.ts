@@ -130,7 +130,7 @@ export async function sendBatch(env: NewsletterEnv, issueId: string, send?: Emai
         .prepare("UPDATE newsletter_deliveries SET state='sent',provider_id=?,sent_at=? WHERE id=?")
         .bind(providerId, now, item.id)
         .run();
-      await applyFeedback(db, providerId);
+      await applyFeedback(env, providerId);
     } catch (error) {
       const knownFailure = error instanceof SendError && !error.uncertain;
       await db

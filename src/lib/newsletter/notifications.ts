@@ -2,10 +2,10 @@ import type { NewsletterEnv } from "./types";
 
 export type WaitUntil = (work: Promise<unknown>) => void;
 
-export async function notifySubscription(
+export async function notifyNewsletter(
   env: NewsletterEnv,
-  event: "subscribed" | "unsubscribed",
-  email: string,
+  event: "subscribed" | "unsubscribed" | "open detected",
+  detail: string,
   waitUntil?: WaitUntil,
 ): Promise<void> {
   const webhook = env.NEWSLETTER_DISCORD_WEBHOOK_URL;
@@ -22,7 +22,7 @@ export async function notifySubscription(
           "Content-Type": "application/json",
           "User-Agent": "DiscordBot (https://kualta.dev, 1.0)",
         },
-        body: JSON.stringify({ content: `Newsletter ${event}: ${email}`, allowed_mentions: { parse: [] } }),
+        body: JSON.stringify({ content: `Newsletter ${event}: ${detail}`, allowed_mentions: { parse: [] } }),
         signal: AbortSignal.timeout(5000),
         redirect: "manual",
       });
