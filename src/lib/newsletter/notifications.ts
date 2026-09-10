@@ -13,6 +13,15 @@ export async function notifyNewsletter(
   async function send(webhook: string) {
     let failure = "transport";
     try {
+      let content = event === "open detected" ? detail : `Newsletter ${event}: ${detail}`;
+      if (event === "subscribed" && env.NEWSLETTER_DB) {
+        failure = "subscriber_count";
+        const total = await env.NEWSLETTER_DB
+          .prepare("SELECT COUNT(*) count FROM newsletter_subscribers WHERE status='active'")
+          .first<{ count: number }>();
+        if (total) content += `\nActive subscribers: ${total.count}`;
+      }
+      failure = "transport";
       const url = new URL(webhook);
       // Ask Discord to acknowledge that the message was saved.
       url.searchParams.set("wait", "true");
@@ -23,7 +32,7 @@ export async function notifyNewsletter(
           "User-Agent": "DiscordBot (https://kualta.dev, 1.0)",
         },
         body: JSON.stringify({
-          content: event === "open detected" ? detail : `Newsletter ${event}: ${detail}`,
+          content,
           allowed_mentions: { parse: [] },
         }),
         signal: AbortSignal.timeout(5000),
