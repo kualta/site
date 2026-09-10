@@ -70,11 +70,15 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true }: P
           disabled={state === "pending" || state === "success"}
           aria-label={state === "success" ? "Subscribed" : "Subscribe"}
         >
-          <span>{buttonLabel}</span>
-          {state === "success" && <LuCheck aria-hidden="true" />}
+          {["Subscribe", "Subscribing…", "Subscribed"].map((label) => (
+            <span key={label} className="newsletter-button-label" aria-hidden={label !== buttonLabel} style={{ visibility: label === buttonLabel ? "visible" : "hidden" }}>
+              {label}
+              {label === "Subscribed" && <LuCheck aria-hidden="true" />}
+            </span>
+          ))}
         </button>
       </div>
-      <p id={`${id}-message`} className="newsletter-message" role="status" data-error={state === "error"}>
+      <p id={`${id}-message`} className={!showHelper && state !== "error" ? "sr-only" : "newsletter-message"} role="status" data-error={state === "error"}>
         {message || (showHelper ? "New essays, occasionally. Unsubscribe anytime." : "")}
       </p>
     </form>
