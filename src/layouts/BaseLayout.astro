@@ -134,6 +134,7 @@ const robots = noindex
     </script>
   </head>
   <body
+    data-music-page={musicPage ? "true" : undefined}
     class="bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-colors
            ease-in-out delay-150 dark:text-dark-text place-items-center
            min-h-screen flex flex-col justify-center relative"
@@ -144,14 +145,33 @@ const robots = noindex
 
     <Header />
 
-    <NotificationsButton />
-
     <main class="flex flex-col items-center justify-center grow w-full h-full">
       <slot />
       <MusicShelf client:load transition:persist="music-player" transition:persist-props tracks={tracks} slug={musicSlug} musicPage={musicPage} />
     </main>
 
-    <CornersScope />
+    <CornersScope bottom_left={false} bottom_right={false} />
+    {Astro.url.pathname === "/" && (
+      <div class="home-screen-corners" aria-hidden="true">
+        <CornersScope top_left={false} top_right={false} />
+      </div>
+    )}
+    <div class="page-bottom" data-home={Astro.url.pathname === "/" ? "true" : undefined}>
+      <CornersScope top_left={false} top_right={false} class="page-bottom-corner" />
+      <NotificationsButton />
+    </div>
+    <script>
+      document.addEventListener("astro:page-load", () => {
+        const bottom = document.querySelector<HTMLElement>('.page-bottom[data-home="true"]');
+        if (!bottom) return;
+        const update = () => bottom.toggleAttribute("data-scrolled", window.scrollY > 8);
+        update();
+        window.addEventListener("scroll", update, { passive: true });
+        document.addEventListener("astro:before-swap", () => {
+          window.removeEventListener("scroll", update);
+        }, { once: true });
+      });
+    </script>
 
     <Toaster client:idle />
   </body>

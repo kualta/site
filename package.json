@@ -15,7 +15,10 @@
     "lint": "bunx @biomejs/biome lint --apply-unsafe ./src",
     "music:lyrics": "node scripts/fetch-lyrics.mjs",
     "music:og": "node scripts/make-og.mjs",
-    "posts:import": "node scripts/import-paragraph.mjs"
+    "posts:import": "node scripts/import-paragraph.mjs",
+    "newsletter:render": "bun scripts/render-newsletter.tsx",
+    "newsletter": "bun --env-file=.dev.vars scripts/newsletter.ts",
+    "newsletter:setup-feedback": "bun --env-file=.dev.vars scripts/newsletter/setup-feedback.ts"
   },
   "dependencies": {
     "@astro-community/astro-embed-bluesky": "0.2.3",
@@ -34,8 +37,10 @@
     "@types/react": "19.0.1",
     "@types/react-dom": "19.0.1",
     "astro": "6.4.8",
+    "motion": "^13.2.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react-email": "^6.9.3",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.6.0",
     "react-snowfall": "^2.4.0",

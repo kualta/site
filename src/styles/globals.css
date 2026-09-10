@@ -12,6 +12,15 @@ body {
   font-family: "Fredoka", "M PLUS Rounded 1c", "Huninn", system-ui, -apple-system, sans-serif;
 }
 
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.dark :focus-visible {
+  outline-color: var(--text-dark);
+}
+
 /* Han characters live in both faces, so Chinese has to ask for Huninn by name
    or it renders in M PLUS's Japanese glyph forms */
 :lang(zh),
@@ -495,10 +504,6 @@ input[type="checkbox"]:checked {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.6 6.3 4.9 8.6 9.4 3.7' fill='none' stroke='%23181818' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
-input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--secondary-text);
-  outline-offset: 2px;
-}
 
 /* a lyric is a control now, so it at least takes a pointer */
 .lyric-line {
@@ -1007,10 +1012,6 @@ input[type="checkbox"]:focus-visible {
   }
 }
 
-.music-mini :is(button, a):focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 3px;
-}
 
 .music-mini-seek {
   position: absolute;
@@ -1042,4 +1043,148 @@ input[type="checkbox"]:focus-visible {
   ::view-transition-new(music-player) {
     animation-duration: 1ms;
   }
+}
+
+/* The signup form shares the bottom corners’ page anchor. */
+.newsletter-dock {
+  --newsletter-control-size: 2.75rem;
+  position: absolute;
+  z-index: 110;
+  left: calc(1.5rem + env(safe-area-inset-left));
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: flex-start;
+  padding: 0.25rem;
+  background: transparent;
+}
+.newsletter-toggle {
+  display: grid;
+  place-items: center;
+  width: var(--newsletter-control-size);
+  height: var(--newsletter-control-size);
+  flex-shrink: 0;
+  border-radius: 0.85rem;
+}
+.newsletter-toggle:hover { opacity: 0.65; }
+.newsletter-expand { overflow: hidden; padding-block: 4px; margin-block: -4px; }
+.newsletter-panel { width: min(21rem, calc(100vw - 7rem - env(safe-area-inset-left) - env(safe-area-inset-right))); padding: 0 0.5rem 0 0.25rem; }
+.newsletter-dock .newsletter-fields :is(input, button) {
+  height: var(--newsletter-control-size);
+  padding-block: 0;
+}
+.newsletter-form { width: 100%; min-width: 0; }
+.newsletter-fields { display: flex; gap: 0.4rem; }
+.newsletter-fields input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.7rem;
+  background: var(--secondary);
+  font: inherit;
+  color: inherit;
+}
+.dark .newsletter-fields input { background: var(--secondary-dark); }
+.newsletter-fields input::placeholder { color: inherit; opacity: 0.55; }
+.newsletter-fields button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.7rem;
+  background: var(--text);
+  color: var(--bg);
+  font: inherit;
+  white-space: nowrap;
+}
+.dark .newsletter-fields button { background: var(--text-dark); color: var(--bg-dark); }
+.newsletter-fields button:disabled { opacity: 0.65; cursor: default; }
+.newsletter-fields button:not(:disabled):hover { opacity: 0.8; }
+.newsletter-message { margin: 0.5rem 0 0; font-size: 0.75rem; line-height: 1.4; opacity: 0.75; }
+.newsletter-message:empty { display: none; }
+.newsletter-message[data-error="true"] { opacity: 1; }
+
+.page-bottom {
+  position: absolute;
+  inset: auto 0 0;
+  height: 0;
+}
+.page-bottom[data-home="true"]:not([data-scrolled]) {
+  top: 100dvh;
+  bottom: auto;
+}
+.page-bottom[data-home="true"]:not([data-scrolled]) .page-bottom-corner {
+  visibility: hidden;
+}
+.home-screen-corners {
+  position: absolute;
+  inset: 100dvh 0 auto;
+  height: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+.home-activity-link {
+  transition: opacity 200ms ease-out, transform 200ms ease-out, visibility 200ms;
+}
+body:has(.page-bottom[data-scrolled]) :is(.home-screen-corners, .home-activity-link) {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+body:has(.page-bottom[data-scrolled]) .home-activity-link {
+  visibility: hidden;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-screen-corners, .home-activity-link { transition: none; }
+}
+body:has(.newsletter-dock):not([data-music-page]) > main { padding-bottom: 6rem; }
+
+.feed-back-top {
+  position: fixed;
+  top: calc(1.5rem + env(safe-area-inset-top));
+  left: calc(1.5rem + env(safe-area-inset-left));
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.85rem;
+  background: transparent;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-12px);
+  transition: opacity 200ms ease-out, transform 200ms ease-out, visibility 200ms;
+}
+
+.feed-back-top-tooltip {
+  position: absolute;
+  left: calc(100% + 0.375rem);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  background: var(--secondary);
+  color: var(--secondary-text);
+  font: normal 0.75rem monospace;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, visibility 120ms;
+}
+.dark .feed-back-top-tooltip { background: var(--secondary-dark); }
+body:has(.page-bottom[data-scrolled]) .feed-back-top:is(:hover, :focus-visible) .feed-back-top-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+body:has(.page-bottom[data-scrolled]) .feed-back-top {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+body:has(.page-bottom[data-scrolled]) .feed-back-top:hover { opacity: 0.7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-back-top, .feed-back-top-tooltip { transition: none; }
 }
