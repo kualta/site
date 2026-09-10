@@ -367,10 +367,10 @@ describe("subscription notifications", () => {
       expect(await confirm(configured, confirmation)).toBe(true);
       expect(await confirm(configured, confirmation)).toBe(false);
       expect(notified).toEqual([
-        "Newsletter subscribed: reader@example.com",
+        "Newsletter subscribed: reader@example.com\nActive subscribers: 1",
         "Newsletter unsubscribed: reader@example.com",
-        "Newsletter subscribed: reader@example.com",
-        "Newsletter subscribed: legacy@example.com",
+        "Newsletter subscribed: reader@example.com\nActive subscribers: 1",
+        "Newsletter subscribed: legacy@example.com\nActive subscribers: 2",
       ]);
       expect(JSON.parse(String(request.mock.calls[0][1]?.body)).allowed_mentions).toEqual({ parse: [] });
       expect(request.mock.calls[0][1]?.redirect).toBe("manual");
