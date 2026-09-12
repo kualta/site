@@ -899,7 +899,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
                 <li key={track.slug}>
                   <button
                     type="button"
-                    className={`queue-item flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition-transform active:scale-[0.98] ${
+                    className={`queue-item flex w-full items-center gap-3 rounded-xl p-1.5 text-left transition-transform active:scale-[0.98] ${
                       track.slug === activeSlug ? "is-current" : ""
                     }`}
                     onClick={() => open(track)}

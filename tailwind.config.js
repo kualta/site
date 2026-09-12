@@ -16,6 +16,15 @@ module.exports = {
       },
     },
     extend: {
+      borderRadius: {
+        sm: "0.25rem",
+        DEFAULT: "0.375rem",
+        md: "0.5rem",
+        lg: "0.75rem",
+        xl: "1rem",
+        "2xl": "1.5rem",
+        "3xl": "2rem",
+      },
       dropShadow: {
         glow: ["0 0px 10px rgba(255, 255, 255, 0.5) ", "0 0px 10px rgba(255, 255, 255, 0.4)"],
         "glow-sm": ["0 0px 5px rgba(255, 255, 255, 0.5) ", "0 0px 5px rgba(255, 255, 255, 0.4)"],
