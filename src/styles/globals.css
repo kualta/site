@@ -411,6 +411,11 @@ html {
   background-color: color-mix(in oklab, var(--secondary-text) 75%, transparent);
 }
 
+/* Align both music scrollers above the newsletter controls. */
+body[data-music-page] :is(.lyrics-rail, .rail) {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
 /* the words sit opposite the crate, so the deck keeps the middle */
 @media (min-width: 1024px) {
   .lyrics-rail {
