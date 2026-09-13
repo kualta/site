@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { articleRecord, portableContent, publicationUri, recordKey } from "./atproto-content.mjs";
 import { coverBlob, syncRecords, verifyWebsite } from "./atproto-publish.mjs";
 import { validateRecord } from "./atproto-validation.mjs";
@@ -56,6 +57,13 @@ function fakePds() {
 const quiet = { log() {} };
 
 describe("portable articles", () => {
+  test("the browser-verified MDX fixture exports the same readable explanation", () => {
+    const body = readFileSync(new URL("../fixtures/interactive.mdx", import.meta.url), "utf8");
+    const result = portableContent(body, `${config.url}/posts/example/`);
+    expect(result.markdown).toContain("At the example setting of **42**");
+    expect(result.markdown).toContain("The rest of the article continues normally.");
+    expect(result.markdown).not.toContain("<input");
+  });
   test("preserves code, images, reference links and prose without leaking Markdown into plain text", () => {
     const result = portableContent(
       "## Heading\n\nHello **world**.\n\n![A graph](/images/graph.png)\n\n```js\nconst x = 1;\n```\n\n[More][ref]\n\n[ref]: /posts/other/",
@@ -118,7 +126,7 @@ describe("publishing", () => {
     await syncRecords(manifest, pds.agent, quiet);
     expect(pds.writes()).toBe(3);
     expect(pds.records.size).toBe(2);
-    await syncRecords(manifest, pds.agent, { ...quiet, verifyOnly: true });
+    await syncRecords(manifest, { com: pds.agent.com }, { ...quiet, verifyOnly: true });
     manifest.documents[0].cover.base64 = Buffer.from("different image").toString("base64");
     await expect(syncRecords(manifest, pds.agent, { ...quiet, verifyOnly: true })).rejects.toThrow("differs");
     expect(pds.writes()).toBe(3);
@@ -162,12 +170,31 @@ describe("publishing", () => {
     expect(pds.records.size).toBe(2);
   });
 
+  test("conditional writes preserve a concurrent remote edit", async () => {
+    const pds = fakePds();
+    const manifest = snapshot();
+    await syncRecords(manifest, pds.agent, quiet);
+    manifest.documents[0].record.title = "Local edit";
+    const originalPut = pds.agent.com.atproto.repo.putRecord;
+    pds.agent.com.atproto.repo.putRecord = async (request) => {
+      const current = pds.records.get(manifest.documents[0].uri);
+      current.cid = "concurrent-revision";
+      current.value.title = "Concurrent edit";
+      return originalPut(request);
+    };
+    await expect(syncRecords(manifest, pds.agent, quiet)).rejects.toThrow("InvalidSwap");
+    expect(pds.records.get(manifest.documents[0].uri).value.title).toBe("Concurrent edit");
+  });
+
   test("requires the deployed snapshot and both verification links", async () => {
     const manifest = snapshot();
     const responses = new Map([
       [`${config.url}/.well-known/site.standard.manifest.json`, JSON.stringify(manifest)],
       [`${config.url}/.well-known/site.standard.publication`, manifest.publication.uri],
-      [`${config.url}/posts/example/`, `<link rel="site.standard.document" href="${manifest.documents[0].uri}">`],
+      [
+        `${config.url}/posts/example/`,
+        `<head><link rel="site.standard.document" href="${manifest.documents[0].uri}"></head>`,
+      ],
     ]);
     const fetcher = async (url) => new Response(responses.get(url), { status: responses.has(url) ? 200 : 404 });
     await verifyWebsite(manifest, fetcher);

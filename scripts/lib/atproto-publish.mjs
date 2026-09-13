@@ -41,7 +41,8 @@ export async function verifyWebsite(manifest, fetcher = fetch) {
   if (publication.trim() !== manifest.publication.uri) throw new Error("Publication verification mismatch");
   for (const document of manifest.documents) {
     const html = await read(`${origin}${document.record.path}`);
-    const tags = html.match(/<link\b[^>]*>/gi) ?? [];
+    const head = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] ?? "";
+    const tags = head.match(/<link\b[^>]*>/gi) ?? [];
     if (
       !tags.some((tag) => /\brel=["']site\.standard\.document["']/.test(tag) && tag.includes(`href="${document.uri}"`))
     ) {
@@ -51,7 +52,7 @@ export async function verifyWebsite(manifest, fetcher = fetch) {
 }
 
 export async function syncRecords(manifest, agent, { verifyOnly = false, log = console.log } = {}) {
-  if (agent.did !== manifest.did) throw new Error("Authenticated identity does not match site owner");
+  if (!verifyOnly && agent.did !== manifest.did) throw new Error("Authenticated identity does not match site owner");
   const repo = agent.com.atproto.repo;
   const publications = await listRecords(repo, manifest.did, "site.standard.publication");
   const documents = await listRecords(repo, manifest.did, "site.standard.document");

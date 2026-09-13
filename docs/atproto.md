@@ -25,7 +25,7 @@ and conditional writes prevent duplicates, including when a write succeeded but
 its response was lost. Unchanged records and covers are not written again. A PDS
 failure leaves the website deployed and the workflow failed, rather than reporting
 complete publication. `bun run atproto:verify` checks remote records without writes
-(with `ATP_APP_PASSWORD` available in the command environment).
+or credentials.
 
 Publication verification is served at `/.well-known/site.standard.publication`.
 Each article's head contains its `site.standard.document` link. The generated
