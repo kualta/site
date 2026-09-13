@@ -1,0 +1,10 @@
+---
+/** MDX: put the readable export inside <div slot="fallback">. */
+---
+<div class="article-interactive">
+  <slot />
+  <details>
+    <summary>Text version</summary>
+    <slot name="fallback" />
+  </details>
+</div>

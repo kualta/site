@@ -1,0 +1,16 @@
+import Interactive from "../../src/components/Interactive.astro";
+
+# Interactive article example
+
+The article includes an adjustable value and a portable explanation.
+
+<Interactive>
+  <input type="range" min="0" max="100" value="42" aria-label="Example value" />
+  <div slot="fallback">
+
+At the example setting of **42**, the value is below the midpoint of 50.
+
+  </div>
+</Interactive>
+
+The rest of the article continues normally.

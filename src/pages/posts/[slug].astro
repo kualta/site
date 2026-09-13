@@ -1,4 +1,6 @@
 ---
+import atprotoConfig from "../../../atproto.config.json";
+import { documentUri } from "../../../scripts/lib/atproto-content.mjs";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import TableOfContents, { POST_TITLE_ID } from "@/components/TableOfContents.tsx";
 import { getPosts, getPostContent } from "@/lib/posts";
@@ -18,6 +20,7 @@ if (!post) {
 const { Content, headings } = post;
 ---
 <BaseLayout
+  atprotoDocument={documentUri(atprotoConfig, slug as string)}
   title={post.data.title}
   description={post.data.summary}
   image={post.data.preview}
