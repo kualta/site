@@ -1,5 +1,6 @@
 ---
 import { formatLastSeenTime, PRESENCE_BANDS, PRESENCE_PARTS, type ActivityFeed } from "@/lib/activity";
+import MediaViewer from "./MediaViewer.astro";
 import ActivityRows from "./ActivityRows.astro";
 
 interface Props {
@@ -12,6 +13,7 @@ const presence = PRESENCE_PARTS[feed.presence];
 const currentBand = PRESENCE_BANDS.find(({ state }) => state === feed.presence);
 const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked for a day";
 ---
+<MediaViewer />
 <section
   class="flex w-full min-w-0 flex-col gap-3"
   aria-labelledby="activity-presence"

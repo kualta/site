@@ -1,0 +1,342 @@
+---
+import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolumeX, FiMaximize, FiMinimize } from "react-icons/fi";
+---
+<dialog class="activity-media-viewer" aria-label="Media viewer">
+  <button type="button" class="viewer-round viewer-close" data-media-close autofocus aria-label="Close media viewer"><FiX size={20} /></button>
+  <button type="button" class="viewer-round viewer-previous" data-media-previous aria-label="Previous media"><FiChevronLeft size={22} /></button>
+  <button type="button" class="viewer-round viewer-next" data-media-next aria-label="Next media"><FiChevronRight size={22} /></button>
+  <div data-media-content></div>
+  <p data-media-error role="status" hidden>Unable to load this media. Close the viewer and try again.</p>
+</dialog>
+
+<template id="activity-preview-play"><FiPlay size={16} aria-hidden="true" /></template>
+
+<template id="activity-video-player">
+  <div class="activity-video-player" data-paused="true">
+    <span class="video-loading" role="status" hidden>Loading…</span>
+    <div class="video-controls" role="group" aria-label="Video controls">
+      <input class="video-range video-seek" type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek video" disabled />
+      <div class="video-control-row">
+        <button type="button" class="video-control video-toggle" aria-label="Play"><span data-play-icon><FiPlay size={16} /></span><span data-pause-icon hidden><FiPause size={19} /></span></button>
+        <span class="video-time" aria-label="Playback time">0:00 / 0:00</span>
+        <div class="video-volume">
+          <button type="button" class="video-control video-mute" aria-label="Mute"><span data-volume-icon><FiVolume2 size={18} /></span><span data-muted-icon hidden><FiVolumeX size={18} /></span></button>
+          <input class="video-range video-volume-range" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume" />
+        </div>
+        <button type="button" class="video-control video-fullscreen" aria-label="Enter fullscreen"><span data-expand-icon><FiMaximize size={18} /></span><span data-collapse-icon hidden><FiMinimize size={18} /></span></button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style is:global>
+  bluesky-media { display: block; }
+  .site-bluesky-card button[data-media-open] {
+    display: block; padding: 0; border: 0; color: inherit;
+    background: transparent; cursor: zoom-in;
+  }
+  .site-bluesky-card button[data-media-open].media-container { cursor: pointer; }
+  .site-bluesky-card button[data-media-open]:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
+  .site-bluesky-card .bluesky-post-container .play-button {
+    width: 2.75rem; height: 2.75rem;
+    border: 1px solid rgb(255 255 255 / 25%);
+    background: rgb(28 28 28 / 60%); color: #f4f1ed;
+    backdrop-filter: blur(8px);
+  }
+  .site-bluesky-card .play-button svg, .video-toggle [data-play-icon] svg { transform: translateX(1px); }
+  .site-bluesky-card button[data-media-open]:hover .play-button { background: rgb(45 45 45 / 80%); }
+  .activity-media-viewer {
+    position: fixed; inset: 0; margin: 0; padding: 0;
+    width: 100vw; height: 100dvh; max-width: none; max-height: none;
+    border: 0; background: transparent; color: #f4f1ed; overflow: hidden;
+  }
+  .activity-media-viewer[open] { display: grid; place-items: center; }
+  [data-media-content] {
+    position: relative; width: fit-content; overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 24%); border-radius: 0.875rem;
+    background: #161616; box-shadow: 0 16px 80px rgb(0 0 0 / 30%);
+  }
+  .activity-media-viewer::backdrop { background: rgb(0 0 0 / 82%); backdrop-filter: blur(8px); opacity: var(--viewer-backdrop, 1); }
+  html:has(.activity-media-viewer[open]) { overflow: hidden; }
+  .activity-media-viewer [hidden] { display: none !important; }
+  .viewer-round {
+    position: absolute; z-index: 3; display: grid; place-items: center;
+    width: 2.5rem; height: 2.5rem; padding: 0; border-radius: 50%;
+    border: 1px solid rgb(255 255 255 / 22%); background: rgb(28 28 28 / 72%);
+    color: #f4f1ed; backdrop-filter: blur(12px); cursor: pointer;
+    transition: background 150ms ease;
+  }
+  .viewer-round:hover { background: rgb(65 65 65 / 90%); }
+  .viewer-close { top: 0.75rem; right: 0.75rem; }
+  .viewer-previous, .viewer-next { top: 50%; transform: translateY(-50%); }
+  .viewer-previous { left: 0.75rem; }
+  .viewer-next { right: 0.75rem; }
+  .viewer-round:disabled { opacity: 0.3; cursor: default; }
+  .activity-media-viewer button:focus-visible { outline: 2px solid #f4f1ed; outline-offset: -4px; }
+  [data-media-content] > img, .activity-video-player video {
+    display: block; width: auto; height: auto;
+    max-width: min(72rem, calc(100vw - 8rem - 2px)); max-height: calc(100dvh - 8rem - 2px); object-fit: contain;
+  }
+  .activity-video-player {
+    position: relative; background: #111;
+    width: min(72rem, calc(100vw - 8rem - 2px), calc((100dvh - 8rem - 2px) * var(--video-ratio)));
+    aspect-ratio: var(--video-ratio);
+  }
+  .activity-video-player video { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+  .activity-video-player:fullscreen { display: grid; place-items: center; width: 100%; height: 100%; }
+  .activity-video-player:fullscreen video { width: 100%; height: 100%; max-width: 100vw; max-height: 100dvh; }
+  .video-controls {
+    position: absolute; inset: auto 0 0; padding: 2.5rem 1rem 0.65rem;
+    background: linear-gradient(transparent, rgb(0 0 0 / 75%));
+  }
+  .video-control-row { display: flex; align-items: center; gap: 0.5rem; }
+  .video-control { display: grid; place-items: center; flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 50%; color: inherit; background: transparent; cursor: pointer; }
+  .video-control:hover { background: rgb(255 255 255 / 12%); }
+  .video-time { font-size: 0.75rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .video-volume { display: flex; align-items: center; gap: 0.25rem; margin-left: auto; }
+  .video-range { --progress: 0%; display: block; appearance: none; height: 1.25rem; padding: 0; background: transparent; cursor: pointer; accent-color: #f4f1ed; }
+  .video-seek { width: 100%; }
+  .video-volume-range { width: 4rem; --progress: 100%; }
+  .video-range::-webkit-slider-runnable-track { height: 3px; border-radius: 4px; background: linear-gradient(to right, #f4f1ed var(--progress), rgb(255 255 255 / 28%) var(--progress)); }
+  .video-range::-moz-range-track { height: 3px; border-radius: 4px; background: rgb(255 255 255 / 28%); }
+  .video-range::-moz-range-progress { height: 3px; background: #f4f1ed; }
+  .video-range::-webkit-slider-thumb { appearance: none; width: 10px; height: 10px; margin-top: -3.5px; border-radius: 50%; background: #f4f1ed; }
+  .video-range::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: #f4f1ed; }
+  .video-range:focus-visible { outline: 1px solid #f4f1ed; outline-offset: 2px; border-radius: 4px; }
+  .video-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 0.5rem 0.875rem; border-radius: 999px; background: rgb(0 0 0 / 60%); font-size: 0.875rem; }
+  [data-media-error] { position: absolute; inset: auto 0 5rem; padding: 0.75rem; background: rgb(0 0 0 / 75%); font-size: 0.875rem; text-align: center; }
+  @media (max-width: 480px) {
+    .video-controls { padding-inline: 0.5rem; }
+    .video-control-row { gap: 0.125rem; }
+    .video-volume-range { display: none; }
+    .video-control { width: 2rem; height: 2rem; }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .activity-media-viewer:has(video) .video-controls {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+    .activity-video-player:is(:hover, :has(:focus-visible)) .video-controls {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .viewer-round, .activity-media-viewer:has(video) .video-controls { transition: none; }
+  }
+</style>
+
+<script>
+  import type Hls from "hls.js";
+  import { animate } from "motion";
+  import { initializeVideoControls } from "@/scripts/activity-video-controls";
+  import type { BlueskyMedia } from "@/lib/activity/bluesky-media";
+
+  let cleanupPlayback: (() => void) | undefined;
+  let generation = 0;
+
+  function openViewer(items: BlueskyMedia[], initialIndex: number, trigger: HTMLElement): void {
+    const dialog = document.querySelector<HTMLDialogElement>(".activity-media-viewer");
+    if (!dialog) return;
+    const content = dialog.querySelector<HTMLElement>("[data-media-content]")!;
+    const error = dialog.querySelector<HTMLElement>("[data-media-error]")!;
+    const previous = dialog.querySelector<HTMLButtonElement>("[data-media-previous]")!;
+    const next = dialog.querySelector<HTMLButtonElement>("[data-media-next]")!;
+    let index = initialIndex;
+    // Image buttons can span the whole feed column; animate from the image itself.
+    const thumbnail = trigger.querySelector("img");
+    const thumbnailElement = items[index].kind === "image" && thumbnail ? thumbnail : trigger;
+    const thumbnailRect = thumbnailElement.getBoundingClientRect();
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let transition: ReturnType<typeof animate> | undefined;
+    let closing = false;
+    let playerRect: DOMRect | undefined;
+
+    function thumbnailTransform(rect: DOMRect): { x: number; y: number; scale: number } {
+      const destination = playerRect!;
+      return {
+        x: rect.left + rect.width / 2 - destination.left - destination.width / 2,
+        y: rect.top + rect.height / 2 - destination.top - destination.height / 2,
+        scale: Math.min(rect.width / destination.width, rect.height / destination.height),
+      };
+    }
+
+    async function closeViewer(): Promise<void> {
+      if (closing) return;
+      closing = true;
+      generation++;
+      content.querySelector("video")?.pause();
+      transition?.stop();
+      if (!reducedMotion && playerRect) {
+        const rect = thumbnailElement.getBoundingClientRect();
+        const canReturn = trigger.isConnected && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight;
+        transition = animate(content, {
+          ...(canReturn ? thumbnailTransform(rect) : {}),
+          opacity: 0,
+
+        }, { duration: 0.22, ease: [0.4, 0, 1, 1] });
+        await transition;
+      }
+      if (dialog!.open) dialog!.close();
+    }
+
+    async function show(): Promise<void> {
+      const currentGeneration = ++generation;
+      cleanupPlayback?.();
+      cleanupPlayback = undefined;
+      content.replaceChildren();
+      error.hidden = true;
+      previous.disabled = index === 0;
+      next.disabled = index === items.length - 1;
+      previous.hidden = items.length < 2;
+      next.hidden = items.length < 2;
+      const item = items[index];
+      if (item.kind === "image") {
+        const image = new Image();
+        image.alt = item.alt;
+        image.width = item.width ?? 640;
+        image.height = item.height ?? 480;
+        // Reserve the final frame before loading, and carry the thumbnail into it.
+        const ratio = image.width / image.height;
+        image.style.width = `min(${image.width}px, 72rem, calc(100vw - 8rem - 2px), calc((100dvh - 8rem - 2px) * ${ratio}))`;
+        image.style.aspectRatio = String(ratio);
+        image.src = item.thumbnail ?? item.src;
+        content.append(image);
+        const fullsize = new Image();
+        fullsize.src = item.src;
+        void fullsize.decode().then(() => {
+          if (generation === currentGeneration) image.src = item.src;
+        }).catch(() => {
+          if (generation === currentGeneration) error.hidden = false;
+        });
+        return;
+      }
+      const video = document.createElement("video");
+      video.controls = false;
+      video.playsInline = true;
+      video.setAttribute("aria-label", item.alt || "Bluesky video");
+      if (item.thumbnail) video.poster = item.thumbnail;
+      let hls: Hls | undefined;
+      cleanupPlayback = () => {
+        releaseControls();
+        video.pause();
+        hls?.destroy();
+        video.removeAttribute("src");
+        video.load();
+      };
+      video.onerror = () => { if (generation === currentGeneration) error.hidden = false; };
+      const player = document.querySelector<HTMLTemplateElement>("#activity-video-player")!.content.cloneNode(true) as DocumentFragment;
+      const frame = player.querySelector<HTMLElement>(".activity-video-player")!;
+      frame.style.setProperty("--video-ratio", String((item.width ?? 16) / (item.height ?? 9)));
+      frame.prepend(video);
+      content.append(player);
+      const releaseControls = initializeVideoControls(frame, video);
+      try {
+        const { default: Hls } = await import("hls.js");
+        if (generation !== currentGeneration) return;
+        if (Hls.isSupported()) {
+          hls = new Hls();
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (data.fatal && generation === currentGeneration) error.hidden = false;
+          });
+          hls.loadSource(item.src);
+          hls.attachMedia(video);
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = item.src;
+        } else {
+          throw new Error("HLS unavailable");
+        }
+        void video.play().catch(() => {});
+      } catch (cause) {
+        console.error("Unable to initialize activity video", cause);
+        if (generation === currentGeneration) error.hidden = false;
+      }
+    }
+
+    previous.onclick = () => { if (index > 0) { index--; void show(); } };
+    next.onclick = () => { if (index < items.length - 1) { index++; void show(); } };
+    dialog.querySelector<HTMLButtonElement>("[data-media-close]")!.onclick = () => void closeViewer();
+    dialog.onclick = (event) => {
+      if (event.target !== dialog) return;
+      void closeViewer();
+    };
+    dialog.oncancel = (event) => { event.preventDefault(); void closeViewer(); };
+    dialog.onkeydown = (event) => {
+      if (event.target instanceof HTMLInputElement || (event.target instanceof Element && event.target.closest(".activity-video-player"))) return;
+      if (event.key === "ArrowLeft") { event.preventDefault(); previous.click(); }
+      if (event.key === "ArrowRight") { event.preventDefault(); next.click(); }
+    };
+    dialog.onclose = () => {
+      transition?.stop();
+      content.style.removeProperty("transform");
+      content.style.removeProperty("opacity");
+      content.style.removeProperty("--viewer-backdrop");
+      generation++;
+      cleanupPlayback?.();
+      cleanupPlayback = undefined;
+      content.replaceChildren();
+      if (trigger.isConnected) trigger.focus();
+    };
+    dialog.showModal();
+    void show();
+    if (!reducedMotion && thumbnailRect.width > 0) {
+      playerRect = content.getBoundingClientRect();
+      const start = thumbnailTransform(thumbnailRect);
+      transition = animate(content, {
+        x: [start.x, 0], y: [start.y, 0],
+        scale: [start.scale, 1],
+        opacity: [0.6, 1],
+      }, { duration: 0.32, ease: [0.22, 1, 0.36, 1] });
+    }
+  }
+
+  class BlueskyMediaElement extends HTMLElement {
+    connectedCallback(): void {
+      if (this.dataset.ready) return;
+      this.dataset.ready = "true";
+      const items: BlueskyMedia[] = JSON.parse(this.dataset.media || "[]");
+      const videos = items.filter((item) => item.kind === "video");
+      let videoIndex = 0;
+      for (const anchor of this.querySelectorAll<HTMLAnchorElement>("a")) {
+        const images = [...anchor.querySelectorAll<HTMLElement>(".image-grid-item")];
+        const video = anchor.querySelector<HTMLElement>(".media-container:has(.play-button)");
+        if (!images.length && !video) continue;
+        const targets = video ? [video] : images;
+        for (const target of targets) {
+          const item = video ? videos[videoIndex++] : items.find((item) => item.kind === "image" && item.thumbnail === target.querySelector("img")?.src);
+          if (!item) continue;
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.mediaOpen = "";
+          button.className = target.className;
+          button.style.cssText = target.style.cssText;
+          for (const attribute of target.attributes) {
+            if (attribute.name.startsWith("data-astro-cid-")) button.setAttribute(attribute.name, attribute.value);
+          }
+          button.setAttribute("aria-label", `${item.kind === "video" ? "Play video" : "Open image"}${item.alt ? `: ${item.alt}` : ""}`);
+          button.append(...target.childNodes);
+          const thumbnail = button.querySelector("img");
+          if (item.kind === "image" && thumbnail) {
+            thumbnail.width = item.width ?? 640;
+            thumbnail.height = item.height ?? 480;
+          }
+          const previewPlay = button.querySelector(".play-button");
+          const previewIcon = document.querySelector<HTMLTemplateElement>("#activity-preview-play");
+          if (previewPlay && previewIcon) previewPlay.replaceChildren(previewIcon.content.cloneNode(true));
+          button.onclick = () => openViewer(items, items.indexOf(item), button);
+          target.replaceWith(button);
+        }
+        // The package wraps the entire image grid in an external post link.
+        if (anchor.querySelector("[data-media-open]")) anchor.replaceWith(...anchor.childNodes);
+      }
+    }
+  }
+  if (!customElements.get("bluesky-media")) customElements.define("bluesky-media", BlueskyMediaElement);
+  document.addEventListener("astro:before-swap", () => {
+    document.querySelector<HTMLDialogElement>(".activity-media-viewer[open]")?.close();
+    generation++;
+    cleanupPlayback?.();
+    cleanupPlayback = undefined;
+  });
+</script>
