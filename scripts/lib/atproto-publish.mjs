@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { setTimeout } from "node:timers/promises";
 import { CID } from "multiformats/cid";
 import { sha256 } from "multiformats/hashes/sha2";
 import { validateRecord } from "./atproto-validation.mjs";
@@ -47,6 +48,22 @@ export async function verifyWebsite(manifest, fetcher = fetch) {
       !tags.some((tag) => /\brel=["']site\.standard\.document["']/.test(tag) && tag.includes(`href="${document.uri}"`))
     ) {
       throw new Error(`Missing document verification: ${document.record.path}`);
+    }
+  }
+}
+
+export async function waitForWebsite(
+  manifest,
+  { attempts = 12, delayMs = 5000, fetcher = fetch, wait = setTimeout, log = console.log } = {},
+) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await verifyWebsite(manifest, fetcher);
+      return;
+    } catch (error) {
+      if (attempt === attempts) throw error;
+      log(`Waiting for the deployed article snapshot (${attempt}/${attempts}): ${error.message}`);
+      await wait(delayMs);
     }
   }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { articleRecord, portableContent, publicationUri, recordKey } from "./atproto-content.mjs";
-import { coverBlob, syncRecords, verifyWebsite } from "./atproto-publish.mjs";
+import { coverBlob, syncRecords, verifyWebsite, waitForWebsite } from "./atproto-publish.mjs";
 import { validateRecord } from "./atproto-validation.mjs";
 
 const config = { did: "did:plc:jhvnnnd3adml7t6anu3ay7ip", url: "https://kualta.dev" };
@@ -203,4 +203,32 @@ describe("publishing", () => {
     responses.set(`${config.url}/.well-known/site.standard.manifest.json`, "{}");
     await expect(verifyWebsite(manifest, fetcher)).rejects.toThrow("differs");
   });
+});
+
+test("deployment readiness tolerates propagation but never accepts a stale snapshot", async () => {
+  const manifest = snapshot();
+  let attempts = 0;
+  let waits = 0;
+  const fetcher = async (url) => {
+    if (url.endsWith("site.standard.manifest.json")) {
+      attempts++;
+      if (attempts === 1) return new Response("Not ready", { status: 404 });
+      return new Response(JSON.stringify(attempts === 2 ? {} : manifest));
+    }
+    if (url.endsWith("site.standard.publication")) return new Response(manifest.publication.uri);
+    return new Response(`<head><link rel="site.standard.document" href="${manifest.documents[0].uri}"></head>`);
+  };
+  await waitForWebsite(manifest, {
+    attempts: 3,
+    fetcher,
+    wait: async () => {
+      waits++;
+    },
+    ...quiet,
+  });
+  expect(attempts).toBe(3);
+  expect(waits).toBe(2);
+  await expect(
+    waitForWebsite(manifest, { attempts: 2, fetcher: async () => new Response("{}"), wait: async () => {}, ...quiet }),
+  ).rejects.toThrow("differs");
 });

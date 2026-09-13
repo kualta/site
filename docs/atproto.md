@@ -20,6 +20,8 @@ The GitHub Actions secret `ATP_APP_PASSWORD` must contain an app password for
 Cloudflare runtime. The publisher resolves the current PDS from the account's DID.
 `atproto.config.json` fixes the owner DID and canonical origin.
 
+The publisher checks readiness up to 12 times, five seconds apart, to allow static assets to propagate. It never publishes against a mismatched snapshot.
+
 To retry a failed sync, rerun the deployment workflow. A deterministic record key
 and conditional writes prevent duplicates, including when a write succeeded but
 its response was lost. Unchanged records and covers are not written again. A PDS
