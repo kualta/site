@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { AtpAgent } from "@atproto/api";
-import { syncRecords, verifyWebsite } from "./lib/atproto-publish.mjs";
+import { syncRecords, verifyWebsite, waitForWebsite } from "./lib/atproto-publish.mjs";
 
 const args = process.argv.slice(2);
 if (args.some((arg) => !["--dry-run", "--verify"].includes(arg))) throw new Error("Use --dry-run or --verify");
@@ -10,8 +10,9 @@ if (args.includes("--dry-run")) {
   for (const doc of manifest.documents)
     console.log(`${doc.record.title}: ${doc.uri} (${Buffer.byteLength(doc.record.textContent)} text bytes)`);
 } else {
-  await verifyWebsite(manifest);
   const verifyOnly = args.includes("--verify");
+  if (verifyOnly) await verifyWebsite(manifest);
+  else await waitForWebsite(manifest);
   const password = process.env.ATP_APP_PASSWORD;
   if (!verifyOnly && !password) throw new Error("Set ATP_APP_PASSWORD to enable AT Protocol publishing");
   const response = await fetch(`https://plc.directory/${manifest.did}`, { signal: AbortSignal.timeout(30_000) });
