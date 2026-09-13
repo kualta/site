@@ -30,6 +30,7 @@ interface Props {
   type?: "website" | "article";
   article?: Article;
   noindex?: boolean;
+  atprotoDocument?: string;
   /** extra schema.org nodes for whatever this page actually is */
   schema?: object[];
 }
@@ -43,6 +44,7 @@ const {
   type = "website",
   article,
   noindex = false,
+  atprotoDocument,
   schema = [],
 } = Astro.props;
 
@@ -74,6 +76,7 @@ const robots = noindex
     <meta name="description" content={metaDescription} />
     <link rel="icon" href="/favicon.ico" />
     <link rel="canonical" href={canonical} />
+    {atprotoDocument && <link rel="site.standard.document" href={atprotoDocument} />}
     <meta name="robots" content={robots} />
     <meta name="author" content={SITE_NAME} />
     <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)" />

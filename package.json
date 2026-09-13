@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "bun run music:sync && astro dev",
-    "build": "bun run music:sync && astro build && node scripts/scrub-build-secrets.mjs",
+    "build": "bun run music:sync && bun run atproto:prepare && astro build && node scripts/scrub-build-secrets.mjs",
     "music:sync": "node scripts/sync-music.mjs",
     "preview": "astro preview",
     "check": "astro check",
@@ -18,7 +18,11 @@
     "posts:import": "node scripts/import-paragraph.mjs",
     "newsletter:render": "bun scripts/render-newsletter.tsx",
     "newsletter": "bun --env-file=.dev.vars scripts/newsletter.ts",
-    "newsletter:setup-feedback": "bun --env-file=.dev.vars scripts/newsletter/setup-feedback.ts"
+    "newsletter:setup-feedback": "bun --env-file=.dev.vars scripts/newsletter/setup-feedback.ts",
+    "atproto:prepare": "node scripts/prepare-atproto.mjs",
+    "atproto:preview": "bun run atproto:prepare && node scripts/publish-atproto.mjs --dry-run",
+    "atproto:publish": "node scripts/publish-atproto.mjs",
+    "atproto:verify": "node scripts/publish-atproto.mjs --verify"
   },
   "dependencies": {
     "@astro-community/astro-embed-bluesky": "0.2.3",
@@ -30,6 +34,8 @@
     "@astrojs/tailwind": "^6.0.2",
     "@atcute/bluesky": "^4.0.20",
     "@atcute/lexicons": "^2.1.0",
+    "@atproto/api": "^0.20.44",
+    "@atproto/lexicon": "^0.7.14",
     "@fontsource/fredoka": "^5.2.10",
     "@fontsource/huninn": "^5.3.0",
     "@fontsource/m-plus-rounded-1c": "^5.3.0",
@@ -38,15 +44,24 @@
     "@types/react-dom": "19.0.1",
     "astro": "6.4.8",
     "hls.js": "^1.7.3",
+    "mdast-util-to-string": "^4.0.0",
     "motion": "^13.2.0",
+    "multiformats": "^14.0.5",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-email": "^6.9.3",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.6.0",
     "react-snowfall": "^2.4.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx": "^3.1.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "sharp": "^0.35.4",
     "typescript": "^5.4.5",
-    "wrangler": "^4.92.0"
+    "unified": "^11.0.5",
+    "wrangler": "^4.92.0",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@biomejs/biome": "1.4.1",

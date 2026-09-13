@@ -25,6 +25,8 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - run: bun test
+
       - run: bun run build
         env:
           PARAGRAPH_API_KEY: ${{ secrets.PARAGRAPH_API_KEY }}
@@ -35,3 +37,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config dist/server/wrangler.json
+
+      - name: Publish and verify Standard.site articles
+        run: bun run atproto:publish
+        env:
+          ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}

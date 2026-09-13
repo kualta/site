@@ -1,5 +1,10 @@
 <a href="https://kualta.dev">`kualta.dev`</a>
 
+## Atmosphere publishing
+
+Articles also publish as Standard.site records after a successful website deployment.
+See [the publishing workflow and interactive MDX fallbacks](docs/atproto.md).
+
 ## Newsletter
 
 D1 owns subscribers, consent, opt-outs, suppression, issues, and per-recipient delivery

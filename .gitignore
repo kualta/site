@@ -36,3 +36,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 dist/**
+# Generated public AT Protocol publishing snapshot
+/public/.well-known/site.standard.publication
+/public/.well-known/site.standard.manifest.json
