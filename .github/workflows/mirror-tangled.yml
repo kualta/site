@@ -1,0 +1,44 @@
+name: Mirror to Tangled
+
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-tangled
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.repository == 'kualta/site'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure Tangled SSH
+        env:
+          TANGLED_SSH_KEY: ${{ secrets.TANGLED_SSH_KEY }}
+        run: |
+          test -n "$TANGLED_SSH_KEY"
+          umask 077
+          mkdir -p "$RUNNER_TEMP/tangled-ssh"
+          printf '%s\n' "$TANGLED_SSH_KEY" > "$RUNNER_TEMP/tangled-ssh/key"
+          printf '%s\n' 'tangled.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII2UShEm/FFPmYZUizaPnIqOJuynoCQpcLhl5PPHd02n' > "$RUNNER_TEMP/tangled-ssh/known_hosts"
+
+      - name: Sync branches and tags from GitHub
+        run: |
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tangled-ssh/key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/tangled-ssh/known_hosts"
+          git clone --bare https://github.com/kualta/site.git "$RUNNER_TEMP/site.git"
+          git -C "$RUNNER_TEMP/site.git" push \
+            git@tangled.org:did:plc:7qot5zehbyi4d4rofokiko2g \
+            'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
+
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/tangled-ssh"
