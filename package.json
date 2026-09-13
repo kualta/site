@@ -37,6 +37,7 @@
     "@types/react": "19.0.1",
     "@types/react-dom": "19.0.1",
     "astro": "6.4.8",
+    "hls.js": "^1.7.3",
     "motion": "^13.2.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",

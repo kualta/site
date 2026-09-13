@@ -1,5 +1,6 @@
 ---
 import { BlueskyPost } from "@astro-community/astro-embed-bluesky";
+import { getBlueskyMedia } from "@/lib/activity/bluesky-media";
 import { FiRepeat } from "react-icons/fi";
 import {
   canRenderBlueskyPost,
@@ -41,7 +42,9 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
             </span>
           </p>
         )}
-        <BlueskyPost post={event.post} />
+        <bluesky-media data-media={JSON.stringify(getBlueskyMedia(event.post.embed))}>
+          <BlueskyPost post={event.post} />
+        </bluesky-media>
         <a
           href={event.url}
           target="_blank"
