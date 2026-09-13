@@ -42,3 +42,9 @@ jobs:
         run: bun run atproto:publish
         env:
           ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}
+
+      - name: Publish and verify music on ATProto
+        if: vars.MUSIC_ATPROTO_ENABLED == 'true'
+        run: bun run music:publish
+        env:
+          ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}
