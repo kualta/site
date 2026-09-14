@@ -4,13 +4,13 @@ import MediaViewer from "./MediaViewer.astro";
 import ActivityRows from "./ActivityRows.astro";
 
 interface Props {
-  feed: ActivityFeed;
+  feed?: ActivityFeed;
 }
 
 const { feed } = Astro.props;
-const lastSeenText = feed.lastSeenAt ? formatLastSeenTime(feed.lastSeenAt) : null;
-const presence = PRESENCE_PARTS[feed.presence];
-const currentBand = PRESENCE_BANDS.find(({ state }) => state === feed.presence);
+const lastSeenText = feed?.lastSeenAt ? formatLastSeenTime(feed.lastSeenAt) : null;
+const presence = PRESENCE_PARTS[feed?.presence ?? "unknown"];
+const currentBand = PRESENCE_BANDS.find(({ state }) => state === feed?.presence);
 const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked for a day";
 ---
 <MediaViewer />
@@ -18,10 +18,19 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   class="flex w-full min-w-0 flex-col gap-3"
   aria-labelledby="activity-presence"
   data-activity-widget
-  data-last-seen={feed.lastSeenAt ?? undefined}
-  data-trusted-until={feed.trustedUntil ?? undefined}
+  data-activity-pending={feed ? undefined : "true"}
+  aria-busy={!feed}
+  data-last-seen={feed?.lastSeenAt ?? undefined}
+  data-trusted-until={feed?.trustedUntil ?? undefined}
 >
-  <div class="min-w-0">
+  <div data-activity-skeleton hidden={!!feed} role="status" class="space-y-3">
+    <span class="sr-only">Loading recent activity</span>
+    <div aria-hidden="true" class="h-6 w-48 rounded bg-secondary motion-safe:animate-pulse dark:bg-dark-secondary" />
+    {[1, 2, 3].map(() => (
+      <div aria-hidden="true" class="h-20 w-full rounded-xl bg-secondary motion-safe:animate-pulse dark:bg-dark-secondary" />
+    ))}
+  </div>
+  <div class="min-w-0" data-activity-content hidden={!feed}>
     <h2 id="activity-presence" class="text-balance text-base font-bold">
       <span class="presence-trigger relative inline-block">
         <span
@@ -46,27 +55,19 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       </span>
     </h2>
     <div class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-secondary-text">
-      {
-        feed.lastSeenAt && lastSeenText && (
-          <time datetime={feed.lastSeenAt} class="tabular-nums" data-activity-last-seen>
-            {lastSeenText}
-          </time>
-        )
-      }
-      <span hidden={!feed.delayed} data-signals-delayed>signals delayed</span>
+      <time datetime={feed?.lastSeenAt ?? undefined} class="tabular-nums" data-activity-last-seen hidden={!lastSeenText}>
+        {lastSeenText}
+      </time>
+      <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>
     </div>
   </div>
-  {
-    feed.events.length > 0 && (
-      <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>
-        <ActivityRows
-          events={feed.events}
-          completeSince={feed.completeSince}
-          limitedBy={feed.coverageLimitedBy}
-        />
-      </ol>
-    )
-  }
+  <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>
+    <ActivityRows
+      events={feed?.events ?? []}
+      completeSince={feed?.completeSince ?? null}
+      limitedBy={feed?.coverageLimitedBy ?? null}
+    />
+  </ol>
 </section>
 
 <style>
@@ -163,7 +164,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   }
 
   async function fetchRows(query: string): Promise<RowsResponse> {
-    const response = await fetch(`${ROWS_ENDPOINT}${query}`, { headers: { accept: "text/html" } });
+    const response = await fetch(`${ROWS_ENDPOINT}${query}`, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(30_000) });
     if (!response.ok) throw new Error(`activity rows responded ${response.status}`);
 
     const template = document.createElement("template");
@@ -203,14 +204,13 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     const widget = list.closest<HTMLElement>("[data-activity-widget]");
     if (!widget || !meta) return;
 
-    if (meta.dataset.lastSeen) {
-      widget.dataset.lastSeen = meta.dataset.lastSeen;
-      // the line under the name is one of these too, and it lives outside the widget
-      for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
-        time.dateTime = meta.dataset.lastSeen;
-      }
+    widget.dataset.lastSeen = meta.dataset.lastSeen ?? "";
+    widget.dataset.trustedUntil = meta.dataset.trustedUntil ?? "";
+    // The time under the name lives outside the widget.
+    for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
+      time.dateTime = meta.dataset.lastSeen ?? "";
+      time.hidden = !meta.dataset.lastSeen;
     }
-    if (meta.dataset.trustedUntil) widget.dataset.trustedUntil = meta.dataset.trustedUntil;
 
     const delayed = widget.querySelector<HTMLElement>("[data-signals-delayed]");
     if (delayed) delayed.hidden = meta.dataset.delayed !== "true";
@@ -241,7 +241,25 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
    */
   async function syncNewestRows(list: HTMLOListElement): Promise<void> {
     const { rows, meta } = await fetchRows("");
+    if (!list.isConnected) return;
+    if (!meta) throw new Error("Activity response is missing metadata");
     applyMeta(list, meta);
+    const widget = list.closest<HTMLElement>("[data-activity-widget]");
+    const initial = widget?.dataset.activityPending === "true";
+    if (widget) {
+      delete widget.dataset.activityPending;
+      widget.setAttribute("aria-busy", "false");
+      widget.querySelector<HTMLElement>("[data-activity-skeleton]")?.setAttribute("hidden", "");
+      widget.querySelector<HTMLElement>("[data-activity-content]")?.removeAttribute("hidden");
+    }
+    document.querySelector("[data-home-activity-skeleton]")?.setAttribute("hidden", "");
+    updateActivityClock();
+    if (initial) {
+      list.replaceChildren(...rows);
+      updateActivityClock();
+      void fillActivityList(list);
+      return;
+    }
     if (!rows.length) return;
 
     const existing = [...list.children] as HTMLElement[];
@@ -286,15 +304,20 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   }
 
   async function pollActivity(list: HTMLOListElement): Promise<void> {
-    if (document.visibilityState !== "visible" || !list.isConnected) return;
+    if (document.visibilityState !== "visible" || !list.isConnected || list.dataset.activityPolling === "true") return;
+    list.dataset.activityPolling = "true";
 
     try {
       await syncNewestRows(list);
       pollFailures = 0;
     } catch {
       pollFailures += 1;
+      const widget = list.closest<HTMLElement>("[data-activity-widget]");
+      const message = widget?.querySelector<HTMLElement>("[data-activity-skeleton] .sr-only");
+      if (message) message.textContent = "Activity is taking longer to load. Retrying automatically.";
     }
-    schedulePoll(list);
+    list.dataset.activityPolling = "false";
+    if (list.isConnected) schedulePoll(list);
   }
 
   /** the tooltip quotes the band the status currently sits in, so it moves with it */
@@ -315,6 +338,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   }
 
   function updateActivityWidget(widget: HTMLElement, now: number): void {
+    if (widget.dataset.activityPending === "true") return;
     const delayed = widget.querySelector<HTMLElement>("[data-signals-delayed]");
     const trustedUntil = Date.parse(widget.dataset.trustedUntil ?? "");
 
@@ -344,7 +368,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     }
 
     for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
-      time.textContent = formatLastSeenTime(time.dateTime, now);
+      if (time.dateTime) time.textContent = formatLastSeenTime(time.dateTime, now);
     }
   }
 
@@ -359,8 +383,12 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       });
     }
 
-    void fillActivityList(list);
-    schedulePoll(list);
+    if (list.closest<HTMLElement>("[data-activity-widget]")?.dataset.activityPending === "true") {
+      void pollActivity(list);
+    } else {
+      void fillActivityList(list);
+      schedulePoll(list);
+    }
   }
 
   function initializeActivityWidget(): void {
