@@ -22,7 +22,8 @@
     "atproto:prepare": "node scripts/prepare-atproto.mjs",
     "atproto:preview": "bun run atproto:prepare && node scripts/publish-atproto.mjs --dry-run",
     "atproto:publish": "node scripts/publish-atproto.mjs",
-    "atproto:verify": "node scripts/publish-atproto.mjs --verify"
+    "atproto:verify": "node scripts/publish-atproto.mjs --verify",
+    "music:publish": "node scripts/publish-music.mjs"
   },
   "dependencies": {
     "@astro-community/astro-embed-bluesky": "0.2.3",
