@@ -97,3 +97,16 @@ test("publishing rejects stale deployment audio and unsafe or duplicate input", 
       /escapes/,
     );
   }));
+test("metadata updates preserve uploaded artwork and accept a new verified CDN cover", () =>
+  fixture(async (items) => {
+    const agent = fakeAgent(items);
+    const options = { log() {} };
+    await publishMusic(items, agent, did, options);
+    agent.records[0].value.imageUrl = "https://images.plyr.fm/old.jpg";
+    items[0].record.title = "New title";
+    await publishMusic(items, agent, did, options);
+    assert.equal(agent.records[0].value.imageUrl, "https://images.plyr.fm/old.jpg");
+    items[0].record.imageUrl = "https://images.plyr.fm/new.jpg";
+    await publishMusic(items, agent, did, options);
+    assert.equal(agent.records[0].value.imageUrl, "https://images.plyr.fm/new.jpg");
+  }));

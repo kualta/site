@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { AtpAgent } from "@atproto/api";
 import { prepareMusic, verifyMusicAssets, publishMusic } from "./lib/music-publish.mjs";
+import { syncMusicArtwork } from "./lib/music-artwork.mjs";
 
 const args = process.argv.slice(2);
 if (args.some((arg) => !["--dry-run", "--verify"].includes(arg))) throw new Error("Use --dry-run or --verify");
@@ -13,6 +14,7 @@ if (args.includes("--dry-run")) {
 } else {
   const verifyOnly = args.includes("--verify");
   if (!verifyOnly && !process.env.ATP_APP_PASSWORD) throw new Error("Set ATP_APP_PASSWORD to publish music");
+  if (!verifyOnly && !process.env.PLYR_TOKEN) throw new Error("Set PLYR_TOKEN to sync music artwork");
   const artistResponse = await fetch(`https://api.plyr.fm/artists/${encodeURIComponent(config.did)}`, {
     signal: AbortSignal.timeout(30_000),
   });
@@ -26,5 +28,8 @@ if (args.includes("--dry-run")) {
   if (!pds || new URL(pds).protocol !== "https:") throw new Error("Identity has no HTTPS PDS");
   const agent = new AtpAgent({ service: pds });
   if (!verifyOnly) await agent.login({ identifier: config.did, password: process.env.ATP_APP_PASSWORD });
+  await publishMusic(items, agent, config.did, { verifyOnly });
+  await syncMusicArtwork(items, config.did, { verifyOnly, token: process.env.PLYR_TOKEN });
+  // plyr's artwork API can rebuild metadata; restore the site's authoritative fields.
   await publishMusic(items, agent, config.did, { verifyOnly });
 }

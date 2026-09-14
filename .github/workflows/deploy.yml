@@ -48,3 +48,4 @@ jobs:
         run: bun run music:publish
         env:
           ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}
+          PLYR_TOKEN: ${{ secrets.PLYR_TOKEN }}
