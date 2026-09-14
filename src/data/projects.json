@@ -162,7 +162,7 @@
   {
     "id": 14,
     "name": "moji",
-    "description": "kaomoji library",
+    "description": "world's biggest kaomoji library",
     "link": "https://moji.kualta.dev/",
     "git_link": "https://github.com/kualta/site.git",
     "language": "TypeScript",
@@ -214,7 +214,7 @@
   {
     "id": 18,
     "name": "cartel",
-    "description": "community",
+    "description": "a global community",
     "link": "https://cartel.sh",
     "git_link": "https://github.com/cartel-sh",
     "language": "TypeScript",
@@ -225,7 +225,7 @@
   {
     "id": 19,
     "name": "bad art",
-    "description": "art sharing",
+    "description": "a serious place for unserious art",
     "git_link": "https://github.com/cartel-sh/bad-art.git",
     "language": "TypeScript",
     "date": "2025-07-01",
@@ -240,7 +240,7 @@
   {
     "id": 20,
     "name": "paragraph",
-    "description": "publishing platform",
+    "description": "where ideas thrive",
     "link": "https://paragraph.com",
     "git_link": "https://github.com/paragraph-xyz/",
     "language": "TypeScript",
