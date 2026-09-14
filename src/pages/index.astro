@@ -51,10 +51,10 @@ Astro.response.headers.set("cache-control", "no-store");
 
       <a
         href="#activity"
-        class="home-activity-link flex shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
+        data-home-activity-pending
+        class="home-activity-link flex min-h-[42px] shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
                hover:opacity-70"
       >
-        <span class="h-4 w-28 rounded bg-secondary motion-safe:animate-pulse dark:bg-dark-secondary" data-home-activity-skeleton aria-label="Loading activity" />
         <time class="tabular-nums" data-activity-last-seen hidden />
         <FiChevronDown className="animate-bounce motion-reduce:animate-none" size={18} aria-hidden="true" />
         <span class="sr-only">Jump to recent activity</span>
@@ -91,6 +91,21 @@ Astro.response.headers.set("cache-control", "no-store");
   </script>
 
   <style is:global>
+    .home-activity-link {
+      transition: opacity 350ms ease;
+    }
+
+    .home-activity-link[data-home-activity-pending] {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .home-activity-link {
+        transition: none;
+      }
+    }
+
     /* the two screens are the only places the page comes to rest, so one scroll
        down carries the whole way to the feed; the feed is taller than the
        viewport, which leaves reading through it unsnapped */

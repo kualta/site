@@ -252,7 +252,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       widget.querySelector<HTMLElement>("[data-activity-skeleton]")?.setAttribute("hidden", "");
       widget.querySelector<HTMLElement>("[data-activity-content]")?.removeAttribute("hidden");
     }
-    document.querySelector("[data-home-activity-skeleton]")?.setAttribute("hidden", "");
+    document.querySelector("[data-home-activity-pending]")?.removeAttribute("data-home-activity-pending");
     updateActivityClock();
     if (initial) {
       list.replaceChildren(...rows);
