@@ -2,12 +2,10 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
 import ActivityWidget from "@/components/activity/ActivityWidget.astro";
-import { formatLastSeenTime, getActivityFeed } from "@/lib/activity";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 import { TAGLINE } from "@/lib/seo";
-import { env } from "cloudflare:workers";
 
 // rendered per request so the middleware can send www and kualta.com to the
 // canonical apex; every other route is prerendered
@@ -19,14 +17,6 @@ const contacts = (contactsData as Contact[])
 
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
-// Wait for a due refresh so a new visitor receives the latest snapshot rather
-// than the value that happened to be cached before their request.
-const activity = await getActivityFeed({
-  cache: env.ACTIVITY_CACHE,
-  githubToken: env.GITHUB_ACTIVITY_TOKEN,
-});
-const lastSeenText = activity.lastSeenAt ? formatLastSeenTime(activity.lastSeenAt) : null;
-
 Astro.response.headers.set("cache-control", "no-store");
 ---
 <BaseLayout description={TAGLINE}>
@@ -58,21 +48,17 @@ Astro.response.headers.set("cache-control", "no-store");
           </div>
         </div>
       </div>
-      {
-        lastSeenText && (
-          <a
-            href="#activity"
-            class="home-activity-link flex shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
-                   hover:opacity-70"
-          >
-            <time datetime={activity.lastSeenAt} class="tabular-nums" data-activity-last-seen>
-              {lastSeenText}
-            </time>
-            <FiChevronDown className="animate-bounce motion-reduce:animate-none" size={18} aria-hidden="true" />
-            <span class="sr-only">Jump to recent activity</span>
-          </a>
-        )
-      }
+
+      <a
+        href="#activity"
+        class="home-activity-link flex shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
+               hover:opacity-70"
+      >
+        <span class="h-4 w-28 rounded bg-secondary motion-safe:animate-pulse dark:bg-dark-secondary" data-home-activity-skeleton aria-label="Loading activity" />
+        <time class="tabular-nums" data-activity-last-seen hidden />
+        <FiChevronDown className="animate-bounce motion-reduce:animate-none" size={18} aria-hidden="true" />
+        <span class="sr-only">Jump to recent activity</span>
+      </a>
     </section>
 
     <section
@@ -81,7 +67,7 @@ Astro.response.headers.set("cache-control", "no-store");
       aria-label="Kualta's recent activity"
       data-activity-screen
     >
-      <ActivityWidget feed={activity} />
+      <ActivityWidget />
     </section>
   </div>
 
