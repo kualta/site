@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { getPostsMetadata } from "@/lib/posts";
-import { SITE_NAME, SITE_URL, TAGLINE } from "@/lib/seo";
+import { SITE_NAME, SITE_URL } from "@/lib/seo";
 
 /**
  * The blog had no feed, so the only way to follow it was the mailing list.
@@ -58,7 +58,7 @@ export const GET: APIRoute = async ({ site }) => {
   <channel>
     <title>${esc(`${SITE_NAME} - posts`)}</title>
     <link>${esc(`${base}/posts/`)}</link>
-    <description>${esc(`Essays by ${SITE_NAME}, ${TAGLINE}.`)}</description>
+    <description>${esc(`Essays by ${SITE_NAME}`)}</description>
     <language>en-us</language>
     <lastBuildDate>${new Date(newest).toUTCString()}</lastBuildDate>
     <atom:link href="${esc(`${base}/rss.xml`)}" rel="self" type="application/rss+xml" />

@@ -79,7 +79,7 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true }: P
         </button>
       </div>
       <p id={`${id}-message`} className={!showHelper && state !== "error" ? "sr-only" : "newsletter-message"} role="status" data-error={state === "error"}>
-        {message || (showHelper ? "New essays, occasionally. Unsubscribe anytime." : "")}
+        {message || (showHelper ? "Essays by email. Unsubscribe anytime." : "")}
       </p>
     </form>
   );

@@ -113,8 +113,7 @@ export function articleRecord(config, slug, source) {
       site: publicationUri(config),
       path,
       title: data.title,
-      description:
-        data.summary || `${data.title}${data.description ? `: ${data.description}` : ""}. ${textContent}`.slice(0, 158),
+      description: data.description ?? "",
       publishedAt,
       updatedAt: new Date(data.modifiedTime ?? publishedAt).toISOString(),
       tags: data.tags ?? [],
