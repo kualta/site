@@ -17,9 +17,9 @@ const valid = /^[a-f0-9-]{72}$/.test(token);
 <BaseLayout title="Confirm subscription" noindex>
   <section class="max-w-md w-full px-6 pb-24 space-y-6 text-center">
     <h1 class="text-3xl">{completed ? "You're subscribed." : 'Confirm your subscription'}</h1>
-    {completed ? <p>New essays, occasionally. See you in your inbox.</p> : failed || !valid ?
+    {completed ? <p>You’ll receive new essays by email.</p> : failed || !valid ?
       <p>This link has expired or has already been used. <a href="/join" class="underline">Request a new link</a>.</p> :
-      <form method="POST"><p class="mb-6">One more click to get new essays from kualta.</p>
+      <form method="POST"><p class="mb-6">Confirm to receive essays by email.</p>
         <button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80" type="submit">Confirm subscription</button>
       </form>}
     <a href="/" class="inline-block underline">Back to the site</a>

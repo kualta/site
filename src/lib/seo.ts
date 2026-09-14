@@ -23,32 +23,9 @@ export function pageTitle(title?: string): string {
   return title.endsWith(SITE_NAME) ? title : `${title} - ${SITE_NAME}`;
 }
 
-/**
- * Search results cut off around 160 characters and Google rewrites anything too
- * thin to be a summary, so a description that is only a few words gets padded
- * out with the site's own context rather than shipped as-is.
- */
-export function pageDescription(description?: string, title?: string): string {
-  const text = description?.trim();
-  if (text === TAGLINE) return TAGLINE;
-  if (text && text.length >= 70) return clamp(text);
-
-  // naming the page again in front of text that already names it reads as a
-  // stutter, which is how "tag: buddhism: Every post on buddhism" happened
-  const named = !title || title === SITE_NAME || text?.toLowerCase().includes(title.toLowerCase());
-  const subject = named ? "" : `${title}: `;
-  const lead = text ? `${subject}${text}` : subject.replace(/: $/, "") || title || "";
-  const suffix = `${SITE_NAME}, ${TAGLINE}.`;
-  // the lead may already end in a full stop, and two of them read as a typo
-  const joined = lead ? `${lead.replace(/[.!?]+$/, "")}. ${suffix}` : suffix;
-  return clamp(joined);
-}
-
-/** results stop showing the description somewhere past 160 characters */
-function clamp(text: string, limit = 158): string {
-  if (text.length <= limit) return text;
-  const cut = text.slice(0, limit);
-  return `${cut.slice(0, cut.lastIndexOf(" ")).replace(/[,;:.\s]+$/, "")}…`;
+/** Use the supplied description without adding copy. */
+export function pageDescription(description?: string): string {
+  return description ?? TAGLINE;
 }
 
 const sizes = imageSizes as Record<string, { width: number; height: number }>;

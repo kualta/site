@@ -55,7 +55,7 @@ const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a
 const documentTitle = pageTitle(title);
 const metaDescription = exactDescription && description !== undefined
   ? description
-  : pageDescription(description, title);
+  : pageDescription(description);
 const canonical = new URL(Astro.url.pathname, Astro.site).toString();
 const og = ogImage(image, Astro.site);
 const month = new Date().getMonth();
