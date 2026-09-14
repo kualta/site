@@ -49,7 +49,7 @@ export async function prepareMusic(tracks, origin, publicDirectory = "public") {
         ...(track.album ? { album: track.album } : {}),
       };
       lexicons.assertValidRecord(record.$type, jsonToLex(record));
-      return { slug: track.slug, record, audio, artwork };
+      return { slug: track.slug, record, audio, artwork, artworkUrl: record.imageUrl };
     }),
   );
 }
@@ -58,7 +58,7 @@ export async function verifyMusicAssets(items, fetcher = fetch) {
   for (const item of items) {
     for (const [url, bytes] of [
       [item.record.audioUrl, item.audio],
-      [item.record.imageUrl, item.artwork],
+      [item.artworkUrl, item.artwork],
     ]) {
       const response = await fetcher(url, { cache: "no-store", signal: AbortSignal.timeout(60_000) });
       if (!response.ok || !Buffer.from(await response.arrayBuffer()).equals(bytes))
@@ -82,6 +82,9 @@ export async function publishMusic(items, agent, did, { verifyOnly = false, log 
   });
   for (const { item, previous } of plans) {
     const record = { ...previous?.value, ...item.record };
+    // API-uploaded artwork must survive subsequent site metadata publications.
+    if (previous?.value.imageUrl && item.record.imageUrl === item.artworkUrl)
+      record.imageUrl = previous.value.imageUrl;
     if (!item.record.album) delete record.album;
     lexicons.assertValidRecord(record.$type, jsonToLex(record));
     if (isDeepStrictEqual(plain(previous?.value ?? null), plain(record))) {
