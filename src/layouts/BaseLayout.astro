@@ -161,7 +161,7 @@ const robots = noindex
     )}
     <div class="page-bottom" data-home={Astro.url.pathname === "/" ? "true" : undefined}>
       <CornersScope top_left={false} top_right={false} class="page-bottom-corner" />
-      <NotificationsButton />
+      {!musicPage && <NotificationsButton />}
     </div>
     <script>
       document.addEventListener("astro:page-load", () => {

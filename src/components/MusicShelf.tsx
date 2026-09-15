@@ -1,3 +1,4 @@
+import { MusicCheckbox } from "@/components/MusicCheckbox";
 import { flushSync } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -11,6 +12,7 @@ import {
   FiVolumeX,
   FiX,
 } from "react-icons/fi";
+import { ScoreNotation } from "@/components/ScoreNotation.tsx";
 import { LyricsPanel } from "@/components/LyricsPanel";
 import { Scrollable } from "@/components/Scrollable";
 import { Vinyl } from "@/components/Vinyl";
@@ -628,7 +630,8 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
       });
       // Native view transitions carry the deck between layouts; older browsers use FLIP.
       const surface = surfaceRef.current;
-      if (!surface || !previous?.width || prefersReducedMotion() || typeof document.startViewTransition === "function") return;
+      if (!surface || !previous?.width || prefersReducedMotion() || typeof document.startViewTransition === "function")
+        return;
       const next = surface.getBoundingClientRect();
       if (!next.width) return;
       surface.animate(
@@ -732,40 +735,41 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
         hidden={!expanded}
         className="music-full grid w-full grow lg:h-[calc(100dvh-8rem)] lg:min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_19rem] xl:grid-cols-[23rem_minmax(0,1fr)_23rem]"
       >
-        <aside
-          className={`lyrics-rail order-last max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:order-none lg:flex lg:max-h-none lg:p-12 ${
-            pane === "lyrics" ? "flex" : "hidden"
-          }`}
-        >
-          <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h2>
-          <div className="flex flex-wrap gap-1.5">
-            <label className="filter-chip flex w-fit cursor-pointer select-none items-center gap-2 rounded-full py-1 pl-1 pr-2.5 font-mono text-xs">
-              <input type="checkbox" checked={lyricsFocus} onChange={(event) => setLyricsFocus(event.target.checked)} />
-              focus sync
-            </label>
-          </div>
-          <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
-        </aside>
+        {!active.score && (
+          <aside
+            className={`lyrics-rail order-last max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:order-none lg:flex lg:max-h-none lg:p-12 ${
+              pane === "lyrics" ? "flex" : "hidden"
+            }`}
+          >
+            <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h2>
+            <MusicCheckbox label="focus sync" checked={lyricsFocus} onChange={setLyricsFocus} />
+            <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
+          </aside>
+        )}
 
         <section
           ref={expanded ? surfaceRef : undefined}
-          className="music-deck flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6 lg:p-8"
+          className={`music-deck flex w-full min-h-0 flex-col items-center justify-center gap-5 p-6 lg:p-8 ${
+            active.score ? "music-score-deck" : ""
+          }`}
         >
-          <div className="w-full max-w-[min(25rem,42vh,78vw)]" ref={deckRef}>
-            <Vinyl
-              track={active}
-              deck
-              spinning={playing}
-              scrubbing={scrubbing}
-              seeking={seeking}
-              scrubAngle={scrubAngle}
-              onPointerDown={grabRecord}
-              onPointerMove={turnRecord}
-              onPointerUp={releaseRecord}
-            />
-          </div>
+          {!active.score && (
+            <div className="w-full max-w-[min(25rem,42vh,78vw)]" ref={deckRef}>
+              <Vinyl
+                track={active}
+                deck
+                spinning={playing}
+                scrubbing={scrubbing}
+                seeking={seeking}
+                scrubAngle={scrubAngle}
+                onPointerDown={grabRecord}
+                onPointerMove={turnRecord}
+                onPointerUp={releaseRecord}
+              />
+            </div>
+          )}
 
-          <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
+          <div className="music-track-heading flex w-full max-w-md flex-col items-center gap-1 text-center">
             <h2 lang={langFor(active.title)} className="text-2xl font-medium leading-tight">
               {active.title}
             </h2>
@@ -774,7 +778,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
             </p>
           </div>
 
-          <div className="flex w-full max-w-md items-center gap-3 font-mono text-xs text-secondary-text">
+          <div className="music-timeline flex w-full max-w-md items-center gap-3 font-mono text-xs text-secondary-text">
             <span className="tabular-nums">{formatTime(time)}</span>
             <input
               className="vinyl-seek grow"
@@ -790,7 +794,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
             <span className="tabular-nums">{formatTime(duration || active.duration)}</span>
           </div>
 
-          <div className="grid w-full max-w-md grid-cols-[1fr_auto_1fr] items-center">
+          <div className="music-transport grid w-full max-w-md grid-cols-[1fr_auto_1fr] items-center">
             <div className="volume-control flex items-center gap-2 justify-self-start">
               <button
                 type="button"
@@ -858,24 +862,36 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
             </button>
           </div>
 
-          <div className="flex gap-1.5 lg:hidden">
-            {(["records", "lyrics"] as const).map((name) => (
-              <button
-                key={name}
-                type="button"
-                className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${pane === name ? "is-on" : ""}`}
-                onClick={() => setPane(name)}
-                aria-pressed={pane === name}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
+          {active.score && expanded && (
+            <ScoreNotation
+              key={active.score}
+              source={active.score}
+              title={active.title}
+              audioRef={audioRef}
+              onSeek={seekTo}
+            />
+          )}
+
+          {!active.score && (
+            <div className="flex gap-1.5 lg:hidden">
+              {(["records", "lyrics"] as const).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${pane === name ? "is-on" : ""}`}
+                  onClick={() => setPane(name)}
+                  aria-pressed={pane === name}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         <aside
           className={`rail max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:flex lg:max-h-none lg:p-12 ${
-            pane === "records" ? "flex" : "hidden"
+            active.score || pane === "records" ? "flex" : "hidden"
           }`}
         >
           <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h2>

@@ -1,0 +1,67 @@
+diff --git a/dist/alphaTab.core.mjs b/dist/alphaTab.core.mjs
+index b6203da6066c95efcf66298fe48a690f144597a5..3549b32c317fa326ca6cc88fc0adc751d99148f1 100644
+--- a/dist/alphaTab.core.mjs
++++ b/dist/alphaTab.core.mjs
+@@ -57895,33 +57895,7 @@ class ScoreLayout {
+ 		}
+ 	}
+ 	_layoutAndRenderAnnotation(y) {
+-		const msg = "rendered by alphaTab";
+-		const resources = this.renderer.settings.display.resources;
+-		const size = 12;
+-		const fontFamilies = resources.elementFonts.has(NotationElement.ScoreCopyright) ? resources.elementFonts.get(NotationElement.ScoreCopyright).families : resources.tablatureFont.families;
+-		const font = Font.withFamilyList(fontFamilies, size, FontStyle.Plain, FontWeight.Bold);
+-		const fakeBarRenderer = new BarRendererBase(this.renderer, this.renderer.tracks[0].staves[0].bars[0]);
+-		const glyph = new TextGlyph(0, 0, msg, font, TextAlign.Center, void 0, resources.mainGlyphColor);
+-		glyph.renderer = fakeBarRenderer;
+-		glyph.doLayout();
+-		this.alignScoreInfoGlyph(glyph);
+-		const e = new RenderFinishedEventArgs();
+-		e.width = glyph.x + glyph.width;
+-		e.x = 0;
+-		e.height = size;
+-		e.y = y;
+-		e.totalWidth = this.scaledWidth;
+-		e.totalHeight = y + size;
+-		e.firstMasterBarIndex = -1;
+-		e.lastMasterBarIndex = -1;
+-		this.registerPartial(e, (canvas) => {
+-			canvas.color = resources.mainGlyphColor;
+-			canvas.font = font;
+-			canvas.textAlign = TextAlign.Left;
+-			canvas.textBaseline = TextBaseline.Top;
+-			glyph.paint(0, 0, canvas);
+-		});
+-		return y + size;
++		return y;
+ 	}
+ }
+ //#endregion
+@@ -60004,6 +59978,7 @@ class LineBarRenderer extends BarRendererBase {
+ 			if (!h.hasStem(true, beat)) continue;
+ 			this.paintBeamingStem(beat, cy + this.y, cx + this.x + beatLineX, topY, bottomY, canvas);
+ 			const _ = ElementStyleHelper.beat(canvas, flagsElement, beat);
++			canvas.beginGroup(BeatContainerGlyph.getGroupId(beat));
+ 			try {
+ 				let flagWidth = 0;
+ 				if (h.hasFlag(true, beat)) {
+@@ -60016,6 +59991,7 @@ class LineBarRenderer extends BarRendererBase {
+ 				if (beat.graceType === GraceType.BeforeBeat) if (direction === BeamDirection.Down) CanvasHelper.fillMusicFontSymbolSafe(canvas, cx + this.x + beatLineX + flagWidth / 2, (topY + bottomY - this.smuflMetrics.glyphHeights.get(MusicFontSymbol.GraceNoteSlashStemDown)) / 2, EngravingSettings.GraceScale, MusicFontSymbol.GraceNoteSlashStemDown, true);
+ 				else CanvasHelper.fillMusicFontSymbolSafe(canvas, cx + this.x + beatLineX + flagWidth / 2, (topY + bottomY + this.smuflMetrics.glyphHeights.get(MusicFontSymbol.GraceNoteSlashStemUp)) / 2, EngravingSettings.GraceScale, MusicFontSymbol.GraceNoteSlashStemUp, true);
+ 			} finally {
++				canvas.endGroup();
+ 				_?.[Symbol.dispose]?.();
+ 			}
+ 		}
+@@ -63299,9 +63275,11 @@ class ScoreBarRenderer extends LineBarRenderer {
+ 	}
+ 	paintBeamingStem(beat, _cy, x, topY, bottomY, canvas) {
+ 		const _ = ElementStyleHelper.beat(canvas, BeatSubElement.StandardNotationStem, beat);
++		canvas.beginGroup(BeatContainerGlyph.getGroupId(beat));
+ 		try {
+ 			canvas.fillRect(x, topY, this.smuflMetrics.stemThickness, bottomY - topY);
+ 		} finally {
++			canvas.endGroup();
+ 			_?.[Symbol.dispose]?.();
+ 		}
+ 	}

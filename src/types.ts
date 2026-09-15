@@ -24,6 +24,8 @@ export interface Track {
   duration: number;
   src: string;
   cover: string | null;
+  /** Matching MusicXML attachment in public/music/scores. */
+  score?: string | null;
   /** 1200x630 share card, drawn by `bun run music:og` */
   og: string | null;
 }
