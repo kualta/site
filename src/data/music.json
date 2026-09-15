@@ -13,6 +13,7 @@
     "duration": 162,
     "src": "/music/rises-the-moon.mp3",
     "cover": "/music/covers/rises-the-moon.jpg",
+    "score": null,
     "og": "/music/og/rises-the-moon.png"
   },
   {
@@ -29,6 +30,7 @@
     "duration": 182,
     "src": "/music/preacher-man.mp3",
     "cover": "/music/covers/preacher-man.png",
+    "score": null,
     "og": "/music/og/preacher-man.png"
   },
   {
@@ -45,6 +47,7 @@
     "duration": 221,
     "src": "/music/almost-gone.mp3",
     "cover": "/music/covers/almost-gone.jpg",
+    "score": null,
     "og": "/music/og/almost-gone.png"
   },
   {
@@ -61,6 +64,7 @@
     "duration": 169,
     "src": "/music/dark-night.mp3",
     "cover": "/music/covers/dark-night.jpg",
+    "score": null,
     "og": "/music/og/dark-night.png"
   },
   {
@@ -77,6 +81,7 @@
     "duration": 135,
     "src": "/music/papercut.mp3",
     "cover": "/music/covers/papercut.jpg",
+    "score": null,
     "og": "/music/og/papercut.png"
   },
   {
@@ -93,6 +98,7 @@
     "duration": 110,
     "src": "/music/faux.mp3",
     "cover": "/music/covers/faux.jpg",
+    "score": null,
     "og": "/music/og/faux.png"
   },
   {
@@ -109,6 +115,7 @@
     "duration": 140,
     "src": "/music/exitlude.mp3",
     "cover": "/music/covers/exitlude.jpg",
+    "score": null,
     "og": "/music/og/exitlude.png"
   },
   {
@@ -125,6 +132,7 @@
     "duration": 216,
     "src": "/music/kyukurarin.mp3",
     "cover": "/music/covers/kyukurarin.jpg",
+    "score": null,
     "og": "/music/og/kyukurarin.png"
   },
   {
@@ -141,6 +149,7 @@
     "duration": 115,
     "src": "/music/dialogue.mp3",
     "cover": "/music/covers/dialogue.jpg",
+    "score": "/music/scores/dialogue.mxl",
     "og": "/music/og/dialogue.png"
   },
   {
@@ -157,6 +166,7 @@
     "duration": 223,
     "src": "/music/self-conscious-portrait.mp3",
     "cover": "/music/covers/self-conscious-portrait.jpg",
+    "score": "/music/scores/self-conscious-portrait.mxl",
     "og": "/music/og/self-conscious-portrait.png"
   },
   {
@@ -173,6 +183,7 @@
     "duration": 147,
     "src": "/music/embrace-it.mp3",
     "cover": "/music/covers/embrace-it.jpg",
+    "score": "/music/scores/embrace-it.mxl",
     "og": "/music/og/embrace-it.png"
   }
 ]

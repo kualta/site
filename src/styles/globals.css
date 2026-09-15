@@ -411,9 +411,9 @@ html {
   background-color: color-mix(in oklab, var(--secondary-text) 75%, transparent);
 }
 
-/* Align both music scrollers above the newsletter controls. */
+/* Leave breathing room above the bottom corners. */
 body[data-music-page] :is(.lyrics-rail, .rail) {
-  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
 }
 
 /* the words sit opposite the crate, so the deck keeps the middle */
@@ -1198,3 +1198,52 @@ body:has(.page-bottom[data-scrolled]) .feed-back-top:hover { opacity: 0.7; }
 @media (prefers-reduced-motion: reduce) {
   .feed-back-top, .feed-back-top-tooltip { transition: none; }
 }
+
+/* A score replaces the platter and lyrics, leaving the record shelf alongside. */
+.music-score-deck {
+  justify-content: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.score-player { --score-accent: oklch(from var(--primary) 0.62 0.14 h); display: flex; flex-direction: column; width: 100%; min-height: 0; flex: 1; }
+.score-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.6rem 1rem; font-size: 0.8rem; color: var(--secondary-text); }
+.music-checkbox, .score-zoom { display: flex; align-items: center; gap: 0.6rem; }
+.music-checkbox { width: fit-content; font-size: 0.8rem; color: var(--secondary-text); cursor: pointer; user-select: none; }
+.music-checkbox:has(input:disabled) { cursor: default; opacity: 0.5; }
+.score-zoom button, .score-zoom a { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 0.5rem; }
+.score-zoom button:hover, .score-zoom a:hover { background: var(--primary); color: var(--text); }
+.score-zoom button:disabled { opacity: 0.3; }
+.score-zoom span { min-width: 3ch; font-variant-numeric: tabular-nums; }
+.score-scroll { position: relative; overflow: auto; flex: 1; min-height: 20rem; background: transparent; color: var(--text); }
+.score-scroll:focus-visible { outline: none; }
+.dark .score-scroll { color: var(--text-dark); }
+.dark .score-player { --score-accent: var(--primary); }
+/* alphaTab emits stems and beams as separately colored SVG shapes. */
+.score-notation svg { fill: currentColor; }
+.score-notation svg [fill]:not([fill="none"]):not([fill="transparent"]) { fill: currentColor; }
+.score-notation svg [stroke]:not([stroke="none"]):not([stroke="transparent"]) { stroke: currentColor; }
+/* alphaTab reserves this default color for staff lines. */
+.dark .score-player .score-notation svg [fill="#A5A5A5"] { fill: color-mix(in srgb, var(--text-dark) 55%, transparent); }
+/* alphaTab measures the full container width, including padding. */
+.score-notation { min-width: 320px; padding: 1rem 0 3rem; }
+.score-message { padding: 2rem; text-align: center; }
+.score-message button { text-decoration: underline; }
+.score-player .at-cursor-bar { background: color-mix(in srgb, var(--score-accent) 12%, transparent); }
+.score-player .at-cursor-beat { background: var(--score-accent); width: 3px; }
+.score-player .at-highlight { color: var(--score-accent); fill: currentColor; }
+.score-player .at-selection div { background: color-mix(in srgb, var(--score-accent) 12%, transparent); }
+@media (min-width: 1024px) {
+  .music-score-deck { grid-column: span 2; padding-bottom: 2rem; }
+}
+@media (max-width: 1023px) {
+  .score-scroll { height: 65vh; flex: none; }
+  .music-score-deck { padding: 1rem; }
+}
+@media (min-width: 768px) {
+  .music-score-deck { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); align-items: center; column-gap: 2rem; }
+  .music-score-deck > .music-track-heading { grid-column: 1; grid-row: 1; align-items: flex-start; text-align: left; }
+  .music-score-deck > .music-timeline { grid-column: 1 / -1; grid-row: 2; max-width: none; }
+  .music-score-deck > .music-transport { grid-column: 2; grid-row: 1; }
+  .music-score-deck > .score-player { grid-column: 1 / -1; grid-row: 3; height: 100%; }
+}
+.score-scroll > .score-message { position: absolute; inset: 0; z-index: 1; background: transparent; }

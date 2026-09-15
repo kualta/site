@@ -13,3 +13,13 @@ The sync waits briefly for indexed tracks, uploads missing or changed artwork, c
 Successful PDS verification alone proves publishing, not discovery. Check the artist page and the public `https://api.plyr.fm/tracks/?artist_did=<DID>` response after activation to confirm indexing and playable audio. Indexing can lag behind record writes.
 
 Sources: [track schema](https://github.com/zzstoatzz/plyr.fm/blob/main/lexicons/track.json), [external-record ingestion](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/architecture/jetstream-ingest.md). The schema is vendored in `scripts/lexicons/fm.plyr.track.json` for validation.
+
+## Interactive scores
+
+Place a MuseScore MusicXML export next to the catalog in `public/music/scores/<track-slug>.mxl` (also `.musicxml` or `.xml`). `music:sync` discovers the attachment on every build. Dialogue, Self-Conscious Portrait and Embrace it include scores; tracks without a matching attachment keep their existing layout.
+
+An attached score replaces both the full-size vinyl and lyrics with a large, scrollable notation player. The shared MP3 still owns playback, seeking, volume, looping, queue advancement and playback across navigation. alphaTab loads on demand and supplies notation, note highlighting, click-to-seek, zoom and following the current system. No soundfont or synthesizer audio is loaded. The score and font are served by the site.
+
+Use the same arrangement and tempo for the score and MP3. Playback uses MusicXML timing, including repeats and alternate endings, rather than stretching the score across the MP3's duration (which includes reverb). Dialogue's export is 105 BPM; its MP3 note attacks align with that timing to approximately 40 ms at both the beginning and final chord. Recordings with different tempo, rubato or edits require explicit alignment before their cursor can be considered accurate.
+
+The Bun patch in `patches/@coderline%2Falphatab@1.8.4.patch` adds beat groups around SVG stems and flags, so alphaTab highlights them together with their noteheads, and removes the renderer credit footer. Keep this patch when updating the renderer until upstream includes equivalent grouping; verify playback highlighting after upgrades. Notation uses the site's foreground color on a transparent background in both themes.

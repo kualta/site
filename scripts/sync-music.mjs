@@ -108,6 +108,10 @@ async function main() {
       duration: Math.round(format.duration ?? previous?.duration ?? 0),
       src: `/music/${file}`,
       cover,
+      score:
+        ["mxl", "musicxml", "xml"]
+          .map((ext) => `/music/scores/${slug}.${ext}`)
+          .find((url) => existsSync(path.join(root, "public", url))) ?? null,
       // drawn by hand with `bun run music:og`, so it may not be there yet
       og: existsSync(path.join(ogDir, `${slug}.png`)) ? `/music/og/${slug}.png` : null,
     });
@@ -115,14 +119,18 @@ async function main() {
     const source = picture ? "embedded" : cover ? "fallback" : "none";
     const words = readLyrics(metadata);
     console.log(
-      `[music] ${slug.padEnd(22)} ${String(Math.round(format.duration ?? 0)).padStart(4)}s  art: ${source.padEnd(8)} lyrics: ${words ? (words.includes("[") ? "synced" : "plain") : "none"}`,
+      `[music] ${slug.padEnd(22)} ${String(Math.round(format.duration ?? 0)).padStart(4)}s  art: ${source.padEnd(
+        8,
+      )} lyrics: ${words ? (words.includes("[") ? "synced" : "plain") : "none"}`,
     );
   }
 
   // newest first, but parts of one album keep their running order
   tracks.sort((a, b) => b.date.localeCompare(a.date) || (a.track ?? 0) - (b.track ?? 0));
   await writeFile(dataFile, `${JSON.stringify(tracks, null, 2)}\n`);
-  console.log(`[music] ${tracks.length} tracks, ${embedded} embedded covers, ${fellBack} fallback, wrote src/data/music.json`);
+  console.log(
+    `[music] ${tracks.length} tracks, ${embedded} embedded covers, ${fellBack} fallback, wrote src/data/music.json`,
+  );
 }
 
 await main();
