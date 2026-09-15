@@ -98,7 +98,12 @@ export function initializeVideoControls(frame: HTMLElement, video: HTMLVideoElem
   frame.addEventListener(
     "keydown",
     (event) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return;
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLButtonElement ||
+        event.target instanceof HTMLSelectElement
+      )
+        return;
       if (event.key === " " || event.key.toLowerCase() === "k") {
         event.preventDefault();
         togglePlayback();

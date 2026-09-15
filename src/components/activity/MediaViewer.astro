@@ -23,6 +23,7 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
           <button type="button" class="video-control video-mute" aria-label="Mute"><span data-volume-icon><FiVolume2 size={18} /></span><span data-muted-icon hidden><FiVolumeX size={18} /></span></button>
           <input class="video-range video-volume-range" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume" />
         </div>
+        <select class="video-quality" aria-label="Video quality" hidden></select>
         <button type="button" class="video-control video-fullscreen" aria-label="Enter fullscreen"><span data-expand-icon><FiMaximize size={18} /></span><span data-collapse-icon hidden><FiMinimize size={18} /></span></button>
       </div>
     </div>
@@ -97,6 +98,13 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
   .video-range { --progress: 0%; display: block; appearance: none; height: 1.25rem; padding: 0; background: transparent; cursor: pointer; accent-color: #f4f1ed; }
   .video-seek { width: 100%; }
   .video-volume-range { width: 4rem; --progress: 100%; }
+  .video-quality {
+    flex-shrink: 0; height: 2.5rem; padding: 0 0.625rem; border: 0; border-radius: 999px;
+    appearance: none; color: inherit; background: transparent; color-scheme: dark;
+    font-size: 0.75rem; font-variant-numeric: tabular-nums; cursor: pointer;
+  }
+  .video-quality:hover { background: rgb(255 255 255 / 12%); }
+  .video-quality:focus-visible { outline: 2px solid #f4f1ed; outline-offset: -4px; }
   .video-range::-webkit-slider-runnable-track { height: 3px; border-radius: 4px; background: linear-gradient(to right, #f4f1ed var(--progress), rgb(255 255 255 / 28%) var(--progress)); }
   .video-range::-moz-range-track { height: 3px; border-radius: 4px; background: rgb(255 255 255 / 28%); }
   .video-range::-moz-range-progress { height: 3px; background: #f4f1ed; }
@@ -110,6 +118,7 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
     .video-control-row { gap: 0.125rem; }
     .video-volume-range { display: none; }
     .video-control { width: 2rem; height: 2rem; }
+    .video-quality { height: 2rem; padding-inline: 0.5rem; }
   }
   @media (hover: hover) and (pointer: fine) {
     .activity-media-viewer:has(video) .video-controls {
@@ -117,7 +126,8 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
       pointer-events: none;
       transition: opacity 180ms ease;
     }
-    .activity-video-player:is(:hover, :has(:focus-visible)) .video-controls {
+    /* The quality menu opens outside the player, so keep controls up while it has focus. */
+    .activity-video-player:is(:hover, :has(:focus-visible), :has(.video-quality:focus)) .video-controls {
       opacity: 1;
       pointer-events: auto;
     }
@@ -131,6 +141,7 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
   import type Hls from "hls.js";
   import { animate } from "motion";
   import { initializeVideoControls } from "@/scripts/activity-video-controls";
+  import { createVideoStream } from "@/scripts/activity-video-stream";
   import type { BlueskyMedia } from "@/lib/activity/bluesky-media";
 
   let cleanupPlayback: (() => void) | undefined;
@@ -236,7 +247,7 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
         const { default: Hls } = await import("hls.js");
         if (generation !== currentGeneration) return;
         if (Hls.isSupported()) {
-          hls = new Hls();
+          hls = createVideoStream(Hls, frame);
           hls.on(Hls.Events.ERROR, (_event, data) => {
             if (data.fatal && generation === currentGeneration) error.hidden = false;
           });
