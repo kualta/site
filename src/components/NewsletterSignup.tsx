@@ -3,7 +3,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import { FiBell, FiX } from "react-icons/fi";
 import { EmailSubscription } from "./EmailSubscription";
 
-export function NewsletterSignup() {
+interface Props {
+  /** open the form when the reader nears the end of the page */
+  openNearEnd?: boolean;
+}
+
+export function NewsletterSignup({ openNearEnd = true }: Props) {
   const [open, setOpen] = useState(false);
   const [focusOnOpen, setFocusOnOpen] = useState(false);
   const reducedMotion = useReducedMotion();
@@ -11,6 +16,7 @@ export function NewsletterSignup() {
   const id = useId();
 
   useEffect(() => {
+    if (!openNearEnd) return;
     let wasNearEnd = false;
     function updateNearEnd() {
       const remaining = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
@@ -30,7 +36,7 @@ export function NewsletterSignup() {
       window.removeEventListener("resize", updateNearEnd);
       observer.disconnect();
     };
-  }, []);
+  }, [openNearEnd]);
 
   function close() {
     setOpen(false);
