@@ -149,6 +149,16 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
 
   let cleanupPlayback: (() => void) | undefined;
   let generation = 0;
+  const preloaded = new Set<string>();
+
+  /** Fetches a full-size image ahead of time, so the viewer rarely opens on the blurry thumbnail. */
+  function preloadImage(item: BlueskyMedia | undefined): void {
+    if (item?.kind !== "image" || preloaded.has(item.src)) return;
+    preloaded.add(item.src);
+    const image = new Image();
+    image.onerror = () => preloaded.delete(item.src);
+    image.src = item.src;
+  }
 
   function openViewer(items: BlueskyMedia[], initialIndex: number, trigger: HTMLElement): void {
     const dialog = document.querySelector<HTMLDialogElement>(".activity-media-viewer");
@@ -206,6 +216,8 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
       previous.hidden = items.length < 2;
       next.hidden = items.length < 2;
       const item = items[index];
+      preloadImage(items[index - 1]);
+      preloadImage(items[index + 1]);
       if (item.kind === "image") {
         const image = new Image();
         image.alt = item.alt;
@@ -339,6 +351,8 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
           const previewIcon = document.querySelector<HTMLTemplateElement>("#activity-preview-play");
           if (previewPlay && previewIcon) previewPlay.replaceChildren(previewIcon.content.cloneNode(true));
           button.onclick = () => openViewer(items, items.indexOf(item), button);
+          button.onpointerenter = () => preloadImage(item);
+          button.onfocus = () => preloadImage(item);
           target.replaceWith(button);
         }
         // The package wraps the entire image grid in an external post link.

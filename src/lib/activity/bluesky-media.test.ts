@@ -24,6 +24,20 @@ test("uses full-size images and preserves alt text", () => {
   ]);
 });
 
+test("asks the Bluesky CDN for the JPEG rendition of full-size images", () => {
+  const cdn = "https://cdn.bsky.app/img";
+  const did = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
+  const imageAt = (fullsize: string) =>
+    getBlueskyMedia({ ...image, images: [{ ...image.images[0], fullsize, thumb: `${cdn}/feed_thumbnail/plain/${did}/cid` }] })[0];
+
+  expect(imageAt(`${cdn}/feed_fullsize/plain/${did}/cid`)).toMatchObject({
+    src: `${cdn}/feed_fullsize/plain/${did}/cid@jpeg`,
+    thumbnail: `${cdn}/feed_thumbnail/plain/${did}/cid`,
+  });
+  expect(imageAt(`${cdn}/feed_fullsize/plain/${did}/cid@webp`).src).toBe(`${cdn}/feed_fullsize/plain/${did}/cid@jpeg`);
+  expect(imageAt(`${cdn}/feed_fullsize/plain/${did}/cid@jpeg`).src).toBe(`${cdn}/feed_fullsize/plain/${did}/cid@jpeg`);
+});
+
 test("retains video streams without requiring a thumbnail", () => {
   expect(getBlueskyMedia(video)[0]).toMatchObject({ kind: "video", src: video.playlist });
 });
