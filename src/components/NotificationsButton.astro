@@ -1,5 +1,8 @@
 ---
 import { NewsletterSignup } from "./NewsletterSignup";
 const hide = Astro.url.pathname.replace(/\/$/, "") === "/join";
+// The home page holds on one short screen while its feed loads, which would
+// read as the end of the page, so there the form opens on click only.
+const home = Astro.url.pathname === "/";
 ---
-{!hide && <NewsletterSignup client:load />}
+{!hide && <NewsletterSignup client:load openNearEnd={!home} />}
