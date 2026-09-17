@@ -17,6 +17,18 @@ function httpsUrl(value: unknown): string | undefined {
   } catch {}
 }
 
+/**
+ * A bare fullsize URL gets a heavily compressed WebP from the CDN. The JPEG
+ * rendition keeps the same resolution with far less loss, which is what a
+ * full-screen view needs.
+ */
+function fullsizeJpeg(url: string): string {
+  const parsed = new URL(url);
+  if (parsed.hostname !== "cdn.bsky.app" || !parsed.pathname.startsWith("/img/feed_fullsize/")) return url;
+  parsed.pathname = `${parsed.pathname.replace(/@[a-z]+$/, "")}@jpeg`;
+  return parsed.href;
+}
+
 /** Follow the same media order as the embed, including quoted posts. */
 export function getBlueskyMedia(value: unknown): BlueskyMedia[] {
   const embed = asRecord(value);
@@ -24,7 +36,8 @@ export function getBlueskyMedia(value: unknown): BlueskyMedia[] {
   if (embed.$type === "app.bsky.embed.images#view" && Array.isArray(embed.images)) {
     return embed.images.flatMap((value) => {
       const image = asRecord(value);
-      const src = httpsUrl(image?.fullsize);
+      const fullsize = httpsUrl(image?.fullsize);
+      const src = fullsize && fullsizeJpeg(fullsize);
       const thumbnail = httpsUrl(image?.thumb);
       const ratio = asRecord(image?.aspectRatio);
       return src && thumbnail
