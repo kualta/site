@@ -117,5 +117,17 @@ Astro.response.headers.set("cache-control", "no-store");
       scroll-snap-align: start;
     }
 
+    /* until the first rows arrive there is only a skeleton below, so the feed
+       takes no room and the page is one screen with nothing to scroll to; the
+       link above drops its pending mark once activity loads, which lets it in.
+       The collapsed feed is no resting place either, or the page snaps down to
+       it the moment it grows */
+    html:has([data-home-activity-pending]) #activity {
+      height: 0;
+      padding-block: 0;
+      overflow: hidden;
+      scroll-snap-align: none;
+    }
+
   </style>
 </BaseLayout>

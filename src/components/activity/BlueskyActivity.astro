@@ -173,8 +173,11 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     margin-block-start: 0.5rem;
   }
 
+  /* the item is the button that opens the viewer, so it takes the image's
+     radius for its focus ring to follow the corners */
   .site-bluesky-card .bluesky-post-container .image-grid-item {
     background-color: transparent;
+    border-radius: var(--bluesky-radius-md);
   }
 
   .site-bluesky-card .bluesky-post-container .image-grid-item img {

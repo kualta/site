@@ -38,6 +38,9 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
   }
   .site-bluesky-card button[data-media-open].media-container { cursor: pointer; }
   .site-bluesky-card button[data-media-open]:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
+  /* A lone portrait image leaves most of its button empty, so the ring traces the image instead. */
+  .site-bluesky-card .image-grid--1 button[data-media-open]:focus-visible { outline: none; }
+  .site-bluesky-card .image-grid--1 button[data-media-open]:focus-visible img { outline: 2px solid currentColor; outline-offset: -3px; }
   .site-bluesky-card .bluesky-post-container .play-button {
     width: 2.75rem; height: 2.75rem;
     border: 1px solid rgb(255 255 255 / 25%);
