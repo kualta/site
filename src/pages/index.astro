@@ -77,7 +77,15 @@ Astro.response.headers.set("cache-control", "no-store");
   </button>
 
   <script>
+    import { holdFirstScreen } from "@/scripts/first-screen-scroll";
+
     document.addEventListener("astro:page-load", () => {
+      const feed = document.getElementById("activity");
+      if (feed) {
+        const release = holdFirstScreen(feed);
+        document.addEventListener("astro:before-swap", release, { once: true });
+      }
+
       const button = document.querySelector<HTMLButtonElement>(".feed-back-top");
       if (!button) return;
       button.addEventListener("click", () => {
