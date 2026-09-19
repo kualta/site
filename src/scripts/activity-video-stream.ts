@@ -12,6 +12,23 @@ function levelLabel(level: Level): string {
   return size ? `${size}p` : `${Math.round(level.bitrate / 1000)} kbps`;
 }
 
+/**
+ * A feed preview is muted, small and may never be watched, so it takes the
+ * rendition that fits the card and buffers only a few seconds ahead.
+ */
+export function createPreviewStream(HlsPlayer: typeof Hls): Hls {
+  const hls = new HlsPlayer({
+    capLevelToPlayerSize: true,
+    maxBufferLength: 10,
+    startLevel: bandwidthEstimate === undefined ? -1 : HlsPlayer.DefaultConfig.startLevel,
+  });
+  if (bandwidthEstimate !== undefined) hls.bandwidthEstimate = bandwidthEstimate;
+  hls.on(HlsPlayer.Events.FRAG_LOADED, () => {
+    bandwidthEstimate = hls.bandwidthEstimate;
+  });
+  return hls;
+}
+
 export function createVideoStream(HlsPlayer: typeof Hls, frame: HTMLElement): Hls {
   const quality = frame.querySelector<HTMLSelectElement>(".video-quality")!;
   const hls = new HlsPlayer({
