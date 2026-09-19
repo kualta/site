@@ -11,6 +11,8 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
 
 <template id="activity-preview-play"><FiPlay size={16} aria-hidden="true" /></template>
 
+<template id="activity-preview-muted"><span class="preview-muted" aria-hidden="true"><FiVolumeX size={14} /></span></template>
+
 <template id="activity-video-player">
   <div class="activity-video-player" data-paused="true">
     <span class="video-loading" role="status" hidden>Loading…</span>
@@ -49,6 +51,23 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
   }
   .site-bluesky-card .play-button svg, .video-toggle [data-play-icon] svg { transform: translateX(1px); }
   .site-bluesky-card button[data-media-open]:hover .play-button { background: rgb(45 45 45 / 80%); }
+  /* The feed video plays itself over its own thumbnail, and hands the frame back if it stalls. */
+  .activity-video-preview {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; opacity: 0; transition: opacity 260ms ease;
+  }
+  [data-preview-playing] .activity-video-preview { opacity: 1; }
+  .site-bluesky-card .bluesky-post-container .play-button { transition: opacity 200ms ease; }
+  /* Once it runs, the sound is what the button offers, so the play mark steps aside for it. */
+  [data-preview-playing] .play-button { opacity: 0; }
+  .preview-muted {
+    position: absolute; z-index: 1; inset: auto 0.5rem 0.5rem auto;
+    display: grid; place-items: center; width: 1.875rem; height: 1.875rem;
+    border: 1px solid rgb(255 255 255 / 25%); border-radius: 50%;
+    background: rgb(28 28 28 / 60%); color: #f4f1ed;
+    opacity: 0; backdrop-filter: blur(8px); transition: opacity 200ms ease;
+  }
+  [data-preview-playing] .preview-muted { opacity: 1; }
   .activity-media-viewer {
     position: fixed; inset: 0; margin: 0; padding: 0;
     width: 100vw; height: 100dvh; max-width: none; max-height: none;
@@ -137,6 +156,7 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
   }
   @media (prefers-reduced-motion: reduce) {
     .viewer-round, .activity-media-viewer:has(video) .video-controls { transition: none; }
+    .activity-video-preview, .preview-muted, .site-bluesky-card .bluesky-post-container .play-button { transition: none; }
   }
 </style>
 
@@ -145,6 +165,14 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
   import { animate } from "motion";
   import { initializeVideoControls } from "@/scripts/activity-video-controls";
   import { createVideoStream } from "@/scripts/activity-video-stream";
+  import {
+    getPreviewTime,
+    registerVideoPreview,
+    releaseVideoPreviews,
+    reobserveVideoPreviews,
+    resumeVideoPreviews,
+    suspendVideoPreviews,
+  } from "@/scripts/activity-video-preview";
   import type { BlueskyMedia } from "@/lib/activity/bluesky-media";
 
   let cleanupPlayback: (() => void) | undefined;
@@ -176,6 +204,8 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
     let transition: ReturnType<typeof animate> | undefined;
     let closing = false;
     let playerRect: DOMRect | undefined;
+    // The feed copy was already running, so the viewer carries on from where it was.
+    let resumeAt = getPreviewTime(trigger);
 
     function thumbnailTransform(rect: DOMRect): { x: number; y: number; scale: number } {
       const destination = playerRect!;
@@ -241,8 +271,17 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
       const video = document.createElement("video");
       video.controls = false;
       video.playsInline = true;
+      video.muted = false;
       video.setAttribute("aria-label", item.alt || "Bluesky video");
       if (item.thumbnail) video.poster = item.thumbnail;
+      const startAt = resumeAt;
+      resumeAt = undefined;
+      if (startAt !== undefined) {
+        // A preview about to loop would otherwise open the viewer on its last frame.
+        video.addEventListener("loadedmetadata", () => {
+          if (startAt < video.duration - 0.5) video.currentTime = startAt;
+        }, { once: true });
+      }
       let hls: Hls | undefined;
       cleanupPlayback = () => {
         releaseControls();
@@ -273,7 +312,12 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
         } else {
           throw new Error("HLS unavailable");
         }
-        void video.play().catch(() => {});
+        // Sound is the point of opening the video, but a browser that withholds
+        // it should still play rather than sit on a frozen poster.
+        void video.play().catch(() => {
+          video.muted = true;
+          return video.play().catch(() => {});
+        });
       } catch (cause) {
         console.error("Unable to initialize activity video", cause);
         if (generation === currentGeneration) error.hidden = false;
@@ -302,8 +346,10 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
       cleanupPlayback?.();
       cleanupPlayback = undefined;
       content.replaceChildren();
+      resumeVideoPreviews();
       if (trigger.isConnected) trigger.focus();
     };
+    suspendVideoPreviews();
     dialog.showModal();
     void show();
     if (!reducedMotion && thumbnailRect.width > 0) {
@@ -319,7 +365,10 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
 
   class BlueskyMediaElement extends HTMLElement {
     connectedCallback(): void {
-      if (this.dataset.ready) return;
+      if (this.dataset.ready) {
+        reobserveVideoPreviews(this);
+        return;
+      }
       this.dataset.ready = "true";
       const items: BlueskyMedia[] = JSON.parse(this.dataset.media || "[]");
       const videos = items.filter((item) => item.kind === "video");
@@ -350,14 +399,24 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
           const previewPlay = button.querySelector(".play-button");
           const previewIcon = document.querySelector<HTMLTemplateElement>("#activity-preview-play");
           if (previewPlay && previewIcon) previewPlay.replaceChildren(previewIcon.content.cloneNode(true));
+          if (item.kind === "video") {
+            const muted = document.querySelector<HTMLTemplateElement>("#activity-preview-muted");
+            if (muted) button.append(muted.content.cloneNode(true));
+          }
           button.onclick = () => openViewer(items, items.indexOf(item), button);
           button.onpointerenter = () => preloadImage(item);
           button.onfocus = () => preloadImage(item);
           target.replaceWith(button);
+          if (item.kind === "video") registerVideoPreview(button, item);
         }
         // The package wraps the entire image grid in an external post link.
         if (anchor.querySelector("[data-media-open]")) anchor.replaceWith(...anchor.childNodes);
       }
+    }
+
+    // The feed drops rows as it polls, and a dropped row must not keep a stream alive.
+    disconnectedCallback(): void {
+      releaseVideoPreviews(this);
     }
   }
   if (!customElements.get("bluesky-media")) customElements.define("bluesky-media", BlueskyMediaElement);
@@ -366,5 +425,6 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
     generation++;
     cleanupPlayback?.();
     cleanupPlayback = undefined;
+    releaseVideoPreviews(document);
   });
 </script>
