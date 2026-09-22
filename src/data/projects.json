@@ -315,5 +315,19 @@
       "CUDA"
     ],
     "relevance": 108
+  },
+  {
+    "id": 26,
+    "name": "ball",
+    "description": "real life 8 ball",
+    "link": "https://real8ball.com",
+    "language": "TypeScript",
+    "date": "2026-09-21",
+    "status": "complete",
+    "tech_stack": [
+      "Three.js",
+      "Cloudflare Workers"
+    ],
+    "relevance": 117
   }
 ]
