@@ -1,6 +1,6 @@
-import { AppBskyFeedPost, RichText } from "@atproto/api";
+import { AppBskyFeedPost } from "@atproto/api";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import BlueskyLogin from "./BlueskyLogin";
+import BlueskyComposer from "./BlueskyComposer";
 import {
   getBlueskyAgent,
   getBlueskyAuthSnapshot,
@@ -33,7 +33,26 @@ export default function ArticleComments({ url, title }: { url: string; title: st
   const pending = useRef(new Map<string, CommentPost>());
   const textarea = useRef<HTMLTextAreaElement>(null);
   const generation = useRef(0);
-  const length = new RichText({ text: text.trim() }).graphemeLength;
+  const submitting = useRef(false);
+
+  const draftKey = `bluesky-comment-draft:${url}`;
+  useEffect(() => {
+    try {
+      setText(sessionStorage.getItem(draftKey) ?? "");
+    } catch {
+      /* Storage may be unavailable. */
+    }
+  }, [draftKey]);
+
+  function updateDraft(value: string) {
+    setText(value);
+    try {
+      if (value) sessionStorage.setItem(draftKey, value);
+      else sessionStorage.removeItem(draftKey);
+    } catch {
+      /* Keep the editable draft in memory. */
+    }
+  }
 
   async function load(more = false) {
     const request = ++generation.current;
@@ -70,7 +89,8 @@ export default function ArticleComments({ url, title }: { url: string; title: st
 
   async function publish(event: React.FormEvent) {
     event.preventDefault();
-    if (publishing) return;
+    if (submitting.current) return;
+    submitting.current = true;
     setPublishing(true);
     setError("");
     setNotice("");
@@ -89,12 +109,13 @@ export default function ArticleComments({ url, title }: { url: string; title: st
       };
       pending.current.set(published.uri, published);
       setPosts((previous) => mergeComments([published], previous));
-      setText("");
+      updateDraft("");
       setParent(undefined);
       setNotice("Posted publicly on Bluesky. It may take a moment to appear for other readers.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Your comment could not be posted. Try again.");
     } finally {
+      submitting.current = false;
       setPublishing(false);
     }
   }
@@ -122,36 +143,27 @@ export default function ArticleComments({ url, title }: { url: string; title: st
 
   return (
     <section className="article-comments" aria-label="Comments">
-      <BlueskyLogin label="Log in to comment" fullWidth />
-      {auth.agent && (
-        <form onSubmit={publish} className="comment-form">
-          {parent && (
+      <BlueskyComposer
+        text={text}
+        onChange={updateDraft}
+        onSubmit={publish}
+        busy={publishing}
+        label={parent ? "Your reply" : "Your comment"}
+        placeholder="Join the conversation…"
+        loginLabel="Log in to comment"
+        submitLabel={parent ? "Reply" : "Comment"}
+        textareaRef={textarea}
+        context={
+          parent && (
             <div className="comment-reply-context">
               Replying to @{parent.author.handle}{" "}
               <button type="button" className="comments-text-button" onClick={() => setParent(undefined)}>
                 Cancel reply
               </button>
             </div>
-          )}
-          <label htmlFor="article-comment">{parent ? "Your reply" : "Your comment"}</label>
-          <textarea
-            id="article-comment"
-            ref={textarea}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            rows={3}
-            placeholder="Join the conversation…"
-            disabled={publishing}
-            aria-describedby="comment-public-notice"
-          />
-          <div className="comment-form-footer">
-            <span id="comment-public-notice">Public on Bluesky · {length}/300</span>
-            <button type="submit" className="comment-submit" disabled={publishing || length < 1 || length > 300}>
-              {publishing ? "Posting…" : parent ? "Post reply publicly" : "Post comment publicly"}
-            </button>
-          </div>
-        </form>
-      )}
+          )
+        }
+      />
       {error && (
         <p role="alert" className="comment-error">
           {error}{" "}
