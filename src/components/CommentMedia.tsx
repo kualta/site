@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { AppBskyEmbedImages, AppBskyEmbedVideo } from "@atproto/api";
+import { AppBskyEmbedGallery, AppBskyEmbedImages, AppBskyEmbedVideo } from "@atproto/api";
 import type { CommentPost } from "@/lib/bluesky/comments";
 function Video({ playlist, poster }: { playlist: string; poster?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -27,10 +27,15 @@ function Video({ playlist, poster }: { playlist: string; poster?: string }) {
   return <video ref={ref} controls playsInline poster={poster} className="mt-3 w-full rounded-lg" />;
 }
 export default function CommentMedia({ post }: { post: CommentPost }) {
-  if (AppBskyEmbedImages.isView(post.embed))
+  const images = AppBskyEmbedImages.isView(post.embed)
+    ? post.embed.images
+    : AppBskyEmbedGallery.isView(post.embed)
+      ? post.embed.items.filter(AppBskyEmbedGallery.isViewImage).map((image) => ({ ...image, thumb: image.thumbnail }))
+      : [];
+  if (images.length)
     return (
       <div className="mt-3 grid grid-cols-2 gap-2">
-        {post.embed.images.map((image) => (
+        {images.map((image) => (
           <a key={image.fullsize} href={image.fullsize} target="_blank" rel="noopener noreferrer">
             <img src={image.thumb} alt={image.alt} loading="lazy" className="w-full rounded-lg" />
           </a>

@@ -61,17 +61,19 @@ export default function BlueskyComposer({
       [...images.map((image) => image.file), ...files].some((file) => file.type.startsWith("video/")) &&
       images.length + files.length > 1
     ) {
-      setMediaError("Attach one video or up to four images.");
+      setMediaError("Attach one video or up to ten images.");
       return;
     }
     if (images.length + files.length > MAX_IMAGES) {
-      setMediaError("Attach up to four images.");
+      setMediaError("Attach up to ten images.");
       return;
     }
     setPreparing(true);
     setMediaError("");
     try {
-      onImagesChange([...images, ...(await Promise.all(files.map(sanitizeAttachment)))]);
+      const prepared: ComposerAttachment[] = [];
+      for (const file of files) prepared.push(await sanitizeAttachment(file));
+      onImagesChange([...images, ...prepared]);
     } catch (error) {
       setMediaError(error instanceof Error ? error.message : "Could not prepare images.");
     } finally {

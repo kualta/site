@@ -55,7 +55,7 @@ real public writes require a visitor to finish sign-in in the browser.
 
 ## Media attachments
 
-The shared feed/comment composer accepts up to four JPEG, PNG, or WebP images,
+The shared feed/comment composer accepts up to ten JPEG, PNG, or WebP images,
 or one MP4, MOV, or WebM video. Controls sit to the left of the submit button.
 Attachments have previews, editable descriptions, and removal controls. Image-only
 posts are allowed. Failed writes retain attachments. Files stay in memory and are
@@ -89,3 +89,7 @@ without shifting sample offsets, and rejecting unsupported/unprepared uploads.
 A temporary local browser harness verified generated PNG/WebM sanitization,
 playable MP4 output, renamed upload payloads, and comment URL matching using a
 mock agent, without publishing public test posts.
+
+Image attachments use the legacy image embed for one to four images and a gallery
+embed for five to ten. Ten is the gallery authoring limit recommended by Bluesky.
+Image preparation runs sequentially to bound memory usage for larger selections.
