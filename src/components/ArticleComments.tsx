@@ -51,7 +51,7 @@ export default function ArticleComments({ url, title }: { url: string; title: st
         (more ? mergeComments(previous, incoming) : incoming).filter((post) => !deleted.current.has(post.uri)),
       );
       setCursor(result.cursor);
-      if (result.incomplete) setError("Some replies could not load. Refresh to try again.");
+      if (result.incomplete) setError("Some replies could not load. Retry loading to try again.");
     } catch {
       if (request === generation.current) setError("Comments could not load from Bluesky. Please try again.");
     } finally {
@@ -124,14 +124,8 @@ export default function ArticleComments({ url, title }: { url: string; title: st
     <section className="article-comments" aria-labelledby="comments-heading">
       <div className="comments-heading-row">
         <h2 id="comments-heading">Comments</h2>
-        <button type="button" className="comments-text-button" onClick={() => void load()} disabled={loading}>
-          Refresh
-        </button>
       </div>
-      <p className="comments-description">
-        A conversation on Bluesky. Comments are public posts linked to this article, with replies from Bluesky included.
-      </p>
-      <BlueskyLogin />
+      <BlueskyLogin label="Log in to comment" />
       {auth.agent && (
         <form onSubmit={publish} className="comment-form">
           {parent && (
@@ -178,9 +172,6 @@ export default function ArticleComments({ url, title }: { url: string; title: st
         <p role="status" className="comments-description">
           Loading comments…
         </p>
-      )}
-      {!loading && !error && posts.length === 0 && (
-        <p className="comments-empty">No comments yet. Start the conversation.</p>
       )}
       <div className="comments-list" aria-busy={loading}>
         {posts.map((post) => {
