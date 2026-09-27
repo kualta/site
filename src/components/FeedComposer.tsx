@@ -74,13 +74,13 @@ export default function FeedComposer() {
           disabled={busy}
           aria-describedby={`${id}-notice`}
           style={{ background: "transparent", color: "inherit" }}
-          className="block w-full resize-y border-0 p-0 text-base leading-relaxed rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+          className="block w-full resize-y rounded-lg border-0 p-3 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
         />
       </form>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p id={`${id}-notice`} className="text-xs text-secondary-text">
-          {auth.profile ? `Public on @${auth.profile.handle}` : "Post to your Bluesky profile"}
-          <span className="ml-2 tabular-nums">{length}/300</span>
+          {auth.profile && <span className="mr-2">Public on @{auth.profile.handle}</span>}
+          <span className="tabular-nums">{length}/300</span>
         </p>
         {auth.agent ? (
           <button
