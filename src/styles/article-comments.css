@@ -1,15 +1,10 @@
-.article-comments { border-top: 1px solid rgb(128 128 128 / .25); margin-top: 2rem; padding: 2rem .5rem; font-size: .95rem; }
-.comments-heading-row, .comment-author-row, .comment-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.comments-heading-row h2 { font-size: 1.5rem; font-weight: 600; }
-.comments-description, .comments-empty { opacity: .7; margin: .75rem 0 1.25rem; line-height: 1.6; }
+.article-comments { position: relative; margin-top: 2rem; padding: 2rem .5rem; font-size: .95rem; }
+.comment-author-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.article-comments::before { content: ""; position: absolute; top: 0; left: 25%; width: 50%; border-top: 1px solid rgb(128 128 128 / .25); }
+.comments-description { opacity: .7; margin: .75rem 0 1.25rem; line-height: 1.6; }
 .comments-text-button, .comment-actions a { text-decoration: underline; text-underline-offset: 3px; font-size: .85rem; }
 .article-comments button:disabled { opacity: .45; cursor: default; }
 .article-comments button:focus-visible, .article-comments a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
-.comment-form { display: grid; gap: .5rem; margin: 1.25rem 0; }
-.comment-form textarea { width: 100%; resize: vertical; border: 1px solid rgb(128 128 128 / .4); border-radius: .65rem; padding: .75rem; background: transparent; color: inherit; }
-.comment-form textarea:focus { outline: 2px solid currentColor; outline-offset: 2px; }
-.comment-form-footer { font-size: .75rem; flex-wrap: wrap; }
-.comment-submit { border: 1px solid rgb(128 128 128 / .4); border-radius: .5rem; padding: .5rem .75rem; font-size: .85rem; }
 .comment-error { margin: 1rem 0; color: #be3434; }
 .dark .comment-error { color: #ff9999; }
 .article-comment { padding: 1.25rem 0; border-bottom: 1px solid rgb(128 128 128 / .18); }
