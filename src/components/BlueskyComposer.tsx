@@ -1,10 +1,11 @@
 import { blueskyProfileUrl } from "@/lib/bluesky/urls";
-import { useId, useSyncExternalStore, type FormEvent, type ReactNode, type Ref } from "react";
+import { useId, useLayoutEffect, useRef, useSyncExternalStore, type FormEvent, type ReactNode, type Ref } from "react";
 import { RichText } from "@atproto/api";
 import BlueskyLogin from "./BlueskyLogin";
 import { getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 
 export default function BlueskyComposer({
+  className = "mb-6",
   text,
   onChange,
   onSubmit,
@@ -17,6 +18,7 @@ export default function BlueskyComposer({
   context,
   children,
 }: {
+  className?: string;
   text: string;
   onChange: (text: string) => void;
   onSubmit: (event: FormEvent) => void;
@@ -31,17 +33,38 @@ export default function BlueskyComposer({
 }) {
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot);
   const id = useId();
+  const input = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    const element = input.current;
+    if (!element) return;
+    const resize = () => {
+      element.style.height = "auto";
+      element.style.height = `${element.scrollHeight}px`;
+    };
+    resize();
+    let width = element.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth !== width) {
+        width = element.clientWidth;
+        resize();
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [text, auth.agent]);
   const length = new RichText({ text: text.trim() }).graphemeLength;
+  const submitDisabled = busy || length === 0 || length > 300;
+
   if (!auth.agent) {
     return (
-      <div className="mb-6">
+      <div className={className}>
         <BlueskyLogin fullWidth label={loginLabel} />
       </div>
     );
   }
 
   return (
-    <section className="mb-6 rounded-xl bg-secondary p-4 dark:bg-dark-secondary" aria-label={label}>
+    <section className={`${className} rounded-xl bg-secondary p-4 dark:bg-dark-secondary`} aria-label={label}>
       <div className={`flex min-h-10 items-center gap-3 ${auth.agent ? "mb-4" : ""}`} aria-label="Post author">
         {auth.profile ? (
           <a
@@ -85,15 +108,24 @@ export default function BlueskyComposer({
           </label>
           <textarea
             id={id}
-            ref={textareaRef}
-            rows={3}
+            ref={(element) => {
+              input.current = element;
+              if (typeof textareaRef === "function") textareaRef(element);
+              else if (textareaRef) textareaRef.current = element;
+            }}
+            rows={1}
             placeholder={placeholder}
             value={text}
             onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              if (!submitDisabled && !event.repeat) event.currentTarget.form?.requestSubmit();
+            }}
             disabled={busy}
             aria-describedby={`${id}-count`}
             style={{ background: "transparent", color: "inherit" }}
-            className="block w-full resize-y rounded-lg border-0 p-3 pb-10 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
+            className="block w-full resize-none overflow-hidden rounded-lg border-0 p-3 pb-10 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
           />
           <span
             id={`${id}-count`}
@@ -109,8 +141,9 @@ export default function BlueskyComposer({
             <button
               type="submit"
               form={`${id}-form`}
-              disabled={busy || length === 0 || length > 300}
-              className="rounded-lg border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] px-4 py-2 text-sm disabled:opacity-50"
+              disabled={submitDisabled}
+              aria-keyshortcuts="Meta+Enter Control+Enter"
+              className="rounded-lg bg-text text-bg dark:bg-dark-text dark:text-dark-bg px-4 py-2 text-sm hover:opacity-80 disabled:opacity-50"
             >
               {busy ? "Posting…" : submitLabel}
             </button>

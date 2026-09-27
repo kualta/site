@@ -52,7 +52,14 @@ export default function FeedComposer() {
   }
 
   return (
-    <BlueskyComposer text={text} onChange={updateDraft} onSubmit={publish} busy={busy} label="Write a Bluesky post">
+    <BlueskyComposer
+      className=""
+      text={text}
+      onChange={updateDraft}
+      onSubmit={publish}
+      busy={busy}
+      label="Write a Bluesky post"
+    >
       {error && (
         <p role="alert" className="text-sm">
           {error}
