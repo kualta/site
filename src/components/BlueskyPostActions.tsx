@@ -1,7 +1,6 @@
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { RichText, type AppBskyFeedDefs } from "@atproto/api";
 import { FiHeart, FiMessageCircle, FiRepeat } from "react-icons/fi";
-import BlueskyLogin from "./BlueskyLogin";
 import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import { fetchInteractionPost, replyToPost, togglePostLike, togglePostRepost } from "@/lib/bluesky/interactions";
 
@@ -17,7 +16,6 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [showLogin, setShowLogin] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
   const [text, setText] = useState("");
   const inputId = useId();
@@ -48,10 +46,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
     setNotice("");
     try {
       const agent = await getBlueskyAgent();
-      if (!agent) {
-        setShowLogin(true);
-        return;
-      }
+      if (!agent) return;
       if (action === "reply") {
         await replyToPost(agent, uri, text);
         setText("");
@@ -67,6 +62,8 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
       setBusy(false);
     }
   }
+
+  if (!auth.agent) return null;
 
   return (
     <div className="px-3 pb-3" aria-label="Bluesky post actions">
@@ -103,10 +100,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           aria-expanded={replyOpen}
           aria-controls={`${inputId}-form`}
           disabled={busy || auth.loading || post?.viewer?.replyDisabled}
-          onClick={() => {
-            if (!auth.agent) setShowLogin(true);
-            else setReplyOpen(!replyOpen);
-          }}
+          onClick={() => setReplyOpen(!replyOpen)}
         >
           <FiMessageCircle size={18} aria-hidden="true" />
           {post?.replyCount ? ` ${post.replyCount}` : ""}
@@ -117,11 +111,6 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           </span>
         )}
       </div>
-      {showLogin && !auth.agent && (
-        <div className="pt-2">
-          <BlueskyLogin />
-        </div>
-      )}
       {replyOpen && auth.agent && (
         <form
           id={`${inputId}-form`}

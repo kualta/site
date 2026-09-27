@@ -61,7 +61,7 @@ export default function FeedComposer() {
 
   return (
     <section className="mb-6 rounded-xl bg-secondary p-4 dark:bg-dark-secondary" aria-label="Write a Bluesky post">
-      <div className="mb-4 flex min-h-10 items-center gap-3" aria-label="Post author">
+      <div className={`flex min-h-10 items-center gap-3 ${auth.agent ? "mb-4" : ""}`} aria-label="Post author">
         {auth.profile ? (
           <a
             className="flex min-w-0 items-center gap-3"
@@ -93,41 +93,50 @@ export default function FeedComposer() {
             </span>
           </a>
         ) : (
-          <BlueskyLogin />
+          <BlueskyLogin fullWidth />
         )}
       </div>
-      <form id={`${id}-form`} onSubmit={publish} className="space-y-3">
-        <label htmlFor={id} className="sr-only">
-          Your post
-        </label>
-        <textarea
-          id={id}
-          rows={3}
-          placeholder="What's on your mind?"
-          value={text}
-          onChange={(event) => updateDraft(event.target.value)}
-          disabled={busy}
-          aria-describedby={`${id}-notice`}
-          style={{ background: "transparent", color: "inherit" }}
-          className="block w-full resize-y rounded-lg border-0 p-3 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
-        />
-      </form>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <p id={`${id}-notice`} className="text-xs text-secondary-text">
-          {auth.profile && <span className="mr-2">Public on @{auth.profile.handle}</span>}
-          <span className="tabular-nums">{length}/300</span>
-        </p>
-        {auth.agent && (
-          <button
-            type="submit"
-            form={`${id}-form`}
-            disabled={busy || length === 0 || length > 300}
-            className="rounded-lg border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] px-4 py-2 text-sm disabled:opacity-50"
+      {auth.agent && (
+        <form id={`${id}-form`} onSubmit={publish} className="relative">
+          <label htmlFor={id} className="sr-only">
+            Your post
+          </label>
+          <textarea
+            id={id}
+            rows={3}
+            placeholder="What's on your mind?"
+            value={text}
+            onChange={(event) => updateDraft(event.target.value)}
+            disabled={busy}
+            aria-describedby={`${id}-count`}
+            style={{ background: "transparent", color: "inherit" }}
+            className="block w-full resize-y rounded-lg border-0 p-3 pb-10 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
+          />
+          <span
+            id={`${id}-count`}
+            className="pointer-events-none absolute bottom-3 right-5 text-xs tabular-nums text-secondary-text"
           >
-            {busy ? "Posting…" : "Post"}
-          </button>
-        )}
-      </div>
+            {length}/300
+          </span>
+        </form>
+      )}
+      {auth.agent && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p id={`${id}-notice`} className="text-xs text-secondary-text">
+            {auth.profile && <span className="mr-2">Public on @{auth.profile.handle}</span>}
+          </p>
+          {auth.agent && (
+            <button
+              type="submit"
+              form={`${id}-form`}
+              disabled={busy || length === 0 || length > 300}
+              className="rounded-lg border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] px-4 py-2 text-sm disabled:opacity-50"
+            >
+              {busy ? "Posting…" : "Post"}
+            </button>
+          )}
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-sm">
           {error}

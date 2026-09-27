@@ -7,16 +7,21 @@ import {
   subscribeBlueskyAuth,
 } from "@/lib/bluesky/auth";
 
-export default function BlueskyLogin({ compact = false }: { compact?: boolean }) {
+export default function BlueskyLogin({
+  compact = false,
+  fullWidth = false,
+}: { compact?: boolean; fullWidth?: boolean }) {
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot);
   const dialog = useRef<HTMLDialogElement>(null);
   const id = useId();
   const [handle, setHandle] = useState("");
   return (
-    <div className="bluesky-login text-sm tracking-normal">
+    <div className={`bluesky-login text-sm tracking-normal ${fullWidth ? "w-full" : ""}`}>
       <button
         type="button"
-        className="rounded-lg border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] px-3 py-2 hover:bg-secondary disabled:opacity-50"
+        className={`rounded-lg border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] px-3 py-2 hover:bg-secondary disabled:opacity-50 ${
+          fullWidth ? "w-full" : ""
+        }`}
         onClick={() => dialog.current?.showModal()}
         disabled={auth.loading}
       >
