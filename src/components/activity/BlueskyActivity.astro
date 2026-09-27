@@ -45,6 +45,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
         <bluesky-media data-media={JSON.stringify(getBlueskyMedia(event.post.embed))}>
           <BlueskyPost post={event.post} />
         </bluesky-media>
+        <bluesky-post-actions data-uri={event.uri} />
         <a
           href={event.url}
           target="_blank"

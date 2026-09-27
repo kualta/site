@@ -1,0 +1,25 @@
+.article-comments { border-top: 1px solid rgb(128 128 128 / .25); margin-top: 2rem; padding: 2rem .5rem; font-size: .95rem; }
+.comments-heading-row, .comment-author-row, .comment-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.comments-heading-row h2 { font-size: 1.5rem; font-weight: 600; }
+.comments-description, .comments-empty { opacity: .7; margin: .75rem 0 1.25rem; line-height: 1.6; }
+.comments-text-button, .comment-actions a { text-decoration: underline; text-underline-offset: 3px; font-size: .85rem; }
+.article-comments button:disabled { opacity: .45; cursor: default; }
+.article-comments button:focus-visible, .article-comments a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.comment-form { display: grid; gap: .5rem; margin: 1.25rem 0; }
+.comment-form textarea { width: 100%; resize: vertical; border: 1px solid rgb(128 128 128 / .4); border-radius: .65rem; padding: .75rem; background: transparent; color: inherit; }
+.comment-form textarea:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.comment-form-footer { font-size: .75rem; flex-wrap: wrap; }
+.comment-submit { border: 1px solid rgb(128 128 128 / .4); border-radius: .5rem; padding: .5rem .75rem; font-size: .85rem; }
+.comment-error { margin: 1rem 0; color: #be3434; }
+.dark .comment-error { color: #ff9999; }
+.article-comment { padding: 1.25rem 0; border-bottom: 1px solid rgb(128 128 128 / .18); }
+.comment-author { display: flex; gap: .5rem; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+.comment-author img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.comment-handle { display: block; opacity: .6; font-size: .75rem; }
+.comment-date { font-size: .75rem; opacity: .65; flex-shrink: 0; }
+.comment-body { margin: .75rem 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.comment-actions { display: flex; gap: 1rem; opacity: .75; }
+.comment-reply-context { font-size: .8rem; opacity: .7; margin-top: .5rem; }
+.comment-reply-context button { margin-left: .5rem; }
+.comments-load-more { margin-top: 1.25rem; }
+@media (max-width: 420px) { .comment-author-row { align-items: flex-start; gap: .5rem; } .comment-date { font-size: .65rem; } }
