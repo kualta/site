@@ -2,6 +2,8 @@ import type { BrowserOAuthClientOptions } from "@atproto/oauth-client-browser";
 
 export const BLUESKY_SCOPE = [
   "atproto",
+  "blob:image/png",
+  "blob:video/mp4",
   "repo:app.bsky.feed.like?action=create&action=delete",
   "repo:app.bsky.feed.repost?action=create&action=delete",
   "repo:app.bsky.feed.post?action=create&action=delete",

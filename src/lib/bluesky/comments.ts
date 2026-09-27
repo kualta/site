@@ -1,3 +1,4 @@
+import { uploadMedia, type ComposerAttachment } from "./media";
 import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import { BskyAgent, RichText, AppBskyFeedPost, AppBskyFeedDefs } from "@atproto/api";
 import { fetchInteractionPost } from "./interactions";
@@ -128,14 +129,26 @@ export async function publishArticleComment(
   url: string,
   title: string,
   parent?: CommentPost,
+  images: ComposerAttachment[] = [],
 ) {
   const freshParent = parent ? await fetchInteractionPost(agent, parent.uri) : undefined;
   if (freshParent?.viewer?.replyDisabled) throw new Error("Replies are disabled for this post.");
   if (freshParent && !visibleComment(freshParent)) throw new Error("This conversation is unavailable.");
-  const record = commentRecord(text, url, title, freshParent);
+  // Media replaces the external card, so retain the exact article link as a text facet.
+  const linkedText = images.length ? `${text.trim()}${text.trim() ? "\n\n" : ""}${url}` : text;
+  const record = commentRecord(linkedText, url, title, freshParent);
   const richText = new RichText({ text: record.text });
   await richText.detectFacets(publicCommentsAgent);
   record.facets = richText.facets;
+  if (images.length) {
+    const byteEnd = new TextEncoder().encode(record.text).length;
+    const byteStart = byteEnd - new TextEncoder().encode(url).length;
+    record.facets = [
+      ...(record.facets ?? []).filter((facet) => facet.index.byteEnd <= byteStart),
+      { index: { byteStart, byteEnd }, features: [{ $type: "app.bsky.richtext.facet#link", uri: url }] },
+    ];
+    record.embed = await uploadMedia(agent, images);
+  }
   const result = await agent.post(record);
   return { ...result, record };
 }

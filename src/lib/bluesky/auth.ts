@@ -4,6 +4,7 @@ import { BLUESKY_SCOPE, blueskyClientMetadata } from "./metadata";
 
 export interface BlueskyAuthSnapshot {
   agent: Agent | null;
+  canUploadMedia?: boolean;
   loading: boolean;
   error: string | null;
   profile: { did: string; handle: string; displayName?: string; avatar?: string } | null;
@@ -77,7 +78,12 @@ async function initialize() {
         .getProfile({ actor: result.session.sub })
         .then(({ data }) => data)
         .catch(() => ({ did: result.session.sub, handle: result.session.sub }));
-      update({ agent, profile, loading: false, error: null });
+      const { scope } = await result.session.getTokenInfo();
+      const permissions = scope.split(" ");
+      const canUploadMedia =
+        permissions.includes("blob:*/*") ||
+        ["blob:image/png", "blob:video/mp4"].every((value) => permissions.includes(value));
+      update({ agent, profile, canUploadMedia, loading: false, error: null });
       if (window.location.pathname === "/auth/bluesky") {
         window.location.replace(safeReturnPath(result.state));
       }
