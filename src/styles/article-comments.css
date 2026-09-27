@@ -1,6 +1,6 @@
-.article-comments { border-top: 1px solid rgb(128 128 128 / .25); margin-top: 2rem; padding: 2rem .5rem; font-size: .95rem; }
-.comments-heading-row, .comment-author-row, .comment-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.comments-heading-row h2 { font-size: 1.5rem; font-weight: 600; }
+.article-comments { position: relative; margin-top: 2rem; padding: 2rem .5rem; font-size: .95rem; }
+.comment-author-row, .comment-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.article-comments::before { content: ""; position: absolute; top: 0; left: 25%; width: 50%; border-top: 1px solid rgb(128 128 128 / .25); }
 .comments-description, .comments-empty { opacity: .7; margin: .75rem 0 1.25rem; line-height: 1.6; }
 .comments-text-button, .comment-actions a { text-decoration: underline; text-underline-offset: 3px; font-size: .85rem; }
 .article-comments button:disabled { opacity: .45; cursor: default; }

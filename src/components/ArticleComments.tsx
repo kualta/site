@@ -121,11 +121,8 @@ export default function ArticleComments({ url, title }: { url: string; title: st
   }
 
   return (
-    <section className="article-comments" aria-labelledby="comments-heading">
-      <div className="comments-heading-row">
-        <h2 id="comments-heading">Comments</h2>
-      </div>
-      <BlueskyLogin label="Log in to comment" />
+    <section className="article-comments" aria-label="Comments">
+      <BlueskyLogin label="Log in to comment" fullWidth />
       {auth.agent && (
         <form onSubmit={publish} className="comment-form">
           {parent && (
