@@ -25,7 +25,7 @@ export default function BlueskyLogin({ compact = false }: { compact?: boolean })
       <dialog
         ref={dialog}
         aria-labelledby={`${id}-title`}
-        className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] bg-primary dark:bg-dark-primary p-6 text-text dark:text-dark-text shadow-xl backdrop:bg-[rgba(0,0,0,0.5)]"
+        className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] bg-secondary dark:bg-dark-primary p-6 text-text dark:text-dark-text shadow-xl backdrop:bg-[rgba(0,0,0,0.5)]"
       >
         <div className="flex items-center justify-between gap-4 mb-4">
           <h2 id={`${id}-title`} className="text-xl">
