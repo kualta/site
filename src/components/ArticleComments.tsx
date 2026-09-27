@@ -1,3 +1,5 @@
+import CommentMedia from "./CommentMedia";
+import type { ComposerAttachment } from "@/lib/bluesky/media";
 import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import { AppBskyFeedPost } from "@atproto/api";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -27,6 +29,7 @@ export default function ArticleComments({ url, title }: { url: string; title: st
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [text, setText] = useState("");
+  const [images, setImages] = useState<ComposerAttachment[]>([]);
   const [parent, setParent] = useState<CommentPost>();
   const [publishing, setPublishing] = useState(false);
   const [deleting, setDeleting] = useState<string>();
@@ -98,7 +101,7 @@ export default function ArticleComments({ url, title }: { url: string; title: st
     try {
       const agent = await getBlueskyAgent();
       if (!agent || !auth.profile) throw new Error("Sign in to Bluesky before posting.");
-      const result = await publishArticleComment(agent, text, url, title, parent);
+      const result = await publishArticleComment(agent, text, url, title, parent, images);
       const { record } = result;
       // The successful repo write is authoritative, even before search indexing catches up.
       const published: CommentPost = {
@@ -111,6 +114,25 @@ export default function ArticleComments({ url, title }: { url: string; title: st
       pending.current.set(published.uri, published);
       setPosts((previous) => mergeComments([published], previous));
       updateDraft("");
+      setImages([]);
+      if (images.length)
+        void agent
+          .getPosts({ uris: [result.uri] })
+          .then(({ data }) => {
+            const hydrated = data.posts[0];
+            if (hydrated) {
+              pending.current.set(hydrated.uri, hydrated);
+              setPosts((previous) =>
+                mergeComments(
+                  [hydrated],
+                  previous.filter((post) => post.uri !== hydrated.uri),
+                ),
+              );
+            }
+          })
+          .catch(() => {
+            /* The published record is already available; media may still be processing. */
+          });
       setParent(undefined);
       setNotice("Posted publicly on Bluesky. It may take a moment to appear for other readers.");
     } catch (cause) {
@@ -145,6 +167,9 @@ export default function ArticleComments({ url, title }: { url: string; title: st
   return (
     <section className="article-comments" aria-label="Comments">
       <BlueskyComposer
+        mediaTextSuffix={url}
+        images={images}
+        onImagesChange={setImages}
         text={text}
         onChange={updateDraft}
         onSubmit={publish}
@@ -216,6 +241,7 @@ export default function ArticleComments({ url, title }: { url: string; title: st
               </div>
               {parentPost && <p className="comment-reply-context">Reply to @{parentPost.author.handle}</p>}
               <p className="comment-body">{record.text}</p>
+              <CommentMedia post={post} />
               <div className="comment-actions">
                 {auth.agent && !post.viewer?.replyDisabled && (
                   <button

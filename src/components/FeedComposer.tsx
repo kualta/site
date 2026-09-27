@@ -1,3 +1,4 @@
+import type { ComposerAttachment } from "@/lib/bluesky/media";
 import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import { useEffect, useRef, useState } from "react";
 import BlueskyComposer from "./BlueskyComposer";
@@ -6,6 +7,7 @@ import { publishProfilePost } from "@/lib/bluesky/compose";
 
 export default function FeedComposer() {
   const [text, setText] = useState("");
+  const [images, setImages] = useState<ComposerAttachment[]>([]);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
   const [error, setError] = useState("");
@@ -39,10 +41,11 @@ export default function FeedComposer() {
     try {
       const agent = await getBlueskyAgent();
       if (!agent) throw new Error("Log in with Bluesky to publish your post.");
-      const post = await publishProfilePost(agent, text);
+      const post = await publishProfilePost(agent, text, images);
       const [, , did, , rkey] = post.uri.split("/");
       setPublishedUrl(`${blueskyProfileUrl(did)}/post/${encodeURIComponent(rkey)}`);
       updateDraft("");
+      setImages([]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not publish your post. Please try again.");
     } finally {
@@ -53,6 +56,8 @@ export default function FeedComposer() {
 
   return (
     <BlueskyComposer
+      images={images}
+      onImagesChange={setImages}
       className=""
       text={text}
       onChange={updateDraft}

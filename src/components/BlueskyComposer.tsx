@@ -1,8 +1,20 @@
+import { FiImage, FiVideo } from "react-icons/fi";
+import ComposerMedia from "./ComposerMedia";
+import { sanitizeAttachment, MAX_IMAGES, type ComposerAttachment } from "@/lib/bluesky/media";
 import { blueskyProfileUrl } from "@/lib/bluesky/urls";
-import { useId, useLayoutEffect, useRef, useSyncExternalStore, type FormEvent, type ReactNode, type Ref } from "react";
+import {
+  useState,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useSyncExternalStore,
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { RichText } from "@atproto/api";
 import BlueskyLogin from "./BlueskyLogin";
-import { getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
+import { signIn, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 
 export default function BlueskyComposer({
   className = "mb-6",
@@ -17,7 +29,13 @@ export default function BlueskyComposer({
   textareaRef,
   context,
   children,
+  mediaTextSuffix = "",
+  images,
+  onImagesChange,
 }: {
+  mediaTextSuffix?: string;
+  images: ComposerAttachment[];
+  onImagesChange: (images: ComposerAttachment[]) => void;
   className?: string;
   text: string;
   onChange: (text: string) => void;
@@ -33,6 +51,34 @@ export default function BlueskyComposer({
 }) {
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot);
   const id = useId();
+  const picker = useRef<HTMLInputElement>(null);
+  const videoPicker = useRef<HTMLInputElement>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [mediaError, setMediaError] = useState("");
+  async function attach(files: File[]) {
+    if (preparing || busy) return;
+    if (
+      [...images.map((image) => image.file), ...files].some((file) => file.type.startsWith("video/")) &&
+      images.length + files.length > 1
+    ) {
+      setMediaError("Attach one video or up to four images.");
+      return;
+    }
+    if (images.length + files.length > MAX_IMAGES) {
+      setMediaError("Attach up to four images.");
+      return;
+    }
+    setPreparing(true);
+    setMediaError("");
+    try {
+      onImagesChange([...images, ...(await Promise.all(files.map(sanitizeAttachment)))]);
+    } catch (error) {
+      setMediaError(error instanceof Error ? error.message : "Could not prepare images.");
+    } finally {
+      setPreparing(false);
+    }
+  }
+
   const input = useRef<HTMLTextAreaElement | null>(null);
   useLayoutEffect(() => {
     const element = input.current;
@@ -52,8 +98,10 @@ export default function BlueskyComposer({
     observer.observe(element);
     return () => observer.disconnect();
   }, [text, auth.agent]);
-  const length = new RichText({ text: text.trim() }).graphemeLength;
-  const submitDisabled = busy || length === 0 || length > 300;
+  const length = new RichText({
+    text: text.trim() + (images.length ? `${text.trim() && mediaTextSuffix ? "\n\n" : ""}${mediaTextSuffix}` : ""),
+  }).graphemeLength;
+  const submitDisabled = busy || preparing || (length === 0 && images.length === 0) || length > 300;
 
   if (!auth.agent) {
     return (
@@ -102,7 +150,14 @@ export default function BlueskyComposer({
       </div>
       {auth.agent && context}
       {auth.agent && (
-        <form id={`${id}-form`} onSubmit={onSubmit} className="relative">
+        <form
+          id={`${id}-form`}
+          onSubmit={(event) => {
+            if (submitDisabled) event.preventDefault();
+            else onSubmit(event);
+          }}
+          className="relative"
+        >
           <label htmlFor={id} className="sr-only">
             {label}
           </label>
@@ -135,8 +190,89 @@ export default function BlueskyComposer({
           </span>
         </form>
       )}
+      {images.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {images.map((image, index) => (
+            <ComposerMedia
+              key={image.file.name}
+              image={image}
+              disabled={busy || preparing}
+              onRemove={() => onImagesChange(images.filter((_, i) => i !== index))}
+              onChange={(alt) => onImagesChange(images.map((value, i) => (i === index ? { ...value, alt } : value)))}
+            />
+          ))}
+        </div>
+      )}
+      {mediaError && (
+        <p role="alert" className="mt-2 text-sm">
+          {mediaError}
+        </p>
+      )}
       {auth.agent && (
-        <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              ref={picker}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              hidden
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void attach(files);
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Attach images"
+              title="Attach images"
+              disabled={
+                busy ||
+                preparing ||
+                images.length >= MAX_IMAGES ||
+                images.some((image) => image.file.type.startsWith("video/"))
+              }
+              onClick={() => {
+                if (!auth.canUploadMedia && auth.profile)
+                  void signIn(auth.profile.handle).catch((error) => setMediaError(String(error)));
+                else picker.current?.click();
+              }}
+              className="p-2 disabled:opacity-50"
+            >
+              <FiImage size={20} />
+            </button>
+            <input
+              ref={videoPicker}
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm"
+              hidden
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = "";
+                void attach(files);
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Attach video"
+              title="Attach video"
+              disabled={busy || preparing || images.length > 0}
+              onClick={() => {
+                if (!auth.canUploadMedia && auth.profile)
+                  void signIn(auth.profile.handle).catch((error) => setMediaError(String(error)));
+                else videoPicker.current?.click();
+              }}
+              className="p-2 disabled:opacity-50"
+            >
+              <FiVideo size={20} />
+            </button>
+          </div>
+          {preparing && (
+            <span role="status" className="text-xs">
+              Preparing media…
+            </span>
+          )}
           {auth.agent && (
             <button
               type="submit"

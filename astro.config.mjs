@@ -85,6 +85,7 @@ export default defineConfig({
     ],
   },
   vite: {
+    optimizeDeps: { exclude: ["@ffmpeg/ffmpeg"] },
     plugins: [
       {
         // This package ships Astro source. Cloudflare's SSR optimizer would

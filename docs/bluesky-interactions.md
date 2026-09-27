@@ -52,3 +52,40 @@ Run `bun test`, `bun run check`, and `bun run build`. Tests cover OAuth return-p
 validation, metadata, exact article matching, threaded replies, reaction writes,
 and immediate undo while AppView indexing catches up. Provider authorization and
 real public writes require a visitor to finish sign-in in the browser.
+
+## Media attachments
+
+The shared feed/comment composer accepts up to four JPEG, PNG, or WebP images,
+or one MP4, MOV, or WebM video. Controls sit to the left of the submit button.
+Attachments have previews, editable descriptions, and removal controls. Image-only
+posts are allowed. Failed writes retain attachments. Files stay in memory and are
+not restored after navigation or a reload.
+
+Images (up to 20 MB input) are decoded into pixels, scaled to at most 2048 pixels,
+and encoded as PNG; only decoding/pixel chunks remain. Images are reduced further
+until below 1 MB. Videos (up to 100 MB input and 3 minutes) are transcoded locally
+with FFmpeg to H.264/AAC MP4 at at most 1280 pixels. Source tags, chapters, extra
+tracks, H.264 SEI, optional MP4 metadata boxes, and creation/modification timestamps
+are removed. Required codec, dimensions, and playback timing remain. Sanitization
+failures never fall back to uploading originals. Files receive random UUID names
+and a zero file modification timestamp before upload.
+
+FFmpeg is loaded only when a video is selected. Its version-pinned core is fetched
+from jsDelivr; media is processed in a browser worker and is never sent there.
+Only sanitized files reach the visitor's PDS. Video files must carry the local
+sanitizer's in-memory provenance; image files are sanitized again at upload.
+The client requests `blob:image/png` and `blob:video/mp4`; existing sessions
+reauthorize when first selecting an attachment control.
+
+A media comment uses its media embed and appends the canonical article URL with
+an explicit link facet instead of the external link card. The character count
+includes that URL. This preserves exact article discovery. Video processing on
+Bluesky can finish after the post is accepted; external viewers may see it later.
+See [Bluesky video upload documentation](https://bsky.network/docs/about-bluesky-content/video/)
+and [AT Protocol blob permissions](https://atproto.com/specs/permission).
+
+Validation includes PNG ancillary/trailing-data removal, MP4 metadata removal
+without shifting sample offsets, and rejecting unsupported/unprepared uploads.
+A temporary local browser harness verified generated PNG/WebM sanitization,
+playable MP4 output, renamed upload payloads, and comment URL matching using a
+mock agent, without publishing public test posts.
