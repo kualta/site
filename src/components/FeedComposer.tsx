@@ -61,6 +61,41 @@ export default function FeedComposer() {
 
   return (
     <section className="mb-6 rounded-xl bg-secondary p-4 dark:bg-dark-secondary" aria-label="Write a Bluesky post">
+      <div className="mb-4 flex min-h-10 items-center gap-3" aria-label="Post author">
+        {auth.profile ? (
+          <a
+            className="flex min-w-0 items-center gap-3"
+            href={`https://bsky.app/profile/${encodeURIComponent(auth.profile.did)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {auth.profile.avatar ? (
+              <img
+                src={auth.profile.avatar}
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg dark:bg-dark-bg"
+              >
+                {(auth.profile.displayName || auth.profile.handle).slice(0, 1).toUpperCase()}
+              </span>
+            )}
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold">
+                {auth.profile.displayName || auth.profile.handle}
+              </span>
+              <span className="block truncate text-xs text-secondary-text">@{auth.profile.handle}</span>
+            </span>
+          </a>
+        ) : (
+          <BlueskyLogin />
+        )}
+      </div>
       <form id={`${id}-form`} onSubmit={publish} className="space-y-3">
         <label htmlFor={id} className="sr-only">
           Your post
@@ -82,7 +117,7 @@ export default function FeedComposer() {
           {auth.profile && <span className="mr-2">Public on @{auth.profile.handle}</span>}
           <span className="tabular-nums">{length}/300</span>
         </p>
-        {auth.agent ? (
+        {auth.agent && (
           <button
             type="submit"
             form={`${id}-form`}
@@ -91,8 +126,6 @@ export default function FeedComposer() {
           >
             {busy ? "Posting…" : "Post"}
           </button>
-        ) : (
-          <BlueskyLogin />
         )}
       </div>
       {error && (

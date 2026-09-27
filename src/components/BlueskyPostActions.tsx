@@ -6,7 +6,7 @@ import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@
 import { fetchInteractionPost, replyToPost, togglePostLike, togglePostRepost } from "@/lib/bluesky/interactions";
 
 const reactionClass =
-  "inline-flex h-8 min-w-[2rem] items-center justify-center gap-1 text-xs hover:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50";
+  "inline-flex h-8 min-w-[2.75rem] items-center justify-center gap-1 text-xs hover:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50";
 
 const buttonClass =
   "inline-flex min-h-10 min-w-10 justify-center items-center gap-1.5 rounded-lg px-2 text-xs hover:bg-primary focus-visible:outline focus-visible:outline-2 disabled:opacity-50 dark:hover:bg-dark-primary";
@@ -70,7 +70,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
 
   return (
     <div className="px-3 pb-3" aria-label="Bluesky post actions">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-4">
         <button
           type="button"
           className={reactionClass}
