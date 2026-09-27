@@ -5,6 +5,9 @@ import BlueskyLogin from "./BlueskyLogin";
 import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import { fetchInteractionPost, replyToPost, togglePostLike, togglePostRepost } from "@/lib/bluesky/interactions";
 
+const reactionClass =
+  "inline-flex h-8 min-w-8 items-center justify-center gap-1 text-xs hover:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50";
+
 const buttonClass =
   "inline-flex min-h-10 min-w-10 justify-center items-center gap-1.5 rounded-lg px-2 text-xs hover:bg-primary focus-visible:outline focus-visible:outline-2 disabled:opacity-50 dark:hover:bg-dark-primary";
 
@@ -70,31 +73,31 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className={buttonClass}
+          className={reactionClass}
           aria-label={post?.viewer?.like ? "Unlike post" : "Like post"}
           title={post?.viewer?.like ? "Unlike post" : "Like post"}
           aria-pressed={!!post?.viewer?.like}
           disabled={busy || auth.loading}
           onClick={() => void act("like")}
         >
-          <FiHeart aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
+          <FiHeart size={18} aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
           {post?.likeCount ? ` ${post.likeCount}` : ""}
         </button>
         <button
           type="button"
-          className={buttonClass}
+          className={reactionClass}
           aria-label={post?.viewer?.repost ? "Undo repost" : "Repost"}
           title={post?.viewer?.repost ? "Undo repost" : "Repost"}
           aria-pressed={!!post?.viewer?.repost}
           disabled={busy || auth.loading}
           onClick={() => void act("repost")}
         >
-          <FiRepeat aria-hidden="true" />
+          <FiRepeat size={18} aria-hidden="true" />
           {post?.repostCount ? ` ${post.repostCount}` : ""}
         </button>
         <button
           type="button"
-          className={buttonClass}
+          className={reactionClass}
           aria-label="Reply"
           title="Reply"
           aria-expanded={replyOpen}
@@ -105,7 +108,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
             else setReplyOpen(!replyOpen);
           }}
         >
-          <FiMessageCircle aria-hidden="true" />
+          <FiMessageCircle size={18} aria-hidden="true" />
           {post?.replyCount ? ` ${post.replyCount}` : ""}
         </button>
         {busy && (
