@@ -11,7 +11,7 @@ export default function BlueskyComposer({
   busy,
   label = "Your post",
   placeholder = "What's on your mind?",
-  loginLabel,
+  loginLabel = "Log in to post",
   submitLabel = "Post",
   textareaRef,
   context,
@@ -32,6 +32,14 @@ export default function BlueskyComposer({
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot);
   const id = useId();
   const length = new RichText({ text: text.trim() }).graphemeLength;
+  if (!auth.agent) {
+    return (
+      <div className="mb-6">
+        <BlueskyLogin fullWidth label={loginLabel} />
+      </div>
+    );
+  }
+
   return (
     <section className="mb-6 rounded-xl bg-secondary p-4 dark:bg-dark-secondary" aria-label={label}>
       <div className={`flex min-h-10 items-center gap-3 ${auth.agent ? "mb-4" : ""}`} aria-label="Post author">
