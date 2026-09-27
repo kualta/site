@@ -1,0 +1,11 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import BlueskyCallback from '@/components/BlueskyCallback';
+---
+<BaseLayout title="Bluesky sign-in" description="Sign in to interact with posts and join the conversation." noindex>
+  <section class="w-full max-w-xl px-8 py-12 flex flex-col gap-6">
+    <h1 class="text-3xl">Bluesky sign-in</h1>
+    <BlueskyCallback client:load />
+    <a href="/" class="underline">Back to the feed</a>
+  </section>
+</BaseLayout>

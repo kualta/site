@@ -1,4 +1,5 @@
 ---
+import BlueskyLogin from "./BlueskyLogin";
 import { BackButton } from "./BackButton.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
@@ -28,6 +29,7 @@ const path = Astro.url.pathname.replace(/\/$/, "") || "/";
       ))}
     </div>
   </nav>
+  <BlueskyLogin compact client:load />
   <div class="hidden sm:flex shrink-0 w-0 h-0 sm:w-8 sm:h-8">
     <ThemeToggle path={path} client:load transition:persist />
   </div>

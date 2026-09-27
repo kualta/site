@@ -3,6 +3,8 @@ import atprotoConfig from "../../../atproto.config.json";
 import { documentUri } from "../../../scripts/lib/atproto-content.mjs";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import TableOfContents, { POST_TITLE_ID } from "@/components/TableOfContents.tsx";
+import ArticleComments from "@/components/ArticleComments";
+import { SITE_URL } from "@/lib/seo";
 import { getPosts, getPostContent } from "@/lib/posts";
 
 export async function getStaticPaths() {
@@ -44,5 +46,6 @@ const { Content, headings } = post;
       <p class="post-subtitle mb-6 mt-0 text-center">{post.data.description}</p>
       <Content />
     </article>
+    <ArticleComments url={`${SITE_URL}/posts/${slug}`} title={post.data.title} client:visible />
   </div>
 </BaseLayout>
