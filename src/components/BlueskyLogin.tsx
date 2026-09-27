@@ -21,7 +21,7 @@ export default function BlueskyLogin({
     <div className={`bluesky-login text-sm tracking-normal ${fullWidth ? "w-full" : ""}`}>
       <button
         type="button"
-        className={`rounded-lg border border-[color:color-mix(in_srgb,currentColor_20%,transparent)] bg-secondary dark:bg-dark-secondary px-3 py-2 hover:opacity-80 disabled:opacity-50 ${
+        className={`rounded-lg bg-secondary dark:bg-dark-secondary px-3 py-2 hover:opacity-80 disabled:opacity-50 ${
           fullWidth ? "w-full" : ""
         }`}
         onClick={() => dialog.current?.showModal()}
