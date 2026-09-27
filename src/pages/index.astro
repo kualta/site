@@ -4,6 +4,7 @@ import { getInitialActivityFeed } from "@/lib/activity/feed";
 import { formatLastSeenTime } from "@/lib/activity/presence";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
+import FeedComposer from "@/components/FeedComposer";
 import ActivityWidget from "@/components/activity/ActivityWidget.astro";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
 import type { Contact } from "@/types";
@@ -75,6 +76,7 @@ Astro.response.headers.set("cache-control", "no-store");
       aria-label="Kualta's recent activity"
       data-activity-screen
     >
+      <FeedComposer client:load />
       <ActivityWidget />
     </section>
   </div>

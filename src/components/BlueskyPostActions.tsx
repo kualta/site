@@ -6,7 +6,7 @@ import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@
 import { fetchInteractionPost, replyToPost, togglePostLike, togglePostRepost } from "@/lib/bluesky/interactions";
 
 const buttonClass =
-  "inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2 text-xs hover:bg-primary focus-visible:outline focus-visible:outline-2 disabled:opacity-50 dark:hover:bg-dark-primary";
+  "inline-flex min-h-10 min-w-10 justify-center items-center gap-1.5 rounded-lg px-2 text-xs hover:bg-primary focus-visible:outline focus-visible:outline-2 disabled:opacity-50 dark:hover:bg-dark-primary";
 
 export default function BlueskyPostActions({ uri }: { uri: string }) {
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthSnapshot);
@@ -72,28 +72,31 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           type="button"
           className={buttonClass}
           aria-label={post?.viewer?.like ? "Unlike post" : "Like post"}
+          title={post?.viewer?.like ? "Unlike post" : "Like post"}
           aria-pressed={!!post?.viewer?.like}
           disabled={busy || auth.loading}
           onClick={() => void act("like")}
         >
           <FiHeart aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
-          {post?.viewer?.like ? "Liked" : "Like"}
           {post?.likeCount ? ` ${post.likeCount}` : ""}
         </button>
         <button
           type="button"
           className={buttonClass}
           aria-label={post?.viewer?.repost ? "Undo repost" : "Repost"}
+          title={post?.viewer?.repost ? "Undo repost" : "Repost"}
           aria-pressed={!!post?.viewer?.repost}
           disabled={busy || auth.loading}
           onClick={() => void act("repost")}
         >
-          <FiRepeat aria-hidden="true" /> {post?.viewer?.repost ? "Reposted" : "Repost"}
+          <FiRepeat aria-hidden="true" />
           {post?.repostCount ? ` ${post.repostCount}` : ""}
         </button>
         <button
           type="button"
           className={buttonClass}
+          aria-label="Reply"
+          title="Reply"
           aria-expanded={replyOpen}
           aria-controls={`${inputId}-form`}
           disabled={busy || auth.loading || post?.viewer?.replyDisabled}
@@ -102,7 +105,8 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
             else setReplyOpen(!replyOpen);
           }}
         >
-          <FiMessageCircle aria-hidden="true" /> Reply{post?.replyCount ? ` ${post.replyCount}` : ""}
+          <FiMessageCircle aria-hidden="true" />
+          {post?.replyCount ? ` ${post.replyCount}` : ""}
         </button>
         {busy && (
           <span className="text-xs text-secondary-text" role="status">
