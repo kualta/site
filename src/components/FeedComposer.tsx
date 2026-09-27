@@ -1,3 +1,4 @@
+import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import { useEffect, useRef, useState } from "react";
 import BlueskyComposer from "./BlueskyComposer";
 import { getBlueskyAgent } from "@/lib/bluesky/auth";
@@ -40,7 +41,7 @@ export default function FeedComposer() {
       if (!agent) throw new Error("Log in with Bluesky to publish your post.");
       const post = await publishProfilePost(agent, text);
       const [, , did, , rkey] = post.uri.split("/");
-      setPublishedUrl(`https://bsky.app/profile/${encodeURIComponent(did)}/post/${encodeURIComponent(rkey)}`);
+      setPublishedUrl(`${blueskyProfileUrl(did)}/post/${encodeURIComponent(rkey)}`);
       updateDraft("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not publish your post. Please try again.");

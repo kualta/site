@@ -1,3 +1,4 @@
+import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import { AppBskyFeedPost } from "@atproto/api";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import BlueskyComposer from "./BlueskyComposer";
@@ -192,7 +193,7 @@ export default function ArticleComments({ url, title }: { url: string; title: st
             <article key={post.uri} className="article-comment">
               <div className="comment-author-row">
                 <a
-                  href={`https://bsky.app/profile/${encodeURIComponent(post.author.did)}`}
+                  href={blueskyProfileUrl(post.author.did)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="comment-author"

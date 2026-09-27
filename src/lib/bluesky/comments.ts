@@ -1,3 +1,4 @@
+import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import { BskyAgent, RichText, AppBskyFeedPost, AppBskyFeedDefs } from "@atproto/api";
 import { fetchInteractionPost } from "./interactions";
 import type { Agent } from "@atproto/api";
@@ -118,9 +119,7 @@ export function commentRecord(
 }
 
 export function commentUrl(post: Pick<CommentPost, "uri" | "author">): string {
-  return `https://bsky.app/profile/${encodeURIComponent(post.author.did)}/post/${encodeURIComponent(
-    post.uri.split("/").pop() ?? "",
-  )}`;
+  return `${blueskyProfileUrl(post.author.did)}/post/${encodeURIComponent(post.uri.split("/").pop() ?? "")}`;
 }
 
 export async function publishArticleComment(
