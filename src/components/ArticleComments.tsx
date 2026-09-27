@@ -203,11 +203,6 @@ export default function ArticleComments({ url, title }: { url: string; title: st
           {notice}
         </p>
       )}
-      {loading && (
-        <p role="status" className="comments-description">
-          Loading comments…
-        </p>
-      )}
       <div className="comments-list" aria-busy={loading}>
         {posts.map((post) => {
           const record = AppBskyFeedPost.isRecord(post.record) ? (post.record as AppBskyFeedPost.Record) : null;
