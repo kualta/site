@@ -1,3 +1,4 @@
+import { FiX } from "react-icons/fi";
 import { useId, useRef, useState, useSyncExternalStore } from "react";
 import {
   getBlueskyAuthSnapshot,
@@ -37,7 +38,7 @@ export default function BlueskyLogin({
             {auth.profile ? "Your Bluesky account" : "Log in with Bluesky"}
           </h2>
           <button type="button" aria-label="Close sign-in" onClick={() => dialog.current?.close()} className="p-2">
-            ×
+            <FiX size={20} aria-hidden="true" />
           </button>
         </div>
         {auth.profile ? (
