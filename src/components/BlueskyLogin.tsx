@@ -81,10 +81,6 @@ export default function BlueskyLogin({
               onChange={(event) => setHandle(event.target.value)}
               className="w-full rounded-lg border border-[color:color-mix(in_srgb,currentColor_30%,transparent)] bg-transparent p-3"
             />
-            <p className="text-sm text-secondary-text">
-              Your account provider will ask you to authorize this site. Likes, reposts, and comments are public on
-              Bluesky.
-            </p>
             <button
               type="submit"
               disabled={auth.loading || !handle.trim()}
