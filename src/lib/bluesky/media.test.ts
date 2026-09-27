@@ -71,3 +71,55 @@ test("MP4 clears creation/modification timestamps while retaining playback timin
   expect([...result.slice(20, 28)]).toEqual(Array(8).fill(0));
   expect(result[28]).toBe(42);
 });
+
+test("image batches select compatible embeds and reject oversized or mixed batches before upload", async () => {
+  const originalBitmap = globalThis.createImageBitmap;
+  const originalDocument = globalThis.document;
+  const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const png = concat(signature, pngChunk("IDAT"), pngChunk("IEND"));
+  const attachment = {
+    file: new File([png], "private-camera.png", { type: "image/png" }),
+    alt: "Description",
+    width: 32,
+    height: 24,
+  };
+  let uploads = 0;
+  const agent = {
+    uploadBlob: async (file: File) => {
+      uploads++;
+      expect(file.name).toMatch(/^image-[\w-]+\.png$/);
+      expect(file.lastModified).toBe(0);
+      return { data: { blob: { ref: "test-blob", mimeType: "image/png", size: png.length } } };
+    },
+  } as unknown as Agent;
+  try {
+    globalThis.createImageBitmap = (async () => ({ width: 32, height: 24, close() {} })) as typeof createImageBitmap;
+    globalThis.document = {
+      createElement: () => ({
+        getContext: () => ({ drawImage() {} }),
+        toBlob: (callback: (blob: Blob) => void) => callback(new Blob([png])),
+      }),
+    } as unknown as Document;
+    for (const count of [1, 4, 5, 10]) {
+      const embed = await uploadMedia(agent, Array(count).fill(attachment));
+      expect(embed?.$type).toBe(count <= 4 ? "app.bsky.embed.images" : "app.bsky.embed.gallery");
+      if (embed?.$type === "app.bsky.embed.gallery") {
+        expect(embed.items.length).toBe(count);
+        expect(embed.items[0]).toMatchObject({
+          $type: "app.bsky.embed.gallery#image",
+          alt: "Description",
+          aspectRatio: { width: 32, height: 24 },
+        });
+      }
+    }
+    const before = uploads;
+    await expect(uploadMedia(agent, Array(11).fill(attachment))).rejects.toThrow("ten images");
+    await expect(uploadMedia(agent, [attachment, {
+      ...attachment, file: new File([], "video.mp4", { type: "video/mp4" }),
+    }])).rejects.toThrow("one video");
+    expect(uploads).toBe(before);
+  } finally {
+    globalThis.createImageBitmap = originalBitmap;
+    globalThis.document = originalDocument;
+  }
+});

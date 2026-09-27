@@ -1,4 +1,4 @@
-import type { Agent, AppBskyEmbedImages, AppBskyEmbedVideo } from "@atproto/api";
+import type { Agent, AppBskyEmbedGallery, AppBskyEmbedImages, AppBskyEmbedVideo } from "@atproto/api";
 
 export interface ComposerAttachment {
   file: File;
@@ -6,7 +6,7 @@ export interface ComposerAttachment {
   width: number;
   height: number;
 }
-export const MAX_IMAGES = 4;
+export const MAX_IMAGES = 10;
 const MAX_BYTES = 1_000_000;
 
 /** Keep only pixel/decoding chunks; discard EXIF, text, timestamps, profiles and trailing data. */
@@ -83,25 +83,31 @@ export async function uploadMedia(
   images: ComposerAttachment[],
 ): Promise<
   | (AppBskyEmbedImages.Main & { $type: "app.bsky.embed.images" })
+  | (AppBskyEmbedGallery.Main & { $type: "app.bsky.embed.gallery" })
   | (AppBskyEmbedVideo.Main & { $type: "app.bsky.embed.video" })
   | undefined
 > {
   if (!images.length) return undefined;
   const video = images.find((image) => image.file.type.startsWith("video/"));
   if (video) {
-    if (images.length !== 1) throw new Error("Attach one video or up to four images.");
+    if (images.length !== 1) throw new Error("Attach one video or up to ten images.");
     if (!sanitizedVideos.has(video.file)) throw new Error("Prepare the video again before uploading.");
     const { data } = await agent.uploadBlob(video.file, { encoding: "video/mp4" });
     return { $type: "app.bsky.embed.video", video: data.blob, alt: video.alt };
   }
-  if (images.length > MAX_IMAGES) throw new Error("Attach up to four images.");
-  const uploaded: AppBskyEmbedImages.Image[] = [];
+  if (images.length > MAX_IMAGES) throw new Error("Attach up to ten images.");
+  const uploaded: Omit<AppBskyEmbedGallery.Image, "$type">[] = [];
   for (const image of images) {
     // Sanitize again at the upload boundary: never trust a selected file or its original name.
     const clean = await sanitizeImage(image.file);
     const { data } = await agent.uploadBlob(clean.file, { encoding: "image/png" });
     uploaded.push({ image: data.blob, alt: image.alt, aspectRatio: { width: clean.width, height: clean.height } });
   }
+  if (uploaded.length > 4)
+    return {
+      $type: "app.bsky.embed.gallery",
+      items: uploaded.map((image) => ({ ...image, $type: "app.bsky.embed.gallery#image" as const })),
+    };
   return { $type: "app.bsky.embed.images", images: uploaded };
 }
 
