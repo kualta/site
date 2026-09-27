@@ -134,7 +134,6 @@ export default function ArticleComments({ url, title }: { url: string; title: st
             /* The published record is already available; media may still be processing. */
           });
       setParent(undefined);
-      setNotice("Posted publicly on Bluesky. It may take a moment to appear for other readers.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Your comment could not be posted. Try again.");
     } finally {
