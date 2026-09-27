@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { RichText, type AppBskyFeedDefs } from "@atproto/api";
 import { FiHeart, FiMessageCircle, FiRepeat } from "react-icons/fi";
 import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
@@ -14,6 +14,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthSnapshot);
   const [post, setPost] = useState<AppBskyFeedDefs.PostView | null>(null);
   const [busy, setBusy] = useState(false);
+  const acting = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [replyOpen, setReplyOpen] = useState(false);
@@ -40,13 +41,25 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
   }, [auth.agent, uri]);
 
   async function act(action: "like" | "repost" | "reply") {
-    if (busy) return;
+    if (acting.current || (action !== "reply" && !post)) return;
+    acting.current = true;
+    const previous = post;
+    if (action !== "reply" && post) {
+      const field = action === "like" ? "like" : "repost";
+      const count = action === "like" ? "likeCount" : "repostCount";
+      const selected = Boolean(post.viewer?.[field]);
+      setPost({
+        ...post,
+        [count]: Math.max(0, (post[count] ?? 0) + (selected ? -1 : 1)),
+        viewer: { ...post.viewer, [field]: selected ? undefined : "pending" },
+      });
+    }
     setBusy(true);
     setError("");
     setNotice("");
     try {
       const agent = await getBlueskyAgent();
-      if (!agent) return;
+      if (!agent) throw new Error("Log in again to update your reaction.");
       if (action === "reply") {
         await replyToPost(agent, uri, text);
         setText("");
@@ -57,8 +70,10 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
         setPost(await (action === "like" ? togglePostLike : togglePostRepost)(agent, uri));
       }
     } catch (cause) {
+      if (action !== "reply") setPost(previous);
       setError(cause instanceof Error ? cause.message : "Could not complete this action. Please try again.");
     } finally {
+      acting.current = false;
       setBusy(false);
     }
   }
@@ -74,7 +89,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           aria-label={post?.viewer?.like ? "Unlike post" : "Like post"}
           title={post?.viewer?.like ? "Unlike post" : "Like post"}
           aria-pressed={!!post?.viewer?.like}
-          disabled={busy || auth.loading}
+          disabled={busy || auth.loading || !post}
           onClick={() => void act("like")}
         >
           <FiHeart size={18} aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
@@ -86,10 +101,10 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           aria-label={post?.viewer?.repost ? "Undo repost" : "Repost"}
           title={post?.viewer?.repost ? "Undo repost" : "Repost"}
           aria-pressed={!!post?.viewer?.repost}
-          disabled={busy || auth.loading}
+          disabled={busy || auth.loading || !post}
           onClick={() => void act("repost")}
         >
-          <FiRepeat size={18} aria-hidden="true" />
+          <FiRepeat size={18} aria-hidden="true" className={post?.viewer?.repost ? "text-[#16a34a]" : ""} />
           {post?.repostCount ? ` ${post.repostCount}` : ""}
         </button>
         <button
@@ -105,11 +120,6 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           <FiMessageCircle size={18} aria-hidden="true" />
           {post?.replyCount ? ` ${post.replyCount}` : ""}
         </button>
-        {busy && (
-          <span className="text-xs text-secondary-text" role="status">
-            Saving…
-          </span>
-        )}
       </div>
       {replyOpen && auth.agent && (
         <form
