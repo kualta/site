@@ -104,10 +104,7 @@ export default function BlueskyComposer({
         </form>
       )}
       {auth.agent && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <p id={`${id}-notice`} className="text-xs text-secondary-text">
-            {auth.profile && <span className="mr-2">Public on @{auth.profile.handle}</span>}
-          </p>
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
           {auth.agent && (
             <button
               type="submit"

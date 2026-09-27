@@ -76,8 +76,9 @@ Astro.response.headers.set("cache-control", "no-store");
       aria-label="Kualta's recent activity"
       data-activity-screen
     >
-      <FeedComposer client:load />
-      <ActivityWidget />
+      <ActivityWidget>
+        <FeedComposer slot="composer" client:load />
+      </ActivityWidget>
     </section>
   </div>
 

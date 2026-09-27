@@ -61,6 +61,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>
     </div>
   </div>
+  <slot name="composer" />
   <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>
     <ActivityRows
       events={feed?.events ?? []}
