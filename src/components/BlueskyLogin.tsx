@@ -11,7 +11,8 @@ import {
 export default function BlueskyLogin({
   compact = false,
   fullWidth = false,
-}: { compact?: boolean; fullWidth?: boolean }) {
+  label,
+}: { compact?: boolean; fullWidth?: boolean; label?: string }) {
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot);
   const dialog = useRef<HTMLDialogElement>(null);
   const id = useId();
@@ -26,7 +27,11 @@ export default function BlueskyLogin({
         onClick={() => dialog.current?.showModal()}
         disabled={auth.loading}
       >
-        {auth.profile ? (compact ? "Account" : `@${auth.profile.handle}`) : compact ? "Log in" : "Log in with Bluesky"}
+        {auth.profile
+          ? compact
+            ? "Account"
+            : `@${auth.profile.handle}`
+          : label ?? (compact ? "Log in" : "Log in with Bluesky")}
       </button>
       <dialog
         ref={dialog}
