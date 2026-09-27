@@ -150,7 +150,7 @@ export default function ArticleComments({ url, title }: { url: string; title: st
         onSubmit={publish}
         busy={publishing}
         label={parent ? "Your reply" : "Your comment"}
-        placeholder="Join the conversation…"
+        placeholder={`Comment on ${title}`}
         loginLabel="Log in to comment"
         submitLabel={parent ? "Reply" : "Comment"}
         textareaRef={textarea}
