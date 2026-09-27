@@ -1,3 +1,4 @@
+import { FiX } from "react-icons/fi";
 import { useId, useRef, useState, useSyncExternalStore } from "react";
 import {
   getBlueskyAuthSnapshot,
@@ -37,7 +38,7 @@ export default function BlueskyLogin({
             {auth.profile ? "Your Bluesky account" : "Log in with Bluesky"}
           </h2>
           <button type="button" aria-label="Close sign-in" onClick={() => dialog.current?.close()} className="p-2">
-            ×
+            <FiX size={20} aria-hidden="true" />
           </button>
         </div>
         {auth.profile ? (
@@ -81,10 +82,6 @@ export default function BlueskyLogin({
               onChange={(event) => setHandle(event.target.value)}
               className="w-full rounded-lg border border-[color:color-mix(in_srgb,currentColor_30%,transparent)] bg-transparent p-3"
             />
-            <p className="text-sm text-secondary-text">
-              Your account provider will ask you to authorize this site. Likes, reposts, and comments are public on
-              Bluesky.
-            </p>
             <button
               type="submit"
               disabled={auth.loading || !handle.trim()}
