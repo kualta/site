@@ -1,3 +1,4 @@
+import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import { useId, useSyncExternalStore, type FormEvent, type ReactNode, type Ref } from "react";
 import { RichText } from "@atproto/api";
 import BlueskyLogin from "./BlueskyLogin";
@@ -37,7 +38,7 @@ export default function BlueskyComposer({
         {auth.profile ? (
           <a
             className="flex min-w-0 items-center gap-3"
-            href={`https://bsky.app/profile/${encodeURIComponent(auth.profile.did)}`}
+            href={blueskyProfileUrl(auth.profile.did)}
             target="_blank"
             rel="noopener noreferrer"
           >
