@@ -1,4 +1,7 @@
 ---
+import { env } from "cloudflare:workers";
+import { getInitialActivityFeed } from "@/lib/activity/feed";
+import { formatLastSeenTime } from "@/lib/activity/presence";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
 import ActivityWidget from "@/components/activity/ActivityWidget.astro";
@@ -14,6 +17,9 @@ export const prerender = false;
 const contacts = (contactsData as Contact[])
   .filter((c) => c.is_main)
   .reverse();
+
+const initialActivity = await getInitialActivityFeed({ cache: env.ACTIVITY_CACHE, githubToken: env.GITHUB_ACTIVITY_TOKEN });
+const lastSeenAt = initialActivity.lastSeenAt;
 
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
@@ -55,7 +61,9 @@ Astro.response.headers.set("cache-control", "no-store");
         class="home-activity-link flex min-h-[42px] shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
                hover:opacity-70"
       >
-        <time class="tabular-nums" data-activity-last-seen hidden />
+        <time class="tabular-nums" data-activity-last-seen datetime={lastSeenAt ?? undefined}>
+          {lastSeenAt ? formatLastSeenTime(lastSeenAt) : "last seen status unavailable"}
+        </time>
         <FiChevronDown className="animate-bounce motion-reduce:animate-none" size={18} aria-hidden="true" />
         <span class="sr-only">Jump to recent activity</span>
       </a>
@@ -103,11 +111,6 @@ Astro.response.headers.set("cache-control", "no-store");
       transition: opacity 350ms ease;
     }
 
-    .home-activity-link[data-home-activity-pending] {
-      opacity: 0;
-      visibility: hidden;
-    }
-
     @media (prefers-reduced-motion: reduce) {
       .home-activity-link {
         transition: none;
@@ -127,7 +130,7 @@ Astro.response.headers.set("cache-control", "no-store");
 
     /* until the first rows arrive there is only a skeleton below, so the feed
        takes no room and the page is one screen with nothing to scroll to; the
-       link above drops its pending mark once activity loads, which lets it in.
+       link above stays visible while its pending mark keeps the feed collapsed.
        The collapsed feed is no resting place either, or the page snaps down to
        it the moment it grows */
     html:has([data-home-activity-pending]) #activity {

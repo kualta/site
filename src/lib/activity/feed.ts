@@ -534,6 +534,24 @@ function buildFeed(state: StoredState | undefined, now: Date): ActivityFeed {
   };
 }
 
+function hasRecentSnapshot(state: StoredState | undefined, now: Date): boolean {
+  return ACTIVITY_SOURCES.every(
+    (source) => ageSince(state?.sources[source].fetchedAt, now) <= 60 * 60 * 1000,
+  );
+}
+
+/** Initial HTML uses shared state, refreshing only when it is over an hour old. */
+export async function getInitialActivityFeed(options: GetActivityFeedOptions = {}): Promise<ActivityFeed> {
+  const now = options.now ?? new Date();
+  const logger = options.logger ?? console;
+  const state = await readStored(options.cache, STATE_KEY, parseState, logger);
+  if (hasRecentSnapshot(state?.value, now)) return buildFeed(state?.value, now);
+
+  const refreshed = await refreshActivity(options, now, logger, state);
+  // Failed providers must not make an older snapshot look current.
+  return buildFeed(hasRecentSnapshot(refreshed, now) ? refreshed : undefined, now);
+}
+
 export async function getActivityFeed(options: GetActivityFeedOptions = {}): Promise<ActivityFeed> {
   const now = options.now ?? new Date();
   const logger = options.logger ?? console;

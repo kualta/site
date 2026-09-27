@@ -7,7 +7,7 @@ import type {
   BlueskyActivity,
   ProviderContext,
 } from "./types";
-import { getActivityFeed, getActivityHistory } from "./feed";
+import { getInitialActivityFeed, getActivityFeed, getActivityHistory } from "./feed";
 
 const NOW = new Date("2026-08-30T12:00:00.000Z");
 const BLUESKY_DID = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
@@ -440,5 +440,32 @@ describe("activity history", () => {
     expect(background).toHaveLength(0);
     expect(calls).toEqual({ github: 1, bluesky: 1 });
     expect(feed.events).toHaveLength(2);
+  });
+});
+
+
+describe("initial activity snapshot", () => {
+  test("shares cached state through one hour, then refreshes it", async () => {
+    const cache = new MemoryCache();
+    const calls = { github: 0, bluesky: 0 };
+    const providers = successfulProviders(calls);
+    const options = { cache, providers, logger, now: NOW };
+    const first = await getInitialActivityFeed(options);
+    expect(first.lastSeenAt).not.toBeNull();
+    await getInitialActivityFeed({ ...options, now: new Date(+NOW + 3_600_000) });
+    expect(calls).toEqual({ github: 1, bluesky: 1 });
+    await getInitialActivityFeed({ ...options, now: new Date(+NOW + 3_600_001) });
+    expect(calls).toEqual({ github: 2, bluesky: 2 });
+  });
+
+  test("does not present an expired snapshot when refresh fails", async () => {
+    const cache = new MemoryCache();
+    await getInitialActivityFeed({ cache, providers: successfulProviders(), logger, now: NOW });
+    const feed = await getInitialActivityFeed({
+      cache, logger, now: new Date(+NOW + 3_600_001),
+      providers: [provider("github", async () => { throw new Error("offline"); }),
+        provider("bluesky", async () => { throw new Error("offline"); })],
+    });
+    expect(feed.lastSeenAt).toBeNull();
   });
 });
