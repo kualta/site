@@ -61,7 +61,7 @@ export default function FeedComposer() {
 
   return (
     <section className="mb-6 rounded-xl bg-secondary p-4 dark:bg-dark-secondary" aria-label="Write a Bluesky post">
-      <div className="mb-4 flex min-h-10 items-center gap-3" aria-label="Post author">
+      <div className={`flex min-h-10 items-center gap-3 ${auth.agent ? "mb-4" : ""}`} aria-label="Post author">
         {auth.profile ? (
           <a
             className="flex min-w-0 items-center gap-3"
@@ -96,28 +96,30 @@ export default function FeedComposer() {
           <BlueskyLogin fullWidth />
         )}
       </div>
-      <form id={`${id}-form`} onSubmit={publish} className="relative">
-        <label htmlFor={id} className="sr-only">
-          Your post
-        </label>
-        <textarea
-          id={id}
-          rows={3}
-          placeholder="What's on your mind?"
-          value={text}
-          onChange={(event) => updateDraft(event.target.value)}
-          disabled={busy}
-          aria-describedby={`${id}-count`}
-          style={{ background: "transparent", color: "inherit" }}
-          className="block w-full resize-y rounded-lg border-0 p-3 pb-10 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
-        />
-        <span
-          id={`${id}-count`}
-          className="pointer-events-none absolute bottom-3 right-5 text-xs tabular-nums text-secondary-text"
-        >
-          {length}/300
-        </span>
-      </form>
+      {auth.agent && (
+        <form id={`${id}-form`} onSubmit={publish} className="relative">
+          <label htmlFor={id} className="sr-only">
+            Your post
+          </label>
+          <textarea
+            id={id}
+            rows={3}
+            placeholder="What's on your mind?"
+            value={text}
+            onChange={(event) => updateDraft(event.target.value)}
+            disabled={busy}
+            aria-describedby={`${id}-count`}
+            style={{ background: "transparent", color: "inherit" }}
+            className="block w-full resize-y rounded-lg border-0 p-3 pb-10 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
+          />
+          <span
+            id={`${id}-count`}
+            className="pointer-events-none absolute bottom-3 right-5 text-xs tabular-nums text-secondary-text"
+          >
+            {length}/300
+          </span>
+        </form>
+      )}
       {auth.agent && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p id={`${id}-notice`} className="text-xs text-secondary-text">
