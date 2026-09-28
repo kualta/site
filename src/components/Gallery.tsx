@@ -156,14 +156,14 @@ export default function Gallery() {
   }, [selected, mobile]);
 
   return (
-    <section className={`gallery ${current ? "has-selection" : ""}`} aria-label="Bluesky gallery">
+    <section className={`gallery ${current ? "has-selection" : ""}`} aria-label="Grain gallery">
       <header className="gallery-toolbar">
         <div>
           <h1>gallery</h1>
           <p>
             moments from{" "}
-            <a href="https://bsky.app/profile/kualta.dev" target="_blank" rel="noreferrer">
-              Bluesky
+            <a href="https://grain.social/profile/kualta.dev" target="_blank" rel="noreferrer">
+              Grain
             </a>
           </p>
         </div>
@@ -198,7 +198,7 @@ export default function Gallery() {
                 className="gallery-tile"
                 key={id}
                 aria-label={`${media.kind === "video" ? "Watch" : "View"} ${
-                  media.alt || `media from ${post.text.slice(0, 70) || "Bluesky post"}`
+                  media.alt || `media from ${post.text.slice(0, 70) || "Grain gallery"}`
                 }`}
                 aria-pressed={id === selected}
                 onClick={(event) => {
@@ -229,7 +229,7 @@ export default function Gallery() {
             ) : loading ? (
               <p>Loading moments…</p>
             ) : !items.length && ready ? (
-              <p>No photos or videos yet.</p>
+              <p>No Grain photos yet.</p>
             ) : cursor ? (
               <button onClick={() => load(cursor)}>Load more</button>
             ) : ready ? (
@@ -280,7 +280,7 @@ export default function Gallery() {
             <div className="gallery-post">
               <a
                 className="gallery-author"
-                href={`https://bsky.app/profile/${current.post.handle}`}
+                href={`https://grain.social/profile/${current.post.handle}`}
                 target="_blank"
                 rel="noreferrer"
               >

@@ -18,6 +18,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      - run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl ffmpeg
       - run: bun test
       - run: bun run check
       - run: bun run build
