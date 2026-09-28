@@ -8,8 +8,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import ffmpeg from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
-import { destinations, openProfile } from "./browser.mjs";
 import { publish } from "./runner.mjs";
+import { laptopKeys, connectAccount } from "./connections.mjs";
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const stateDir = join(root, ".publisher");
@@ -66,7 +66,7 @@ async function python(script, args) {
   }
 }
 
-const [command, platform] = process.argv.slice(2);
+const [command] = process.argv.slice(2);
 if (command === "connect") {
   const prompt = createInterface({ input: stdin, output: stdout });
   try {
@@ -85,47 +85,38 @@ if (command === "connect") {
     config.token = token;
     await api("heartbeat", {});
     await save();
-    console.log("Connected. Run bun run publisher login <platform>, then bun run publisher start.");
+    console.log("Connected. Run bun run publisher start, then connect accounts in the composer.");
   } finally {
     prompt.close();
   }
-} else if (command === "login" && ["grain", "bluesky"].includes(platform)) {
-  const prompt = createInterface({ input: stdin, output: stdout });
-  try {
-    const service =
-      (await prompt.question("PDS URL [https://bsky.social]: ")).trim() || "https://bsky.social";
-    if (new URL(service).protocol !== "https:") throw new Error("PDS must use HTTPS");
-    const identifier = (await prompt.question("AT Protocol handle [kualta.dev]: ")).trim() || "kualta.dev";
-    const password = (await prompt.question("App password (not your main password): ")).trim();
-    config.atproto = { service, identifier, password };
-    config.platforms = [...new Set([...config.platforms, "grain", "bluesky"])];
-    await save();
-  } finally {
-    prompt.close();
-  }
-} else if (command === "login" && destinations[platform]) {
-  const browser = await openProfile(join(stateDir, platform));
-  const page = browser.pages()[0] || (await browser.newPage());
-  await page.goto(destinations[platform]);
-  const prompt = createInterface({ input: stdin, output: stdout });
-  try {
-    await prompt.question("Sign in to your account in the browser, then press Enter here: ");
-  } finally {
-    prompt.close();
-    await browser.close();
-  }
-  config.platforms = [...new Set([...config.platforms, platform])];
-  await save();
 } else if (command === "start") {
   if (!config.token) throw new Error("Connect the helper first");
   await exec("exiftool", ["-ver"]);
   await exec(process.env.FFMPEG_PATH, ["-version"]);
+  const keys = await laptopKeys(stateDir);
   console.log("Publisher ready. Keep this terminal open. Ctrl+C stops the helper.");
   setInterval(() => api("heartbeat", {}).catch(() => {}), 30_000).unref();
   while (true) {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
-      const { target, post } = await (await api("claim", { platforms: config.platforms })).json();
+      const { target, post, connection } = await (
+        await api("claim", { platforms: config.platforms, publicKey: keys.publicKey })
+      ).json();
+      if (connection) {
+        const result = await connectAccount(connection, { stateDir, config, keys, api, save });
+        // Retry the receipt only; never reopen or repeat an account action.
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            await api("accounts/result", { id: connection.id, claim: connection.claim, ...result });
+            break;
+          } catch (error) {
+            if (attempt === 4) console.error("Connection receipt could not be saved. Refresh the composer.");
+            else await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+        }
+        console.log(`${connection.platform}: ${result.message}`);
+        continue;
+      }
       if (target) {
         console.log(`Publishing ${target.platform}…`);
         const result = await publish(target, post, { api, config, stateDir, python });
@@ -150,7 +141,4 @@ if (command === "connect") {
       await new Promise((resolve) => setTimeout(resolve, 10_000));
     }
   }
-} else
-  console.log(
-    "Usage: bun run publisher connect | login <grain|bluesky|instagram|twitter|xiaohongshu|youtube|tiktok> | start",
-  );
+} else console.log("Usage: bun run publisher connect | start");

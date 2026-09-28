@@ -32,7 +32,12 @@ export async function publishBrowser(platform, profile, files, post) {
     const page = context.pages()[0] || (await context.newPage());
     page.setDefaultTimeout(60_000);
     if (platform === "youtube") {
-      const cookie = (await context.cookies("https://www.youtube.com")).map((c) => `${c.name}=${c.value}`).join("; ");
+      const cookies = await context.cookies("https://www.youtube.com");
+      let cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+      if (!cookies.some((c) => c.name === "SAPISID")) {
+        const fallback = cookies.find((c) => c.name === "__Secure-3PAPISID");
+        if (fallback) cookie += `; SAPISID=${fallback.value}`;
+      }
       if (!cookie.includes("SAPISID=")) throw new Error("Log in to YouTube first");
       const yt = await Innertube.create({ cookie, retrieve_player: false });
       const response = await yt.studio.upload(new Blob([await readFile(files[0])], { type: "video/mp4" }), {
@@ -81,14 +86,17 @@ export async function publishBrowser(platform, profile, files, post) {
         .click();
       if (post.kind === "photo") {
         for (let i = 0; i < files.length; i++) {
-          const input = i === 0 ? page.locator(".upload-input") : page.locator('input[type="file"][accept*="image"]');
+          const input =
+            i === 0 ? page.locator(".upload-input") : page.locator('input[type="file"][accept*="image"]');
           await input.first().setInputFiles(files[i]);
           await page.locator(".img-preview-area .pr").nth(i).waitFor({ state: "visible" });
         }
       } else await page.locator('input[type="file"]').first().setInputFiles(files);
       await page.locator("div.d-input input").first().fill(post.title);
       await page
-        .locator('div[role="textbox"][contenteditable="true"], div.tiptap[contenteditable="true"], div.ql-editor')
+        .locator(
+          'div[role="textbox"][contenteditable="true"], div.tiptap[contenteditable="true"], div.ql-editor',
+        )
         .first()
         .fill(post.caption);
       submitting = true;

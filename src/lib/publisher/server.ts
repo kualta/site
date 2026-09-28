@@ -53,7 +53,12 @@ export function validatePost(value: unknown): Post {
   }
   if (typeof p.title !== "string" || !p.title.trim() || p.title.length > 100)
     throw new Error("Add a title of up to 100 characters");
-  if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
+  if (
+    typeof p.caption !== "string" ||
+    p.caption.length > 5000 ||
+    typeof p.alt !== "string" ||
+    p.alt.length > 1000
+  )
     throw new Error("Caption or alt text is too long");
   if (p.platforms.includes("grain")) {
     const encoder = new TextEncoder();
@@ -109,4 +114,19 @@ export async function claimTarget(db: NewsletterDB, supported: Platform[]) {
     )
     .bind(claim, Date.now(), ...supported)
     .first<{ id: string; job_id: string; platform: Platform; claim: string }>();
+}
+
+export async function claimConnection(db: NewsletterDB) {
+  await db
+    .prepare(
+      "UPDATE publisher_connections SET state='failed', payload=NULL, message='Connection expired. Try again.' WHERE state IN ('queued','working') AND created_at < ?",
+    )
+    .bind(Date.now() - 15 * 60_000)
+    .run();
+  return db
+    .prepare(
+      "UPDATE publisher_connections SET state='working', claim=? WHERE id=(SELECT id FROM publisher_connections WHERE state='queued' ORDER BY created_at LIMIT 1) AND state='queued' RETURNING *",
+    )
+    .bind(crypto.randomUUID())
+    .first<{ id: string; platform: Platform; action: string; payload: string | null; claim: string }>();
 }

@@ -41,20 +41,27 @@ Run from this checkout:
 bun install --frozen-lockfile
 bun run publisher:setup
 bun run publisher connect
-bun run publisher login instagram
-bun run publisher login twitter
-bun run publisher login xiaohongshu
-bun run publisher login youtube
-bun run publisher login tiktok
-bun run publisher login grain
 bun run publisher start
 ```
 
-Only log in to the destinations you want. In the composer, expand **Laptop
-connection**, generate a key, and paste it into `publisher connect`. A new key
-revokes the previous one. Browser destinations open an isolated Chrome profile;
-sign in and press Enter in the terminal. Grain/Bluesky share one AT Protocol
-app password, entered in the terminal; only the site's owner DID is accepted.
+In the composer, expand **Laptop connection**, generate a key, and paste it into
+`publisher connect`. A new key revokes the previous one. Then use **Accounts** in
+the composer to connect each destination. Instagram, X, YouTube, TikTok and
+Xiaohongshu open an isolated Chrome window on your laptop. Sign in there, then
+click **Finish sign-in** in the composer. Missing or expired sessions are not
+marked connected; Cancel closes the pending connection. No terminal input is
+needed for platform connections.
+
+**Grain / Bluesky** opens a PDS, handle and app-password form in the composer.
+Credentials are encrypted with AES-GCM and the AES key is wrapped to the paired
+laptop's RSA-OAEP public key. Only the laptop has the private key; Cloudflare
+stores temporary ciphertext and clears it when the connection finishes, is
+cancelled, or expires. Credentials are never saved in browser localStorage.
+The helper verifies the owner's DID before saving an app password locally and
+connecting both destinations. **Disconnect** removes the local profile or AT
+credentials. Each connection expires after fifteen minutes; interactive sign-in
+waits up to ten minutes. Connect one account at a time.
+
 Keep the helper terminal running while posting. It polls Cloudflare; no inbound
 localhost HTTP server or public tunnel is necessary. Closing the laptop leaves
 queued work waiting. Two helpers cannot claim the same target.
@@ -64,7 +71,7 @@ composer shows which selected destinations still need sign-in and labels the
 action **Queue post** while those destinations or the laptop are unavailable.
 
 `.publisher/` is gitignored and private (directory 0700, config 0600). It holds
-only helper credentials and platform sessions. It is the necessary local
+helper credentials, the connection encryption key, and platform sessions. It is the necessary local
 exception to Cloudflare persistence for browser login. Presets, platform choices,
 caption defaults, metadata policies and YouTube visibility live in this browser's
 localStorage. Media and job history live in Cloudflare R2/D1. Neither Flow tokens

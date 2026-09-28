@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import PublisherConnections, { type Connection } from "./PublisherConnections";
 import {
   defaultPreferences,
   parsePreferences,
@@ -48,6 +49,8 @@ export default function Publisher() {
   const [token, setToken] = useState("");
   const [helperOnline, setHelperOnline] = useState(false);
   const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [helperKey, setHelperKey] = useState<JsonWebKey | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const input = useRef<HTMLInputElement>(null);
   const submission = useRef<{ id: string; media: string[]; payload?: unknown } | null>(null);
@@ -93,6 +96,8 @@ export default function Publisher() {
     setRows(data.results);
     setHelperOnline(Boolean(data.helper?.last_seen && Date.now() - data.helper.last_seen < 90_000));
     setConnectedPlatforms(JSON.parse(data.helper?.platforms || "[]"));
+    setConnections(data.connections || []);
+    setHelperKey(data.helper?.public_key ? JSON.parse(data.helper.public_key) : null);
   }
   useEffect(() => {
     if (access !== "owner") return;
@@ -429,6 +434,15 @@ export default function Publisher() {
               )}
             </aside>
           </div>
+          <PublisherConnections
+            online={helperOnline}
+            connected={connectedPlatforms}
+            publicKey={helperKey}
+            connections={connections}
+            request={api}
+            refresh={refresh}
+            onError={setError}
+          />
           <details className="publisher-connection">
             <summary>Laptop connection</summary>
             {!helperOnline && (
@@ -438,11 +452,6 @@ export default function Publisher() {
               </p>
             )}
             {helperOnline && <p>Laptop paired and running.</p>}
-            {missingPlatforms.map((platform) => (
-              <p key={platform}>
-                {platformNames[platform]}: <code>bun run publisher login {platform}</code>
-              </p>
-            ))}
             <button
               onClick={async () => {
                 try {

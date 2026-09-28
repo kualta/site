@@ -49,3 +49,16 @@ body:has(.publisher) { background: #111113; }
 .publisher-error { color:#ffc7bd; background:#30211f; padding:14px; border-radius:8px; }
 .publisher-notice { color:#bfdbc8; }
 @media(max-width:700px) { .publisher { padding:24px 20px 70px; } .publisher-header { margin-bottom:48px; } .publisher-compose { grid-template-columns:1fr; gap:24px; } .publisher h1 { font-size:26px; } }
+
+.publisher-accounts { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #ffffff14; }
+.publisher-accounts h2 { font-size: 1rem; margin-bottom: .75rem; }
+.publisher-account { padding: .65rem 0; border-bottom: 1px solid #ffffff0a; }
+.publisher-account-row { display: flex; align-items: center; gap: 1rem; }
+.publisher-account-row > span:first-child { flex: 1; }
+.publisher-account-row .publisher-note { margin: 0; }
+.publisher-account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: .65rem; }
+.publisher-account-actions p { flex-basis: 100%; margin: 0; }
+.publisher-account-form { display: grid; gap: 1rem; max-width: 28rem; margin-top: 1.5rem; }
+.publisher-account-form label { display: grid; gap: .5rem; font-size: .85rem; }
+.publisher-account-form input { min-width: 0; width: 100%; }
+@media (max-width: 520px) { .publisher-account-row { flex-wrap: wrap; gap: .5rem; } .publisher-account-row .publisher-note { font-size: .7rem; } }

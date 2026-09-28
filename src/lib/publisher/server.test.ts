@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
-import { claimTarget, hashToken, validatePost } from "./server";
+import { claimTarget, claimConnection, hashToken, validatePost } from "./server";
 import { defaultMetadata } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 const post = () => ({
@@ -18,6 +18,7 @@ const post = () => ({
 function database() {
   const sqlite = new Database(":memory:");
   sqlite.exec(readFileSync("migrations/0002_publisher.sql", "utf8"));
+  sqlite.exec(readFileSync("migrations/0003_publisher_accounts.sql", "utf8"));
   const db = {
     prepare(sql: string) {
       let values: unknown[] = [];
@@ -98,4 +99,25 @@ describe("queue", () => {
     expect(() => sqlite.exec("UPDATE publisher_media SET job_id = 'other'")).toThrow();
     sqlite.close();
   });
+});
+
+test("account connection claims are exclusive and expiry discards encrypted credentials", async () => {
+  const { db, sqlite } = database();
+  sqlite
+    .query("INSERT INTO publisher_connections(id,platform,action,payload,created_at) VALUES(?,?,?,?,?)")
+    .run("one", "grain", "connect", "encrypted", Date.now());
+  expect((await claimConnection(db))?.id).toBe("one");
+  expect(await claimConnection(db)).toBeNull();
+  expect(() =>
+    sqlite.exec(
+      "INSERT INTO publisher_connections(id,platform,action,created_at) VALUES('two','instagram','connect',0)",
+    ),
+  ).toThrow();
+  sqlite.exec("UPDATE publisher_connections SET created_at=0 WHERE id='one'");
+  expect(await claimConnection(db)).toBeNull();
+  expect(sqlite.query("SELECT state,payload FROM publisher_connections WHERE id='one'").get()).toEqual({
+    state: "failed",
+    payload: null,
+  });
+  sqlite.close();
 });
