@@ -1,0 +1,8 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Gallery from "@/components/Gallery";
+---
+<BaseLayout title="gallery" description="Photos and videos from kualta’s Bluesky.">
+  <Gallery client:load />
+  <noscript><p>Enable JavaScript to browse the gallery, or <a href="https://bsky.app/profile/kualta.dev">view the posts on Bluesky</a>.</p></noscript>
+</BaseLayout>
