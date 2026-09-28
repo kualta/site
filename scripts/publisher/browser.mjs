@@ -92,7 +92,12 @@ export async function publishBrowser(platform, profile, files, post) {
         .first()
         .fill(post.caption);
       submitting = true;
-      await page.getByRole("button", { name: "发布", exact: true }).click({ timeout: 10 * 60_000 });
+      await page
+        .locator(
+          'xhs-publish-btn:not([is-publish="false"]):not([submit-disabled="true"]), .publish-page-publish-btn button.bg-red:not([disabled]):not([aria-disabled="true"]):not(.disabled)',
+        )
+        .first()
+        .click({ timeout: 10 * 60_000 });
     } else {
       await page.locator('input[type="file"]').first().setInputFiles(files);
       await page.locator('[contenteditable="true"]').first().fill(post.caption);
