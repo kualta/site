@@ -1,10 +1,11 @@
 import type { ComposerAttachment } from "@/lib/bluesky/media";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import BlueskyComposer from "./BlueskyComposer";
-import { getBlueskyAgent } from "@/lib/bluesky/auth";
+import { getBlueskyAgent, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import { publishProfilePost } from "@/lib/bluesky/compose";
 
 export default function FeedComposer() {
+  const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot);
   const [text, setText] = useState("");
   const [images, setImages] = useState<ComposerAttachment[]>([]);
   const [busy, setBusy] = useState(false);
@@ -48,6 +49,8 @@ export default function FeedComposer() {
       setBusy(false);
     }
   }
+
+  if (auth.agent && auth.profile?.handle !== "kualta.dev") return null;
 
   return (
     <BlueskyComposer
