@@ -11,26 +11,25 @@ function Video({ media }: { media: BlueskyMedia }) {
     const video = ref.current!;
     let disposed = false;
     let destroy: (() => void) | undefined;
-    if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = media.src;
-    else
-      import("hls.js")
-        .then(({ default: Hls }) => {
-          if (disposed) return;
-          if (!Hls.isSupported()) {
-            setFailed(true);
-            return;
-          }
-          const hls = new Hls();
-          hls.loadSource(media.src);
-          hls.attachMedia(video);
-          hls.on(Hls.Events.ERROR, (_, data) => {
-            if (data.fatal) setFailed(true);
-          });
-          destroy = () => hls.destroy();
-        })
-        .catch(() => {
-          if (!disposed) setFailed(true);
+    import("hls.js")
+      .then(({ default: Hls }) => {
+        if (disposed) return;
+        if (!Hls.isSupported()) {
+          if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = media.src;
+          else setFailed(true);
+          return;
+        }
+        const hls = new Hls();
+        hls.loadSource(media.src);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) setFailed(true);
         });
+        destroy = () => hls.destroy();
+      })
+      .catch(() => {
+        if (!disposed) setFailed(true);
+      });
     return () => {
       disposed = true;
       destroy?.();
