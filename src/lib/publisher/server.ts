@@ -3,7 +3,10 @@ import { platforms, support, type Platform, type MetadataPolicy } from "./preset
 
 export interface MediaBucket {
   put(key: string, body: ArrayBuffer, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
-  get(key: string): Promise<{ body: ReadableStream; httpMetadata?: { contentType?: string } } | null>;
+  get(key: string): Promise<{
+    body: ReadableStream;
+    httpMetadata?: { contentType?: string };
+  } | null>;
   delete(keys: string | string[]): Promise<void>;
 }
 export interface Post {
@@ -52,6 +55,11 @@ export function validatePost(value: unknown): Post {
     throw new Error("Add a title of up to 100 characters");
   if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
     throw new Error("Caption or alt text is too long");
+  if (p.platforms.includes("grain")) {
+    const encoder = new TextEncoder();
+    if (encoder.encode(p.title.trim()).length > 100 || encoder.encode(p.caption).length > 1000)
+      throw new Error("Grain supports 100 title and 1,000 caption UTF-8 bytes");
+  }
   if (p.platforms.includes("bluesky") && [...p.caption].length > 300)
     throw new Error("Bluesky captions support up to 300 characters");
   if (p.platforms.includes("twitter") && [...p.caption].length > 280)

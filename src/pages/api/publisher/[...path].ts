@@ -146,7 +146,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ ok: result.meta.changes > 0 });
     }
     if (path === "retry" && request.method === "POST") {
-      const data = (await request.json()) as { job: string; platform: string; checked: boolean };
+      const data = (await request.json()) as {
+        job: string;
+        platform: string;
+        checked: boolean;
+      };
       if (!validId(data.job) || !platforms.includes(data.platform as never) || data.checked !== true)
         return json({ error: "Confirm the destination has no duplicate first" }, 400);
       const result = await db
@@ -184,11 +188,13 @@ export const ALL: APIRoute = async ({ request, params }) => {
     // Validation errors are safe; storage/session exceptions must not expose internals.
     const message = error instanceof Error ? error.message : "";
     const safe =
-      /^(Invalid post|Choose |Add a title|Caption or alt|Unsupported destination|Bluesky captions|X captions|Instagram captions|Xiaohongshu supports)/.test(
+      /^(Invalid post|Choose |Add a title|Caption or alt|Unsupported destination|Grain supports|Bluesky captions|X captions|Instagram captions|Xiaohongshu supports)/.test(
         message,
       );
     return json(
-      { error: safe ? message : "Publisher unavailable. Check storage and session configuration." },
+      {
+        error: safe ? message : "Publisher unavailable. Check storage and session configuration.",
+      },
       safe ? 400 : 503,
     );
   }

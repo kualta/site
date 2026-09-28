@@ -1,32 +1,47 @@
 import { BskyAgent, RichText } from "@atproto/api";
 import { readFile } from "node:fs/promises";
+import { recordKey } from "../lib/atproto-content.mjs";
 const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 
 export async function publishAtproto(platform, config, files, infos, post, options = {}) {
   const agent = options.agent || new BskyAgent({ service: config.service });
   const fetcher = options.fetcher || fetch;
   const wait = options.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-  await agent.login({ identifier: config.identifier, password: config.password });
+  await agent.login({
+    identifier: config.identifier,
+    password: config.password,
+  });
   if (agent.session.did !== owner) throw new Error("The AT Protocol account must belong to kualta");
   const createdAt = new Date().toISOString();
   const blobs = [];
   if (post.kind === "photo") {
     for (const file of files)
-      blobs.push((await agent.uploadBlob(new Uint8Array(await readFile(file)), { encoding: "image/jpeg" })).data.blob);
+      blobs.push(
+        (
+          await agent.uploadBlob(new Uint8Array(await readFile(file)), {
+            encoding: "image/jpeg",
+          })
+        ).data.blob,
+      );
   }
   if (platform === "grain") {
-    const rkey = post.id;
+    const rkey = recordKey(`publisher:grain:${post.id}`);
     const gallery = `at://${owner}/social.grain.gallery/${rkey}`;
     const writes = [
       {
         $type: "com.atproto.repo.applyWrites#create",
         collection: "social.grain.gallery",
         rkey,
-        value: { $type: "social.grain.gallery", title: post.title, description: post.caption, createdAt },
+        value: {
+          $type: "social.grain.gallery",
+          title: post.title,
+          description: post.caption,
+          createdAt,
+        },
       },
     ];
     for (let i = 0; i < blobs.length; i++) {
-      const photoKey = `${rkey}-${i}`;
+      const photoKey = recordKey(`publisher:grain:${post.id}:${i}`);
       writes.push({
         $type: "com.atproto.repo.applyWrites#create",
         collection: "social.grain.photo",
@@ -52,7 +67,11 @@ export async function publishAtproto(platform, config, files, infos, post, optio
         },
       });
     }
-    await agent.com.atproto.repo.applyWrites({ repo: owner, validate: false, writes });
+    await agent.com.atproto.repo.applyWrites({
+      repo: owner,
+      validate: false,
+      writes,
+    });
     return { url: `https://grain.social/profile/${owner}/gallery/${rkey}` };
   }
   let embed;
@@ -74,7 +93,10 @@ export async function publishAtproto(platform, config, files, infos, post, optio
     const query = new URLSearchParams({ did: owner, name: `${post.id}.mp4` });
     const response = await fetcher(`https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?${query}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "video/mp4" },
+      headers: {
+        Authorization: `Bearer ${auth.token}`,
+        "Content-Type": "video/mp4",
+      },
       body: await readFile(files[0]),
     });
     let job = await response.json();
@@ -100,11 +122,18 @@ export async function publishAtproto(platform, config, files, infos, post, optio
   }
   const rich = new RichText({ text: post.caption });
   await rich.detectFacets(agent);
+  const rkey = recordKey(`publisher:bluesky:${post.id}`);
   await agent.com.atproto.repo.createRecord({
     repo: owner,
     collection: "app.bsky.feed.post",
-    rkey: post.id,
-    record: { $type: "app.bsky.feed.post", text: rich.text, facets: rich.facets, embed, createdAt },
+    rkey,
+    record: {
+      $type: "app.bsky.feed.post",
+      text: rich.text,
+      facets: rich.facets,
+      embed,
+      createdAt,
+    },
   });
-  return { url: `https://bsky.app/profile/${owner}/post/${post.id}` };
+  return { url: `https://bsky.app/profile/${owner}/post/${rkey}` };
 }
