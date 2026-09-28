@@ -2,8 +2,10 @@ import { BskyAgent, RichText } from "@atproto/api";
 import { readFile } from "node:fs/promises";
 const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 
-export async function publishAtproto(platform, config, files, infos, post) {
-  const agent = new BskyAgent({ service: config.service });
+export async function publishAtproto(platform, config, files, infos, post, options = {}) {
+  const agent = options.agent || new BskyAgent({ service: config.service });
+  const fetcher = options.fetcher || fetch;
+  const wait = options.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   await agent.login({ identifier: config.identifier, password: config.password });
   if (agent.session.did !== owner) throw new Error("The AT Protocol account must belong to kualta");
   const createdAt = new Date().toISOString();
@@ -65,25 +67,25 @@ export async function publishAtproto(platform, config, files, infos, post) {
     };
   else {
     const { data: auth } = await agent.com.atproto.server.getServiceAuth({
-      aud: "did:web:video.bsky.app",
+      aud: `did:web:${agent.pdsUrl.host}`,
       lxm: "com.atproto.repo.uploadBlob",
       exp: Math.floor(Date.now() / 1000) + 1800,
     });
     const query = new URLSearchParams({ did: owner, name: `${post.id}.mp4` });
-    const response = await fetch(`https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?${query}`, {
+    const response = await fetcher(`https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?${query}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "video/mp4" },
       body: await readFile(files[0]),
     });
-    if (!response.ok) throw new Error(`Bluesky video upload failed (${response.status})`);
     let job = await response.json();
     job = job.jobStatus || job;
+    if (!response.ok && !job.blob && !job.jobId) throw new Error(`Bluesky video upload failed (${response.status})`);
     for (let attempt = 0; !job.blob && attempt < 180; attempt++) {
       if (job.error || job.state === "JOB_STATE_FAILED") throw new Error("Bluesky video processing failed");
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      const response = await fetch(
+      await wait(5000);
+      const response = await fetcher(
         `https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=${encodeURIComponent(job.jobId)}`,
-        { headers: { Authorization: `Bearer ${auth.token}` } },
+        { signal: AbortSignal.timeout(30_000) },
       );
       if (!response.ok) throw new Error("Bluesky video status unavailable");
       job = (await response.json()).jobStatus;
