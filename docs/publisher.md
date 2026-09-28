@@ -28,6 +28,9 @@ to the printed API origin. Defaults are `http://localhost:8063` and
 `http://127.0.0.1:8060`. The local Auth audience allowlist must include the site's
 exact origin (`http://127.0.0.1:4321`). Local accounts are separate from production;
 these development settings never override the production publisher's issuer.
+The Flow SDK 0.26.0 dependency patch uses manual redirects and rejects 3xx
+responses: Cloudflare Workers does not implement `redirect: "error"`. Keep the
+patch until the SDK includes this fix; the login regression test covers it.
 
 ## Laptop setup
 

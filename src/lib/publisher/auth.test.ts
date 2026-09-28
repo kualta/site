@@ -30,3 +30,41 @@ test("publisher writes require an explicit same-origin request", () => {
     ),
   ).toBe(true);
 });
+
+test("Flow login uses Worker-compatible fetch and refuses issuer redirects", async () => {
+  const { handleSessionRequest } = await import("@flow-industries/id/server");
+  const original = globalThis.fetch;
+  const options = {
+    audience: "http://127.0.0.1:4321",
+    issuerUrl: "http://localhost:8063",
+    apiUrl: "http://127.0.0.1:8060",
+  };
+  const request = () =>
+    new Request(`${options.audience}/flow/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: options.audience },
+      body: JSON.stringify({ action: "login", returnTo: "/publish" }),
+    });
+  let redirect = false;
+  globalThis.fetch = Object.assign(
+    async (_url: unknown, init?: RequestInit) => {
+      expect(init?.redirect).toBe("manual");
+      return redirect
+        ? new Response(null, { status: 307, headers: { Location: "https://unexpected.example" } })
+        : Response.json({ transaction: "a".repeat(43) });
+    },
+    { preconnect: original.preconnect },
+  );
+  try {
+    const success = await handleSessionRequest(request(), options);
+    expect(success.status).toBe(200);
+    expect((await success.json()).authorizeUrl).toStartWith(`${options.issuerUrl}/authorize?`);
+    expect(success.headers.get("Set-Cookie")).toContain("HttpOnly");
+    redirect = true;
+    const refused = await handleSessionRequest(request(), options);
+    expect(refused.status).toBe(502);
+    expect((await refused.json()).error).toBe("login_unavailable");
+  } finally {
+    globalThis.fetch = original;
+  }
+});

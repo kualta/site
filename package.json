@@ -92,6 +92,7 @@
     "ws": "^8.21.0"
   },
   "patchedDependencies": {
-    "@coderline/alphatab@1.8.4": "patches/@coderline%2Falphatab@1.8.4.patch"
+    "@coderline/alphatab@1.8.4": "patches/@coderline%2Falphatab@1.8.4.patch",
+    "@flow-industries/id@0.26.0": "patches/@flow-industries%2Fid@0.26.0.patch"
   }
 }
