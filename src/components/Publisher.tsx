@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEffect, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import {
@@ -193,12 +194,15 @@ export default function Publisher() {
         <a href="https://kualta.dev">
           kualta<span> / post</span>
         </a>
-        {access === "owner" && (
-          <span className="helper-status">
-            <i data-online={helperOnline} />
-            {helperOnline ? "Laptop connected" : "Laptop offline"}
-          </span>
-        )}
+        <div className="publisher-header-tools">
+          {access === "owner" && (
+            <span className="helper-status">
+              <i data-online={helperOnline} />
+              {helperOnline ? "Laptop connected" : "Laptop offline"}
+            </span>
+          )}
+          <ThemeToggle path="/publish" showOnHome />
+        </div>
       </header>
       {access !== "owner" ? (
         <section className="publisher-login">

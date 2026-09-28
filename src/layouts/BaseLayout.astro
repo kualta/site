@@ -5,6 +5,7 @@ import { ClientRouter } from "astro:transitions";
 import MusicShelf from "@/components/MusicShelf.tsx";
 import musicData from "@/data/music.json";
 import type { Track } from "@/types";
+import ThemeInit from "@/components/ThemeInit.astro";
 import Header from "@/components/Header.astro";
 import NotificationsButton from "@/components/NotificationsButton.astro";
 import CornersScope from "@/components/CornersScope.astro";
@@ -124,17 +125,7 @@ const robots = noindex
     />
 
     <ClientRouter />
-    <script is:inline>
-      (function () {
-        try {
-          const stored = localStorage.getItem("theme");
-          const isDark = stored ? stored === "dark" : true;
-          document.documentElement.classList.toggle("dark", isDark);
-        } catch (_) {
-          document.documentElement.classList.add("dark");
-        }
-      })();
-    </script>
+    <ThemeInit />
   </head>
   <body
     data-music-page={musicPage ? "true" : undefined}

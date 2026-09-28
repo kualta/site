@@ -6,7 +6,10 @@ function readTheme(): "dark" | "light" {
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
-export function ThemeToggle({ path: initial = "/" }: { path?: string }) {
+export function ThemeToggle({
+  path: initial = "/",
+  showOnHome = false,
+}: { path?: string; showOnHome?: boolean }) {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [path, setPath] = useState(initial);
 
@@ -30,7 +33,7 @@ export function ThemeToggle({ path: initial = "/" }: { path?: string }) {
     } catch {}
   };
 
-  if (path === "/") {
+  if (path === "/" && !showOnHome) {
     return <div className="sm:w-8 sm:h-8" />;
   }
 
