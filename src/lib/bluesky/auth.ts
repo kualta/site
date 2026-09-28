@@ -27,6 +27,12 @@ export function subscribeBlueskyAuth(listener: () => void) {
     listeners.delete(listener);
   };
 }
+export function normalizeBlueskyCallbackUrl(location: Pick<Location, "pathname" | "search" | "hash">, history: Pick<History, "replaceState" | "state">) {
+  // Cloudflare adds a trailing slash to this static page. The SDK matches
+  // redirect_uri paths exactly, so fix the URL without another HTTP redirect.
+  if (location.pathname === "/auth/bluesky/")
+    history.replaceState(history.state, "", `/auth/bluesky${location.search}${location.hash}`);
+}
 export function safeReturnPath(value: string | null | undefined): string {
   if (
     !value ||
@@ -37,7 +43,7 @@ export function safeReturnPath(value: string | null | undefined): string {
   )
     return "/";
   const url = new URL(value, "https://kualta.dev");
-  return url.origin === "https://kualta.dev" && url.pathname !== "/auth/bluesky"
+  return url.origin === "https://kualta.dev" && !/^\/auth\/bluesky\/?$/.test(url.pathname)
     ? `${url.pathname}${url.search}${url.hash}`
     : "/";
 }
@@ -71,6 +77,7 @@ async function initialize() {
     } else {
       client = new BrowserOAuthClient({ clientMetadata: blueskyClientMetadata(origin), ...options });
     }
+    normalizeBlueskyCallbackUrl(window.location, window.history);
     const result = await client.init();
     if (result) {
       const agent = new Agent(result.session);
