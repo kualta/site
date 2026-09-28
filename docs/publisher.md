@@ -22,6 +22,13 @@ No production resources, account credentials, or posts are created by building
 or testing this branch. Local Flow login requires a local Auth stack configured
 for the site's dev origin; production Flow ID deliberately refuses localhost.
 
+For a local Auth stack, run its supported `./dev.sh` launcher. Start the site
+with `FLOW_ID_HOST` set to the printed Landing origin and `FLOW_ID_API_URL` set
+to the printed API origin. Defaults are `http://localhost:8063` and
+`http://127.0.0.1:8060`. The local Auth audience allowlist must include the site's
+exact origin (`http://127.0.0.1:4321`). Local accounts are separate from production;
+these development settings never override the production publisher's issuer.
+
 ## Laptop setup
 
 Install Bun, Python 3, Google Chrome and ExifTool (`brew install exiftool`).

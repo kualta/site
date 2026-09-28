@@ -103,7 +103,9 @@ export default function Publisher() {
       const { createFlow } = await import("@flow-industries/id");
       await createFlow().login({ returnTo: location.pathname });
     } catch {
-      setError("Flow ID sign-in could not start. Check this origin’s Flow ID configuration.");
+      setError(import.meta.env.DEV
+        ? "Local Flow ID is unavailable. Start the Auth development stack and configure FLOW_ID_HOST and FLOW_ID_API_URL for this preview."
+        : "Flow ID sign-in is unavailable. Please try again shortly.");
     }
   }
   async function submit() {

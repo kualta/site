@@ -32,6 +32,8 @@ declare namespace App {
 }
 
 interface ImportMetaEnv {
+  readonly FLOW_ID_HOST?: string;
+  readonly FLOW_ID_API_URL?: string;
   readonly PARAGRAPH_API_KEY?: string;
   readonly PARAGRAPH_PUBLICATION_SLUG?: string;
 }
