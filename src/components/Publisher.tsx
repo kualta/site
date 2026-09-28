@@ -8,6 +8,7 @@ import {
   STORAGE_KEY,
   type Preferences,
   type Preset,
+  type Platform,
 } from "@/lib/publisher/presets";
 import "@/styles/publisher.css";
 import { validatePost } from "@/lib/publisher/server";
@@ -46,6 +47,7 @@ export default function Publisher() {
   const [submitted, setSubmitted] = useState(false);
   const [token, setToken] = useState("");
   const [helperOnline, setHelperOnline] = useState(false);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const input = useRef<HTMLInputElement>(null);
   const submission = useRef<{ id: string; media: string[]; payload?: unknown } | null>(null);
@@ -90,6 +92,7 @@ export default function Publisher() {
     const data = await api("status");
     setRows(data.results);
     setHelperOnline(Boolean(data.helper?.last_seen && Date.now() - data.helper.last_seen < 90_000));
+    setConnectedPlatforms(JSON.parse(data.helper?.platforms || "[]"));
   }
   useEffect(() => {
     if (access !== "owner") return;
@@ -103,9 +106,11 @@ export default function Publisher() {
       const { createFlow } = await import("@flow-industries/id");
       await createFlow().login({ returnTo: location.pathname });
     } catch {
-      setError(import.meta.env.DEV
-        ? "Local Flow ID is unavailable. Start the Auth development stack and configure FLOW_ID_HOST and FLOW_ID_API_URL for this preview."
-        : "Flow ID sign-in is unavailable. Please try again shortly.");
+      setError(
+        import.meta.env.DEV
+          ? "Local Flow ID is unavailable. Start the Auth development stack and configure FLOW_ID_HOST and FLOW_ID_API_URL for this preview."
+          : "Flow ID sign-in is unavailable. Please try again shortly.",
+      );
     }
   }
   async function submit() {
@@ -175,6 +180,8 @@ export default function Publisher() {
   }
   const jobs = [...new Set(rows.map((row) => row.id))];
   let publishLabel = `Publish to ${preset.platforms.length} ${preset.platforms.length === 1 ? "place" : "places"}`;
+  const missingPlatforms = preset.platforms.filter((platform) => !connectedPlatforms.includes(platform));
+  if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
   if (submitted) publishLabel = "Retry queue request";
   if (busy) publishLabel = "Uploading…";
   return (
@@ -243,9 +250,15 @@ export default function Publisher() {
                   }}
                 />
                 <span>
-                  {files.length ? "Replace media" : preset.kind === "photo" ? "Choose photos" : "Choose a video"}
+                  {files.length
+                    ? "Replace media"
+                    : preset.kind === "photo"
+                      ? "Choose photos"
+                      : "Choose a video"}
                 </span>
-                <small>{preset.kind === "photo" ? "Up to 4 photos · 30 MB each" : "One video · up to 90 MB"}</small>
+                <small>
+                  {preset.kind === "photo" ? "Up to 4 photos · 30 MB each" : "One video · up to 90 MB"}
+                </small>
               </label>
               {!!previews.length && (
                 <div className="publisher-previews">
@@ -341,7 +354,11 @@ export default function Publisher() {
                 <summary>Preset settings</summary>
                 <label>
                   Name
-                  <input value={preset.name} maxLength={50} onChange={(e) => updatePreset({ name: e.target.value })} />
+                  <input
+                    value={preset.name}
+                    maxLength={50}
+                    onChange={(e) => updatePreset({ name: e.target.value })}
+                  />
                 </label>
                 <label>
                   Default caption
@@ -359,7 +376,10 @@ export default function Publisher() {
                       value={preset.metadata[p]}
                       onChange={(e) =>
                         updatePreset({
-                          metadata: { ...preset.metadata, [p]: e.target.value as "remove-location" | "remove-all" },
+                          metadata: {
+                            ...preset.metadata,
+                            [p]: e.target.value as "remove-location" | "remove-all",
+                          },
                         })
                       }
                     >
@@ -401,14 +421,28 @@ export default function Publisher() {
               <p className="publisher-note">
                 Media stays private in Cloudflare. Your laptop removes metadata before publishing.
               </p>
+              {!!missingPlatforms.length && (
+                <p className="publisher-note">
+                  Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")}{" "}
+                  sign-in.
+                </p>
+              )}
             </aside>
           </div>
           <details className="publisher-connection">
             <summary>Laptop connection</summary>
-            <p>
-              Run <code>bun run publisher:setup</code>, then <code>bun run publisher connect</code> on your laptop.
-              Paste a pairing key when prompted.
-            </p>
+            {!helperOnline && (
+              <p>
+                Run <code>bun run publisher:setup</code>, then <code>bun run publisher connect</code> on your
+                laptop. Paste a pairing key when prompted.
+              </p>
+            )}
+            {helperOnline && <p>Laptop paired and running.</p>}
+            {missingPlatforms.map((platform) => (
+              <p key={platform}>
+                {platformNames[platform]}: <code>bun run publisher login {platform}</code>
+              </p>
+            ))}
             <button
               onClick={async () => {
                 try {

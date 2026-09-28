@@ -58,6 +58,10 @@ app password, entered in the terminal; only the site's owner DID is accepted.
 Keep the helper terminal running while posting. It polls Cloudflare; no inbound
 localhost HTTP server or public tunnel is necessary. Closing the laptop leaves
 queued work waiting. Two helpers cannot claim the same target.
+Pairing checks the key before saving it. The paired helper can run before any
+platform login, and picks up newly connected accounts without restarting. The
+composer shows which selected destinations still need sign-in and labels the
+action **Queue post** while those destinations or the laptop are unavailable.
 
 `.publisher/` is gitignored and private (directory 0700, config 0600). It holds
 only helper credentials and platform sessions. It is the necessary local
