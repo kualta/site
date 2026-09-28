@@ -1,0 +1,11 @@
+---
+import Publisher from "@/components/Publisher";
+import "@/styles/globals.css";
+export const prerender = false;
+Astro.response.headers.set("Cache-Control", "no-store");
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+Astro.response.headers.set("Referrer-Policy", "same-origin");
+---
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width" /><meta name="robots" content="noindex,nofollow" /><title>post · kualta</title></head>
+<body><Publisher client:load /></body></html>

@@ -7,7 +7,6 @@ const CANONICAL_HOST = "kualta.dev";
 const subdomainRedirects: Record<string, string> = {
   moji: "/kaomoji",
   blog: "/posts",
-  post: "/posts",
   join: "/join",
 };
 
@@ -28,6 +27,9 @@ export const onRequest = defineMiddleware((ctx, next) => {
     const target = `https://${CANONICAL_HOST}${ctx.url.pathname}${ctx.url.search}`;
     return Response.redirect(target, 301);
   }
+
+  if (!import.meta.env.DEV && hostname === "kualta.dev" && ctx.url.pathname === "/publish") return Response.redirect("https://post.kualta.dev/", 302);
+  if (hostname === "post.kualta.dev" && ctx.url.pathname === "/") return ctx.rewrite("/publish");
 
   // permanent: these subdomains have no content of their own and never will,
   // so the destination is the one that should hold the ranking

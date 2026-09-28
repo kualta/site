@@ -2,21 +2,32 @@ import { expect, test } from "bun:test";
 import type { ActivityFetch } from "./activity/types";
 import { getGalleryPage, normalizeGallery } from "./gallery";
 
+const did = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 const post = {
-  uri: "at://did:plc:jhvnnnd3adml7t6anu3ay7ip/app.bsky.feed.post/post1",
-  cid: "bafyreid3l3mpwbadpafmoajnc2ukaaf42cmnti6shcomrrqnqq4ctap5xy",
-  indexedAt: "2026-08-30T12:00:00Z",
-  author: { did: "did:plc:jhvnnnd3adml7t6anu3ay7ip", handle: "kualta.dev" },
-  record: { $type: "app.bsky.feed.post", text: "hello", createdAt: "2026-08-30T12:00:00Z" },
-  embed: {
-    $type: "app.bsky.embed.images#view",
-    images: [
-      { alt: "first", thumb: "https://cdn.bsky.app/1.jpg", fullsize: "https://cdn.bsky.app/1.jpg" },
-      { alt: "second", thumb: "https://cdn.bsky.app/2.jpg", fullsize: "https://cdn.bsky.app/2.jpg" },
-    ],
+  uri: `at://${did}/social.grain.gallery/post1`,
+  creator: { did, handle: "kualta.dev", displayName: "ku" },
+  record: {
+    $type: "social.grain.gallery",
+    title: "hello",
+    description: "A gallery",
+    createdAt: "2026-08-30T12:00:00Z",
   },
+  items: [
+    {
+      alt: "second",
+      thumb: "https://cdn.grain.social/2.jpg",
+      fullsize: "https://cdn.grain.social/2.jpg",
+      gallery: { itemPosition: 1 },
+    },
+    {
+      alt: "first",
+      thumb: "https://cdn.grain.social/1.jpg",
+      fullsize: "https://cdn.grain.social/1.jpg",
+      gallery: { itemPosition: 0 },
+    },
+  ],
 };
-const feed = { feed: [{ post }], cursor: "older" };
+const feed = { items: [post], cursor: "older" };
 function memoryCache() {
   const entries = new Map<string, string>();
   return {
@@ -28,19 +39,19 @@ function memoryCache() {
 }
 
 test("keeps all attached images, deduplicates posts, and preserves pagination", () => {
-  const page = normalizeGallery({ ...feed, feed: [{ post }, { post }] });
+  const page = normalizeGallery({ ...feed, items: [post, post] });
   expect(page.posts).toHaveLength(1);
   expect(page.posts[0].media.map((m) => m.alt)).toEqual(["first", "second"]);
   expect(page.cursor).toBe("older");
 });
 
-test("excludes reposts, quotes without own media, and moderated media", () => {
+test("excludes other authors, moderated records, and unsafe media", () => {
   expect(
     normalizeGallery({
-      feed: [
-        { post, reason: { $type: "app.bsky.feed.defs#reasonRepost" } },
-        { post: { ...post, labels: [{ src: post.author.did, uri: post.uri, val: "porn", cts: post.indexedAt }] } },
-        { post: { ...post, embed: undefined } },
+      items: [
+        { ...post, creator: { did: "did:plc:other" } },
+        { ...post, labels: [{ val: "porn" }] },
+        { ...post, items: [{ fullsize: "javascript:alert(1)", thumb: "https://cdn.grain.social/x.jpg" }] },
       ],
     }).posts,
   ).toEqual([]);

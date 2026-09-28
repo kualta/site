@@ -2,6 +2,7 @@
 
 declare namespace Cloudflare {
   interface Env {
+    PUBLISHER_MEDIA?: import("@/lib/publisher/server").MediaBucket;
     ACTIVITY_CACHE?: import("@/lib/activity").ActivityCacheStore;
     GITHUB_ACTIVITY_TOKEN?: string;
     PLUNK_SECRET_KEY?: string;
@@ -37,4 +38,9 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+
+declare module "ffprobe-static" {
+  const binary: { path: string };
+  export default binary;
 }
