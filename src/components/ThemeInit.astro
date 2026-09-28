@@ -1,0 +1,10 @@
+<script is:inline>
+  (function () {
+    try {
+      const stored = localStorage.getItem("theme");
+      document.documentElement.classList.toggle("dark", stored ? stored === "dark" : true);
+    } catch (_) {
+      document.documentElement.classList.add("dark");
+    }
+  })();
+</script>

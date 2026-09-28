@@ -39,3 +39,7 @@ dist/**
 # Generated public AT Protocol publishing snapshot
 /public/.well-known/site.standard.publication
 /public/.well-known/site.standard.manifest.json
+
+# Laptop publisher credentials, sessions and temporary files
+.publisher/
+__pycache__/

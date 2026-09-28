@@ -10,7 +10,7 @@
     "music:sync": "node scripts/sync-music.mjs",
     "preview": "astro preview",
     "check": "astro check",
-    "test": "bun test",
+    "test": "bun test && node --test scripts/publisher/oauth.node-test.mjs",
     "format": "bunx @biomejs/biome format --write ./src",
     "lint": "bunx @biomejs/biome lint --apply-unsafe ./src",
     "music:lyrics": "node scripts/fetch-lyrics.mjs",
@@ -23,7 +23,9 @@
     "atproto:preview": "bun run atproto:prepare && node scripts/publish-atproto.mjs --dry-run",
     "atproto:publish": "node scripts/publish-atproto.mjs",
     "atproto:verify": "node scripts/publish-atproto.mjs --verify",
-    "music:publish": "node scripts/publish-music.mjs"
+    "music:publish": "node scripts/publish-music.mjs",
+    "publisher": "node scripts/publisher/cli.mjs",
+    "publisher:setup": "sh scripts/publisher/setup.sh"
   },
   "dependencies": {
     "@astro-community/astro-embed-bluesky": "0.2.3",
@@ -40,6 +42,7 @@
     "@atproto/oauth-client-browser": "^0.5.7",
     "@coderline/alphatab": "^1.8.4",
     "@ffmpeg/ffmpeg": "0.12.15",
+    "@flow-industries/id": "0.26.0",
     "@fontsource/fredoka": "^5.2.10",
     "@fontsource/huninn": "^5.3.0",
     "@fontsource/m-plus-rounded-1c": "^5.3.0",
@@ -51,6 +54,7 @@
     "mdast-util-to-string": "^4.0.0",
     "motion": "^13.2.0",
     "multiformats": "^14.0.5",
+    "ox": "^1.8.3",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-email": "^6.9.3",
@@ -64,24 +68,32 @@
     "sharp": "^0.35.4",
     "typescript": "^5.4.5",
     "unified": "^11.0.5",
+    "viem": "^2.56.9",
     "wrangler": "^4.92.0",
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@atproto/oauth-client-node": "^0.5.7",
     "@biomejs/biome": "1.4.1",
     "@tailwindcss/typography": "^0.5.9",
     "@types/bun": "^1.4.0",
     "autoprefixer": "^10.4.13",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
     "music-metadata": "^11.14.0",
     "node-id3": "^0.2.9",
+    "playwright": "^1.63.0",
     "postcss": "^8.4.31",
-    "tailwindcss": "^3.2.7"
+    "tailwindcss": "^3.2.7",
+    "youtubei.js": "^18.1.0"
   },
   "overrides": {
     "@types/react": "19.0.1",
-    "@types/react-dom": "19.0.1"
+    "@types/react-dom": "19.0.1",
+    "ws": "^8.21.0"
   },
   "patchedDependencies": {
-    "@coderline/alphatab@1.8.4": "patches/@coderline%2Falphatab@1.8.4.patch"
+    "@coderline/alphatab@1.8.4": "patches/@coderline%2Falphatab@1.8.4.patch",
+    "@flow-industries/id@0.26.0": "patches/@flow-industries%2Fid@0.26.0.patch"
   }
 }

@@ -1,0 +1,16 @@
+diff --git a/dist/sdk/issuer-api.js b/dist/sdk/issuer-api.js
+index 3adfd80f5e5e78516f230b4327df1fbd7cbd4a22..d2bb5f4fdc5a7bf1f384496aaf8588a5b94f63ee 100644
+--- a/dist/sdk/issuer-api.js
++++ b/dist/sdk/issuer-api.js
+@@ -16,7 +16,10 @@ export function resolveIssuerApiUrl(issuerUrl, override) {
+     return url.origin;
+ }
+ export async function fetchIssuerApi(url, init) {
+-    const response = await fetch(url, { ...init, redirect: "error" });
++    const response = await fetch(url, { ...init, redirect: "manual" });
++    if (response.status >= 300 && response.status < 400) {
++        throw new Error("Flow ID API redirects are not allowed");
++    }
+     if (!response.ok) {
+         console.warn("Flow ID API request failed", {
+             path: new URL(url).pathname,

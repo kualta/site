@@ -14,6 +14,7 @@
     "database_id": "4103ceff-20df-4314-b5c7-ee64df0e52ad",
     "migrations_dir": "migrations"
   }],
+  "r2_buckets": [{ "binding": "PUBLISHER_MEDIA", "bucket_name": "kualta-publisher-media" }],
   "observability": {
     "enabled": true
   },

@@ -1,0 +1,28 @@
+---
+import CornersScope from "@/components/CornersScope.astro";
+import ThemeInit from "@/components/ThemeInit.astro";
+import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?url";
+import Publisher from "@/components/Publisher";
+import "@/styles/globals.css";
+export const prerender = false;
+Astro.response.headers.set("Cache-Control", "no-store");
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+Astro.response.headers.set("Referrer-Policy", "same-origin");
+---
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>post · kualta</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="preload" href={fredoka} as="font" type="font/woff2" crossorigin />
+    <ThemeInit />
+  </head>
+  <body class="publisher-page bg-bg dark:bg-dark-bg text-text dark:text-dark-text min-h-screen relative">
+    <div class="noise" aria-hidden="true"></div>
+    <Publisher client:load />
+    <div class="pointer-events-none" aria-hidden="true"><CornersScope /></div>
+  </body>
+</html>
