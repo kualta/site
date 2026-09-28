@@ -18,9 +18,8 @@ test("video grants uploadBlob to the account PDS, waits for a blob, then creates
     ref: { $link: "test" },
   };
   const agent = {
-    session: { did: "did:plc:jhvnnnd3adml7t6anu3ay7ip" },
+    did: "did:plc:jhvnnnd3adml7t6anu3ay7ip",
     pdsUrl: new URL("https://owner.pds.example"),
-    login: async () => {},
     com: {
       atproto: {
         server: {
@@ -41,7 +40,7 @@ test("video grants uploadBlob to the account PDS, waits for a blob, then creates
   try {
     const result = await publishAtproto(
       "bluesky",
-      {},
+      { agent, pdsUrl: new URL("https://owner.pds.example") },
       [file],
       [{ width: 64, height: 48 }],
       {
@@ -55,7 +54,9 @@ test("video grants uploadBlob to the account PDS, waits for a blob, then creates
         wait: async () => {},
         fetcher: async (url) => {
           urls.push(String(url));
-          return Response.json(call++ === 0 ? { jobId: "job", state: "JOB_STATE_CREATED" } : { jobStatus: { blob } });
+          return Response.json(
+            call++ === 0 ? { jobId: "job", state: "JOB_STATE_CREATED" } : { jobStatus: { blob } },
+          );
         },
       },
     );
@@ -77,8 +78,7 @@ test("Grain writes ordered photos and gallery links atomically with stable TID k
   const batches = [];
   const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
   const agent = {
-    session: { did: owner },
-    login: async () => {},
+    did: owner,
     uploadBlob: async () => ({
       data: { blob: { $type: "blob", mimeType: "image/jpeg", size: 10 } },
     }),
@@ -97,7 +97,7 @@ test("Grain writes ordered photos and gallery links atomically with stable TID k
     const publish = () =>
       publishAtproto(
         "grain",
-        {},
+        { agent, pdsUrl: new URL("https://owner.pds.example") },
         [file, file],
         [
           { width: 64, height: 48 },

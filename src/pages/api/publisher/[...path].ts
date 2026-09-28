@@ -10,7 +10,6 @@ import {
   validatePost,
 } from "@/lib/publisher/server";
 import { platforms } from "@/lib/publisher/presets";
-import { validEncryptedCredentials } from "@/lib/publisher/credentials";
 export const prerender = false;
 
 export const ALL: APIRoute = async ({ request, params }) => {
@@ -50,7 +49,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "status" && request.method === "GET") {
       const helper = await db
-        .prepare("SELECT last_seen, platforms, public_key FROM publisher_helper WHERE id = 1")
+        .prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1")
         .first();
       const connections = await db
         .prepare(
@@ -72,9 +71,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       };
       if (!platforms.includes(data.platform) || !["connect", "disconnect"].includes(data.action))
         return json({ error: "Invalid connection" }, 400);
-      const atproto = ["grain", "bluesky"].includes(data.platform);
-      if (data.action === "connect" && atproto && !validEncryptedCredentials(data.credentials))
-        return json({ error: "Enter AT Protocol credentials" }, 400);
+      if (data.credentials !== undefined)
+        return json({ error: "Refresh the composer to connect with OAuth" }, 400);
       const helper = await db
         .prepare("SELECT last_seen FROM publisher_helper WHERE id=1")
         .first<{ last_seen: number }>();
@@ -91,13 +89,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         .prepare(
           "INSERT INTO publisher_connections(id,platform,action,payload,created_at) SELECT ?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM publisher_connections WHERE state IN ('queued','working')) RETURNING id",
         )
-        .bind(
-          id,
-          data.platform,
-          data.action,
-          atproto && data.action === "connect" ? JSON.stringify(data.credentials) : null,
-          Date.now(),
-        )
+        .bind(id, data.platform, data.action, null, Date.now())
         .first();
       return inserted
         ? json({ id }, 201)
@@ -126,12 +118,24 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const id = path.slice("helper/accounts/".length);
       if (!validId(id)) return json({ error: "Invalid connection" }, 400);
       return json(
-        await db.prepare("SELECT state, confirmed FROM publisher_connections WHERE id=?").bind(id).first(),
+        await db
+          .prepare("SELECT state, confirmed FROM publisher_connections WHERE id=?")
+          .bind(id)
+          .first(),
       );
     }
     if (path === "helper/accounts/result" && request.method === "POST") {
-      const data = (await request.json()) as { id: string; claim: string; state: string; message?: string };
-      if (!validId(data.id) || !validId(data.claim) || !["succeeded", "failed"].includes(data.state))
+      const data = (await request.json()) as {
+        id: string;
+        claim: string;
+        state: string;
+        message?: string;
+      };
+      if (
+        !validId(data.id) ||
+        !validId(data.claim) ||
+        !["succeeded", "failed"].includes(data.state)
+      )
         return json({ error: "Invalid connection result" }, 400);
       const updated = await db
         .prepare(
@@ -198,25 +202,17 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ id: post.id }, 201);
     }
     if (path === "helper/heartbeat" && request.method === "POST") {
-      await db.prepare("UPDATE publisher_helper SET last_seen = ? WHERE id = 1").bind(Date.now()).run();
+      await db
+        .prepare("UPDATE publisher_helper SET last_seen = ? WHERE id = 1")
+        .bind(Date.now())
+        .run();
       return json({ ok: true });
     }
     if (path === "helper/claim" && request.method === "POST") {
-      const input = (await request.json()) as { platforms?: unknown; publicKey?: JsonWebKey };
+      const input = (await request.json()) as { platforms?: unknown };
       const supported = platforms.filter(
         (p) => Array.isArray(input.platforms) && input.platforms.includes(p),
       );
-      const key = input.publicKey;
-      if (
-        key?.kty === "RSA" &&
-        key.e === "AQAB" &&
-        typeof key.n === "string" &&
-        /^[A-Za-z0-9_-]{342}$/.test(key.n)
-      )
-        await db
-          .prepare("UPDATE publisher_helper SET public_key=? WHERE id=1")
-          .bind(JSON.stringify({ kty: key.kty, n: key.n, e: key.e, alg: "RSA-OAEP-256", ext: true }))
-          .run();
       await db
         .prepare("UPDATE publisher_helper SET last_seen = ?, platforms = ? WHERE id = 1")
         .bind(Date.now(), JSON.stringify(supported))
@@ -252,8 +248,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
       )
         return json({ error: "Invalid result" }, 400);
       const url =
-        typeof data.url === "string" && /^https:\/\//.test(data.url) ? data.url.slice(0, 2000) : null;
-      if (data.state === "succeeded" && !url) return json({ error: "A confirmed post URL is required" }, 400);
+        typeof data.url === "string" && /^https:\/\//.test(data.url)
+          ? data.url.slice(0, 2000)
+          : null;
+      if (data.state === "succeeded" && !url)
+        return json({ error: "A confirmed post URL is required" }, 400);
       const result = await db
         .prepare(
           "UPDATE publisher_targets SET state = ?, message = ?, url = ? WHERE id = ? AND claim = ? AND state IN ('working','uncertain')",
@@ -268,7 +267,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
         platform: string;
         checked: boolean;
       };
-      if (!validId(data.job) || !platforms.includes(data.platform as never) || data.checked !== true)
+      if (
+        !validId(data.job) ||
+        !platforms.includes(data.platform as never) ||
+        data.checked !== true
+      )
         return json({ error: "Confirm the destination has no duplicate first" }, 400);
       const result = await db
         .prepare(

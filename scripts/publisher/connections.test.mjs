@@ -1,35 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { laptopKeys, decryptCredentials, connectAccount, hasSession } from "./connections.mjs";
-import { encryptCredentials, validEncryptedCredentials } from "../../src/lib/publisher/credentials";
-
-test("AT credentials round-trip only with the paired laptop key and reject tampering", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "publisher-keys-"));
-  const other = await mkdtemp(join(tmpdir(), "publisher-other-"));
-  try {
-    const keys = await laptopKeys(dir);
-    const credentials = {
-      service: "https://pds.example",
-      identifier: "kualta.dev",
-      password: "fixture-private-password",
-    };
-    const envelope = await encryptCredentials(keys.publicKey, credentials);
-    expect(validEncryptedCredentials(envelope)).toBe(true);
-    expect(JSON.stringify(envelope)).not.toContain(credentials.password);
-    expect(await decryptCredentials(envelope, keys.privateKey)).toEqual(credentials);
-    expect((await stat(join(dir, "connection-key.json"))).mode & 0o777).toBe(0o600);
-    expect((await laptopKeys(dir)).publicKey).toEqual(keys.publicKey);
-    await expect(decryptCredentials(envelope, (await laptopKeys(other)).privateKey)).rejects.toThrow();
-    await expect(
-      decryptCredentials({ ...envelope, data: "AAAA" + envelope.data.slice(4) }, keys.privateKey),
-    ).rejects.toThrow();
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-    await rm(other, { recursive: true, force: true });
-  }
-});
+import { connectAccount, hasSession } from "./connections.mjs";
 
 function browserFixture(cookies) {
   let closed = false,
@@ -43,7 +13,6 @@ function browserFixture(cookies) {
     deps: {
       config,
       stateDir: "/unused",
-      keys: {},
       save: async () => {
         saved = true;
       },
@@ -91,30 +60,42 @@ test("cancelled connection does not open a browser or save an account", async ()
   expect(opened).toBe(false);
   expect(fixture.saved()).toBe(false);
 });
-test("AT Protocol rejects a different account and never persists its password", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "publisher-owner-"));
-  try {
-    const keys = await laptopKeys(dir);
-    const payload = await encryptCredentials(keys.publicKey, {
-      service: "https://pds.example",
-      identifier: "other.example",
-      password: "private",
-    });
-    const fixture = browserFixture([]);
-    const result = await connectAccount(
-      { ...request, platform: "grain", payload: JSON.stringify(payload) },
-      {
-        ...fixture.deps,
-        keys,
-        agentFactory: () => ({ login: async () => {}, session: { did: "did:plc:anotherowner" } }),
+test("OAuth connects Grain and Bluesky together without credentials", async () => {
+  const fixture = browserFixture([]);
+  const did = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
+  const result = await connectAccount(
+    { ...request, platform: "grain" },
+    {
+      ...fixture.deps,
+      oauth: {
+        connect: async (active) => {
+          await active();
+          return did;
+        },
       },
-    );
-    expect(result.state).toBe("failed");
-    expect(fixture.saved()).toBe(false);
-    expect(fixture.config.platforms).toEqual([]);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
+    },
+  );
+  expect(result.state).toBe("succeeded");
+  expect(fixture.config.atproto).toEqual({ did });
+  expect(fixture.config.platforms).toEqual(["grain", "bluesky"]);
+  expect(fixture.saved()).toBe(true);
+});
+test("OAuth failure never marks an account connected", async () => {
+  const fixture = browserFixture([]);
+  const result = await connectAccount(
+    { ...request, platform: "grain" },
+    {
+      ...fixture.deps,
+      oauth: {
+        connect: async () => {
+          throw Error("Authorization denied");
+        },
+      },
+    },
+  );
+  expect(result.state).toBe("failed");
+  expect(fixture.config.platforms).toEqual([]);
+  expect(fixture.saved()).toBe(false);
 });
 
 test("helper refuses unrecognized platform paths before touching local profiles", async () => {

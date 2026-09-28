@@ -5,7 +5,7 @@ import { publish } from "./runner.mjs";
 function fixture(overrides = {}) {
   return {
     api: async () => new Response("source"),
-    config: {},
+    oauth: { agent: async () => ({ agent: {} }) },
     stateDir: "/unused",
     process: async (_input, output) => {
       await writeFile(output, "prepared");
@@ -113,4 +113,24 @@ test("Bluesky video limits are enforced before invoking the platform", async () 
   );
   expect(result.state).toBe("failed");
   expect(calls).toBe(0);
+});
+
+test("expired OAuth fails before publishing starts", async () => {
+  let called = false;
+  const result = await publish(
+    { platform: "bluesky" },
+    post,
+    fixture({
+      oauth: {
+        agent: async () => {
+          throw Error("Reconnect with OAuth");
+        },
+      },
+      atproto: async () => {
+        called = true;
+      },
+    }),
+  );
+  expect(result.state).toBe("failed");
+  expect(called).toBe(false);
 });

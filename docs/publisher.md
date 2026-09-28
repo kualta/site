@@ -52,26 +52,29 @@ click **Finish sign-in** in the composer. Missing or expired sessions are not
 marked connected; Cancel closes the pending connection. No terminal input is
 needed for platform connections.
 
-**Grain / Bluesky** opens a PDS, handle and app-password form in the composer.
-Credentials are encrypted with AES-GCM and the AES key is wrapped to the paired
-laptop's RSA-OAEP public key. Only the laptop has the private key; Cloudflare
-stores temporary ciphertext and clears it when the connection finishes, is
-cancelled, or expires. Credentials are never saved in browser localStorage.
-The helper verifies the owner's DID before saving an app password locally and
-connecting both destinations. **Disconnect** removes the local profile or AT
-credentials. Each connection expires after fifteen minutes; interactive sign-in
-waits up to ten minutes. Connect one account at a time.
+**Grain / Bluesky** opens the account's AT Protocol OAuth authorization page on
+your laptop and connects both destinations automatically after approval. The
+official Node OAuth client handles PKCE, DPoP and token refresh. The helper
+checks kualta's DID and requests only creation of Bluesky posts and Grain gallery,
+photo and gallery-item records, JPEG/MP4 uploads, and the uploadBlob service
+authorization used for Bluesky video. No app password is requested.
 
-Keep the helper terminal running while posting. It polls Cloudflare; no inbound
-localhost HTTP server or public tunnel is necessary. Closing the laptop leaves
-queued work waiting. Two helpers cannot claim the same target.
+OAuth tokens and signing keys stay in private laptop files. **Disconnect** revokes
+the OAuth session and deletes the local tokens; other platforms remove their
+local browser profiles. Connections expire after fifteen minutes; interactive
+sign-in waits up to ten minutes. Connect one account at a time.
+
+Keep the helper terminal running while posting. It polls Cloudflare. AT Protocol
+OAuth returns to a loopback-only listener at `127.0.0.1:43827/oauth/callback`;
+no public tunnel is needed. That port also ensures only one helper uses the
+OAuth session at a time. Closing the laptop leaves queued work waiting.
 Pairing checks the key before saving it. The paired helper can run before any
 platform login, and picks up newly connected accounts without restarting. The
 composer shows which selected destinations still need sign-in and labels the
 action **Queue post** while those destinations or the laptop are unavailable.
 
 `.publisher/` is gitignored and private (directory 0700, config 0600). It holds
-helper credentials, the connection encryption key, and platform sessions. It is the necessary local
+the pairing key, OAuth tokens and platform sessions. It is the necessary local
 exception to Cloudflare persistence for browser login. Presets, platform choices,
 caption defaults, metadata policies and YouTube visibility live in this browser's
 localStorage. Media and job history live in Cloudflare R2/D1. Neither Flow tokens

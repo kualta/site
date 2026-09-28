@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
+import { mkdir, readFile, writeFile, chmod, rm } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { resolve, join, dirname } from "node:path";
@@ -9,7 +9,8 @@ import { promisify } from "node:util";
 import ffmpeg from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
 import { publish } from "./runner.mjs";
-import { laptopKeys, connectAccount } from "./connections.mjs";
+import { connectAccount } from "./connections.mjs";
+import { createOAuth } from "./oauth.mjs";
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const stateDir = join(root, ".publisher");
@@ -93,24 +94,31 @@ if (command === "connect") {
   if (!config.token) throw new Error("Connect the helper first");
   await exec("exiftool", ["-ver"]);
   await exec(process.env.FFMPEG_PATH, ["-version"]);
-  const keys = await laptopKeys(stateDir);
+  const oauth = await createOAuth(stateDir);
+  await rm(join(stateDir, "connection-key.json"), { force: true });
+  if (config.atproto?.password || !(await oauth.hasSession())) {
+    delete config.atproto;
+    config.platforms = config.platforms.filter((p) => !["grain", "bluesky"].includes(p));
+    await save();
+  }
   console.log("Publisher ready. Keep this terminal open. Ctrl+C stops the helper.");
   setInterval(() => api("heartbeat", {}).catch(() => {}), 30_000).unref();
   while (true) {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
       const { target, post, connection } = await (
-        await api("claim", { platforms: config.platforms, publicKey: keys.publicKey })
+        await api("claim", { platforms: config.platforms })
       ).json();
       if (connection) {
-        const result = await connectAccount(connection, { stateDir, config, keys, api, save });
+        const result = await connectAccount(connection, { stateDir, config, oauth, api, save });
         // Retry the receipt only; never reopen or repeat an account action.
         for (let attempt = 0; attempt < 5; attempt++) {
           try {
             await api("accounts/result", { id: connection.id, claim: connection.claim, ...result });
             break;
           } catch (error) {
-            if (attempt === 4) console.error("Connection receipt could not be saved. Refresh the composer.");
+            if (attempt === 4)
+              console.error("Connection receipt could not be saved. Refresh the composer.");
             else await new Promise((resolve) => setTimeout(resolve, 5000));
           }
         }
@@ -119,7 +127,7 @@ if (command === "connect") {
       }
       if (target) {
         console.log(`Publishing ${target.platform}…`);
-        const result = await publish(target, post, { api, config, stateDir, python });
+        const result = await publish(target, post, { api, config, oauth, stateDir, python });
         // Only delivery acknowledgements retry. Never repeat a publishing action.
         let delivered = false;
         for (let i = 0; i < 5 && !delivered; i++) {
@@ -133,7 +141,9 @@ if (command === "connect") {
           }
         }
         console.log(
-          `${target.platform}: ${result.state}${delivered ? "" : " (receipt not saved; check the platform)"}`,
+          `${target.platform}: ${result.state}${
+            delivered ? "" : " (receipt not saved; check the platform)"
+          }`,
         );
       } else await new Promise((resolve) => setTimeout(resolve, 5000));
     } catch (e) {
