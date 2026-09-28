@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { safeReturnPath } from "./auth";
+import { normalizeBlueskyCallbackUrl, safeReturnPath } from "./auth";
 import { BLUESKY_SCOPE, blueskyClientMetadata } from "./metadata";
 
 describe("OAuth return paths", () => {
@@ -17,6 +17,8 @@ describe("OAuth return paths", () => {
       "/\nevil.example",
       "/\t/evil.example",
       "/auth/bluesky",
+      "/auth/bluesky/",
+      "/auth/bluesky/?code=test#state=test",
     ]) {
       expect(safeReturnPath(path)).toBe("/");
     }
@@ -36,5 +38,32 @@ describe("OAuth metadata", () => {
     expect(metadata.scope).toBe(BLUESKY_SCOPE);
     expect(metadata.token_endpoint_auth_method).toBe("none");
     expect(BLUESKY_SCOPE).not.toContain("transition:generic");
+  });
+});
+
+
+describe("OAuth callback canonicalization", () => {
+  it("preserves query and fragment responses while matching the registered callback", () => {
+    for (const suffix of ["?code=test&state=opaque&iss=https%3A%2F%2Fbsky.social", "#code=test&state=opaque", "?error=access_denied&state=opaque"]) {
+      const url = new URL(`https://kualta.dev/auth/bluesky/${suffix}`);
+      const history = {
+        state: { existing: true },
+        replaceState: (state: unknown, _title: string, path?: string | URL | null) => {
+          expect(state).toEqual({ existing: true });
+          url.href = new URL(String(path), url).href;
+        },
+      };
+      normalizeBlueskyCallbackUrl(url, history);
+      expect(url.href).toBe(`https://kualta.dev/auth/bluesky${suffix}`);
+      expect(url.pathname).toBe(new URL(blueskyClientMetadata(url.origin).redirect_uris[0]).pathname);
+    }
+  });
+  it("leaves normal pages and the exact callback untouched", () => {
+    for (const path of ["/posts/dream-letter/", "/auth/bluesky", "/"]) {
+      normalizeBlueskyCallbackUrl(new URL(`https://kualta.dev${path}`), {
+        state: null,
+        replaceState: () => { throw new Error("Unexpected URL rewrite"); },
+      });
+    }
   });
 });
