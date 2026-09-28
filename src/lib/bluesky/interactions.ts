@@ -1,3 +1,4 @@
+import { uploadMedia, type ComposerAttachment } from "./media";
 import { AppBskyFeedPost, RichText, Agent } from "@atproto/api";
 
 export async function fetchInteractionPost(agent: Agent, uri: string) {
@@ -34,14 +35,15 @@ export async function togglePostRepost(agent: Agent, uri: string, knownRepost?: 
   return { ...post, repostCount: (post.repostCount ?? 0) + 1, viewer: { ...post.viewer, repost: repost.uri } };
 }
 
-export async function replyToPost(agent: Agent, uri: string, text: string) {
+export async function replyToPost(agent: Agent, uri: string, text: string, images: ComposerAttachment[] = []) {
   const richText = new RichText({ text: text.trim() });
-  if (!richText.text || richText.graphemeLength > 300) throw new Error("Write a reply of 1–300 characters.");
+  if ((!richText.text && !images.length) || richText.graphemeLength > 300) throw new Error("Write a reply of 1–300 characters.");
   const post = await fetchInteractionPost(agent, uri);
   if (post.viewer?.replyDisabled) throw new Error("Replies are disabled for this post.");
   const parent = { uri: post.uri, cid: post.cid };
   const record = AppBskyFeedPost.isRecord(post.record) ? (post.record as AppBskyFeedPost.Record) : undefined;
   const root = record?.reply?.root ?? parent;
   await richText.detectFacets(new Agent({ service: "https://public.api.bsky.app" }));
-  return agent.post({ text: richText.text, facets: richText.facets, reply: { parent, root } });
+  const embed = await uploadMedia(agent, images);
+  return agent.post({ text: richText.text, facets: richText.facets, reply: { parent, root }, ...(embed ? { embed } : {}) });
 }
