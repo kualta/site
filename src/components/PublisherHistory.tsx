@@ -13,7 +13,14 @@ type Target = {
 type Post = {
   id: string;
   created_at: number;
-  post: { title: string; caption: string; kind: "photo" | "video"; media: string[]; alt: string };
+  post: {
+    title: string;
+    caption: string;
+    kind: "photo" | "video";
+    media: string[];
+    datesTaken?: (string | null)[];
+    alt: string;
+  };
   targets: Target[];
 };
 type Page = { posts: Post[]; next: string | null };
@@ -159,6 +166,14 @@ export default function PublisherHistory({ request, onError }: Props) {
                   <time dateTime={new Date(post.created_at).toISOString()}>
                     {new Date(post.created_at).toLocaleString()}
                   </time>
+                  {post.post.datesTaken?.map(
+                    (date, index) =>
+                      date && (
+                        <p className="publisher-note" key={index}>
+                          Photo {index + 1} · Taken {new Date(date).toLocaleString()}
+                        </p>
+                      ),
+                  )}
                   {post.post.caption && <p className="publisher-history-caption">{post.post.caption}</p>}
                   {post.targets.map((target) => (
                     <div className="publisher-history-target" key={target.id}>

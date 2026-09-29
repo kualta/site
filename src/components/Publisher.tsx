@@ -1,3 +1,4 @@
+import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEffect, useRef, useState } from "react";
@@ -31,6 +32,8 @@ export default function Publisher() {
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [ready, setReady] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [datesTaken, setDatesTaken] = useState<string[]>([]);
+  const [readingDates, setReadingDates] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [caption, setCaption] = useState("");
@@ -82,6 +85,36 @@ export default function Publisher() {
     setPreviews(urls);
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, [files]);
+  useEffect(() => {
+    let active = true;
+    setDatesTaken(files.map(() => ""));
+    setReadingDates(true);
+    async function readDates() {
+      try {
+        const { parse } = await import("exifr");
+        const dates = await Promise.all(
+          files.map(async (file) => {
+            if (!file.type.startsWith("image/")) return "";
+            try {
+              const exif = await parse(file, { pick: ["DateTimeOriginal", "OffsetTimeOriginal"], reviveValues: false });
+              return exifDateTime(exif?.DateTimeOriginal, exif?.OffsetTimeOriginal);
+            } catch {
+              return "";
+            }
+          }),
+        );
+        if (active) setDatesTaken(dates);
+      } catch {
+        // Reading EXIF is optional; manual capture dates remain available.
+      } finally {
+        if (active) setReadingDates(false);
+      }
+    }
+    void readDates();
+    return () => {
+      active = false;
+    };
+  }, [files]);
   async function refresh() {
     const data = await api("status");
     setHelperOnline(Boolean(data.helper?.last_seen && Date.now() - data.helper.last_seen < 90_000));
@@ -112,6 +145,7 @@ export default function Publisher() {
     setError("");
     setNotice("");
     try {
+      if (readingDates) throw new Error("Reading photo dates. Try again in a moment.");
       if (!files.length || !preset.platforms.length || !title.trim())
         throw new Error("Add media, a title, and at least one destination.");
       if (preset.kind === "video" && files.length !== 1) throw new Error("Choose one video.");
@@ -122,6 +156,8 @@ export default function Publisher() {
         title,
         caption,
         alt,
+        datesTaken:
+          preset.kind === "photo" ? datesTaken.map((date) => (date ? new Date(date).toISOString() : null)) : undefined,
         platforms: preset.platforms,
         metadata: preset.metadata,
         visibility: preset.visibility,
@@ -145,6 +181,8 @@ export default function Publisher() {
         title,
         caption,
         alt,
+        datesTaken:
+          preset.kind === "photo" ? datesTaken.map((date) => (date ? new Date(date).toISOString() : null)) : undefined,
         platforms: preset.platforms,
         metadata: preset.metadata,
         visibility: preset.visibility,
@@ -246,15 +284,9 @@ export default function Publisher() {
                   }}
                 />
                 <span>
-                  {files.length
-                    ? "Replace media"
-                    : preset.kind === "photo"
-                      ? "Choose photos"
-                      : "Choose a video"}
+                  {files.length ? "Replace media" : preset.kind === "photo" ? "Choose photos" : "Choose a video"}
                 </span>
-                <small>
-                  {preset.kind === "photo" ? "Up to 4 photos · 30 MB each" : "One video · up to 90 MB"}
-                </small>
+                <small>{preset.kind === "photo" ? "Up to 4 photos · 30 MB each" : "One video · up to 90 MB"}</small>
               </label>
               {!!previews.length && (
                 <div className="publisher-previews">
@@ -265,6 +297,34 @@ export default function Publisher() {
                       <img key={url} src={url} alt={files[i]?.name || "Selected photo"} />
                     ),
                   )}
+                </div>
+              )}
+              {preset.kind === "photo" && preset.platforms.includes("grain") && files.length > 0 && (
+                <div className="publisher-photo-dates">
+                  <p className="publisher-note">
+                    Date taken · Grain · {Intl.DateTimeFormat().resolvedOptions().timeZone}. Photos without a timezone
+                    use this timezone.
+                  </p>
+                  {files.map((file, index) => (
+                    <label key={`${file.name}-${index}`}>
+                      {file.name}
+                      <input
+                        type="datetime-local"
+                        step="1"
+                        aria-label={`Date taken for ${file.name}`}
+                        disabled={busy || submitted || readingDates}
+                        value={datesTaken[index] || ""}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setDatesTaken((dates) => dates.map((date, i) => (i === index ? value : date)));
+                          submission.current = null;
+                        }}
+                      />
+                    </label>
+                  ))}
+                  <p className="publisher-note">
+                    Optional. Read from the original photo; edit or clear before posting.
+                  </p>
                 </div>
               )}
               <label>
@@ -350,11 +410,7 @@ export default function Publisher() {
                 <summary>Preset settings</summary>
                 <label>
                   Name
-                  <input
-                    value={preset.name}
-                    maxLength={50}
-                    onChange={(e) => updatePreset({ name: e.target.value })}
-                  />
+                  <input value={preset.name} maxLength={50} onChange={(e) => updatePreset({ name: e.target.value })} />
                 </label>
                 <label>
                   Default caption
@@ -419,8 +475,7 @@ export default function Publisher() {
               </p>
               {!!missingPlatforms.length && (
                 <p className="publisher-note">
-                  Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")}{" "}
-                  sign-in.
+                  Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.
                 </p>
               )}
             </aside>
@@ -438,8 +493,8 @@ export default function Publisher() {
             <summary>Laptop connection</summary>
             {!helperOnline && (
               <p>
-                Run <code>bun run publisher:setup</code>, then <code>bun run publisher connect</code> on your
-                laptop. Paste a pairing key when prompted.
+                Run <code>bun run publisher:setup</code>, then <code>bun run publisher connect</code> on your laptop.
+                Paste a pairing key when prompted.
               </p>
             )}
             {helperOnline && <p>Laptop paired and running.</p>}
@@ -474,7 +529,6 @@ export default function Publisher() {
               Disconnect laptop
             </button>
           </details>
-
         </>
       )}
       {error && (

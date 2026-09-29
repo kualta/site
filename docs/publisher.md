@@ -143,3 +143,9 @@ than claiming the post was removed. Real platform deletion acceptance remains ow
 
 Apply `0005_publisher_deletions.sql` before deploying this version. Old helpers continue to
 publish but cannot claim deletions until restarted with the updated code.
+
+### Photo capture dates
+
+When Grain is selected, each photo has an optional Date taken field. The browser reads only DateTimeOriginal and OffsetTimeOriginal from the original file before the helper strips metadata. Times display in the browser timezone; photos lacking an EXIF offset are interpreted in that timezone. Edit or clear each field before queueing. Missing dates stay blank; file modification time is never substituted.
+
+Grain receives a separate social.grain.photo.exif record containing only the capture time, photo reference, and record creation time. Other destinations do not receive this field. History retains the chosen dates, and Grain deletion also removes the associated EXIF records. Restart the updated helper and reconnect Grain/Bluesky once for the additional OAuth collection permission.

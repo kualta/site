@@ -50,6 +50,18 @@ export async function publishAtproto(platform, authorization, files, infos, post
           createdAt,
         },
       });
+      if (post.datesTaken?.[i])
+        writes.push({
+          $type: "com.atproto.repo.applyWrites#create",
+          collection: "social.grain.photo.exif",
+          rkey: photoKey,
+          value: {
+            $type: "social.grain.photo.exif",
+            photo: `at://${owner}/social.grain.photo/${photoKey}`,
+            dateTimeOriginal: post.datesTaken[i],
+            createdAt,
+          },
+        });
       writes.push({
         $type: "com.atproto.repo.applyWrites#create",
         collection: "social.grain.gallery.item",
@@ -87,29 +99,22 @@ export async function publishAtproto(platform, authorization, files, infos, post
       exp: Math.floor(Date.now() / 1000) + 1800,
     });
     const query = new URLSearchParams({ did: owner, name: `${post.id}.mp4` });
-    const response = await fetcher(
-      `https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?${query}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${auth.token}`,
-          "Content-Type": "video/mp4",
-        },
-        body: await readFile(files[0]),
+    const response = await fetcher(`https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?${query}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${auth.token}`,
+        "Content-Type": "video/mp4",
       },
-    );
+      body: await readFile(files[0]),
+    });
     let job = await response.json();
     job = job.jobStatus || job;
-    if (!response.ok && !job.blob && !job.jobId)
-      throw new Error(`Bluesky video upload failed (${response.status})`);
+    if (!response.ok && !job.blob && !job.jobId) throw new Error(`Bluesky video upload failed (${response.status})`);
     for (let attempt = 0; !job.blob && attempt < 180; attempt++) {
-      if (job.error || job.state === "JOB_STATE_FAILED")
-        throw new Error("Bluesky video processing failed");
+      if (job.error || job.state === "JOB_STATE_FAILED") throw new Error("Bluesky video processing failed");
       await wait(5000);
       const response = await fetcher(
-        `https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=${encodeURIComponent(
-          job.jobId,
-        )}`,
+        `https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=${encodeURIComponent(job.jobId)}`,
         { signal: AbortSignal.timeout(30_000) },
       );
       if (!response.ok) throw new Error("Bluesky video status unavailable");

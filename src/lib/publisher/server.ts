@@ -16,6 +16,7 @@ export interface Post {
   caption: string;
   alt: string;
   media: string[];
+  datesTaken?: (string | null)[];
   platforms: Platform[];
   metadata: Record<Platform, MetadataPolicy>;
   visibility: "PUBLIC" | "UNLISTED" | "PRIVATE";
@@ -37,6 +38,21 @@ export function validatePost(value: unknown): Post {
     new Set(p.media).size !== p.media.length
   )
     throw new Error("Choose 1–4 photos or one video");
+  if (
+    p.datesTaken !== undefined &&
+    (p.kind !== "photo" ||
+      !Array.isArray(p.datesTaken) ||
+      p.datesTaken.length !== p.media.length ||
+      p.datesTaken.some(
+        (date) =>
+          date !== null &&
+          (typeof date !== "string" ||
+            !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(date) ||
+            !Number.isFinite(Date.parse(date)) ||
+            new Date(date).toISOString() !== date),
+      ))
+  )
+    throw new Error("Choose a valid date taken for each photo");
   if (p.kind === "video" && p.media.length !== 1) throw new Error("Choose one video");
   if (
     !Array.isArray(p.platforms) ||
@@ -53,12 +69,7 @@ export function validatePost(value: unknown): Post {
   }
   if (typeof p.title !== "string" || !p.title.trim() || p.title.length > 100)
     throw new Error("Add a title of up to 100 characters");
-  if (
-    typeof p.caption !== "string" ||
-    p.caption.length > 5000 ||
-    typeof p.alt !== "string" ||
-    p.alt.length > 1000
-  )
+  if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
     throw new Error("Caption or alt text is too long");
   if (p.platforms.includes("grain")) {
     const encoder = new TextEncoder();
@@ -81,6 +92,7 @@ export function validatePost(value: unknown): Post {
     caption: p.caption,
     alt: p.alt,
     media: p.media,
+    ...(p.datesTaken ? { datesTaken: p.datesTaken } : {}),
     platforms: p.platforms,
     metadata: p.metadata,
     visibility: p.visibility,

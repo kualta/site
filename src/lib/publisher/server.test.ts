@@ -121,3 +121,12 @@ test("account connection claims are exclusive and expiry discards encrypted cred
   });
   sqlite.close();
 });
+
+test("validates optional capture dates without accepting mismatched or invalid dates", () => {
+  expect(validatePost({ ...post(), datesTaken: ["2020-07-18T06:30:10.000Z"] }).datesTaken).toEqual([
+    "2020-07-18T06:30:10.000Z",
+  ]);
+  expect(validatePost({ ...post(), datesTaken: [null] }).datesTaken).toEqual([null]);
+  for (const datesTaken of [[], ["2020-02-30T00:00:00.000Z"], ["yesterday"], ["2020-01-01"], [123]])
+    expect(() => validatePost({ ...post(), datesTaken })).toThrow("date taken");
+});
