@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { searchKaomoji, type KaomojiIndex } from "@/lib/kaomoji-search";
-import { FiX } from "react-icons/fi";
+import { FiChevronLeft, FiChevronRight, FiChevronsLeft, FiChevronsRight, FiX } from "react-icons/fi";
 
 interface Props {
   initialEntries: string[];
@@ -53,6 +53,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
   const page = searching ? searchPage : browsePage;
   const count = searching ? results.length : total;
   const pageCount = Math.max(1, Math.ceil(count / pageSize));
+  const pageDigits = String(Math.max(1, Math.ceil(total / pageSize))).length;
   const entries = searching ? results.slice((page - 1) * pageSize, page * pageSize) : browseEntries;
   const loading = searching ? (!index && indexLoading) || trimmedQuery !== deferredQuery : pageLoading;
   const error = searching ? indexError : pageError;
@@ -166,26 +167,32 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             onClick={() => goToPage(1)}
             aria-label="First page"
           >
-            «
+            <FiChevronsLeft aria-hidden="true" size={18} />
           </button>
           <button
             type="button"
             className={buttonClass}
             disabled={loading || page === 1}
             onClick={() => goToPage(page - 1)}
+            aria-label="Previous page"
           >
-            Previous
+            <FiChevronLeft aria-hidden="true" size={18} />
           </button>
-          <span>
-            {page} / {pageCount}
+          <span className="flex items-center font-mono tabular-nums shrink-0">
+            <span className="text-right" style={{ width: `${pageDigits}ch` }}>
+              {page}
+            </span>
+            <span className="text-center w-[3ch]">/</span>
+            <span style={{ width: `${pageDigits}ch` }}>{pageCount}</span>
           </span>
           <button
             type="button"
             className={buttonClass}
             disabled={loading || page === pageCount}
             onClick={() => goToPage(page + 1)}
+            aria-label="Next page"
           >
-            Next
+            <FiChevronRight aria-hidden="true" size={18} />
           </button>
           <button
             type="button"
@@ -194,7 +201,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             onClick={() => goToPage(pageCount)}
             aria-label="Last page"
           >
-            »
+            <FiChevronsRight aria-hidden="true" size={18} />
           </button>
         </nav>
         {error && (
