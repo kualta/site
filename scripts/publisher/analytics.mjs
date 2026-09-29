@@ -98,7 +98,11 @@ export async function collectAnalytics(
       page.setDefaultTimeout(20_000);
       if (target.platform === "youtube") {
         const cookies = await context.cookies("https://www.youtube.com");
-        const cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+        let cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+        if (!cookies.some((c) => c.name === "SAPISID")) {
+          const fallback = cookies.find((c) => c.name === "__Secure-3PAPISID");
+          if (fallback) cookie += `; SAPISID=${fallback.value}`;
+        }
         const client = await youtube.create({
           cookie,
           retrieve_player: false,

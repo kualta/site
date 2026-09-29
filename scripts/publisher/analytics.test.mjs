@@ -89,7 +89,7 @@ test("YouTube collection uses the saved session, checks video identity, and clos
         expect(headless).toBe(true);
         return {
           pages: () => [{ setDefaultTimeout: () => {} }],
-          cookies: async () => [{ name: "session", value: "fixture" }],
+          cookies: async () => [{ name: "__Secure-3PAPISID", value: "fixture" }],
           close: async () => {
             closed = true;
           },
@@ -97,7 +97,7 @@ test("YouTube collection uses the saved session, checks video identity, and clos
       },
       youtube: {
         create: async (options) => {
-          expect(options.cookie).toBe("session=fixture");
+          expect(options.cookie).toBe("__Secure-3PAPISID=fixture; SAPISID=fixture");
           return { getInfo: async (id) => ({ basic_info: { id, view_count: 42, like_count: 0 } }) };
         },
       },
