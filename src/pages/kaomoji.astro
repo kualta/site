@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import KaomojiList from "@/components/KaomojiList.tsx";
+import AllKaomojiList from "@/components/AllKaomojiList.tsx";
+import { allKaomoji, KAOMOJI_PAGE_SIZE } from "@/data/kaomoji-library";
 ---
 <BaseLayout
   title="kaomoji"
@@ -8,4 +10,10 @@ import KaomojiList from "@/components/KaomojiList.tsx";
 >
   <h1 class="sr-only">kaomoji</h1>
   <KaomojiList client:load />
+  <AllKaomojiList
+    client:visible
+    initialEntries={allKaomoji.slice(0, KAOMOJI_PAGE_SIZE)}
+    total={allKaomoji.length}
+    pageSize={KAOMOJI_PAGE_SIZE}
+  />
 </BaseLayout>

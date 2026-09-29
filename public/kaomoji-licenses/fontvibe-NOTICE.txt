@@ -1,0 +1,72 @@
+This dataset is a merge of several independently collected kaomoji sources.
+Per CC BY 4.0, attribution is required. Credits below.
+
+────────────────────────────────────────────────────────────────────────
+mtripg6666tdr/Kaomoji_proj — MIT License
+https://github.com/mtripg6666tdr/Kaomoji_proj
+
+  MIT requires its copyright notice and permission notice to be preserved
+  in all copies or substantial portions. That requirement is the reason this
+  dataset is released under CC BY 4.0 rather than CC0 — CC0 cannot carry it.
+
+  Copyright (c) mtripg6666tdr
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+────────────────────────────────────────────────────────────────────────
+fdw/rofimoji            https://github.com/fdw/rofimoji
+Allaman/emoji.nvim      https://github.com/Allaman/emoji.nvim
+aoguai/rime_kaomoji_dict https://github.com/aoguai/rime_kaomoji_dict
+
+  Kaomoji lists carried by these projects. Each project's own license governs
+  its code; the kaomoji entries themselves are a folk tradition with no
+  identifiable authors (see below).
+
+────────────────────────────────────────────────────────────────────────
+Japanese IME dictionaries — 20 files from kaomoji.com and Vector
+(vector.co.jp/vpack/filearea/data/writing/dic/kao), plus kaosute.net
+
+  Community-distributed IME dictionaries, most published in the late 1990s
+  and 2000s, in LZH/ZIP + Shift-JIS, format: 読み<TAB>顔文字<TAB>品詞.
+  Distributed freely for use as IME dictionaries; the great majority carry no
+  explicit license and no reachable author. They are included on the same
+  footing as the rest: as a folk tradition, not as anyone's authored work.
+
+  The Japanese 読み (reading) shipped with these dictionaries is the origin of
+  a large part of the Japanese-language labels in this dataset.
+
+────────────────────────────────────────────────────────────────────────
+On the kaomoji themselves
+
+  Kaomoji are a 25-year-old folk tradition. Individual kaomoji have no
+  identifiable authors, circulate freely, and every collection — including
+  every source above — has borrowed from the others. Nothing in this dataset
+  is claimed as original except the 106 entries marked
+  "origin": "fontvibe-original", which are released CC0.
+
+  If you are the author of something here and want it removed or credited
+  differently, open an issue.
+
+────────────────────────────────────────────────────────────────────────
+Metadata produced by FontVibe — CC0
+
+  The semantic labels (emotion / intent / subject), six-language names and
+  keywords, tier assignment, rendering flags (ascii_safe / needs_cjk_font /
+  display_width) and the 106 original kaomoji are dedicated to the public
+  domain under CC0. No attribution needed for those.
