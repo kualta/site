@@ -56,7 +56,7 @@ needed for platform connections.
 your laptop and connects both destinations automatically after approval. The
 official Node OAuth client handles PKCE, DPoP and token refresh. The helper
 checks kualta's DID and requests only creation of Bluesky posts and Grain gallery,
-photo and gallery-item records, JPEG/MP4 uploads, and the uploadBlob service
+photo and gallery-item records (creation and deletion), JPEG/MP4 uploads, and the uploadBlob service
 authorization used for Bluesky video. No app password is requested.
 
 OAuth tokens and signing keys stay in private laptop files. **Disconnect** revokes
@@ -120,3 +120,26 @@ GPS/comment-bearing photo/video fixtures. CI installs ExifTool for these tests.
 Queue tests cover claim exclusivity, unsupported destinations and interrupted
 work. Tests do not publish externally. Authenticated account acceptance remains
 necessary before relying on the browser upload adapters.
+
+## History and deleting publications
+
+History shows posts sent through this app, with saved title/caption, photo/video previews,
+links and outcomes for each destination. Older pages remain available after upload expiry;
+previews become unavailable after the seven-day media retention window.
+
+Delete removes one confirmed publication. Delete everywhere queues removal from every
+confirmed destination on that history entry after publishing finishes. Both actions ask
+for explicit confirmation and retain the history. Each destination reports its own deletion
+outcome. A failed or unconfirmed deletion can be retried explicitly; interrupted operations
+are never automatically replayed. These controls do not import or delete unrelated posts.
+
+Restart the updated laptop helper to process deletions. Reconnect Grain / Bluesky once to
+grant the new delete scopes; the helper uses a new OAuth session store for these permissions.
+Grain removal deletes this job's gallery, photo and item records together. Bluesky removes
+its exact post record. Browser destinations open the saved publication's delete controls
+in their isolated signed-in profiles and require a platform success response. Changed UI,
+missing owner controls or an unconfirmed response leaves a failure/review status rather
+than claiming the post was removed. Real platform deletion acceptance remains owner-tested.
+
+Apply `0005_publisher_deletions.sql` before deploying this version. Old helpers continue to
+publish but cannot claim deletions until restarted with the updated code.

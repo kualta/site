@@ -10,6 +10,7 @@ import {
   validatePost,
 } from "@/lib/publisher/server";
 import { platforms } from "@/lib/publisher/presets";
+import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 export const prerender = false;
 
 export const ALL: APIRoute = async ({ request, params }) => {
@@ -21,14 +22,12 @@ export const ALL: APIRoute = async ({ request, params }) => {
     const bucket = env.PUBLISHER_MEDIA;
     const helper = path.startsWith("helper/");
     if (helper) {
-      if (!db || !(await authorizeHelper(request, db)))
-        return json({ error: "Helper authentication required" }, 401);
+      if (!db || !(await authorizeHelper(request, db))) return json({ error: "Helper authentication required" }, 401);
     } else {
       const owner = await publisherSession(request);
       for (const cookie of owner.session.setCookies) headers.append("Set-Cookie", cookie);
       if (!owner.allowed) return json({ error: "Owner sign-in required" }, 403);
-      if (request.method !== "GET" && !publisherSameOrigin(request))
-        return json({ error: "Invalid origin" }, 403);
+      if (request.method !== "GET" && !publisherSameOrigin(request)) return json({ error: "Invalid origin" }, 403);
     }
     if (!db || !bucket) return json({ error: "Publisher storage is not configured" }, 503);
     if (path === "pair" && request.method === "POST") {
@@ -47,10 +46,38 @@ export const ALL: APIRoute = async ({ request, params }) => {
       await db.prepare("DELETE FROM publisher_helper WHERE id = 1").run();
       return json({ ok: true });
     }
+    if (path === "history" && request.method === "GET") {
+      return json(await historyPage(db, new URL(request.url).searchParams.get("before")));
+    }
+    if (path === "delete-publications" && request.method === "POST") {
+      const data = (await request.json()) as {
+        job: string;
+        platform?: (typeof platforms)[number];
+        confirmed?: boolean;
+      };
+      if (
+        !validId(data.job) ||
+        data.confirmed !== true ||
+        (data.platform !== undefined && !platforms.includes(data.platform))
+      )
+        return json({ error: "Confirm the post and destinations to delete" }, 400);
+      const result = await queueDeletion(db, data.job, data.platform);
+      return json({ queued: result.meta.changes });
+    }
+    if (path === "helper/deletion-result" && request.method === "POST") {
+      const data = (await request.json()) as { target_id: string; claim: string; state: string; message?: string };
+      if (!validId(data.target_id) || !validId(data.claim) || !["deleted", "failed", "uncertain"].includes(data.state))
+        return json({ error: "Invalid deletion result" }, 400);
+      const result = await db
+        .prepare(
+          "UPDATE publisher_deletions SET state=?,message=?,finished_at=? WHERE target_id=? AND claim=? AND state IN ('working','uncertain')",
+        )
+        .bind(data.state, String(data.message || "").slice(0, 500), Date.now(), data.target_id, data.claim)
+        .run();
+      return json({ ok: result.meta.changes > 0 });
+    }
     if (path === "status" && request.method === "GET") {
-      const helper = await db
-        .prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1")
-        .first();
+      const helper = await db.prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1").first();
       const connections = await db
         .prepare(
           "SELECT id, platform, action, state, confirmed, message FROM publisher_connections ORDER BY created_at DESC LIMIT 10",
@@ -58,7 +85,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         .all();
       const { results } = await db
         .prepare(
-          "SELECT j.id, j.payload, j.created_at, t.platform, t.state, t.message, t.url FROM publisher_jobs j JOIN publisher_targets t ON t.job_id = j.id WHERE j.id IN (SELECT id FROM publisher_jobs ORDER BY created_at DESC LIMIT 20) ORDER BY j.created_at DESC",
+          "SELECT j.id,j.payload,j.created_at,t.platform,t.state,t.message,t.url FROM publisher_jobs j JOIN publisher_targets t ON t.job_id=j.id WHERE j.id IN (SELECT id FROM publisher_jobs ORDER BY created_at DESC LIMIT 20) ORDER BY j.created_at DESC",
         )
         .all();
       return json({ helper, results, connections: connections.results });
@@ -71,8 +98,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       };
       if (!platforms.includes(data.platform) || !["connect", "disconnect"].includes(data.action))
         return json({ error: "Invalid connection" }, 400);
-      if (data.credentials !== undefined)
-        return json({ error: "Refresh the composer to connect with OAuth" }, 400);
+      if (data.credentials !== undefined) return json({ error: "Refresh the composer to connect with OAuth" }, 400);
       const helper = await db
         .prepare("SELECT last_seen FROM publisher_helper WHERE id=1")
         .first<{ last_seen: number }>();
@@ -91,9 +117,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         )
         .bind(id, data.platform, data.action, null, Date.now())
         .first();
-      return inserted
-        ? json({ id }, 201)
-        : json({ error: "Finish or cancel the current connection first" }, 409);
+      return inserted ? json({ id }, 201) : json({ error: "Finish or cancel the current connection first" }, 409);
     }
     if (path.startsWith("accounts/") && request.method === "POST") {
       const id = path.slice("accounts/".length);
@@ -108,21 +132,13 @@ export const ALL: APIRoute = async ({ request, params }) => {
           .bind(id)
           .run();
       else
-        await db
-          .prepare("UPDATE publisher_connections SET confirmed=1 WHERE id=? AND state='working'")
-          .bind(id)
-          .run();
+        await db.prepare("UPDATE publisher_connections SET confirmed=1 WHERE id=? AND state='working'").bind(id).run();
       return json({ ok: true });
     }
     if (path.startsWith("helper/accounts/") && request.method === "GET") {
       const id = path.slice("helper/accounts/".length);
       if (!validId(id)) return json({ error: "Invalid connection" }, 400);
-      return json(
-        await db
-          .prepare("SELECT state, confirmed FROM publisher_connections WHERE id=?")
-          .bind(id)
-          .first(),
-      );
+      return json(await db.prepare("SELECT state, confirmed FROM publisher_connections WHERE id=?").bind(id).first());
     }
     if (path === "helper/accounts/result" && request.method === "POST") {
       const data = (await request.json()) as {
@@ -131,11 +147,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         state: string;
         message?: string;
       };
-      if (
-        !validId(data.id) ||
-        !validId(data.claim) ||
-        !["succeeded", "failed"].includes(data.state)
-      )
+      if (!validId(data.id) || !validId(data.claim) || !["succeeded", "failed"].includes(data.state))
         return json({ error: "Invalid connection result" }, 400);
       const updated = await db
         .prepare(
@@ -151,8 +163,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!kind) return json({ error: "Choose a photo or video" }, 400);
       const max = kind === "photo" ? 30_000_000 : 90_000_000;
       const length = Number(request.headers.get("Content-Length"));
-      if (!length || length > max)
-        return json({ error: "Photos can be up to 30 MB; videos up to 90 MB" }, 413);
+      if (!length || length > max) return json({ error: "Photos can be up to 30 MB; videos up to 90 MB" }, 413);
       const bytes = await request.arrayBuffer();
       if (bytes.byteLength !== length) return json({ error: "Incomplete upload" }, 400);
       const id = crypto.randomUUID();
@@ -190,9 +201,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         db
           .prepare("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)")
           .bind(post.id, JSON.stringify(post), Date.now()),
-        ...post.media.map((id) =>
-          db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ?").bind(post.id, id),
-        ),
+        ...post.media.map((id) => db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ?").bind(post.id, id)),
         ...post.platforms.map((platform) =>
           db
             .prepare("INSERT INTO publisher_targets (id, job_id, platform) VALUES (?, ?, ?)")
@@ -202,27 +211,29 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ id: post.id }, 201);
     }
     if (path === "helper/heartbeat" && request.method === "POST") {
-      await db
-        .prepare("UPDATE publisher_helper SET last_seen = ? WHERE id = 1")
-        .bind(Date.now())
-        .run();
+      await db.prepare("UPDATE publisher_helper SET last_seen = ? WHERE id = 1").bind(Date.now()).run();
       return json({ ok: true });
     }
     if (path === "helper/claim" && request.method === "POST") {
-      const input = (await request.json()) as { platforms?: unknown };
-      const supported = platforms.filter(
-        (p) => Array.isArray(input.platforms) && input.platforms.includes(p),
-      );
+      const input = (await request.json()) as { platforms?: unknown; deletePublications?: boolean };
+      const supported = platforms.filter((p) => Array.isArray(input.platforms) && input.platforms.includes(p));
       await db
         .prepare("UPDATE publisher_helper SET last_seen = ?, platforms = ? WHERE id = 1")
         .bind(Date.now(), JSON.stringify(supported))
         .run();
       const connection = await claimConnection(db);
       if (connection) return json({ connection, target: null });
-      const connecting = await db
-        .prepare("SELECT id FROM publisher_connections WHERE state='working' LIMIT 1")
-        .first();
+      const connecting = await db.prepare("SELECT id FROM publisher_connections WHERE state='working' LIMIT 1").first();
       if (connecting) return json({ target: null });
+      const deletion = input.deletePublications === true ? await claimDeletion(db, supported) : null;
+      if (deletion) {
+        const target = await db.prepare("SELECT * FROM publisher_targets WHERE id=?").bind(deletion.target_id).first();
+        const job = await db
+          .prepare("SELECT j.payload FROM publisher_jobs j JOIN publisher_targets t ON t.job_id=j.id WHERE t.id=?")
+          .bind(deletion.target_id)
+          .first<{ payload: string }>();
+        return json({ deletion: { ...deletion, target, post: JSON.parse(job!.payload) } });
+      }
       const target = await claimTarget(db, supported);
       if (!target) return json({ target: null });
       const job = await db
@@ -231,8 +242,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
         .first<{ payload: string }>();
       return json({ target, post: JSON.parse(job!.payload) });
     }
-    if (path.startsWith("helper/media/") && request.method === "GET") {
-      const id = path.slice("helper/media/".length);
+    if ((path.startsWith("helper/media/") || path.startsWith("media/")) && request.method === "GET") {
+      const id = path.slice(path.lastIndexOf("/") + 1);
       if (!validId(id)) return json({ error: "Invalid media" }, 400);
       const object = await bucket.get(id);
       if (!object) return json({ error: "Media expired" }, 404);
@@ -247,12 +258,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
         !["succeeded", "failed", "uncertain"].includes(String(data.state))
       )
         return json({ error: "Invalid result" }, 400);
-      const url =
-        typeof data.url === "string" && /^https:\/\//.test(data.url)
-          ? data.url.slice(0, 2000)
-          : null;
-      if (data.state === "succeeded" && !url)
-        return json({ error: "A confirmed post URL is required" }, 400);
+      const url = typeof data.url === "string" && /^https:\/\//.test(data.url) ? data.url.slice(0, 2000) : null;
+      if (data.state === "succeeded" && !url) return json({ error: "A confirmed post URL is required" }, 400);
       const result = await db
         .prepare(
           "UPDATE publisher_targets SET state = ?, message = ?, url = ? WHERE id = ? AND claim = ? AND state IN ('working','uncertain')",
@@ -267,11 +274,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         platform: string;
         checked: boolean;
       };
-      if (
-        !validId(data.job) ||
-        !platforms.includes(data.platform as never) ||
-        data.checked !== true
-      )
+      if (!validId(data.job) || !platforms.includes(data.platform as never) || data.checked !== true)
         return json({ error: "Confirm the destination has no duplicate first" }, 400);
       const result = await db
         .prepare(
@@ -284,24 +287,24 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (path.startsWith("jobs/") && request.method === "DELETE") {
       const id = path.slice(5);
       if (!validId(id)) return json({ error: "Invalid post" }, 400);
+      const published = await db
+        .prepare(
+          "SELECT id FROM publisher_targets WHERE job_id=? AND (state IN ('succeeded','uncertain') OR id IN (SELECT target_id FROM publisher_deletions)) LIMIT 1",
+        )
+        .bind(id)
+        .first();
+      if (published)
+        return json({ error: "Published history is retained. Delete publications from History instead." }, 409);
       await db
         .prepare(
           "UPDATE publisher_targets SET state = 'failed', message = 'Cancelled by owner' WHERE job_id = ? AND state = 'queued'",
         )
         .bind(id)
         .run();
-      if (
-        await db
-          .prepare("SELECT id FROM publisher_targets WHERE job_id = ? AND state = 'working'")
-          .bind(id)
-          .first()
-      )
+      if (await db.prepare("SELECT id FROM publisher_targets WHERE job_id = ? AND state = 'working'").bind(id).first())
         return json({ error: "Wait for the active upload to finish" }, 409);
       // Delete DB state first: no helper may claim queued targets during cleanup.
-      const media = await db
-        .prepare("SELECT id FROM publisher_media WHERE job_id = ?")
-        .bind(id)
-        .all<{ id: string }>();
+      const media = await db.prepare("SELECT id FROM publisher_media WHERE job_id = ?").bind(id).all<{ id: string }>();
       await db.batch([
         db.prepare("DELETE FROM publisher_targets WHERE job_id = ?").bind(id),
         db.prepare("DELETE FROM publisher_jobs WHERE id = ?").bind(id),

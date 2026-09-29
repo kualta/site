@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import ffmpeg from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
+import { deletePublication } from "./delete.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { createOAuth } from "./oauth.mjs";
@@ -45,14 +46,10 @@ async function api(path, data) {
 async function python(script, args) {
   let output;
   try {
-    output = await exec(
-      join(stateDir, "venv/bin/python"),
-      [join(root, "scripts/publisher/vendor", script), ...args],
-      {
-        timeout: 20 * 60_000,
-        maxBuffer: 2 * 1024 * 1024,
-      },
-    );
+    output = await exec(join(stateDir, "venv/bin/python"), [join(root, "scripts/publisher/vendor", script), ...args], {
+      timeout: 20 * 60_000,
+      maxBuffer: 2 * 1024 * 1024,
+    });
   } catch (e) {
     output = e;
   }
@@ -72,8 +69,7 @@ if (command === "connect") {
   const prompt = createInterface({ input: stdin, output: stdout });
   try {
     const origin =
-      (await prompt.question("Publisher URL [https://post.kualta.dev]: ")).trim() ||
-      "https://post.kualta.dev";
+      (await prompt.question("Publisher URL [https://post.kualta.dev]: ")).trim() || "https://post.kualta.dev";
     const url = new URL(origin);
     if (
       url.origin !== "https://post.kualta.dev" &&
@@ -106,9 +102,24 @@ if (command === "connect") {
   while (true) {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
-      const { target, post, connection } = await (
-        await api("claim", { platforms: config.platforms })
+      const { target, post, connection, deletion } = await (
+        await api("claim", { platforms: config.platforms, deletePublications: true })
       ).json();
+      if (deletion) {
+        const result = await deletePublication(deletion, { oauth, stateDir });
+        // Retry delivery of the receipt, never the deletion itself.
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            await api("deletion-result", { target_id: deletion.target_id, claim: deletion.claim, ...result });
+            break;
+          } catch {
+            if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 5000));
+            else console.error("Deletion receipt was not saved. Check the platform.");
+          }
+        }
+        console.log(`${deletion.target.platform}: ${result.state}`);
+        continue;
+      }
       if (connection) {
         const result = await connectAccount(connection, { stateDir, config, oauth, api, save });
         // Retry the receipt only; never reopen or repeat an account action.
@@ -117,8 +128,7 @@ if (command === "connect") {
             await api("accounts/result", { id: connection.id, claim: connection.claim, ...result });
             break;
           } catch (error) {
-            if (attempt === 4)
-              console.error("Connection receipt could not be saved. Refresh the composer.");
+            if (attempt === 4) console.error("Connection receipt could not be saved. Refresh the composer.");
             else await new Promise((resolve) => setTimeout(resolve, 5000));
           }
         }
@@ -132,18 +142,14 @@ if (command === "connect") {
         let delivered = false;
         for (let i = 0; i < 5 && !delivered; i++) {
           try {
-            const response = await (
-              await api("result", { id: target.id, claim: target.claim, ...result })
-            ).json();
+            const response = await (await api("result", { id: target.id, claim: target.claim, ...result })).json();
             delivered = response.ok;
           } catch {
             await new Promise((resolve) => setTimeout(resolve, 5000));
           }
         }
         console.log(
-          `${target.platform}: ${result.state}${
-            delivered ? "" : " (receipt not saved; check the platform)"
-          }`,
+          `${target.platform}: ${result.state}${delivered ? "" : " (receipt not saved; check the platform)"}`,
         );
       } else await new Promise((resolve) => setTimeout(resolve, 5000));
     } catch (e) {
