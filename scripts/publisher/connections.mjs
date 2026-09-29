@@ -1,3 +1,4 @@
+import { manualLogin } from "./manual-login.mjs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { destinations, openProfile } from "./browser.mjs";
@@ -14,22 +15,12 @@ export function hasSession(platform, cookies) {
     }[platform] || [];
   return cookies.some(
     (cookie) =>
-      names.includes(cookie.name) &&
-      cookie.value &&
-      (cookie.expires === -1 || cookie.expires > Date.now() / 1000),
+      names.includes(cookie.name) && cookie.value && (cookie.expires === -1 || cookie.expires > Date.now() / 1000),
   );
 }
 export async function connectAccount(
   connection,
-  {
-    stateDir,
-    config,
-    oauth,
-    api,
-    save,
-    open = openProfile,
-    wait = (ms) => new Promise((r) => setTimeout(r, ms)),
-  },
+  { stateDir, config, oauth, api, save, open = openProfile, login = manualLogin },
 ) {
   const atproto = ["grain", "bluesky"].includes(connection.platform);
   if (
@@ -57,30 +48,18 @@ export async function connectAccount(
       config.atproto = { did };
       config.platforms = [...new Set([...config.platforms, ...affected])];
     } else {
-      const browser = await open(join(stateDir, connection.platform));
+      const profile = join(stateDir, connection.platform);
+      await login(profile, destinations[connection.platform], active);
+      if (!(await active()).confirmed) throw new Error("Finish sign-in before checking the session.");
+      const browser = await open(profile);
       try {
         const page = browser.pages()[0] || (await browser.newPage());
-        await page.goto(destinations[connection.platform]);
-        const deadline = Date.now() + 10 * 60_000;
-        let confirmed = false;
-        while (Date.now() < deadline) {
-          if ((await active()).confirmed) {
-            confirmed = true;
-            break;
-          }
-          if (!browser.pages().length)
-            throw new Error("Login window closed. Connect again to continue.");
-          await wait(2000);
-        }
-        if (!confirmed) throw new Error("Sign-in timed out. Connect again to continue.");
         await page.goto(destinations[connection.platform]);
         if (
           /\/(login|accounts\/login|signin)(\/|\?|$)/i.test(page.url()) ||
           !hasSession(connection.platform, await browser.cookies(destinations[connection.platform]))
         )
-          throw new Error(
-            "No signed-in session found. Connect again and finish signing in before confirming.",
-          );
+          throw new Error("No signed-in session found. Connect again and finish signing in before confirming.");
         await active();
         config.platforms = [...new Set([...config.platforms, connection.platform])];
       } finally {

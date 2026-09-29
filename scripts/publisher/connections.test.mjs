@@ -12,6 +12,7 @@ function browserFixture(cookies) {
     saved: () => saved,
     deps: {
       config,
+      login: async () => {},
       stateDir: "/unused",
       save: async () => {
         saved = true;
@@ -100,10 +101,27 @@ test("OAuth failure never marks an account connected", async () => {
 
 test("helper refuses unrecognized platform paths before touching local profiles", async () => {
   const fixture = browserFixture([]);
-  const result = await connectAccount(
-    { ...request, platform: "../outside", action: "disconnect" },
-    fixture.deps,
-  );
+  const result = await connectAccount({ ...request, platform: "../outside", action: "disconnect" }, fixture.deps);
   expect(result).toEqual({ state: "failed", message: "Unsupported account action" });
   expect(fixture.saved()).toBe(false);
+});
+
+test("manual login finishes before automation opens the saved profile", async () => {
+  const f = browserFixture([{ name: "sessionid", value: "fixture", expires: -1 }]);
+  const order = [];
+  const result = await connectAccount(request, {
+    ...f.deps,
+    login: async (path, url, active) => {
+      expect(path).toBe("/unused/instagram");
+      expect(url).toBe("https://www.instagram.com/");
+      await active();
+      order.push("manual");
+    },
+    open: async (...args) => {
+      order.push("automated");
+      return f.deps.open(...args);
+    },
+  });
+  expect(result.state).toBe("succeeded");
+  expect(order).toEqual(["manual", "automated"]);
 });
