@@ -17,14 +17,7 @@ interface Props {
   refresh: () => Promise<void>;
   onError: (message: string) => void;
 }
-export default function PublisherConnections({
-  online,
-  connected,
-  connections,
-  request,
-  refresh,
-  onError,
-}: Props) {
+export default function PublisherConnections({ online, connected, connections, request, refresh, onError }: Props) {
   const [busy, setBusy] = useState(false);
   const active = connections.find((c) => c.state === "queued" || c.state === "working");
   async function send(path: string, body: unknown) {
@@ -54,9 +47,7 @@ export default function PublisherConnections({
             (c) => c.platform === platform || (platform === "grain" && c.platform === "bluesky"),
           );
           const current =
-            active &&
-            (active.platform === platform ||
-              (platform === "grain" && active.platform === "bluesky"));
+            active && (active.platform === platform || (platform === "grain" && active.platform === "bluesky"));
           let status = ready ? "Connected" : "Not connected";
           if (current) {
             status = "Connecting…";
@@ -73,9 +64,7 @@ export default function PublisherConnections({
                   onClick={() => {
                     if (ready) {
                       if (
-                        confirm(
-                          `Disconnect ${label} from this publisher? Queued posts will wait until you reconnect.`,
-                        )
+                        confirm(`Disconnect ${label} from this publisher? Queued posts will wait until you reconnect.`)
                       )
                         void send("accounts", { platform, action: "disconnect" });
                     } else void send("accounts", { platform, action: "connect" });
@@ -86,32 +75,24 @@ export default function PublisherConnections({
               </div>
               {current && (
                 <div className="publisher-account-actions">
-                  {active.state === "working" &&
-                    active.action === "connect" &&
-                    platform === "grain" && (
+                  {active.state === "working" && active.action === "connect" && platform === "grain" && (
+                    <p className="publisher-note">Authorize Grain and Bluesky in the browser window on your laptop.</p>
+                  )}
+                  {active.state === "working" && active.action === "connect" && platform !== "grain" && (
+                    <>
                       <p className="publisher-note">
-                        Authorize Grain and Bluesky in the browser window on your laptop.
+                        Sign in in the Chrome window on your laptop, then finish here. Finishing closes that window and
+                        checks the saved session.
                       </p>
-                    )}
-                  {active.state === "working" &&
-                    active.action === "connect" &&
-                    platform !== "grain" && (
-                      <>
-                        <p className="publisher-note">
-                          Sign in in the Chrome window on your laptop, then finish here.
-                        </p>
-                        <button
-                          disabled={busy || !!active.confirmed}
-                          onClick={() => void send(`accounts/${active.id}`, { action: "finish" })}
-                        >
-                          {active.confirmed ? "Checking…" : "Finish sign-in"}
-                        </button>
-                      </>
-                    )}
-                  <button
-                    disabled={busy}
-                    onClick={() => void send(`accounts/${active.id}`, { action: "cancel" })}
-                  >
+                      <button
+                        disabled={busy || !!active.confirmed}
+                        onClick={() => void send(`accounts/${active.id}`, { action: "finish" })}
+                      >
+                        {active.confirmed ? "Checking…" : "Finish sign-in"}
+                      </button>
+                    </>
+                  )}
+                  <button disabled={busy} onClick={() => void send(`accounts/${active.id}`, { action: "cancel" })}>
                     Cancel
                   </button>
                 </div>
