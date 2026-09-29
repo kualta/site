@@ -1,3 +1,4 @@
+import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useEffect, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
@@ -25,15 +26,6 @@ async function api(path: string, body?: unknown, method = body === undefined ? "
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
 }
-type Row = {
-  id: string;
-  payload: string;
-  created_at: number;
-  platform: keyof typeof platformNames;
-  state: string;
-  message: string | null;
-  url: string | null;
-};
 export default function Publisher() {
   const [access, setAccess] = useState<"loading" | "owner" | "signin" | "denied">("loading");
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
@@ -51,7 +43,6 @@ export default function Publisher() {
   const [helperOnline, setHelperOnline] = useState(false);
   const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [rows, setRows] = useState<Row[]>([]);
   const input = useRef<HTMLInputElement>(null);
   const submission = useRef<{ id: string; media: string[]; payload?: unknown } | null>(null);
   const preset = preferences.presets.find((p) => p.id === preferences.active) || preferences.presets[0];
@@ -93,7 +84,6 @@ export default function Publisher() {
   }, [files]);
   async function refresh() {
     const data = await api("status");
-    setRows(data.results);
     setHelperOnline(Boolean(data.helper?.last_seen && Date.now() - data.helper.last_seen < 90_000));
     setConnectedPlatforms(JSON.parse(data.helper?.platforms || "[]"));
     setConnections(data.connections || []);
@@ -182,7 +172,6 @@ export default function Publisher() {
     setFiles([]);
     submission.current = null;
   }
-  const jobs = [...new Set(rows.map((row) => row.id))];
   let publishLabel = `Publish to ${preset.platforms.length} ${preset.platforms.length === 1 ? "place" : "places"}`;
   const missingPlatforms = preset.platforms.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
@@ -436,6 +425,7 @@ export default function Publisher() {
               )}
             </aside>
           </div>
+          <PublisherHistory request={api} onError={setError} />
           <PublisherConnections
             online={helperOnline}
             connected={connectedPlatforms}
@@ -484,78 +474,7 @@ export default function Publisher() {
               Disconnect laptop
             </button>
           </details>
-          {!!jobs.length && (
-            <section className="publisher-history">
-              <h2>Recent posts</h2>
-              {jobs.map((id) => {
-                const group = rows.filter((r) => r.id === id);
-                return (
-                  <article key={id}>
-                    <div>
-                      <h3>{JSON.parse(group[0].payload).title}</h3>
-                      <time>{new Date(group[0].created_at).toLocaleString()}</time>
-                    </div>
-                    {group.map((row) => (
-                      <div className="publisher-result" key={row.platform}>
-                        <span>{platformNames[row.platform]}</span>
-                        <span title={row.message || ""}>
-                          {row.url ? (
-                            <a href={row.url} target="_blank" rel="noreferrer">
-                              {row.state}
-                            </a>
-                          ) : (
-                            row.state
-                          )}
-                        </span>
-                        {row.message && <small>{row.message}</small>}
-                        {["failed", "uncertain"].includes(row.state) && (
-                          <button
-                            onClick={async () => {
-                              if (
-                                !window.confirm(
-                                  `Check ${
-                                    platformNames[row.platform]
-                                  } first. Confirm this post is absent before retrying?`,
-                                )
-                              )
-                                return;
-                              try {
-                                await api("retry", { job: id, platform: row.platform, checked: true });
-                                await refresh();
-                              } catch (e) {
-                                setError((e as Error).message);
-                              }
-                            }}
-                          >
-                            Retry this destination
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <button
-                      disabled={group.some((r) => r.state === "working")}
-                      onClick={async () => {
-                        if (
-                          !window.confirm(
-                            "Remove this queued post, stored media, and history? Published posts stay on their platforms.",
-                          )
-                        )
-                          return;
-                        try {
-                          await api(`jobs/${id}`, undefined, "DELETE");
-                          await refresh();
-                        } catch (e) {
-                          setError((e as Error).message);
-                        }
-                      }}
-                    >
-                      Remove stored media & history
-                    </button>
-                  </article>
-                );
-              })}
-            </section>
-          )}
+
         </>
       )}
       {error && (
