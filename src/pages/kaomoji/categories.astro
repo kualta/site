@@ -1,0 +1,9 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import KaomojiList from "@/components/KaomojiList.tsx";
+---
+<BaseLayout title="kaomoji categories" description="Kaomoji by category">
+  <h1 class="sr-only">kaomoji categories</h1>
+  <a href="/kaomoji" class="kaomoji-button mb-10">all kaomoji</a>
+  <KaomojiList client:load />
+</BaseLayout>

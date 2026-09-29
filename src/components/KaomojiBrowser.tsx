@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { searchKaomoji, type KaomojiIndex } from "@/lib/kaomoji-search";
-import KaomojiList from "./KaomojiList";
+import { FiX } from "react-icons/fi";
 
 interface Props {
   initialEntries: string[];
@@ -22,7 +22,8 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
   const [retry, setRetry] = useState(0);
   const [pageLoading, setPageLoading] = useState(false);
   const [pageError, setPageError] = useState("");
-  const heading = useRef<HTMLHeadingElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const resultsPane = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!searching || index) return;
@@ -58,16 +59,27 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
   const firstEntry = count ? (page - 1) * pageSize + 1 : 0;
   const lastEntry = Math.min(page * pageSize, count);
 
-  function focusHeading(): void {
-    heading.current?.focus({ preventScroll: true });
-    heading.current?.scrollIntoView({ block: "start" });
+  useEffect(() => {
+    if (resultsPane.current) resultsPane.current.scrollTop = 0;
+  }, [deferredQuery]);
+
+  function focusResults(): void {
+    if (!resultsPane.current) return;
+    resultsPane.current.scrollTop = 0;
+    resultsPane.current.focus({ preventScroll: true });
+  }
+
+  function clearSearch(): void {
+    setQuery("");
+    setSearchPage(1);
+    input.current?.focus({ preventScroll: true });
   }
 
   async function goToPage(nextPage: number): Promise<void> {
     if (loading || nextPage < 1 || nextPage > pageCount) return;
     if (searching) {
       setSearchPage(nextPage);
-      focusHeading();
+      focusResults();
       return;
     }
     setPageLoading(true);
@@ -82,7 +94,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
       }
       setBrowseEntries(nextEntries);
       setBrowsePage(nextPage);
-      if (document.activeElement === trigger) focusHeading();
+      if (document.activeElement === trigger) focusResults();
     } catch {
       setPageError("Couldn’t load this page. Try again.");
     } finally {
@@ -90,48 +102,62 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
     }
   }
 
-  const buttonClass =
-    "rounded border border-current/20 px-3 py-2 hover:bg-current/5 disabled:opacity-30 disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4";
+  const buttonClass = "kaomoji-button";
 
   return (
-    <div className="kaomoji-browser flex w-full flex-col items-center">
-      <div className="w-full max-w-md px-5 mb-10">
-        <label htmlFor="kaomoji-search" className="sr-only">
-          Search kaomoji, categories, and tags
-        </label>
-        <input
-          id="kaomoji-search"
-          type="search"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setSearchPage(1);
-          }}
-          placeholder="Search kaomoji, categories, tags…"
-          className="kaomoji-search"
-        />
+    <div className="kaomoji-browser">
+      <div className="kaomoji-toolbar">
+        <div className="kaomoji-search-field">
+          <label htmlFor="kaomoji-search" className="sr-only">
+            Search kaomoji, categories, and tags
+          </label>
+          <input
+            ref={input}
+            id="kaomoji-search"
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setSearchPage(1);
+            }}
+            placeholder="Search kaomoji, categories, tags…"
+            className="kaomoji-search"
+          />
+          {query && (
+            <button type="button" className="kaomoji-clear" aria-label="Clear search" onClick={clearSearch}>
+              <FiX aria-hidden="true" size={18} />
+            </button>
+          )}
+        </div>
+        <a href="/kaomoji/categories" className="kaomoji-button">
+          categories
+        </a>
       </div>
-      {!searching && <KaomojiList />}
-      <section aria-labelledby="all-kaomoji" className="w-full max-w-6xl px-5 pb-16 pt-12 font-mono">
-        <h2
-          id="all-kaomoji"
-          ref={heading}
-          tabIndex={-1}
-          className="scroll-mt-8 text-center text-xl font-bold outline-none"
-        >
+      <section aria-labelledby="all-kaomoji" className="kaomoji-results">
+        <h2 id="all-kaomoji" className="sr-only">
           all kaomoji
         </h2>
-        <p className="mt-4 text-center text-sm opacity-60" aria-live="polite" role="status">
+        <p className="text-center text-sm opacity-60" aria-live="polite" role="status">
           {loading ? "Loading…" : `${firstEntry}–${lastEntry} of ${count.toLocaleString("en-US")}`}
         </p>
-        <ul aria-busy={loading} className="my-8 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-          {entries.map((entry) => (
-            <li key={entry} className="overflow-x-auto whitespace-pre text-center text-lg py-1">
-              {entry}
-            </li>
-          ))}
-        </ul>
-        {searching && index && !loading && count === 0 && <p className="my-8 text-center text-sm">No kaomoji found.</p>}
+        <div
+          ref={resultsPane}
+          className="kaomoji-results-scroll"
+          tabIndex={0}
+          role="region"
+          aria-label="Kaomoji results"
+        >
+          <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3 lg:grid-cols-5 font-mono">
+            {entries.map((entry) => (
+              <li key={entry} className="overflow-x-auto whitespace-pre text-center text-sm px-2 py-3">
+                {entry}
+              </li>
+            ))}
+          </ul>
+          {searching && index && !loading && count === 0 && (
+            <p className="my-8 text-center text-sm">No kaomoji found.</p>
+          )}
+        </div>
         <nav aria-label="All kaomoji pages" className="flex flex-wrap items-center justify-center gap-3 text-sm">
           <button
             type="button"

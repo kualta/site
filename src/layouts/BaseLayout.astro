@@ -50,6 +50,8 @@ const {
 } = Astro.props;
 
 const musicPage = /^\/music(?:\/|$)/.test(Astro.url.pathname);
+const kaomojiPage = /^\/kaomoji(?:\/|$)/.test(Astro.url.pathname);
+const kaomojiResultsPage = /^\/kaomoji\/?$/.test(Astro.url.pathname);
 const musicSlug = musicPage ? Astro.url.pathname.split("/")[2] || undefined : undefined;
 const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -129,6 +131,7 @@ const robots = noindex
   </head>
   <body
     data-music-page={musicPage ? "true" : undefined}
+    data-kaomoji-results={kaomojiResultsPage ? "true" : undefined}
     class="bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-colors
            ease-in-out delay-150 dark:text-dark-text place-items-center
            min-h-screen flex flex-col justify-center relative"
@@ -152,7 +155,7 @@ const robots = noindex
     )}
     <div class="page-bottom" data-home={Astro.url.pathname === "/" ? "true" : undefined}>
       <CornersScope top_left={false} top_right={false} class="page-bottom-corner" />
-      {!musicPage && <NotificationsButton />}
+      {!musicPage && !kaomojiPage && <NotificationsButton />}
     </div>
     <script>
       document.addEventListener("astro:page-load", () => {
