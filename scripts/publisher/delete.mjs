@@ -110,7 +110,11 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
         ];
         for (let index = 0; index < post.media.length; index++) {
           const rkey = recordKey(`publisher:grain:${post.id}:${index}`);
-          for (const collection of ["social.grain.gallery.item", "social.grain.photo"])
+          for (const collection of [
+            "social.grain.gallery.item",
+            "social.grain.photo",
+            ...(post.datesTaken?.[index] ? ["social.grain.photo.exif"] : []),
+          ])
             writes.push({ $type: "com.atproto.repo.applyWrites#delete", collection, rkey });
         }
         submitted = true;

@@ -12,6 +12,7 @@ export const scope = [
   "repo:app.bsky.feed.post?action=create&action=delete",
   "repo:social.grain.gallery?action=create&action=delete",
   "repo:social.grain.photo?action=create&action=delete",
+  "repo:social.grain.photo.exif?action=create&action=delete",
   "repo:social.grain.gallery.item?action=create&action=delete",
   "blob:image/jpeg",
   "blob:video/mp4",
@@ -54,8 +55,8 @@ export async function createOAuth(
     clientFactory = (options) => new NodeOAuthClient(options),
   } = {},
 ) {
-  const sessions = await fileStore(join(stateDir, "oauth/publishing-v2/sessions"));
-  const states = await fileStore(join(stateDir, "oauth/publishing-v2/states"), 10 * 60_000);
+  const sessions = await fileStore(join(stateDir, "oauth/publishing-v3/sessions"));
+  const states = await fileStore(join(stateDir, "oauth/publishing-v3/states"), 10 * 60_000);
   let pending;
   let client;
   let callbackBusy = false;

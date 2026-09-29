@@ -19,19 +19,29 @@ function fixture(platform) {
 }
 test("Grain deletion atomically removes only this job's gallery, photos and links", async () => {
   const batches = [];
-  const result = await deletePublication(fixture("grain"), {
-    oauth: {
-      agent: async () => ({
-        agent: {
-          did: owner,
-          com: { atproto: { repo: { applyWrites: async (data) => batches.push(data) } } },
-        },
-      }),
+  const result = await deletePublication(
+    { ...fixture("grain"), post: { ...post, datesTaken: ["2020-07-18T06:30:10.000Z", null] } },
+    {
+      oauth: {
+        agent: async () => ({
+          agent: {
+            did: owner,
+            com: { atproto: { repo: { applyWrites: async (data) => batches.push(data) } } },
+          },
+        }),
+      },
     },
-  });
+  );
   expect(result.state).toBe("deleted");
   expect(batches).toHaveLength(1);
-  expect(batches[0].writes).toHaveLength(5);
+  expect(batches[0].writes).toHaveLength(6);
+  expect(batches[0].writes.filter((w) => w.collection === "social.grain.photo.exif")).toEqual([
+    {
+      $type: "com.atproto.repo.applyWrites#delete",
+      collection: "social.grain.photo.exif",
+      rkey: recordKey("publisher:grain:fixture:0"),
+    },
+  ]);
   expect(batches[0].writes.every((w) => w.$type.endsWith("#delete"))).toBe(true);
   expect(batches[0].writes[1].rkey).toBe(recordKey("publisher:grain:fixture:0"));
 });
@@ -94,22 +104,11 @@ test("wrong URLs and account identities cannot trigger deletion", async () => {
 test("browser deletion receipts require platform success, not just an HTTP response", () => {
   const url = "https://x.com/i/api/graphql/hash/DeleteTweet";
   expect(
-    deletionResponse(
-      "twitter",
-      url,
-      "POST",
-      { data: { delete_tweet: {} } },
-      '{"tweet_id":"12345"}',
-      "12345",
-    ),
+    deletionResponse("twitter", url, "POST", { data: { delete_tweet: {} } }, '{"tweet_id":"12345"}', "12345"),
   ).toBe(true);
   expect(deletionResponse("twitter", url, "POST", { errors: [{}] }, "12345", "12345")).toBe(false);
-  expect(
-    deletionResponse("twitter", url, "GET", { data: { delete_tweet: {} } }, "12345", "12345"),
-  ).toBe(false);
-  expect(
-    deletionResponse("twitter", url, "POST", { data: { delete_tweet: {} } }, "different", "12345"),
-  ).toBe(false);
+  expect(deletionResponse("twitter", url, "GET", { data: { delete_tweet: {} } }, "12345", "12345")).toBe(false);
+  expect(deletionResponse("twitter", url, "POST", { data: { delete_tweet: {} } }, "different", "12345")).toBe(false);
   expect(
     deletionResponse(
       "instagram",

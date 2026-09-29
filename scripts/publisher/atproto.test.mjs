@@ -54,9 +54,7 @@ test("video grants uploadBlob to the account PDS, waits for a blob, then creates
         wait: async () => {},
         fetcher: async (url) => {
           urls.push(String(url));
-          return Response.json(
-            call++ === 0 ? { jobId: "job", state: "JOB_STATE_CREATED" } : { jobStatus: { blob } },
-          );
+          return Response.json(call++ === 0 ? { jobId: "job", state: "JOB_STATE_CREATED" } : { jobStatus: { blob } });
         },
       },
     );
@@ -121,6 +119,17 @@ test("Grain writes ordered photos and gallery links atomically with stable TID k
     expect(result.url).toEndWith(`/gallery/${gallery.rkey}`);
     await publish();
     expect(batches[1].writes.map((write) => write.rkey)).toEqual(writes.map((write) => write.rkey));
+    post.datesTaken = ["2020-07-18T06:30:10.000Z", null];
+    await publish();
+    const dated = batches[2].writes.filter((write) => write.collection === "social.grain.photo.exif");
+    expect(dated).toHaveLength(1);
+    expect(dated[0].value).toEqual({
+      $type: "social.grain.photo.exif",
+      photo: `at://${owner}/social.grain.photo/${photo1.rkey}`,
+      dateTimeOriginal: post.datesTaken[0],
+      createdAt: batches[2].writes[0].value.createdAt,
+    });
+    expect(dated[0].value.createdAt).not.toBe(post.datesTaken[0]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
