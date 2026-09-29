@@ -1,3 +1,4 @@
+import { claimAnalytics, saveAnalytics, analyticsPage, analyticsSeries } from "@/lib/publisher/analytics";
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { publisherSession, publisherSameOrigin } from "@/lib/publisher/auth";
@@ -44,6 +45,35 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "pair" && request.method === "DELETE") {
       await db.prepare("DELETE FROM publisher_helper WHERE id = 1").run();
+      return json({ ok: true });
+    }
+    if (path === "analytics" && request.method === "GET")
+      return json(await analyticsPage(db, new URL(request.url).searchParams.get("before")));
+    if (path.startsWith("analytics/") && request.method === "GET") {
+      const id = path.slice("analytics/".length);
+      if (!validId(id)) return json({ error: "Invalid post" }, 400);
+      return json({ samples: await analyticsSeries(db, id) });
+    }
+    if (path === "analytics/refresh" && request.method === "POST") {
+      const { job } = (await request.json()) as { job: string };
+      if (!validId(job)) return json({ error: "Invalid post" }, 400);
+      await db
+        .prepare(
+          "UPDATE publisher_metric_checks SET next_at=0 WHERE claim IS NULL AND (checked_at IS NULL OR checked_at < ?) AND target_id IN (SELECT id FROM publisher_targets WHERE job_id=?)",
+        )
+        .bind(Date.now() - 5 * 60_000, job)
+        .run();
+      return json({ ok: true });
+    }
+    if (path === "helper/analytics-result" && request.method === "POST") {
+      const data = (await request.json()) as { target_id: string; claim: string; metrics: unknown; error?: string };
+      if (
+        !validId(data.target_id) ||
+        !validId(data.claim) ||
+        (data.error !== undefined && (typeof data.error !== "string" || !data.error))
+      )
+        return json({ error: "Invalid analytics receipt" }, 400);
+      await saveAnalytics(db, data.target_id, data.claim, data.metrics, data.error);
       return json({ ok: true });
     }
     if (path === "history" && request.method === "GET") {
@@ -215,7 +245,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ ok: true });
     }
     if (path === "helper/claim" && request.method === "POST") {
-      const input = (await request.json()) as { platforms?: unknown; deletePublications?: boolean };
+      const input = (await request.json()) as {
+        platforms?: unknown;
+        deletePublications?: boolean;
+        analytics?: boolean;
+      };
       const supported = platforms.filter((p) => Array.isArray(input.platforms) && input.platforms.includes(p));
       await db
         .prepare("UPDATE publisher_helper SET last_seen = ?, platforms = ? WHERE id = 1")
@@ -235,7 +269,18 @@ export const ALL: APIRoute = async ({ request, params }) => {
         return json({ deletion: { ...deletion, target, post: JSON.parse(job!.payload) } });
       }
       const target = await claimTarget(db, supported);
-      if (!target) return json({ target: null });
+      if (!target) {
+        const metricClaim =
+          input.analytics === true
+            ? await claimAnalytics(db, [...new Set([...supported, "grain", "bluesky"])] as (typeof platforms)[number][])
+            : null;
+        if (!metricClaim) return json({ target: null });
+        const publication = await db
+          .prepare("SELECT * FROM publisher_targets WHERE id=?")
+          .bind(metricClaim.target_id)
+          .first();
+        return json({ analytics: { ...metricClaim, target: publication } });
+      }
       const job = await db
         .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
         .bind(target.job_id)

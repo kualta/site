@@ -23,7 +23,7 @@ export async function historyPage(db: NewsletterDB, cursor: string | null) {
      WHERE t.job_id IN (${page.map(() => "?").join(",")}) ORDER BY t.rowid`,
     )
     .bind(...page.map((job) => job.id))
-    .all<{ job_id: string }>();
+    .all<{ id: string; job_id: string }>();
   const last = page[page.length - 1];
   return {
     posts: page.map((job) => ({

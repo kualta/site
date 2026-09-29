@@ -157,3 +157,20 @@ Account connection launches installed Google Chrome directly with a dedicated pu
 This removes the automated login browser from the sign-in step. It does not bypass provider account checks or guarantee automated publishing is accepted. The ordinary personal Chrome profile is never copied, read, or terminated.
 
 Chrome session checks, browser publishing, and deletion use the native OS credential store, matching the ordinary Chrome sign-in window. Playwright's mock-keychain/basic-password-store defaults are disabled for these dedicated profiles. The X/Instagram adapters default to installed Chrome and fail if it cannot launch, rather than silently switching to bundled Chromium with a different credential store. Restart the helper after this update; if an earlier connection check already discarded unreadable cookies, sign in once again.
+
+### Analytics
+
+The owner-only Analytics tab tracks publications made through this tool, including those published before analytics was enabled. It does not import unrelated platform posts or reconstruct counts from before the first observation. Select a post to compare platforms, inspect daily closing counts, and switch between 7/30/90-day or all-time charts. The underlying hourly observations remain in Cloudflare D1 after a publication is deleted.
+
+Restart the updated laptop helper to enable collection. When no account connection, deletion, or publication is queued, it reads due metrics using public AT Protocol APIs or the saved browser sessions. Each destination is due about hourly; offline periods and busy helpers delay collection. Refresh metrics makes eligible destinations due immediately, limited to once every five minutes. Five-minute leases make interrupted reads retryable; claim-bound receipts are idempotent. Failed reads preserve the previous snapshot and show an error and its observation time. Deleted destinations stop refreshing.
+
+The combined figure adds each destination's latest **impressions, or views when impressions are absent**, never both. It is not deduplicated audience reach. Coverage and timestamps identify partial or stale totals. Unsupported and hidden metrics remain unavailable, while a reported zero remains zero. The chart carries forward the most recent observed count for each reporting destination and uses UTC daily closing samples; platform coverage can change over time.
+
+Collector coverage:
+- Bluesky: likes, replies, reposts from the public post API; no views/reach field.
+- Grain: gallery favorites and comments from `social.grain.unspecced.getGallery`; no views/reach field.
+- YouTube: video views and likes through the existing YouTube client.
+- X/Twitter and TikTok: exact-post views and available engagement counters from the saved-session page's structured data.
+- Instagram and Xiaohongshu: exact-post available engagement and view counters; photo reach/owner-only insights may be unavailable.
+
+Browser metrics rely on provider response shapes and still need real-account acceptance testing. Hidden counts, expired sessions, changed response formats, and platform challenges yield unavailable/error states, not invented numbers. Unique reach is never inferred from views. No credentials or response bodies are persisted in analytics; only numeric counts, target IDs, timestamps, and generic error messages are stored. Apply `0006_publisher_analytics.sql` before deploying.
