@@ -1,0 +1,66 @@
+[
+  {
+    "id": "kaomojiya",
+    "name": "Kaomojiya",
+    "url": "https://github.com/kaomojiya-collection/kaomoji-collection",
+    "license": "MIT",
+    "retrieved": "2026-09-29",
+    "licenseUrl": "/kaomoji-licenses/kaomojiya-LICENSE.txt",
+    "importedEntries": 35359
+  },
+  {
+    "id": "fontvibe",
+    "name": "FontVibe",
+    "url": "https://fontvibe.ai/tools/kaomoji",
+    "license": "CC-BY-4.0",
+    "repository": "https://github.com/Funovate/fontvibe-kaomoji",
+    "retrieved": "2026-09-29",
+    "licenseUrl": "/kaomoji-licenses/fontvibe-LICENSE.txt",
+    "noticeUrl": "/kaomoji-licenses/fontvibe-NOTICE.txt",
+    "importedEntries": 81828
+  },
+  {
+    "id": "kaomojikan",
+    "name": "Kaomojikan",
+    "url": "https://github.com/kaomojikan/kaomoji-data",
+    "license": "MIT",
+    "retrieved": "2026-09-29",
+    "licenseUrl": "/kaomoji-licenses/kaomojikan-LICENSE.txt",
+    "importedEntries": 1689
+  },
+  {
+    "id": "mozc",
+    "name": "Google Mozc",
+    "url": "https://github.com/google/mozc",
+    "license": "BSD-3-Clause",
+    "retrieved": "2026-09-29",
+    "licenseUrl": "/kaomoji-licenses/mozc-LICENSE.txt",
+    "importedEntries": 417
+  },
+  {
+    "id": "myon",
+    "name": "Myon IME",
+    "url": "https://github.com/mtripg6666tdr/Kaomoji_proj",
+    "license": "MIT",
+    "retrieved": "2026-09-29",
+    "licenseUrl": "/kaomoji-licenses/myon-LICENSE.txt",
+    "importedEntries": 2102
+  },
+  {
+    "id": "heliboard",
+    "name": "HeliBoard kaomojidict",
+    "url": "https://github.com/netromdk/kaomojidict",
+    "license": "MIT",
+    "retrieved": "2026-09-29",
+    "licenseUrl": "/kaomoji-licenses/heliboard-LICENSE.txt",
+    "importedEntries": 107
+  },
+  {
+    "id": "kaomoji-you",
+    "name": "Kaomoji.ru / Kaomoji.you",
+    "url": "https://kaomoji.you/en/",
+    "license": "No SPDX license; page invites use and mixing of its emoticons. Original URL https://kaomoji.ru/en/ redirects here.",
+    "retrieved": "2026-09-29",
+    "importedEntries": 796
+  }
+]

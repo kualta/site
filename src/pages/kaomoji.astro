@@ -1,11 +1,17 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import KaomojiList from "@/components/KaomojiList.tsx";
+import KaomojiBrowser from "@/components/KaomojiBrowser.tsx";
+import { allKaomoji, KAOMOJI_PAGE_SIZE } from "@/data/kaomoji-library";
 ---
 <BaseLayout
   title="kaomoji"
   description="Kaomoji"
 >
   <h1 class="sr-only">kaomoji</h1>
-  <KaomojiList client:load />
+  <KaomojiBrowser
+    client:load
+    initialEntries={allKaomoji.slice(0, KAOMOJI_PAGE_SIZE)}
+    total={allKaomoji.length}
+    pageSize={KAOMOJI_PAGE_SIZE}
+  />
 </BaseLayout>

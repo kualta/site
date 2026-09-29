@@ -1,0 +1,55 @@
+KAOMOJI SOURCES
+Collected 2026-09-29
+
+The existing themed library is retained. Imported expressions are trimmed,
+normalized to Unicode NFC, and deduplicated; their category, tag and reading
+labels are unioned across sources. Internal spacing and glyph widths are retained.
+Standalone prose, emoji and decorations were filtered from imported collections.
+Source membership and labels are retained in src/data/kaomoji-collected.json,
+with source IDs in src/data/kaomoji-sources.json in https://github.com/kualta/site.
+
+Kaomojiya
+https://github.com/kaomojiya-collection/kaomoji-collection
+License: MIT
+https://kualta.dev/kaomoji-licenses/kaomojiya-LICENSE.txt
+
+FontVibe
+https://fontvibe.ai/tools/kaomoji
+https://github.com/Funovate/fontvibe-kaomoji
+License: CC-BY-4.0
+https://kualta.dev/kaomoji-licenses/fontvibe-LICENSE.txt
+https://kualta.dev/kaomoji-licenses/fontvibe-NOTICE.txt
+
+Kaomojikan
+https://github.com/kaomojikan/kaomoji-data
+License: MIT
+https://kualta.dev/kaomoji-licenses/kaomojikan-LICENSE.txt
+
+Google Mozc
+https://github.com/google/mozc
+License: BSD-3-Clause
+https://kualta.dev/kaomoji-licenses/mozc-LICENSE.txt
+
+Myon IME
+https://github.com/mtripg6666tdr/Kaomoji_proj
+License: MIT
+https://kualta.dev/kaomoji-licenses/myon-LICENSE.txt
+
+HeliBoard kaomojidict
+https://github.com/netromdk/kaomojidict
+License: MIT
+https://kualta.dev/kaomoji-licenses/heliboard-LICENSE.txt
+
+Kaomoji.ru / Kaomoji.you
+https://kaomoji.you/en/
+License: No SPDX license; page invites use and mixing of its emoticons. Original URL https://kaomoji.ru/en/ redirects here.
+
+FontVibe: compilation distributed under CC BY 4.0; original expressions and
+metadata are CC0. Its NOTICE distinguishes traditional community expressions
+from upstream IME dictionaries with no explicit license; the compilation
+license does not retroactively license those upstream sources. The full
+required NOTICE is linked above.
+
+Kaomoji.you (formerly Kaomoji.ru): the author invites use and mixing of the
+emoticons on the source page. No SPDX license is asserted. Only the short
+emoticons and category names are included, not the explanatory article.
