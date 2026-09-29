@@ -94,7 +94,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
     "rounded border border-current/20 px-3 py-2 hover:bg-current/5 disabled:opacity-30 disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4";
 
   return (
-    <div className="flex w-full flex-col items-center font-mono">
+    <div className="kaomoji-browser flex w-full flex-col items-center">
       <div className="w-full max-w-md px-5 mb-10">
         <label htmlFor="kaomoji-search" className="sr-only">
           Search kaomoji, categories, and tags
@@ -108,11 +108,11 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             setSearchPage(1);
           }}
           placeholder="Search kaomoji, categories, tags…"
-          className="w-full rounded border border-current/20 bg-transparent px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
+          className="kaomoji-search"
         />
       </div>
       {!searching && <KaomojiList />}
-      <section aria-labelledby="all-kaomoji" className="w-full max-w-6xl px-5 pb-16 pt-12">
+      <section aria-labelledby="all-kaomoji" className="w-full max-w-6xl px-5 pb-16 pt-12 font-mono">
         <h2
           id="all-kaomoji"
           ref={heading}
@@ -181,11 +181,6 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             )}
           </p>
         )}
-        <p className="mt-8 text-center text-xs opacity-60">
-          <a href="/kaomoji-sources.txt" className="underline underline-offset-4">
-            Sources & licenses
-          </a>
-        </p>
       </section>
     </div>
   );

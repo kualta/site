@@ -1079,7 +1079,8 @@ input[type="checkbox"]:checked {
 }
 .newsletter-form { width: 100%; min-width: 0; }
 .newsletter-fields { display: flex; gap: 0.4rem; }
-.newsletter-fields input {
+.newsletter-fields input,
+.kaomoji-search {
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -1090,8 +1091,19 @@ input[type="checkbox"]:checked {
   font: inherit;
   color: inherit;
 }
-.dark .newsletter-fields input { background: var(--secondary-dark); }
-.newsletter-fields input::placeholder { color: inherit; opacity: 0.55; }
+.dark .newsletter-fields input,
+.dark .kaomoji-search { background: var(--secondary-dark); }
+.newsletter-fields input::placeholder,
+.kaomoji-search::placeholder { color: inherit; opacity: 0.55; }
+
+/* Keep search anchored when filtering removes the tall themed collections. */
+main:has(.kaomoji-browser) { justify-content: flex-start; }
+.kaomoji-search { transition: border-color 160ms ease; }
+.kaomoji-search:is(:focus, :focus-visible) {
+  outline: none;
+  border-color: currentColor;
+  box-shadow: none;
+}
 .newsletter-fields button {
   display: grid;
   flex-shrink: 0;
