@@ -26,7 +26,10 @@ for (const [category, faces] of Object.entries(kaomoji)) {
   for (const face of faces) addEntry(face, [category.replaceAll("_", " ")]);
 }
 for (const entry of collected.entries) {
-  addEntry(entry.text, entry.tags.map((id) => collected.tags[id]));
+  addEntry(
+    entry.text,
+    entry.tags.map((id) => collected.tags[id]),
+  );
 }
 
 export const kaomojiSearchIndex: KaomojiIndex = {

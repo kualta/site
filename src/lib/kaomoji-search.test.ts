@@ -39,7 +39,11 @@ describe("kaomoji search", () => {
   });
 
   test("retains every existing expression and merges source classifications", () => {
-    const originals = new Set(Object.values(kaomoji).flat().map((text) => text.trim().normalize("NFC")));
+    const originals = new Set(
+      Object.values(kaomoji)
+        .flat()
+        .map((text) => text.trim().normalize("NFC")),
+    );
     const library = new Set(allKaomoji);
     expect([...originals].every((text) => library.has(text))).toBe(true);
     expect(library.size).toBe(allKaomoji.length);

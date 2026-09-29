@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { searchKaomoji, type KaomojiIndex } from "@/lib/kaomoji-search";
+import KaomojiList from "./KaomojiList";
 
 interface Props {
   initialEntries: string[];
@@ -7,7 +8,7 @@ interface Props {
   pageSize: number;
 }
 
-export default function AllKaomojiList({ initialEntries, total, pageSize }: Props) {
+export default function KaomojiBrowser({ initialEntries, total, pageSize }: Props) {
   const [browseEntries, setBrowseEntries] = useState(initialEntries);
   const [browsePage, setBrowsePage] = useState(1);
   const [searchPage, setSearchPage] = useState(1);
@@ -44,7 +45,10 @@ export default function AllKaomojiList({ initialEntries, total, pageSize }: Prop
     return () => controller.abort();
   }, [searching, index, retry]);
 
-  const results = useMemo(() => index && deferredQuery ? searchKaomoji(index, deferredQuery) : [], [index, deferredQuery]);
+  const results = useMemo(
+    () => (index && deferredQuery ? searchKaomoji(index, deferredQuery) : []),
+    [index, deferredQuery],
+  );
   const page = searching ? searchPage : browsePage;
   const count = searching ? results.length : total;
   const pageCount = Math.max(1, Math.ceil(count / pageSize));
@@ -86,46 +90,103 @@ export default function AllKaomojiList({ initialEntries, total, pageSize }: Prop
     }
   }
 
-  const buttonClass = "rounded border border-current/20 px-3 py-2 hover:bg-current/5 disabled:opacity-30 disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4";
+  const buttonClass =
+    "rounded border border-current/20 px-3 py-2 hover:bg-current/5 disabled:opacity-30 disabled:cursor-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4";
 
   return (
-    <section aria-labelledby="all-kaomoji" className="w-full max-w-6xl px-5 pb-16 pt-12 font-mono">
-      <h2 id="all-kaomoji" ref={heading} tabIndex={-1} className="scroll-mt-8 text-center text-xl font-bold outline-none">
-        all kaomoji
-      </h2>
-      <div className="mx-auto mt-5 max-w-md">
-        <label htmlFor="kaomoji-search" className="sr-only">Search kaomoji, categories, and tags</label>
+    <div className="flex w-full flex-col items-center font-mono">
+      <div className="w-full max-w-md px-5 mb-10">
+        <label htmlFor="kaomoji-search" className="sr-only">
+          Search kaomoji, categories, and tags
+        </label>
         <input
           id="kaomoji-search"
           type="search"
           value={query}
-          onChange={(event) => { setQuery(event.target.value); setSearchPage(1); }}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setSearchPage(1);
+          }}
           placeholder="Search kaomoji, categories, tags…"
           className="w-full rounded border border-current/20 bg-transparent px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
         />
       </div>
-      <p className="mt-4 text-center text-sm opacity-60" aria-live="polite" role="status">
-        {loading ? "Loading…" : `${firstEntry}–${lastEntry} of ${count.toLocaleString("en-US")}`}
-      </p>
-      <ul aria-busy={loading} className="my-8 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
-        {entries.map((entry) => (
-          <li key={entry} className="overflow-x-auto whitespace-pre text-center text-lg py-1">{entry}</li>
-        ))}
-      </ul>
-      {searching && index && !loading && count === 0 && <p className="my-8 text-center text-sm">No kaomoji found.</p>}
-      <nav aria-label="All kaomoji pages" className="flex flex-wrap items-center justify-center gap-3 text-sm">
-        <button type="button" className={buttonClass} disabled={loading || page === 1} onClick={() => goToPage(1)} aria-label="First page">«</button>
-        <button type="button" className={buttonClass} disabled={loading || page === 1} onClick={() => goToPage(page - 1)}>Previous</button>
-        <span>{page} / {pageCount}</span>
-        <button type="button" className={buttonClass} disabled={loading || page === pageCount} onClick={() => goToPage(page + 1)}>Next</button>
-        <button type="button" className={buttonClass} disabled={loading || page === pageCount} onClick={() => goToPage(pageCount)} aria-label="Last page">»</button>
-      </nav>
-      {error && <p role="alert" className="mt-4 text-center text-sm">
-        {error}{searching && <button type="button" onClick={() => setRetry(retry + 1)} className="ml-2 underline">Retry</button>}
-      </p>}
-      <p className="mt-8 text-center text-xs opacity-60">
-        <a href="/kaomoji-sources.txt" className="underline underline-offset-4">Sources & licenses</a>
-      </p>
-    </section>
+      {!searching && <KaomojiList />}
+      <section aria-labelledby="all-kaomoji" className="w-full max-w-6xl px-5 pb-16 pt-12">
+        <h2
+          id="all-kaomoji"
+          ref={heading}
+          tabIndex={-1}
+          className="scroll-mt-8 text-center text-xl font-bold outline-none"
+        >
+          all kaomoji
+        </h2>
+        <p className="mt-4 text-center text-sm opacity-60" aria-live="polite" role="status">
+          {loading ? "Loading…" : `${firstEntry}–${lastEntry} of ${count.toLocaleString("en-US")}`}
+        </p>
+        <ul aria-busy={loading} className="my-8 grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+          {entries.map((entry) => (
+            <li key={entry} className="overflow-x-auto whitespace-pre text-center text-lg py-1">
+              {entry}
+            </li>
+          ))}
+        </ul>
+        {searching && index && !loading && count === 0 && <p className="my-8 text-center text-sm">No kaomoji found.</p>}
+        <nav aria-label="All kaomoji pages" className="flex flex-wrap items-center justify-center gap-3 text-sm">
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={loading || page === 1}
+            onClick={() => goToPage(1)}
+            aria-label="First page"
+          >
+            «
+          </button>
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={loading || page === 1}
+            onClick={() => goToPage(page - 1)}
+          >
+            Previous
+          </button>
+          <span>
+            {page} / {pageCount}
+          </span>
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={loading || page === pageCount}
+            onClick={() => goToPage(page + 1)}
+          >
+            Next
+          </button>
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={loading || page === pageCount}
+            onClick={() => goToPage(pageCount)}
+            aria-label="Last page"
+          >
+            »
+          </button>
+        </nav>
+        {error && (
+          <p role="alert" className="mt-4 text-center text-sm">
+            {error}
+            {searching && (
+              <button type="button" onClick={() => setRetry(retry + 1)} className="ml-2 underline">
+                Retry
+              </button>
+            )}
+          </p>
+        )}
+        <p className="mt-8 text-center text-xs opacity-60">
+          <a href="/kaomoji-sources.txt" className="underline underline-offset-4">
+            Sources & licenses
+          </a>
+        </p>
+      </section>
+    </div>
   );
 }
