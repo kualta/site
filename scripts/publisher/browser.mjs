@@ -12,6 +12,8 @@ export const destinations = {
 export async function openProfile(path, headless = false) {
   return chromium.launchPersistentContext(path, {
     channel: "chrome",
+    // Match ordinary Chrome so saved login cookies use the same OS keychain.
+    ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"],
     headless,
     viewport: { width: 1280, height: 900 },
     locale: "en-US",

@@ -42,14 +42,14 @@ def import_playwright():
         )
 
 
-def launch_persistent(playwright, user_data_dir, headless, channel="auto"):
+def launch_persistent(playwright, user_data_dir, headless, channel="chrome"):
     """Launches an isolated browser with a persistent per-profile session.
 
-    Prefers the installed Google Chrome ("chrome" channel) because it ships the
+    Defaults to installed Google Chrome ("chrome" channel) because it ships the
     proprietary codecs (H.264/AAC) Instagram needs to read uploaded video.
     Playwright's bundled Chromium lacks those codecs and rejects MP4 video with
-    "could not be read by your browser", so it is only the fallback when Chrome
-    is not installed. The per-profile user-data dir keeps each account isolated
+    "could not be read by your browser". Other channels require an explicit
+    choice. The per-profile user-data dir keeps each account isolated
     and separate from the user's own Chrome profile either way.
     """
     path = str(Path(user_data_dir).expanduser())
@@ -57,6 +57,8 @@ def launch_persistent(playwright, user_data_dir, headless, channel="auto"):
 
     opts = dict(
         headless=headless,
+        # Match the native Chrome keychain used during manual sign-in.
+        ignore_default_args=["--use-mock-keychain", "--password-store=basic"],
         user_agent=DESKTOP_USER_AGENT,
         viewport={"width": 1280, "height": 900},
         locale="en-US",
