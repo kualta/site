@@ -1,3 +1,4 @@
+import PublisherAnalytics from "./PublisherAnalytics";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -28,6 +29,7 @@ async function api(path: string, body?: unknown, method = body === undefined ? "
   return data;
 }
 export default function Publisher() {
+  const [tab, setTab] = useState<"compose" | "analytics">("compose");
   const [access, setAccess] = useState<"loading" | "owner" | "signin" | "denied">("loading");
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [ready, setReady] = useState(false);
@@ -241,294 +243,309 @@ export default function Publisher() {
         </section>
       ) : (
         <>
-          <div className="publisher-heading">
-            <h1>New post</h1>
-            <select
-              aria-label="Preset"
-              value={preset.id}
-              disabled={busy || submitted}
-              onChange={(e) => selectPreset(e.target.value)}
-            >
-              {preferences.presets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="publisher-compose">
-            <section>
-              <label className="media-picker">
-                <input
-                  ref={input}
-                  type="file"
-                  accept={preset.kind === "photo" ? "image/*" : "video/*"}
-                  multiple={preset.kind === "photo"}
-                  disabled={busy || submitted}
-                  onChange={(e) => {
-                    const next = Array.from(e.target.files || []);
-                    if (
-                      next.length > 4 ||
-                      next.some(
-                        (f) =>
-                          f.size > (preset.kind === "photo" ? 30e6 : 90e6) ||
-                          !f.type.startsWith(preset.kind === "photo" ? "image/" : "video/"),
-                      )
-                    ) {
-                      setError("Choose up to four photos (30 MB each) or one video (90 MB).");
-                      return;
-                    }
-                    setFiles(next);
-                    submission.current = null;
-                    setError("");
-                  }}
-                />
-                <span>
-                  {files.length ? "Replace media" : preset.kind === "photo" ? "Choose photos" : "Choose a video"}
-                </span>
-                <small>{preset.kind === "photo" ? "Up to 4 photos · 30 MB each" : "One video · up to 90 MB"}</small>
-              </label>
-              {!!previews.length && (
-                <div className="publisher-previews">
-                  {previews.map((url, i) =>
-                    preset.kind === "video" ? (
-                      <video key={url} src={url} controls />
-                    ) : (
-                      <img key={url} src={url} alt={files[i]?.name || "Selected photo"} />
-                    ),
-                  )}
-                </div>
-              )}
-              {preset.kind === "photo" && preset.platforms.includes("grain") && files.length > 0 && (
-                <div className="publisher-photo-dates">
-                  <p className="publisher-note">
-                    Date taken · Grain · {Intl.DateTimeFormat().resolvedOptions().timeZone}. Photos without a timezone
-                    use this timezone.
-                  </p>
-                  {files.map((file, index) => (
-                    <label key={`${file.name}-${index}`}>
-                      {file.name}
-                      <input
-                        type="datetime-local"
-                        step="1"
-                        aria-label={`Date taken for ${file.name}`}
-                        disabled={busy || submitted || readingDates}
-                        value={datesTaken[index] || ""}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setDatesTaken((dates) => dates.map((date, i) => (i === index ? value : date)));
-                          submission.current = null;
-                        }}
-                      />
-                    </label>
-                  ))}
-                  <p className="publisher-note">
-                    Optional. Read from the original photo; edit or clear before posting.
-                  </p>
-                </div>
-              )}
-              <label>
-                Title
-                <input
-                  value={title}
-                  maxLength={100}
-                  disabled={busy || submitted}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    submission.current = null;
-                  }}
-                  placeholder="A moment worth sharing"
-                />
-              </label>
-              <label>
-                Caption
-                <textarea
-                  value={caption}
-                  maxLength={5000}
-                  disabled={busy || submitted}
-                  onChange={(e) => {
-                    setCaption(e.target.value);
-                    submission.current = null;
-                  }}
-                  placeholder="Say something…"
-                  rows={5}
-                />
-              </label>
-              <label>
-                Image description (Grain / Bluesky)
-                <input
-                  value={alt}
-                  maxLength={1000}
-                  disabled={busy || submitted}
-                  onChange={(e) => {
-                    setAlt(e.target.value);
-                    submission.current = null;
-                  }}
-                  placeholder="Describe the photos for screen readers"
-                />
-              </label>
-            </section>
-            <aside>
-              <h2>Share to</h2>
-              <div className="publisher-destinations">
-                {platforms
-                  .filter((p) => support[p].includes(preset.kind))
-                  .map((p) => (
-                    <label key={p}>
-                      <span>{platformNames[p]}</span>
-                      <input
-                        type="checkbox"
-                        checked={preset.platforms.includes(p)}
-                        disabled={busy || submitted}
-                        onChange={() => {
-                          submission.current = null;
-                          updatePreset({
-                            platforms: preset.platforms.includes(p)
-                              ? preset.platforms.filter((v) => v !== p)
-                              : [...preset.platforms, p],
-                          });
-                        }}
-                      />
-                    </label>
-                  ))}
-              </div>
-              {preset.platforms.includes("youtube") && (
-                <label>
-                  YouTube visibility
-                  <select
-                    value={preset.visibility}
+          <nav className="publisher-tabs" aria-label="Publisher sections">
+            <button aria-pressed={tab === "compose"} onClick={() => setTab("compose")}>
+              Compose
+            </button>
+            <button aria-pressed={tab === "analytics"} onClick={() => setTab("analytics")}>
+              Analytics
+            </button>
+          </nav>
+          {tab === "analytics" && <PublisherAnalytics request={api} online={helperOnline} />}
+          <div hidden={tab !== "compose"}>
+            <div className="publisher-heading">
+              <h1>New post</h1>
+              <select
+                aria-label="Preset"
+                value={preset.id}
+                disabled={busy || submitted}
+                onChange={(e) => selectPreset(e.target.value)}
+              >
+                {preferences.presets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="publisher-compose">
+              <section>
+                <label className="media-picker">
+                  <input
+                    ref={input}
+                    type="file"
+                    accept={preset.kind === "photo" ? "image/*" : "video/*"}
+                    multiple={preset.kind === "photo"}
                     disabled={busy || submitted}
-                    onChange={(e) => updatePreset({ visibility: e.target.value as Preset["visibility"] })}
-                  >
-                    <option value="PRIVATE">Private</option>
-                    <option value="UNLISTED">Unlisted</option>
-                    <option value="PUBLIC">Public</option>
-                  </select>
+                    onChange={(e) => {
+                      const next = Array.from(e.target.files || []);
+                      if (
+                        next.length > 4 ||
+                        next.some(
+                          (f) =>
+                            f.size > (preset.kind === "photo" ? 30e6 : 90e6) ||
+                            !f.type.startsWith(preset.kind === "photo" ? "image/" : "video/"),
+                        )
+                      ) {
+                        setError("Choose up to four photos (30 MB each) or one video (90 MB).");
+                        return;
+                      }
+                      setFiles(next);
+                      submission.current = null;
+                      setError("");
+                    }}
+                  />
+                  <span>
+                    {files.length ? "Replace media" : preset.kind === "photo" ? "Choose photos" : "Choose a video"}
+                  </span>
+                  <small>{preset.kind === "photo" ? "Up to 4 photos · 30 MB each" : "One video · up to 90 MB"}</small>
                 </label>
-              )}
-              <details>
-                <summary>Preset settings</summary>
+                {!!previews.length && (
+                  <div className="publisher-previews">
+                    {previews.map((url, i) =>
+                      preset.kind === "video" ? (
+                        <video key={url} src={url} controls />
+                      ) : (
+                        <img key={url} src={url} alt={files[i]?.name || "Selected photo"} />
+                      ),
+                    )}
+                  </div>
+                )}
+                {preset.kind === "photo" && preset.platforms.includes("grain") && files.length > 0 && (
+                  <div className="publisher-photo-dates">
+                    <p className="publisher-note">
+                      Date taken · Grain · {Intl.DateTimeFormat().resolvedOptions().timeZone}. Photos without a timezone
+                      use this timezone.
+                    </p>
+                    {files.map((file, index) => (
+                      <label key={`${file.name}-${index}`}>
+                        {file.name}
+                        <input
+                          type="datetime-local"
+                          step="1"
+                          aria-label={`Date taken for ${file.name}`}
+                          disabled={busy || submitted || readingDates}
+                          value={datesTaken[index] || ""}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setDatesTaken((dates) => dates.map((date, i) => (i === index ? value : date)));
+                            submission.current = null;
+                          }}
+                        />
+                      </label>
+                    ))}
+                    <p className="publisher-note">
+                      Optional. Read from the original photo; edit or clear before posting.
+                    </p>
+                  </div>
+                )}
                 <label>
-                  Name
-                  <input value={preset.name} maxLength={50} onChange={(e) => updatePreset({ name: e.target.value })} />
-                </label>
-                <label>
-                  Default caption
-                  <textarea
-                    rows={2}
-                    value={preset.caption}
-                    onChange={(e) => updatePreset({ caption: e.target.value.slice(0, 5000) })}
+                  Title
+                  <input
+                    value={title}
+                    maxLength={100}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      submission.current = null;
+                    }}
+                    placeholder="A moment worth sharing"
                   />
                 </label>
-                <p className="publisher-note">Saved in this browser. Videos remove all optional metadata.</p>
-                {preset.platforms.map((p) => (
-                  <label key={p}>
-                    {platformNames[p]} metadata
+                <label>
+                  Caption
+                  <textarea
+                    value={caption}
+                    maxLength={5000}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setCaption(e.target.value);
+                      submission.current = null;
+                    }}
+                    placeholder="Say something…"
+                    rows={5}
+                  />
+                </label>
+                <label>
+                  Image description (Grain / Bluesky)
+                  <input
+                    value={alt}
+                    maxLength={1000}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setAlt(e.target.value);
+                      submission.current = null;
+                    }}
+                    placeholder="Describe the photos for screen readers"
+                  />
+                </label>
+              </section>
+              <aside>
+                <h2>Share to</h2>
+                <div className="publisher-destinations">
+                  {platforms
+                    .filter((p) => support[p].includes(preset.kind))
+                    .map((p) => (
+                      <label key={p}>
+                        <span>{platformNames[p]}</span>
+                        <input
+                          type="checkbox"
+                          checked={preset.platforms.includes(p)}
+                          disabled={busy || submitted}
+                          onChange={() => {
+                            submission.current = null;
+                            updatePreset({
+                              platforms: preset.platforms.includes(p)
+                                ? preset.platforms.filter((v) => v !== p)
+                                : [...preset.platforms, p],
+                            });
+                          }}
+                        />
+                      </label>
+                    ))}
+                </div>
+                {preset.platforms.includes("youtube") && (
+                  <label>
+                    YouTube visibility
                     <select
-                      value={preset.metadata[p]}
-                      onChange={(e) =>
-                        updatePreset({
-                          metadata: {
-                            ...preset.metadata,
-                            [p]: e.target.value as "remove-location" | "remove-all",
-                          },
+                      value={preset.visibility}
+                      disabled={busy || submitted}
+                      onChange={(e) => updatePreset({ visibility: e.target.value as Preset["visibility"] })}
+                    >
+                      <option value="PRIVATE">Private</option>
+                      <option value="UNLISTED">Unlisted</option>
+                      <option value="PUBLIC">Public</option>
+                    </select>
+                  </label>
+                )}
+                <details>
+                  <summary>Preset settings</summary>
+                  <label>
+                    Name
+                    <input
+                      value={preset.name}
+                      maxLength={50}
+                      onChange={(e) => updatePreset({ name: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Default caption
+                    <textarea
+                      rows={2}
+                      value={preset.caption}
+                      onChange={(e) => updatePreset({ caption: e.target.value.slice(0, 5000) })}
+                    />
+                  </label>
+                  <p className="publisher-note">Saved in this browser. Videos remove all optional metadata.</p>
+                  {preset.platforms.map((p) => (
+                    <label key={p}>
+                      {platformNames[p]} metadata
+                      <select
+                        value={preset.metadata[p]}
+                        onChange={(e) =>
+                          updatePreset({
+                            metadata: {
+                              ...preset.metadata,
+                              [p]: e.target.value as "remove-location" | "remove-all",
+                            },
+                          })
+                        }
+                      >
+                        <option value="remove-location">Remove location · keep camera settings</option>
+                        <option value="remove-all">Remove all optional metadata</option>
+                      </select>
+                    </label>
+                  ))}
+                  <div className="publisher-actions">
+                    <button
+                      disabled={busy || submitted || preferences.presets.length >= 20}
+                      onClick={() => {
+                        const copy = { ...preset, id: crypto.randomUUID(), name: `${preset.name} copy` };
+                        setPreferences((p) => ({ ...p, active: copy.id, presets: [...p.presets, copy] }));
+                      }}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      disabled={busy || submitted || preferences.presets.length === 1}
+                      onClick={() =>
+                        setPreferences((p) => {
+                          const remaining = p.presets.filter((v) => v.id !== preset.id);
+                          return { ...p, active: remaining[0].id, presets: remaining };
                         })
                       }
                     >
-                      <option value="remove-location">Remove location · keep camera settings</option>
-                      <option value="remove-all">Remove all optional metadata</option>
-                    </select>
-                  </label>
-                ))}
-                <div className="publisher-actions">
-                  <button
-                    disabled={busy || submitted || preferences.presets.length >= 20}
-                    onClick={() => {
-                      const copy = { ...preset, id: crypto.randomUUID(), name: `${preset.name} copy` };
-                      setPreferences((p) => ({ ...p, active: copy.id, presets: [...p.presets, copy] }));
-                    }}
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    disabled={busy || submitted || preferences.presets.length === 1}
-                    onClick={() =>
-                      setPreferences((p) => {
-                        const remaining = p.presets.filter((v) => v.id !== preset.id);
-                        return { ...p, active: remaining[0].id, presets: remaining };
-                      })
-                    }
-                  >
-                    Delete
-                  </button>
-                </div>
-              </details>
-              <button
-                className="publish-button"
-                disabled={busy || !files.length || !preset.platforms.length}
-                onClick={submit}
-              >
-                {publishLabel}
-              </button>
-              <p className="publisher-note">
-                Media stays private in Cloudflare. Your laptop removes metadata before publishing.
-              </p>
-              {!!missingPlatforms.length && (
+                      Delete
+                    </button>
+                  </div>
+                </details>
+                <button
+                  className="publish-button"
+                  disabled={busy || !files.length || !preset.platforms.length}
+                  onClick={submit}
+                >
+                  {publishLabel}
+                </button>
                 <p className="publisher-note">
-                  Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.
+                  Media stays private in Cloudflare. Your laptop removes metadata before publishing.
+                </p>
+                {!!missingPlatforms.length && (
+                  <p className="publisher-note">
+                    Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.
+                  </p>
+                )}
+              </aside>
+            </div>
+            <PublisherHistory request={api} onError={setError} />
+            <PublisherConnections
+              online={helperOnline}
+              connected={connectedPlatforms}
+              connections={connections}
+              request={api}
+              refresh={refresh}
+              onError={setError}
+            />
+            <details className="publisher-connection">
+              <summary>Laptop connection</summary>
+              {!helperOnline && (
+                <p>
+                  Run <code>bun run publisher:setup</code>, then <code>bun run publisher connect</code> on your laptop.
+                  Paste a pairing key when prompted.
                 </p>
               )}
-            </aside>
+              {helperOnline && <p>Laptop paired and running.</p>}
+              <button
+                onClick={async () => {
+                  try {
+                    setToken((await api("pair", {})).token);
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                Generate pairing key
+              </button>
+              {token && (
+                <label>
+                  One-time display · replaces the previous key
+                  <input readOnly value={token} onFocus={(e) => e.target.select()} autoComplete="off" />
+                </label>
+              )}
+              <button
+                onClick={async () => {
+                  try {
+                    await api("pair", undefined, "DELETE");
+                    setToken("");
+                    setHelperOnline(false);
+                  } catch (e) {
+                    setError((e as Error).message);
+                  }
+                }}
+              >
+                Disconnect laptop
+              </button>
+            </details>
           </div>
-          <PublisherHistory request={api} onError={setError} />
-          <PublisherConnections
-            online={helperOnline}
-            connected={connectedPlatforms}
-            connections={connections}
-            request={api}
-            refresh={refresh}
-            onError={setError}
-          />
-          <details className="publisher-connection">
-            <summary>Laptop connection</summary>
-            {!helperOnline && (
-              <p>
-                Run <code>bun run publisher:setup</code>, then <code>bun run publisher connect</code> on your laptop.
-                Paste a pairing key when prompted.
-              </p>
-            )}
-            {helperOnline && <p>Laptop paired and running.</p>}
-            <button
-              onClick={async () => {
-                try {
-                  setToken((await api("pair", {})).token);
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              Generate pairing key
-            </button>
-            {token && (
-              <label>
-                One-time display · replaces the previous key
-                <input readOnly value={token} onFocus={(e) => e.target.select()} autoComplete="off" />
-              </label>
-            )}
-            <button
-              onClick={async () => {
-                try {
-                  await api("pair", undefined, "DELETE");
-                  setToken("");
-                  setHelperOnline(false);
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
-            >
-              Disconnect laptop
-            </button>
-          </details>
         </>
       )}
       {error && (

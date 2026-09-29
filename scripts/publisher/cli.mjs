@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { collectAnalytics } from "./analytics.mjs";
 import { mkdir, readFile, writeFile, chmod, rm } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -102,9 +103,14 @@ if (command === "connect") {
   while (true) {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
-      const { target, post, connection, deletion } = await (
-        await api("claim", { platforms: config.platforms, deletePublications: true })
+      const { target, post, connection, deletion, analytics } = await (
+        await api("claim", { platforms: config.platforms, deletePublications: true, analytics: true })
       ).json();
+      if (analytics) {
+        const result = await collectAnalytics(analytics.target, { stateDir });
+        await api("analytics-result", { target_id: analytics.target_id, claim: analytics.claim, ...result });
+        continue;
+      }
       if (deletion) {
         const result = await deletePublication(deletion, { oauth, stateDir });
         // Retry delivery of the receipt, never the deletion itself.
