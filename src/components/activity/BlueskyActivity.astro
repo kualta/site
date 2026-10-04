@@ -47,7 +47,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
         )}
         <bluesky-media data-media={JSON.stringify(media)}>
           <BlueskyPost post={gallery ? { ...event.post, embed: undefined } : event.post} />
-          {gallery && <div class="grid grid-cols-2 gap-1 p-4">{media.map((image) => <a href={image.src}><img class="image-grid-item w-full rounded-lg" src={image.thumbnail} alt={image.alt} loading="lazy" /></a>)}</div>}
+          {gallery && <div class="grid grid-cols-2 gap-1 p-4">{media.map((image) => <a href={image.src}><div class="image-grid-item"><img class="w-full rounded-lg" src={image.thumbnail} alt={image.alt} loading="lazy" /></div></a>)}</div>}
         </bluesky-media>
         <bluesky-post-actions data-uri={event.uri} />
         <a

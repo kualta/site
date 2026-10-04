@@ -144,6 +144,17 @@ try {
     mode = "gallery";
     assert.equal((await page.reload({ waitUntil: "domcontentloaded" })).status(), 200);
     assert.equal(await page.locator('img[alt^="Gallery"]').count(), 5);
+    await page.locator("button[data-media-open]").first().click();
+    const viewer = page.getByRole("dialog", { name: "Media viewer" });
+    await viewer.waitFor({ state: "visible" });
+    await viewer.locator('img[alt="Gallery 1"]').waitFor();
+    await viewer.getByRole("button", { name: "Next media" }).click();
+    await viewer.locator('img[alt="Gallery 2"]').waitFor();
+    await viewer.getByRole("button", { name: "Previous media" }).click();
+    await viewer.locator('img[alt="Gallery 1"]').waitFor();
+    await viewer.getByRole("button", { name: "Close media viewer" }).click();
+    await viewer.waitFor({ state: "hidden" });
+    assert.equal(page.url(), url);
     mode = "labeled";
     assert.equal((await page.reload({ waitUntil: "domcontentloaded" })).status(), 200);
     assert.equal(await page.locator("[data-bluesky-fallback]").count(), 1);
