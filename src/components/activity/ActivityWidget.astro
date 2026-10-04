@@ -22,6 +22,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   aria-busy={!feed}
   data-last-seen={feed?.lastSeenAt ?? undefined}
   data-trusted-until={feed?.trustedUntil ?? undefined}
+  data-fresh-until={feed?.freshUntil ?? undefined}
 >
   <div data-activity-skeleton hidden={!!feed} role="status" class="space-y-3">
     <span class="sr-only">Loading recent activity</span>
@@ -147,6 +148,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     formatLastSeenTime,
     formatRelativeTime,
     getPresenceState,
+    isActivityDelayed,
     PRESENCE_BANDS,
     PRESENCE_PARTS,
   } from "@/lib/activity/presence";
@@ -208,6 +210,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
 
     widget.dataset.lastSeen = meta.dataset.lastSeen ?? "";
     widget.dataset.trustedUntil = meta.dataset.trustedUntil ?? "";
+    widget.dataset.freshUntil = meta.dataset.freshUntil ?? "";
     // The time under the name lives outside the widget.
     for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
       time.dateTime = meta.dataset.lastSeen ?? "";
@@ -341,6 +344,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   function updateActivityWidget(widget: HTMLElement, now: number): void {
     if (widget.dataset.activityPending === "true") return;
     const delayed = widget.querySelector<HTMLElement>("[data-signals-delayed]");
+    if (delayed) delayed.hidden = !isActivityDelayed(widget.dataset.freshUntil, now);
     const trustedUntil = Date.parse(widget.dataset.trustedUntil ?? "");
 
     if (!Number.isFinite(trustedUntil) || now > trustedUntil) {
@@ -404,7 +408,8 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       });
     }
 
-    if (list.closest<HTMLElement>("[data-activity-widget]")?.dataset.activityPending === "true") {
+    const widget = list.closest<HTMLElement>("[data-activity-widget]");
+    if (widget?.dataset.activityPending === "true" || isActivityDelayed(widget?.dataset.freshUntil)) {
       void pollActivity(list);
     } else {
       void fillActivityList(list);

@@ -57,3 +57,12 @@ describe("formatLastSeenTime", () => {
     expect(formatLastSeenTime(seenAgo(0), NOW)).toBe("last seen just now");
   });
 });
+
+test("delayed status follows cache freshness even when polls fail", async () => {
+  const { isActivityDelayed } = await import("./presence");
+  const until = "2026-10-04T13:05:00Z";
+  expect(isActivityDelayed(until, Date.parse(until))).toBe(false);
+  expect(isActivityDelayed(until, Date.parse(until) + 1)).toBe(true);
+  expect(isActivityDelayed(null)).toBe(true);
+  expect(isActivityDelayed(undefined)).toBe(true);
+});

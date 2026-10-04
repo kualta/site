@@ -130,6 +130,8 @@ export interface ActivityFeed {
   presence: PresenceState;
   sources: Record<ActivitySource, SourceHealth>;
   delayed: boolean;
+  /** first source to cross the five-minute freshness budget */
+  freshUntil: string | null;
   trustedUntil: string | null;
   /** oldest point every source still reaches; below it the feed is partial */
   completeSince: string | null;

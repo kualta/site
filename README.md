@@ -218,3 +218,28 @@ Capacity prerequisite: a successful minute refresh writes at least 1,440 KV stat
 updates/day, plus changed archives. This exceeds Workers KV's free 1,000-write/day
 allowance. Confirm the existing account's KV capacity before rollout; if it needs
 a paid upgrade, obtain approval first. No plan or billing change is made here.
+
+If **signals delayed** appears, at least one provider has no successful timestamp
+or was last fetched over five minutes ago. It is independent of the last event's
+age: a person can be inactive while the sources remain fresh. The client keeps
+this deadline even when polling fails, and immediately retries reading the shared
+snapshot on a cold/delayed arrival. These reads never request upstream providers.
+Cron and asynchronous snapshot reads allow two seconds for KV, while initial HTML
+retains its 250ms budget. A cache-read error during polling preserves the visible
+snapshot; it does not replace it with empty data.
+
+The deployment workflow now checks `SELECT minute FROM activity_refresh LIMIT 1`
+with a **read-only** remote D1 query before replacing the Worker. If it fails with
+`no such table`, an approved operator must apply only the activity migration:
+
+```sh
+bunx wrangler d1 execute kualta-newsletter --remote --config wrangler.jsonc --file migrations/0007_activity_refresh.sql
+```
+
+This command changes production schema and must be approved separately. Neither
+runtime nor CI creates the table automatically. Once applied, verify the cron is
+`* * * * *`, `ACTIVITY_CACHE` and `NEWSLETTER_DB` are bound, and the existing
+`GITHUB_ACTIVITY_TOKEN` belongs to kualta. In Worker logs, coordination failures
+report `verify-0007-migration-and-D1`; provider failures report sanitized codes
+such as `missing-token` or `timeout`. Successful provider results and advancing
+source timestamps establish recovery; missing events alone do not indicate failure.

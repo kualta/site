@@ -92,3 +92,9 @@ export function formatDay(occurredAt: string, now: number = Date.now()): string 
 export function formatDayOfMonth(occurredAt: string): string {
   return DAY_FORMATTER.format(new Date(occurredAt)).toLowerCase();
 }
+
+/** A failed poll must not keep a previously fresh snapshot looking current. */
+export function isActivityDelayed(freshUntil: string | null | undefined, now = Date.now()): boolean {
+  const deadline = Date.parse(freshUntil ?? "");
+  return !Number.isFinite(deadline) || now > deadline;
+}

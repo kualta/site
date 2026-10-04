@@ -479,3 +479,47 @@ test("scheduled refresh preserves snapshots when KV reads fail", async () => {
   expect(writes).toBe(0);
   expect(cache.values).toEqual(before);
 });
+
+test("cron tolerates a slow shared cache, while initial HTML remains bounded", async () => {
+  const cache = new MemoryCache();
+  const slow = {
+    async get(key: string) { await new Promise((resolve) => setTimeout(resolve, 350)); return cache.get(key); },
+    put: (key: string, value: string) => cache.put(key, value),
+  };
+  await refreshScheduledActivity({ cache: slow, providers: successfulProviders(), logger, now: NOW });
+  const started = performance.now();
+  const initial = await getInitialActivityFeed({ cache: slow, logger, now: NOW });
+  expect(performance.now() - started).toBeLessThan(600);
+  expect(initial.delayed).toBe(true);
+  const recovered = await getInitialActivityFeed({ cache: slow, logger, now: NOW, cacheReadTimeoutMs: 2_000, requireReadableCache: true });
+  expect(recovered.delayed).toBe(false);
+  expect(recovered.presence).toBe("definitely-alive");
+});
+
+test("freshness survives a failed refresh and recovers only after successful scheduled work", async () => {
+  const cache = new MemoryCache();
+  const options = { cache, logger, now: NOW, providers: successfulProviders() };
+  await refreshScheduledActivity(options);
+  const first = await getInitialActivityFeed(options);
+  expect(first.delayed).toBe(false);
+  expect(first.freshUntil).toBe(new Date(+NOW + 300_000).toISOString());
+  expect((await getInitialActivityFeed({ ...options, now: new Date(+NOW + 300_000) })).delayed).toBe(false);
+  const later = new Date(+NOW + 300_001);
+  await refreshScheduledActivity({ ...options, now: later, providers: failingProviders() });
+  const failed = await getInitialActivityFeed({ ...options, now: later });
+  expect(failed.delayed).toBe(true);
+  expect(failed.lastSeenAt).toBe(first.lastSeenAt);
+  expect(failed.freshUntil).toBe(first.freshUntil);
+  expect(failed.sources.github.fetchedAt).toBe(NOW.toISOString());
+  await refreshScheduledActivity({ ...options, now: later });
+  const recovered = await getInitialActivityFeed({ ...options, now: later });
+  expect(recovered.delayed).toBe(false);
+  expect(recovered.sources.github.fetchedAt).toBe(later.toISOString());
+});
+
+test("poll cache errors are rejected instead of replacing a healthy client snapshot", async () => {
+  await expect(getInitialActivityFeed({
+    cache: { get: async () => { throw new Error("cache down"); }, put: async () => {} },
+    requireReadableCache: true, logger,
+  })).rejects.toThrow("preserving existing snapshot");
+});

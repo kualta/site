@@ -58,6 +58,8 @@ interface GetActivityFeedOptions {
   now?: Date;
   providers?: readonly ActivityProvider[];
   timeoutMs?: number;
+  cacheReadTimeoutMs?: number;
+  requireReadableCache?: boolean;
   /** hands the refresh to the platform so a visitor never waits on providers */
   waitUntil?: (work: Promise<unknown>) => void;
 }
@@ -295,11 +297,12 @@ async function readStored<T>(
   parse: (value: unknown) => T | undefined,
   logger: ActivityLogger,
   requireReadable = false,
+  timeoutMs = 250,
 ): Promise<StoredEntry<T> | undefined> {
   if (!cache) return undefined;
 
   try {
-    const serialized = await bounded(cache.get(key), 250);
+    const serialized = await bounded(cache.get(key), timeoutMs);
     if (!serialized) return undefined;
 
     const value = parse(JSON.parse(serialized));
@@ -464,8 +467,8 @@ async function refreshActivity(
   known?: StoredEntry<StoredState>,
 ): Promise<StoredState> {
   const providers = options.providers ?? DEFAULT_PROVIDERS;
-  const state = known ?? (await readStored(options.cache, STATE_KEY, parseState, logger, true));
-  const archive = await readStored(options.cache, ARCHIVE_KEY, parseArchive, logger, true);
+  const state = known ?? (await readStored(options.cache, STATE_KEY, parseState, logger, true, options.cacheReadTimeoutMs ?? 2_000));
+  const archive = await readStored(options.cache, ARCHIVE_KEY, parseArchive, logger, true, options.cacheReadTimeoutMs ?? 2_000);
   const results = await Promise.all(providers.map((provider) => loadSource(provider, options, now, logger)));
 
   const sources = { ...(state?.value.sources ?? emptySources()) };
@@ -531,6 +534,11 @@ function buildFeed(state: StoredState | undefined, now: Date): ActivityFeed {
   const events = state?.events ?? [];
   const sources = healthFor(state, now);
   const trustedUntil = trustedUntilFor(sources);
+  const deadlines = ACTIVITY_SOURCES.map((source) => {
+    const fetchedAt = sources[source].fetchedAt;
+    return fetchedAt ? Date.parse(fetchedAt) + DELAYED_AFTER_MS : Number.NaN;
+  });
+  const freshUntil = deadlines.every(Number.isFinite) ? new Date(Math.min(...deadlines)).toISOString() : null;
   const lastSeenAt = events[0]?.occurredAt ?? null;
   const oldest = events[events.length - 1];
   const coverage = coverageBoundary(state?.coverage ?? {});
@@ -541,6 +549,7 @@ function buildFeed(state: StoredState | undefined, now: Date): ActivityFeed {
     presence: trustedUntil ? getPresenceState(lastSeenAt, now) : "unknown",
     sources,
     delayed: Object.values(sources).some(({ status }) => status !== "fresh"),
+    freshUntil,
     trustedUntil,
     completeSince: coverage.completeSince,
     coverageLimitedBy: coverage.limitedBy,
@@ -552,7 +561,8 @@ function buildFeed(state: StoredState | undefined, now: Date): ActivityFeed {
 export async function getInitialActivityFeed(options: GetActivityFeedOptions = {}): Promise<ActivityFeed> {
   const now = options.now ?? new Date();
   const logger = options.logger ?? console;
-  const state = await readStored(options.cache, STATE_KEY, parseState, logger);
+  const state = await readStored(options.cache, STATE_KEY, parseState, logger,
+    options.requireReadableCache, options.cacheReadTimeoutMs);
   return buildFeed(state?.value, now);
 }
 
