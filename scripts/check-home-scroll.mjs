@@ -41,7 +41,7 @@ try {
           await page.mouse.move(400, 400);
           await page.mouse.wheel(0, 650);
         }
-        await page.waitForFunction(() => scrollY > 20, { timeout: 1000 });
+        await page.waitForFunction(() => scrollY > 20, null, { timeout: 1000 });
         const y = await page.evaluate(() => scrollY);
         assert(y > 20, "Scroll must respond while status is unavailable");
         if (visit < 2) {
