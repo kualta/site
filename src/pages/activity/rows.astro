@@ -34,6 +34,7 @@ Astro.response.headers.set("cache-control", "no-store");
     <span
       hidden
       data-activity-meta
+      data-server-now={new Date().toISOString()}
       data-last-seen={feed.lastSeenAt ?? undefined}
       data-trusted-until={feed.trustedUntil ?? undefined}
       data-fresh-until={feed.freshUntil ?? undefined}

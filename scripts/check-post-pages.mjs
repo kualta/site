@@ -71,21 +71,23 @@ const mf = new Miniflare({
           mode === "missing"
             ? []
             : [
-                mode === "gallery"
-                  ? {
-                      ...post,
-                      embed: {
-                        $type: "app.bsky.embed.gallery#view",
-                        items: [1, 2, 3, 4, 5].map((i) => ({
-                          $type: "app.bsky.embed.gallery#viewImage",
-                          alt: `Gallery ${i}`,
-                          thumbnail: "https://cdn.bsky.app/fixture.jpg",
-                          fullsize: "https://cdn.bsky.app/fixture.jpg",
-                          aspectRatio: { width: 1, height: 1 },
-                        })),
-                      },
-                    }
-                  : post,
+                mode === "labeled"
+                  ? { ...post, labels: [{ src: did, uri, val: "porn", cts: new Date().toISOString() }] }
+                  : mode === "gallery"
+                    ? {
+                        ...post,
+                        embed: {
+                          $type: "app.bsky.embed.gallery#view",
+                          items: [1, 2, 3, 4, 5].map((i) => ({
+                            $type: "app.bsky.embed.gallery#viewImage",
+                            alt: `Gallery ${i}`,
+                            thumbnail: "https://cdn.bsky.app/fixture.jpg",
+                            fullsize: "https://cdn.bsky.app/fixture.jpg",
+                            aspectRatio: { width: 1, height: 1 },
+                          })),
+                        },
+                      }
+                    : post,
               ],
       });
     }
@@ -142,6 +144,15 @@ try {
     mode = "gallery";
     assert.equal((await page.reload({ waitUntil: "domcontentloaded" })).status(), 200);
     assert.equal(await page.locator('img[alt^="Gallery"]').count(), 5);
+    mode = "labeled";
+    assert.equal((await page.reload({ waitUntil: "domcontentloaded" })).status(), 200);
+    assert.equal(await page.locator("[data-bluesky-fallback]").count(), 1);
+    assert.equal(
+      await page.locator('meta[property="og:description"]').getAttribute("content"),
+      "A Bluesky post on kualta.dev",
+    );
+    assert.equal(await page.locator('meta[property="og:image"]').count(), 0);
+    assert(!(await page.content()).includes("Public permalink text"));
     mode = "missing";
     assert.equal((await page.reload({ waitUntil: "domcontentloaded" })).status(), 404);
     assert.equal(await page.locator('meta[name="robots"]').getAttribute("content"), "noindex");

@@ -66,3 +66,24 @@ test("delayed status follows cache freshness even when polls fail", async () => 
   expect(isActivityDelayed(null)).toBe(true);
   expect(isActivityDelayed(undefined)).toBe(true);
 });
+
+test("server clock ages independently of skew and later wall-clock corrections", async () => {
+  const { createServerClock, isActivityDelayed } = await import("./presence");
+  const timestamp = "2026-10-04T13:00:00Z";
+  const deadline = "2026-10-04T13:05:00Z";
+  for (const skew of [-3_600_000, 3_600_000]) {
+    const original = Date.now;
+    try {
+      Date.now = () => Date.parse(timestamp) + skew;
+      const clock = createServerClock(timestamp, 100)!;
+      expect(isActivityDelayed(deadline, clock(100))).toBe(false);
+      Date.now = () => Date.parse(timestamp) - skew * 2;
+      expect(isActivityDelayed(deadline, clock(300_101))).toBe(true);
+      expect(isActivityDelayed("2026-10-04T12:59:00Z", clock(100))).toBe(true);
+      expect(clock(50)).toBe(Date.parse(timestamp));
+    } finally {
+      Date.now = original;
+    }
+  }
+  expect(createServerClock("invalid", 100)).toBeUndefined();
+});
