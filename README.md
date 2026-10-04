@@ -190,3 +190,31 @@ The tracking pixel and Plunk open callbacks share an atomic `opened_at` update,
 so reloads, retries, and overlapping reports produce one alert. Existing opens
 are not replayed. Opens are estimates: email privacy proxies can preload images,
 and blocked images can hide a real open.
+
+### Background activity refresh
+
+The existing `kualta-site` Worker refreshes GitHub/Bluesky activity with a
+Cloudflare Cron Trigger (`* * * * *`), even when nobody visits. Both home HTML and
+`/activity/rows` read `ACTIVITY_CACHE` only. Empty or unavailable cache data renders
+unknown/delayed status immediately; activity never gates scrolling. Successful
+snapshots retain their original source timestamps through provider failures.
+Provider requests are aborted after five seconds; KV reads have a 250ms budget.
+Existing sanitizers strip private repository names, targets, raw IDs and tokens
+before anything enters the shared cache (only existing anonymous activity signals
+are retained).
+
+Before deploying, apply `0007_activity_refresh.sql` to the existing
+`kualta-newsletter` D1 database. It adds one coordination row, with no subscriber
+data, so duplicate cron deliveries refresh at most once per scheduled minute.
+No new service or credential is required: the Worker uses its existing KV, D1 and
+`GITHUB_ACTIVITY_TOKEN`. Do not deploy this change before the migration. The normal
+build preserves the custom Worker entry and cron configuration in
+`dist/server/wrangler.json`. Cron changes can take up to 15 minutes to propagate;
+KV is eventually consistent, so freshness labels reflect successful provider
+fetches rather than promising exact global one-minute visibility. Check Worker
+cron logs and `signals delayed` after rollout. This branch does not deploy itself.
+
+Capacity prerequisite: a successful minute refresh writes at least 1,440 KV state
+updates/day, plus changed archives. This exceeds Workers KV's free 1,000-write/day
+allowance. Confirm the existing account's KV capacity before rollout; if it needs
+a paid upgrade, obtain approval first. No plan or billing change is made here.

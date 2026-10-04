@@ -19,7 +19,7 @@ const contacts = (contactsData as Contact[])
   .filter((c) => c.is_main)
   .reverse();
 
-const initialActivity = await getInitialActivityFeed({ cache: env.ACTIVITY_CACHE, githubToken: env.GITHUB_ACTIVITY_TOKEN });
+const initialActivity = await getInitialActivityFeed({ cache: env.ACTIVITY_CACHE });
 const lastSeenAt = initialActivity.lastSeenAt;
 
 const month = new Date().getMonth();
@@ -58,7 +58,6 @@ Astro.response.headers.set("cache-control", "no-store");
 
       <a
         href="#activity"
-        data-home-activity-pending
         class="home-activity-link flex min-h-[42px] shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
                hover:opacity-70"
       >
@@ -72,11 +71,11 @@ Astro.response.headers.set("cache-control", "no-store");
 
     <section
       id="activity"
-      class="mx-auto w-full max-w-[min(92vw,42rem)] px-4 pt-8 pb-16"
+      class="mx-auto min-h-[100dvh] w-full max-w-[min(92vw,42rem)] px-4 pt-8 pb-16"
       aria-label="Kualta's recent activity"
       data-activity-screen
     >
-      <ActivityWidget>
+      <ActivityWidget feed={initialActivity}>
         <FeedComposer slot="composer" client:load />
       </ActivityWidget>
     </section>
@@ -88,15 +87,7 @@ Astro.response.headers.set("cache-control", "no-store");
   </button>
 
   <script>
-    import { holdFirstScreen } from "@/scripts/first-screen-scroll";
-
     document.addEventListener("astro:page-load", () => {
-      const feed = document.getElementById("activity");
-      if (feed) {
-        const release = holdFirstScreen(feed);
-        document.addEventListener("astro:before-swap", release, { once: true });
-      }
-
       const button = document.querySelector<HTMLButtonElement>(".feed-back-top");
       if (!button) return;
       button.addEventListener("click", () => {
@@ -120,28 +111,13 @@ Astro.response.headers.set("cache-control", "no-store");
       }
     }
 
-    /* the two screens are the only places the page comes to rest, so one scroll
-       down carries the whole way to the feed; the feed is taller than the
-       viewport, which leaves reading through it unsnapped */
+    /* Gently align the two sections without intercepting wheel or touch input. */
     html:has([data-activity-screen]) {
-      scroll-snap-type: y mandatory;
+      scroll-snap-type: y proximity;
     }
 
     [data-activity-screen] {
       scroll-snap-align: start;
     }
-
-    /* until the first rows arrive there is only a skeleton below, so the feed
-       takes no room and the page is one screen with nothing to scroll to; the
-       link above stays visible while its pending mark keeps the feed collapsed.
-       The collapsed feed is no resting place either, or the page snaps down to
-       it the moment it grows */
-    html:has([data-home-activity-pending]) #activity {
-      height: 0;
-      padding-block: 0;
-      overflow: hidden;
-      scroll-snap-align: none;
-    }
-
   </style>
 </BaseLayout>

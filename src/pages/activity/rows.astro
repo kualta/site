@@ -1,6 +1,6 @@
 ---
 import ActivityRows from "@/components/activity/ActivityRows.astro";
-import { decodeActivityCursor, getActivityFeed, getActivityHistory } from "@/lib/activity";
+import { decodeActivityCursor, getInitialActivityFeed, getActivityHistory } from "@/lib/activity";
 import { env } from "cloudflare:workers";
 
 // serves both halves of the feed's paging: the newest rows for the live poll,
@@ -12,13 +12,11 @@ const ROW_LIMIT = 20;
 const before = Astro.url.searchParams.get("before");
 const cache = env.ACTIVITY_CACHE;
 
-// paging reads history only; the newest rows go through the feed, so the poll
-// is also what keeps the stored data warm
+// Both paths read shared data only; the scheduled Worker keeps it warm.
 const feed = before
   ? null
-  : await getActivityFeed({
+  : await getInitialActivityFeed({
       cache,
-      githubToken: env.GITHUB_ACTIVITY_TOKEN,
     });
 const page = feed ?? (await getActivityHistory({ cache, before, limit: ROW_LIMIT * 5 }));
 
