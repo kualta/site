@@ -32,6 +32,14 @@ jobs:
           PARAGRAPH_API_KEY: ${{ secrets.PARAGRAPH_API_KEY }}
           PARAGRAPH_PUBLICATION_SLUG: ${{ secrets.PARAGRAPH_PUBLICATION_SLUG }}
 
+      # Read-only preflight: fail before replacing the Worker if cron cannot claim.
+      - name: Verify activity refresh migration
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute kualta-newsletter --remote --config wrangler.jsonc --command "SELECT minute FROM activity_refresh LIMIT 1"
+
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

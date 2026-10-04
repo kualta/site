@@ -17,6 +17,8 @@ const feed = before
   ? null
   : await getInitialActivityFeed({
       cache,
+      cacheReadTimeoutMs: 2_000,
+      requireReadableCache: true,
     });
 const page = feed ?? (await getActivityHistory({ cache, before, limit: ROW_LIMIT * 5 }));
 
@@ -34,6 +36,7 @@ Astro.response.headers.set("cache-control", "no-store");
       data-activity-meta
       data-last-seen={feed.lastSeenAt ?? undefined}
       data-trusted-until={feed.trustedUntil ?? undefined}
+      data-fresh-until={feed.freshUntil ?? undefined}
       data-delayed={feed.delayed ? "true" : "false"}
     />
   )
