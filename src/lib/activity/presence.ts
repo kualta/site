@@ -98,3 +98,13 @@ export function isActivityDelayed(freshUntil: string | null | undefined, now = D
   const deadline = Date.parse(freshUntil ?? "");
   return !Number.isFinite(deadline) || now > deadline;
 }
+
+/** Age a server snapshot using elapsed time, independent of the visitor's wall clock. */
+export function createServerClock(
+  serverNow: string | undefined,
+  receivedAt: number,
+): ((monotonicNow: number) => number) | undefined {
+  const timestamp = Date.parse(serverNow ?? "");
+  if (!Number.isFinite(timestamp) || !Number.isFinite(receivedAt)) return;
+  return (monotonicNow) => timestamp + Math.max(0, monotonicNow - receivedAt);
+}

@@ -33,6 +33,12 @@ function fullsizeJpeg(url: string): string {
 export function getBlueskyMedia(value: unknown): BlueskyMedia[] {
   const embed = asRecord(value);
   if (!embed) return [];
+  if (embed.$type === "app.bsky.embed.gallery#view" && Array.isArray(embed.items)) {
+    return getBlueskyMedia({ $type: "app.bsky.embed.images#view", images: embed.items.map((value) => {
+      const item = asRecord(value);
+      return { ...item, thumb: item?.thumbnail };
+    }) });
+  }
   if (embed.$type === "app.bsky.embed.images#view" && Array.isArray(embed.images)) {
     return embed.images.flatMap((value) => {
       const image = asRecord(value);

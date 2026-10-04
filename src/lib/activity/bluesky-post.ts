@@ -1,6 +1,7 @@
 import type { Post as BlueskyPostView } from "@astro-community/astro-embed-bluesky";
 import {
   AppBskyEmbedExternal,
+  AppBskyEmbedGallery,
   AppBskyEmbedImages,
   AppBskyEmbedRecord,
   AppBskyEmbedRecordWithMedia,
@@ -99,7 +100,7 @@ function isSupportedQuotedRecord(value: unknown): boolean {
 
 function isSupportedEmbed(value: unknown): boolean {
   if (value === undefined) return true;
-  if (isSupportedMediaEmbed(value)) return true;
+  if (isSupportedMediaEmbed(value) || is(AppBskyEmbedGallery.viewSchema, value)) return true;
 
   if (is(AppBskyEmbedRecord.viewSchema, value)) {
     return isSupportedQuotedRecord(value.record);

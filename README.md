@@ -243,3 +243,34 @@ runtime nor CI creates the table automatically. Once applied, verify the cron is
 report `verify-0007-migration-and-D1`; provider failures report sanitized codes
 such as `missing-token` or `timeout`. Successful provider results and advancing
 source timestamps establish recovery; missing events alone do not indicate failure.
+
+### Feed publication and post permalinks
+
+Publishing from the home composer inserts the acknowledged repository record in
+that browser session immediately, with its actual text, author, attachments and
+post identity. Anonymous AppView readback replaces it when the same URI and CID
+are indexed. Failed publication retains the draft; delayed indexing retains the
+acknowledged card. Navigation and cache refresh reconcile by post identity and
+preserve history. Posts written in other Bluesky clients still depend on public
+indexing and the existing minute refresh; **Refresh activity** reads the latest
+shared snapshot.
+
+Each post's options can copy its `kualta.dev/post/<did>/<rkey>` permalink or its
+Bluesky URL. Direct permalink requests render the centered public post and share
+metadata, with anonymous upstream reads bounded to three seconds. Missing posts
+return 404 and unavailable upstream reads return 503; neither uses stale fallback
+or stores visitor authorization in a shared cache. No additional infrastructure
+or migration is required beyond the background-refresh prerequisites above.
+
+Reproduce publication checks without sending real posts:
+
+```sh
+CHROMIUM_PATH=/usr/bin/chromium node scripts/check-post-feed.mjs
+bun run build
+CHROMIUM_PATH=/usr/bin/chromium node scripts/check-post-pages.mjs
+```
+
+The composer fixture stubs only authentication and repository writes; it exercises
+the real composer, media processing, local reconciliation and link controls. The
+permalink checks run the compiled Worker with a stubbed public AppView and also
+exercise cold-cache home scrolling and activity freshness recovery.

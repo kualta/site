@@ -1329,3 +1329,13 @@ body:has(.page-bottom[data-scrolled]) .feed-back-top:hover { opacity: 0.7; }
   .music-score-deck > .score-player { grid-column: 1 / -1; grid-row: 3; height: 100%; }
 }
 .score-scroll > .score-message { position: absolute; inset: 0; z-index: 1; background: transparent; }
+
+.post-link-menu { position: relative; }
+.post-menu-trigger { display: flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border-radius: 0.5rem; }
+.post-menu-panel { position: absolute; right: 0; top: 100%; z-index: 120; min-width: 13rem; padding: 0.5rem; border: 1px solid var(--secondary-text); border-radius: 0.75rem; background: var(--bg); box-shadow: 0 4px 12px #0003; }
+.dark .post-menu-panel { background: var(--bg-dark); }
+.post-menu-panel :is(button, a) { display: block; width: 100%; text-align: left; padding: 0.75rem; border-radius: 0.5rem; }
+.post-menu-panel :is(button, a):hover { background: var(--secondary); }
+.post-menu-panel :is(button, a):focus-visible, .post-menu-trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+.dark .post-menu-panel :is(button, a):hover { background: var(--secondary-dark); }

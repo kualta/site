@@ -1,0 +1,55 @@
+---
+import "@/styles/globals.css";
+import ThemeInit from "@/components/ThemeInit.astro";
+import BlueskyActivity from "@/components/activity/BlueskyActivity.astro";
+import MediaViewer from "@/components/activity/MediaViewer.astro";
+import { postUriFromPath, sitePostUrl, parsePostUri } from "@/lib/bluesky/urls";
+import { loadPublicPost } from "@/lib/bluesky/public-post";
+import { canRenderBlueskyPost } from "@/lib/activity/bluesky-post";
+import { getBlueskyMedia } from "@/lib/activity/bluesky-media";
+export const prerender = false;
+const uri = postUriFromPath(Astro.url.pathname);
+const result = await loadPublicPost(uri);
+const event = result.status === 200 ? result.event : undefined;
+const title = event ? `${event.author.displayName || event.author.handle} on kualta.dev` : "Post unavailable · kualta.dev";
+const shareable = event && canRenderBlueskyPost(event.post);
+const description = (shareable ? event.text.slice(0, 200) : undefined) || "A Bluesky post on kualta.dev";
+const canonical = parsePostUri(uri) ? sitePostUrl(uri) : undefined;
+const image = shareable && getBlueskyMedia(event.post.embed).find((media) => media.kind === "image")?.thumbnail;
+Astro.response.status = result.status;
+Astro.response.headers.set("cache-control", "no-store");
+---
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    {image && <meta property="og:image" content={image} />}
+    {!event && <meta name="robots" content="noindex" />}
+    <ThemeInit />
+  </head>
+  <body class="bg-bg text-text dark:bg-dark-bg dark:text-dark-text">
+    <main class="mx-auto flex min-h-dvh w-full max-w-[42rem] flex-col justify-center gap-4 p-4 sm:p-8">
+      {event ? <BlueskyActivity group={{ id: event.id, occurredAt: event.occurredAt, events: [event] }} /> : (
+        <section aria-label="Post unavailable" class="rounded-xl bg-secondary p-6 dark:bg-dark-secondary">
+          <h1 class="text-xl">{result.status === 404 ? "Post not found" : "Post temporarily unavailable"}</h1>
+          <p class="mt-3">{result.status === 404 ? "It may have been deleted, or may not be visible on Bluesky yet." : "Bluesky could not be reached. Please try again."}</p>
+          <a href={Astro.url.pathname} class="mt-3 inline-block underline">Try again</a>
+        </section>
+      )}
+      <a href="/" class="text-center text-sm text-secondary-text">Back to feed</a>
+    </main>
+    <MediaViewer />
+    <script>
+      import "@/scripts/bluesky-post-actions";
+      document.addEventListener("DOMContentLoaded", () => document.dispatchEvent(new Event("astro:page-load")));
+    </script>
+  </body>
+</html>

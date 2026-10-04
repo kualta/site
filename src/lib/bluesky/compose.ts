@@ -13,5 +13,13 @@ export async function publishProfilePost(agent: Agent, text: string, images: Com
   const richText = postText(text, images.length > 0);
   await richText.detectFacets(new Agent({ service: "https://public.api.bsky.app" }));
   const embed = await uploadMedia(agent, images);
-  return agent.post({ text: richText.text, facets: richText.facets, ...(embed ? { embed } : {}) });
+  const record = {
+    $type: "app.bsky.feed.post" as const,
+    text: richText.text,
+    facets: richText.facets,
+    createdAt: new Date().toISOString(),
+    ...(embed ? { embed } : {}),
+  };
+  const result = await agent.post(record);
+  return { ...result, record };
 }
