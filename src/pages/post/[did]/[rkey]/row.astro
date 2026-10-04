@@ -1,0 +1,12 @@
+---
+import { postUriFromPath } from "@/lib/bluesky/urls";
+import { loadPublicPost } from "@/lib/bluesky/public-post";
+import ActivityRows from "@/components/activity/ActivityRows.astro";
+export const prerender = false;
+export const partial = true;
+const uri = postUriFromPath(Astro.url.pathname);
+const result = await loadPublicPost(uri);
+Astro.response.status = result.status;
+Astro.response.headers.set("cache-control", "no-store");
+---
+{result.status === 200 && <ActivityRows events={[result.event]} />}

@@ -38,6 +38,7 @@ const boundaryIndex =
       <li
         class="w-full min-w-0"
         data-activity-row={row.id}
+        data-activity-occurred-at={row.occurredAt}
         data-activity-count={row.events.length}
         data-activity-cursor={encodeActivityCursor(row.events[row.events.length - 1])}
       >

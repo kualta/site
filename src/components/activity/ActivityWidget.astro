@@ -60,6 +60,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
         {lastSeenText}
       </time>
       <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>
+      <button type="button" data-refresh-activity title="Bluesky posts may take a moment to appear">Refresh activity</button>
     </div>
   </div>
   <slot name="composer" />
@@ -144,6 +145,8 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
 
 <script>
   import "@/scripts/bluesky-post-actions";
+  import "@/scripts/published-feed-post";
+  import { reconcilePublishedRows, restorePublishedRows, uniqueHistoricalRows, mergeNewestRows } from "@/lib/bluesky/published-feed";
   import {
     formatLastSeenTime,
     formatRelativeTime,
@@ -177,15 +180,6 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       rows: [...template.content.querySelectorAll("li")],
       meta: template.content.querySelector<HTMLElement>("[data-activity-meta]"),
     };
-  }
-
-  function rowSignature(rows: Element[]): string {
-    return rows
-      .map((row) => {
-        const element = row as HTMLElement;
-        return `${element.dataset.activityRow ?? "boundary"}:${element.dataset.activityCount ?? ""}`;
-      })
-      .join(",");
   }
 
   function distanceToBottom(): number {
@@ -225,7 +219,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     if (list.dataset.activityExhausted === "true") return false;
 
     const loaded = [...list.querySelectorAll<HTMLLIElement>("li[data-activity-cursor]")];
-    const cursor = loaded[loaded.length - 1]?.dataset.activityCursor;
+    const cursor = list.dataset.activityOlderCursor || loaded[loaded.length - 1]?.dataset.activityCursor;
     if (!cursor) return false;
 
     const { rows } = await fetchRows(`?before=${encodeURIComponent(cursor)}`);
@@ -234,7 +228,11 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       return false;
     }
 
-    list.append(...rows);
+    const nextCursor = rows.filter(row => row.dataset.activityCursor).at(-1)?.dataset.activityCursor;
+    if (nextCursor) list.dataset.activityOlderCursor = nextCursor;
+    const unique = uniqueHistoricalRows(list, rows);
+    list.append(...unique);
+    if (!nextCursor || nextCursor === cursor) { list.dataset.activityExhausted = "true"; return false; }
     updateActivityClock();
     return true;
   }
@@ -245,7 +243,9 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
    * rather than diffed row by row.
    */
   async function syncNewestRows(list: HTMLOListElement): Promise<void> {
-    const { rows, meta } = await fetchRows("");
+    const fetched = await fetchRows("");
+    const { meta } = fetched;
+    const rows = fetched.rows;
     if (!list.isConnected) return;
     if (!meta) throw new Error("Activity response is missing metadata");
     applyMeta(list, meta);
@@ -259,7 +259,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     }
     updateActivityClock();
     if (initial) {
-      list.replaceChildren(...rows);
+      list.replaceChildren(...reconcilePublishedRows(rows));
       updateActivityClock();
       void fillActivityList(list);
       return;
@@ -267,21 +267,9 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     if (!rows.length) return;
 
     const existing = [...list.children] as HTMLElement[];
-    const anchorId = rows[rows.length - 1]?.dataset.activityRow;
-    const anchorIndex = existing.findIndex((row) => row.dataset.activityRow === anchorId);
-    if (anchorIndex >= 0 && rowSignature(existing.slice(0, anchorIndex + 1)) === rowSignature(rows)) return;
-
-    preserveScroll(() => {
-      if (anchorIndex < 0) {
-        // the feed moved past everything on screen, so start it over
-        list.replaceChildren(...rows);
-        list.dataset.activityExhausted = "false";
-        return;
-      }
-
-      for (const row of existing.slice(0, anchorIndex + 1)) row.remove();
-      list.prepend(...rows);
-    });
+    const merged = mergeNewestRows(existing, rows);
+    if (merged !== existing) preserveScroll(() => list.replaceChildren(...merged));
+    if (!existing.some(row => row.dataset.activityRow === rows[rows.length - 1]?.dataset.activityRow)) { list.dataset.activityExhausted = "false"; delete list.dataset.activityOlderCursor; }
     updateActivityClock();
   }
 
@@ -420,14 +408,23 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   function initializeActivityWidget(): void {
     if (activityClock) window.clearInterval(activityClock);
     window.clearTimeout(pollTimer);
+    for (const list of document.querySelectorAll<HTMLOListElement>("[data-activity-list]")) restorePublishedRows(list);
     updateActivityClock();
     activityClock = window.setInterval(updateActivityClock, 60_000);
 
+    const refresh = document.querySelector<HTMLButtonElement>("[data-refresh-activity]");
+    if (refresh) refresh.onclick = () => {
+      const list = document.querySelector<HTMLOListElement>("[data-activity-list]");
+      if (list) void pollActivity(list);
+    };
     for (const list of document.querySelectorAll<HTMLOListElement>("[data-activity-list]")) {
       initializeActivityList(list);
     }
   }
 
+  window.addEventListener("bluesky:published", () => {
+    for (const list of document.querySelectorAll<HTMLOListElement>("[data-activity-list]")) restorePublishedRows(list);
+  });
   document.addEventListener("astro:page-load", initializeActivityWidget);
   initializeActivityWidget();
 </script>

@@ -22,11 +22,14 @@ const absoluteTime = formatAbsoluteTime(event.occurredAt);
 const authorName = event.author.displayName
   ? `${event.author.displayName} (@${event.author.handle})`
   : `@${event.author.handle}`;
+const gallery = event.post.embed?.$type === "app.bsky.embed.gallery#view";
+const media = getBlueskyMedia(event.post.embed);
 const renderCard = canRenderBlueskyPost(event.post);
 // a repost otherwise reads as someone else's post appearing out of nowhere
 const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : null;
 ---
-<article class="w-full min-w-0">
+<article class="w-full min-w-0" data-post-uri={event.uri} data-post-cid={event.post.cid} data-post-action={event.action}>
+  <div class="flex justify-end"><post-link-menu data-uri={event.uri} /></div>
   {
     renderCard ? (
       <div
@@ -42,8 +45,9 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
             </span>
           </p>
         )}
-        <bluesky-media data-media={JSON.stringify(getBlueskyMedia(event.post.embed))}>
-          <BlueskyPost post={event.post} />
+        <bluesky-media data-media={JSON.stringify(media)}>
+          <BlueskyPost post={gallery ? { ...event.post, embed: undefined } : event.post} />
+          {gallery && <div class="grid grid-cols-2 gap-1 p-4">{media.map((image) => <a href={image.src}><img class="image-grid-item w-full rounded-lg" src={image.thumbnail} alt={image.alt} loading="lazy" /></a>)}</div>}
         </bluesky-media>
         <bluesky-post-actions data-uri={event.uri} />
         <a
@@ -259,3 +263,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     margin-top: var(--bluesky-space-sm);
   }
 </style>
+
+<script>
+  import "@/scripts/post-link-menu";
+</script>

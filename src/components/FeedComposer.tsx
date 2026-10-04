@@ -1,7 +1,14 @@
 import type { ComposerAttachment } from "@/lib/bluesky/media";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import BlueskyComposer from "./BlueskyComposer";
-import { getBlueskyAgent, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
+import {
+  getBlueskyAgent,
+  getBlueskyAuthSnapshot,
+  getBlueskyAuthServerSnapshot,
+  subscribeBlueskyAuth,
+} from "@/lib/bluesky/auth";
+import { rememberPublishedPost } from "@/lib/bluesky/published-feed";
+import siteIdentity from "../../atproto.config.json";
 import { publishProfilePost } from "@/lib/bluesky/compose";
 
 export default function FeedComposer() {
@@ -39,7 +46,10 @@ export default function FeedComposer() {
     try {
       const agent = await getBlueskyAgent();
       if (!agent) throw new Error("Log in with Bluesky to publish your post.");
-      await publishProfilePost(agent, text, images);
+      if (!auth.profile || auth.profile.did !== siteIdentity.did)
+        throw new Error("Sign in as kualta to publish to this feed.");
+      const result = await publishProfilePost(agent, text, images);
+      rememberPublishedPost(result, auth.profile, images);
       updateDraft("");
       setImages([]);
     } catch (cause) {
@@ -50,7 +60,7 @@ export default function FeedComposer() {
     }
   }
 
-  if (auth.agent && auth.profile?.handle !== "kualta.dev") return null;
+  if (auth.agent && auth.profile?.did !== siteIdentity.did) return null;
 
   return (
     <BlueskyComposer

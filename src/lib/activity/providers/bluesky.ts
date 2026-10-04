@@ -1,16 +1,11 @@
 import type { ActivityEvent, ActivityProvider, BlueskyActivity, ProviderContext } from "../types";
 import { sanitizeBlueskyPostView } from "../bluesky-post";
+import { parsePostUri } from "@/lib/bluesky/urls";
 import { asRecord, safeDate, stringField } from "../validation";
 
 const BLUESKY_ACTOR = "kualta.dev";
 const BLUESKY_API = "https://public.api.bsky.app";
 const REPOST_REASON = "app.bsky.feed.defs#reasonRepost";
-
-function parsePostUri(uri: string): { did: string; rkey: string } | undefined {
-  const match = uri.match(/^at:\/\/(did:[^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/);
-  if (!match) return undefined;
-  return { did: match[1], rkey: match[2] };
-}
 
 function normalizeBlueskyItem(value: unknown): BlueskyActivity | undefined {
   const item = asRecord(value);
@@ -26,7 +21,7 @@ function normalizeBlueskyItem(value: unknown): BlueskyActivity | undefined {
   const uriParts = parsePostUri(uri);
   const handle = stringField(author, "handle");
   const text = record.text;
-  if (!uriParts || !handle || typeof text !== "string") return undefined;
+  if (!uriParts || author.did !== uriParts.did || !handle || typeof text !== "string") return undefined;
 
   let action: BlueskyActivity["action"] = "post";
   let occurredAt = safeDate(postView.indexedAt);
@@ -90,3 +85,8 @@ export const blueskyProvider: ActivityProvider = {
   id: "bluesky",
   fetch: fetchBlueskyActivity,
 };
+
+/** A direct post can be a reply; author-feed filtering is separate. */
+export function normalizeBlueskyPost(post: unknown): BlueskyActivity | undefined {
+  return normalizeBlueskyItem({ post });
+}
