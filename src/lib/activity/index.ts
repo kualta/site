@@ -3,7 +3,7 @@ export { decodeActivityCursor, encodeActivityCursor } from "./archive";
 export { canRenderBlueskyPost } from "./bluesky-post";
 export { waitUntilFrom } from "./defer";
 export { describeGitHubActivity, describeGitHubActivityGroup } from "./describe-github";
-export { getActivityFeed, getActivityHistory } from "./feed";
+export { getActivityFeed, getInitialActivityFeed, getActivityHistory } from "./feed";
 export { groupActivityEvents } from "./group";
 export {
   formatAbsoluteTime,

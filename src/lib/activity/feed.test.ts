@@ -7,7 +7,7 @@ import type {
   BlueskyActivity,
   ProviderContext,
 } from "./types";
-import { getInitialActivityFeed, getActivityFeed, getActivityHistory } from "./feed";
+import { getInitialActivityFeed, getActivityFeed, getActivityHistory, refreshScheduledActivity } from "./feed";
 
 const NOW = new Date("2026-08-30T12:00:00.000Z");
 const BLUESKY_DID = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
@@ -272,7 +272,7 @@ describe("getActivityFeed", () => {
     expect(feed.presence).toBe("unknown");
   });
 
-  test("keeps serving fresh results when cache reads and writes fail", async () => {
+  test("refuses refresh when cached history cannot be read", async () => {
     const brokenCache: ActivityCacheStore = {
       async get() {
         throw new Error("read failed");
@@ -282,15 +282,12 @@ describe("getActivityFeed", () => {
       },
     };
 
-    const feed = await getActivityFeed({
+    await expect(getActivityFeed({
       cache: brokenCache,
       logger,
       now: NOW,
       providers: successfulProviders(),
-    });
-
-    expect(feed.events).toHaveLength(2);
-    expect(feed.presence).toBe("definitely-alive");
+    })).rejects.toThrow("preserving existing snapshot");
   });
 
   test("does not copy provider error details into logs", async () => {
@@ -445,27 +442,40 @@ describe("activity history", () => {
 
 
 describe("initial activity snapshot", () => {
-  test("shares cached state through one hour, then refreshes it", async () => {
-    const cache = new MemoryCache();
+  test("cold visitors never call providers", async () => {
     const calls = { github: 0, bluesky: 0 };
-    const providers = successfulProviders(calls);
-    const options = { cache, providers, logger, now: NOW };
-    const first = await getInitialActivityFeed(options);
-    expect(first.lastSeenAt).not.toBeNull();
-    await getInitialActivityFeed({ ...options, now: new Date(+NOW + 3_600_000) });
-    expect(calls).toEqual({ github: 1, bluesky: 1 });
-    await getInitialActivityFeed({ ...options, now: new Date(+NOW + 3_600_001) });
-    expect(calls).toEqual({ github: 2, bluesky: 2 });
+    const feed = await getInitialActivityFeed({ cache: new MemoryCache(), providers: successfulProviders(calls), now: NOW });
+    expect(calls).toEqual({ github: 0, bluesky: 0 });
+    expect(feed.presence).toBe("unknown");
+    expect(feed.delayed).toBe(true);
   });
 
-  test("does not present an expired snapshot when refresh fails", async () => {
+  test("retains last successful data with honest freshness", async () => {
     const cache = new MemoryCache();
-    await getInitialActivityFeed({ cache, providers: successfulProviders(), logger, now: NOW });
-    const feed = await getInitialActivityFeed({
-      cache, logger, now: new Date(+NOW + 3_600_001),
-      providers: [provider("github", async () => { throw new Error("offline"); }),
-        provider("bluesky", async () => { throw new Error("offline"); })],
-    });
-    expect(feed.lastSeenAt).toBeNull();
+    await getActivityFeed({ cache, providers: successfulProviders(), logger, now: NOW });
+    const lastSeen = (await getInitialActivityFeed({ cache, now: NOW })).lastSeenAt;
+    const feed = await getInitialActivityFeed({ cache, now: new Date(+NOW + 25 * 3_600_000), providers: failingProviders() });
+    expect(feed.lastSeenAt).toBe(lastSeen);
+    expect(feed.presence).toBe("unknown");
+    expect(feed.sources.github.fetchedAt).toBe(NOW.toISOString());
+    expect(feed.sources.github.status).toBe("unavailable");
   });
+
+  test("a hanging cache cannot delay a cold visitor beyond its budget", async () => {
+    const started = performance.now();
+    const feed = await getInitialActivityFeed({ cache: { get: () => new Promise(() => {}), put: async () => {} }, logger });
+    expect(performance.now() - started).toBeLessThan(600);
+    expect(feed.presence).toBe("unknown");
+  });
+});
+
+test("scheduled refresh preserves snapshots when KV reads fail", async () => {
+  const cache = new MemoryCache();
+  await getActivityFeed({ cache, providers: successfulProviders(), logger, now: NOW });
+  const before = new Map(cache.values);
+  let writes = 0;
+  const unavailable = { get: async () => { throw new Error("offline"); }, put: async () => { writes++; } };
+  await expect(refreshScheduledActivity({ cache: unavailable, providers: failingProviders(), logger })).rejects.toThrow("preserving");
+  expect(writes).toBe(0);
+  expect(cache.values).toEqual(before);
 });

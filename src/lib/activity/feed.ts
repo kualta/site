@@ -277,22 +277,37 @@ function parseCoverage(value: unknown): Partial<Record<ActivitySource, string>> 
   return coverage;
 }
 
+/** KV outages must not stall HTML or leave a cron running into the next minute. */
+async function bounded<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([work, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Activity cache timed out")), timeoutMs);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function readStored<T>(
   cache: ActivityCacheStore | undefined,
   key: string,
   parse: (value: unknown) => T | undefined,
   logger: ActivityLogger,
+  requireReadable = false,
 ): Promise<StoredEntry<T> | undefined> {
   if (!cache) return undefined;
 
   try {
-    const serialized = await cache.get(key);
+    const serialized = await bounded(cache.get(key), 250);
     if (!serialized) return undefined;
 
     const value = parse(JSON.parse(serialized));
+    if (!value && requireReadable) throw new Error("Invalid activity snapshot");
     return value ? { value, serialized } : undefined;
   } catch {
     logger.warn("activity cache result", { key, cacheState: "read-error", error: "cache-read-failed" });
+    if (requireReadable) throw new Error("Activity cache is unavailable; preserving existing snapshot");
     return undefined;
   }
 }
@@ -310,7 +325,7 @@ async function writeStored(
   if (serialized === previous) return;
 
   try {
-    await cache.put(key, serialized);
+    await bounded(cache.put(key, serialized), 2_000);
   } catch {
     logger.warn("activity cache result", { key, cacheState: "write-error", error: "cache-write-failed" });
   }
@@ -432,9 +447,8 @@ function contentSignature(state: StoredState): string {
 }
 
 /**
- * KV allows a thousand writes a day on the free plan, so the state is only
- * rewritten when it carries new information — an unchanged retry marker is not
- * worth a write until it goes properly stale.
+ * Successful fetch timestamps are new information. Failed unchanged retries
+ * only update the retry marker when it goes stale.
  */
 function shouldWriteState(previous: StoredState | undefined, next: StoredState, now: Date): boolean {
   if (!previous) return true;
@@ -450,8 +464,8 @@ async function refreshActivity(
   known?: StoredEntry<StoredState>,
 ): Promise<StoredState> {
   const providers = options.providers ?? DEFAULT_PROVIDERS;
-  const state = known ?? (await readStored(options.cache, STATE_KEY, parseState, logger));
-  const archive = await readStored(options.cache, ARCHIVE_KEY, parseArchive, logger);
+  const state = known ?? (await readStored(options.cache, STATE_KEY, parseState, logger, true));
+  const archive = await readStored(options.cache, ARCHIVE_KEY, parseArchive, logger, true);
   const results = await Promise.all(providers.map((provider) => loadSource(provider, options, now, logger)));
 
   const sources = { ...(state?.value.sources ?? emptySources()) };
@@ -534,22 +548,17 @@ function buildFeed(state: StoredState | undefined, now: Date): ActivityFeed {
   };
 }
 
-function hasRecentSnapshot(state: StoredState | undefined, now: Date): boolean {
-  return ACTIVITY_SOURCES.every(
-    (source) => ageSince(state?.sources[source].fetchedAt, now) <= 60 * 60 * 1000,
-  );
-}
-
-/** Initial HTML uses shared state, refreshing only when it is over an hour old. */
+/** Request paths only read the shared snapshot; scheduled refreshes own upstream work. */
 export async function getInitialActivityFeed(options: GetActivityFeedOptions = {}): Promise<ActivityFeed> {
   const now = options.now ?? new Date();
   const logger = options.logger ?? console;
   const state = await readStored(options.cache, STATE_KEY, parseState, logger);
-  if (hasRecentSnapshot(state?.value, now)) return buildFeed(state?.value, now);
+  return buildFeed(state?.value, now);
+}
 
-  const refreshed = await refreshActivity(options, now, logger, state);
-  // Failed providers must not make an older snapshot look current.
-  return buildFeed(hasRecentSnapshot(refreshed, now) ? refreshed : undefined, now);
+/** Called only by the scheduled Worker, never by a public request. */
+export async function refreshScheduledActivity(options: GetActivityFeedOptions): Promise<void> {
+  await refreshActivity(options, options.now ?? new Date(), options.logger ?? console);
 }
 
 export async function getActivityFeed(options: GetActivityFeedOptions = {}): Promise<ActivityFeed> {
