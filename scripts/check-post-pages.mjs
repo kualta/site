@@ -45,6 +45,7 @@ const mf = new Miniflare({
   compatibilityDate: "2026-05-18",
   compatibilityFlags: ["nodejs_compat"],
   kvNamespaces: ["SESSION", "ACTIVITY_CACHE"],
+  durableObjects: { ACTIVITY_STORE: { className: "ActivityStatusCache", useSQLite: true } },
   d1Databases: ["NEWSLETTER_DB"],
   r2Buckets: ["PUBLISHER_MEDIA"],
   port: 8799,

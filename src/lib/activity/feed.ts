@@ -617,6 +617,8 @@ interface ActivityHistoryOptions {
   logger?: ActivityLogger;
   before?: string | null;
   limit?: number;
+  requireReadableCache?: boolean;
+  cacheReadTimeoutMs?: number;
 }
 
 export interface ActivityHistory {
@@ -629,10 +631,10 @@ export interface ActivityHistory {
 /** pages the archive without touching the providers */
 export async function getActivityHistory(options: ActivityHistoryOptions = {}): Promise<ActivityHistory> {
   const logger = options.logger ?? console;
-  const archive = await readStored(options.cache, ARCHIVE_KEY, parseArchive, logger);
+  const archive = await readStored(options.cache, ARCHIVE_KEY, parseArchive, logger, options.requireReadableCache, options.cacheReadTimeoutMs);
   let events = archive?.value ?? [];
   if (!archive) {
-    const state = await readStored(options.cache, STATE_KEY, parseState, logger);
+    const state = await readStored(options.cache, STATE_KEY, parseState, logger, options.requireReadableCache, options.cacheReadTimeoutMs);
     events = state?.value.events ?? [];
   }
 

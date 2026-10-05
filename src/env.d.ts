@@ -4,6 +4,8 @@ declare namespace Cloudflare {
   interface Env {
     PUBLISHER_MEDIA?: import("@/lib/publisher/server").MediaBucket;
     ACTIVITY_CACHE?: import("@/lib/activity").ActivityCacheStore;
+    ACTIVITY_STORE?: import("@/lib/activity/durable").ActivityDurableNamespace;
+    ACTIVITY_STORE_MODE?: string;
     GITHUB_ACTIVITY_TOKEN?: string;
     PLUNK_SECRET_KEY?: string;
     NEWSLETTER_DB?: import("@/lib/newsletter/types").NewsletterDB;

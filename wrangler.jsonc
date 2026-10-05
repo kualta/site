@@ -7,6 +7,11 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
+  "vars": { "ACTIVITY_STORE_MODE": "enabled" },
+  "durable_objects": {
+    "bindings": [{ "name": "ACTIVITY_STORE", "class_name": "ActivityStatusCache" }]
+  },
+  "migrations": [{ "tag": "activity-store-v1", "new_sqlite_classes": ["ActivityStatusCache"] }],
   "kv_namespaces": [
     { "binding": "ACTIVITY_CACHE", "id": "2b4fd9e1881247b0aa2d7a030a5e1961" }
   ],
