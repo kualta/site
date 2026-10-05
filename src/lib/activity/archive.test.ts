@@ -6,6 +6,7 @@ import {
   mergeIntoArchive,
   reconcileSource,
   sliceEventsBefore,
+  sortEventsNewestFirst,
 } from "./archive";
 import { collapsePastDays } from "./archive";
 import type { ActivityEvent } from "./types";
@@ -50,6 +51,16 @@ function contributionDay(date: string, count: number): ActivityEvent {
 function hoursAgo(hours: number): string {
   return new Date(NOW.getTime() - hours * 60 * 60 * 1000).toISOString();
 }
+
+test("sorting preserves chronological offset ordering and equal-time order without changing the input", () => {
+  const older = githubEvent("older", "2026-08-30T11:00:00.000Z");
+  const newest = githubEvent("newest", "2026-08-30T13:00:00+01:00");
+  const equal = githubEvent("equal", "2026-08-30T12:00:00.000Z");
+  const input = [older, newest, equal];
+  const sorted = sortEventsNewestFirst(input);
+  expect(sorted).toEqual([newest, equal, older]);
+  expect(input).toEqual([older, newest, equal]);
+});
 
 describe("mergeIntoArchive", () => {
   test("keeps events the provider no longer returns", () => {

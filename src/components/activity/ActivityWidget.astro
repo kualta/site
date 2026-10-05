@@ -64,6 +64,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       <button type="button" data-refresh-activity title="Bluesky posts may take a moment to appear">Refresh activity</button>
     </div>
   </div>
+  <p class="text-xs text-secondary-text" role="status" data-activity-refresh-status hidden />
   <slot name="composer" />
   <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>
     <ActivityRows
@@ -183,7 +184,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   }
 
   async function fetchRows(query: string): Promise<RowsResponse> {
-    const response = await fetch(`${ROWS_ENDPOINT}${query}`, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(30_000) });
+    const response = await fetch(`${ROWS_ENDPOINT}${query}`, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(8_000) });
     if (!response.ok) throw new Error(`activity rows responded ${response.status}`);
 
     const template = document.createElement("template");
@@ -309,21 +310,41 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     pollTimer = window.setTimeout(() => void pollActivity(list), POLL_MS * backoff);
   }
 
-  async function pollActivity(list: HTMLOListElement): Promise<void> {
-    if (document.visibilityState !== "visible" || !list.isConnected || list.dataset.activityPolling === "true") return;
+  async function pollActivity(list: HTMLOListElement, manual = false): Promise<void> {
+    if (document.visibilityState !== "visible" || !list.isConnected) return;
+    const widget = list.closest<HTMLElement>("[data-activity-widget]");
+    const refresh = widget?.querySelector<HTMLButtonElement>("[data-refresh-activity]");
+    const status = widget?.querySelector<HTMLElement>("[data-activity-refresh-status]");
+    function message(text: string): void {
+      if (!status) return;
+      status.textContent = text;
+      status.hidden = !text;
+    }
+    if (list.dataset.activityPolling === "true") {
+      if (manual) message("Activity refresh is already in progress.");
+      return;
+    }
     list.dataset.activityPolling = "true";
+    if (manual) {
+      message("Refreshing activity…");
+      if (refresh) refresh.disabled = true;
+    }
 
     try {
       await syncNewestRows(list);
       pollFailures = 0;
+      if (manual) message(widget?.querySelector<HTMLElement>("[data-signals-delayed]")?.hidden
+        ? "Activity refreshed."
+        : "Activity is still delayed. Retrying automatically.");
+      else message("");
     } catch {
       pollFailures += 1;
-      const widget = list.closest<HTMLElement>("[data-activity-widget]");
-      const message = widget?.querySelector<HTMLElement>("[data-activity-skeleton] .sr-only");
-      if (message) message.textContent = "Activity is taking longer to load. Retrying automatically.";
+      message("Activity could not refresh. Retrying automatically.");
+    } finally {
+      list.dataset.activityPolling = "false";
+      if (refresh) refresh.disabled = false;
+      if (list.isConnected) schedulePoll(list);
     }
-    list.dataset.activityPolling = "false";
-    if (list.isConnected) schedulePoll(list);
   }
 
   /** the tooltip quotes the band the status currently sits in, so it moves with it */
@@ -432,7 +453,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     const refresh = document.querySelector<HTMLButtonElement>("[data-refresh-activity]");
     if (refresh) refresh.onclick = () => {
       const list = document.querySelector<HTMLOListElement>("[data-activity-list]");
-      if (list) void pollActivity(list);
+      if (list) void pollActivity(list, true);
     };
     for (const list of document.querySelectorAll<HTMLOListElement>("[data-activity-list]")) {
       initializeActivityList(list);

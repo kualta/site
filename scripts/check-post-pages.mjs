@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, readdir } from "node:fs/promises";
+import { mkdir, readFile, readdir } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { Miniflare } from "miniflare";
 import { chromium } from "playwright";
@@ -129,11 +129,48 @@ try {
       "Public permalink text",
     );
     assert.equal(await page.locator('img[alt="Fixture image"]').count(), 1);
+    const trigger = page.getByRole("button", { name: "Post options" });
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+    const card = page.locator(".site-bluesky-card");
+    assert.equal(await card.locator("post-link-menu").count(), 1);
+    const triggerBox = await trigger.boundingBox();
+    const timeBox = await page.locator(".site-bluesky-time").boundingBox();
+    assert.equal(triggerBox.width, 24);
+    assert.equal(triggerBox.height, 24);
+    assert(timeBox.x >= triggerBox.x + triggerBox.width);
+    assert(timeBox.x - triggerBox.x - triggerBox.width <= 8);
+    assert(Math.abs(timeBox.y + timeBox.height / 2 - triggerBox.y - triggerBox.height / 2) < 2);
+    assert.equal(await page.locator(".post-menu-panel").getAttribute("popover"), "auto");
+    if (process.env.SCREENSHOT_DIR) {
+      await mkdir(process.env.SCREENSHOT_DIR, { recursive: true });
+      await page.screenshot({ path: resolve(process.env.SCREENSHOT_DIR, `post-${mobile ? "mobile" : "desktop"}.png`) });
+    }
     const box = await page.locator("main").boundingBox();
     const viewport = page.viewportSize();
     assert(Math.abs(box.x + box.width / 2 - viewport.width / 2) < 2);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-    await page.getByRole("button", { name: "Post options" }).click();
+    await trigger.click();
+    const panel = page.locator(".post-menu-panel");
+    await panel.waitFor({ state: "visible" });
+    const panelBox = await panel.boundingBox();
+    const lightColor = await panel.evaluate(el => getComputedStyle(el).color);
+    assert(panelBox.x >= 0 && panelBox.x + panelBox.width <= viewport.width);
+    assert(panelBox.y >= 0 && panelBox.y + panelBox.height <= viewport.height);
+    assert(await panel.evaluate(el => {
+      const rect = el.getBoundingClientRect();
+      return el.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height - 10));
+    }), "Native popover must not be clipped by the card");
+    await page.keyboard.press("Escape");
+    await panel.waitFor({ state: "hidden" });
+    assert(await trigger.evaluate(el => el === document.activeElement));
+    await trigger.click();
+    await panel.waitFor({ state: "visible" });
+    await page.mouse.click(1, 1);
+    await panel.waitFor({ state: "hidden" });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await trigger.click();
+    await panel.waitFor({ state: "visible" });
+    assert.notEqual(await panel.evaluate(el => getComputedStyle(el).color), lightColor);
     await page.getByRole("button", { name: "Copy kualta.dev link" }).click();
     assert.equal(
       await page.evaluate(() => navigator.clipboard.readText()),
@@ -181,6 +218,9 @@ try {
         centered: true,
         noHorizontalOverflow: true,
         publicImage: true,
+        compactNativeMenu: true,
+        menuLeftOfTimestamp: true,
+        nativeEscapeAndLightDismiss: true,
         metadata: true,
         deleted404: true,
         failed503: true,

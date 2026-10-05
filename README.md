@@ -219,6 +219,59 @@ updates/day, plus changed archives. This exceeds Workers KV's free 1,000-write/d
 allowance. Confirm the existing account's KV capacity before rollout; if it needs
 a paid upgrade, obtain approval first. No plan or billing change is made here.
 
+CPU capacity is a separate prerequisite. Cloudflare's
+[Worker limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time)
+give Free Cron Triggers a 10ms CPU budget; a minute cron on Paid has a 30-second
+budget. Increasing fetch/KV timeouts or adding `waitUntil` does not increase CPU
+capacity. A scheduled `exceededCpu` outcome can occur after the coordination
+claim advances, before any source timestamp is stored. An advancing D1 claim
+therefore proves delivery, not a successful refresh. Verify the active Worker
+limit and account entitlement; a higher-capacity plan requires separate approval.
+Do not reduce the minute cadence as a workaround without agreeing to the change
+in freshness. After an approved capacity change and deployment, require repeated
+successful cron outcomes and advancing source timestamps, and check KV capacity
+against the successful write rate as well.
+
+The archive sort parses each timestamp once instead of doing so in every
+comparison. To reproduce a local CPU comparison with synthetic data only:
+
+```sh
+bun build scripts/profile-activity.ts --target=node --outfile=/tmp/profile-activity.mjs
+PROFILE_MODE=cron node --cpu-prof --cpu-prof-dir=/tmp /tmp/profile-activity.mjs
+```
+
+`PROFILE_CALENDAR_DAYS`, `PROFILE_POSTS` and `PROFILE_RUNS` adjust the fixture.
+`PROFILE_MODE=head` or `history` isolates cache reads. `providers` runs the real
+provider normalizers against synthetic JSON; `full-cron` also includes archive
+work. `PROFILE_PROVIDER_CALENDAR_DAYS` controls the fixture's upstream calendar
+size independently of its stored history. Rejected fixtures fail the run.
+The script does not access remote storage or upstreams. Its Node/V8 process CPU
+includes local GC and, for provider/full-cron modes, JSON parsing and provider
+normalization. It omits network and D1; it is not Cloudflare CPU accounting or a
+guarantee that a 10ms deployment will work.
+
+`bounded-cron` is a diagnostic experiment that omits retained history. Use it
+with a small provider calendar to estimate savings from separating history and
+the minute refresh; it must never be treated as a deployable cache design. A
+bounded redesign must durably store sanitized deltas before acknowledging
+freshness, preserve edit/deletion reconciliation within observed provider
+windows, and maintain honest coverage and last-success timestamps. Historical
+backfills must also use bounded batches: moving the same full archive/calendar
+work to an hourly cron leaves the same per-invocation CPU limit. Existing D1
+could hold indexed event rows and small head/freshness state without minute KV
+writes, but that requires prepared schema/code, measured D1 usage, and an
+approved migration and rollout. Unchanged event upserts must avoid rewriting
+every row each minute. No history is dropped or storage migrated here.
+
+Another supported option is a singleton SQLite-backed Durable Object on the
+existing Cloudflare account. Cloudflare documents availability on Workers Free,
+a default 30-second CPU limit per Durable Object invocation, and separate
+SQLite storage allowances. It can own refresh work and the shared snapshots,
+avoiding minute KV writes. This needs an approved new binding/class migration
+and measured account-wide request, duration and storage usage, rather than an
+automatic paid-plan change. See [Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
+and [pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+
 If **signals delayed** appears, at least one provider has no successful timestamp
 or was last fetched over five minutes ago. It is independent of the last event's
 age: a person can be inactive while the sources remain fresh. The client keeps
@@ -243,6 +296,18 @@ runtime nor CI creates the table automatically. Once applied, verify the cron is
 report `verify-0007-migration-and-D1`; provider failures report sanitized codes
 such as `missing-token` or `timeout`. Successful provider results and advancing
 source timestamps establish recovery; missing events alone do not indicate failure.
+
+Provider success alone does not establish a stored refresh. Cron now reports
+`stage: persistence` with `result: stored` only after required snapshot writes
+complete; failed writes fail the cron. Cache logs distinguish `quota-exceeded`,
+`rate-limited`, `timeout`, `invalid-snapshot`, and `cache-unavailable` without
+printing platform error details. If providers succeed but the snapshot stops
+advancing, check these cache codes and the account's KV write usage/limit. A paid
+capacity change requires approval; the refresh button cannot repair storage quota
+or credentials. It reports progress, failure, or continued delayed signals while
+keeping the last visible snapshot and scrolling usable.
+Head and archive writes are independent: a successful head write can remain fresh
+while a failed history write is reported and retried on the next minute.
 
 ### Feed publication and post permalinks
 

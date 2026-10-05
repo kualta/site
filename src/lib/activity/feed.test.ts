@@ -523,3 +523,85 @@ test("poll cache errors are rejected instead of replacing a healthy client snaps
     requireReadableCache: true, logger,
   })).rejects.toThrow("preserving existing snapshot");
 });
+
+test("failed cron persistence preserves freshness, reports only safe codes, and recovers next minute", async () => {
+  const cache = new MemoryCache();
+  await refreshScheduledActivity({ cache, providers: successfulProviders(), logger, now: NOW });
+  const before = new Map(cache.values);
+  const warnings: unknown[] = [];
+  const diagnostics = { info() {}, warn(...args: unknown[]) { warnings.push(args); } };
+  let fail = true;
+  const limited = {
+    get: (key: string) => cache.get(key),
+    put: async (key: string, value: string) => {
+      if (fail) throw new Error("KV put() limit exceeded for the day. token=private-credential");
+      await cache.put(key, value);
+    },
+  };
+  const later = new Date(+NOW + 6 * 60_000);
+  await expect(refreshScheduledActivity({ cache: limited, providers: successfulProviders(), logger: diagnostics, now: later })).rejects.toThrow("persistence failed");
+  expect(cache.values).toEqual(before);
+  const stale = await getInitialActivityFeed({ cache, now: later });
+  expect(stale.delayed).toBe(true);
+  expect(stale.sources.github.fetchedAt).toBe(NOW.toISOString());
+  const logs = JSON.stringify(warnings);
+  expect(logs).toContain("quota-exceeded");
+  expect(logs).toContain('"stage":"persistence"');
+  expect(logs).not.toContain("private-credential");
+  expect(logs).not.toContain("KV put()");
+  fail = false;
+  const recoveredAt = new Date(+later + 60_000);
+  await refreshScheduledActivity({ cache: limited, providers: successfulProviders(), logger, now: recoveredAt });
+  const recovered = await getInitialActivityFeed({ cache, now: recoveredAt });
+  expect(recovered.delayed).toBe(false);
+  expect(recovered.sources.github.fetchedAt).toBe(recoveredAt.toISOString());
+});
+
+test("cache diagnostics distinguish throttling, corrupt data and bounded read timeouts", async () => {
+  for (const [cache, code] of [
+    [{ get: async () => { throw new Error("429 Too Many Requests secret=hidden"); }, put: async () => {} }, "rate-limited"],
+    [{ get: async () => "invalid-json", put: async () => {} }, "invalid-snapshot"],
+    [{ get: () => new Promise<null>(() => {}), put: async () => {} }, "timeout"],
+  ] as const) {
+    const warnings: unknown[] = [];
+    await expect(getInitialActivityFeed({ cache, cacheReadTimeoutMs: 5, requireReadableCache: true,
+      logger: { info() {}, warn(...args: unknown[]) { warnings.push(args); } },
+    })).rejects.toThrow("preserving existing snapshot");
+    expect(JSON.stringify(warnings)).toContain(code);
+    expect(JSON.stringify(warnings)).not.toContain("secret=hidden");
+  }
+});
+
+test("partial cache writes fail cron, preserve the failed key, and retry independently", async () => {
+  for (const failedKey of ["activity:archive:v3", "activity:state:v3"]) {
+    const cache = new MemoryCache();
+    await refreshScheduledActivity({ cache, providers: successfulProviders(), logger, now: NOW });
+    const before = new Map(cache.values);
+    const writes: string[] = [];
+    let fail = true;
+    const partial = {
+      get: (key: string) => cache.get(key),
+      async put(key: string, value: string) {
+        writes.push(key);
+        if (fail && key === failedKey) throw new Error("cache unavailable");
+        await cache.put(key, value);
+      },
+    };
+    const providers = [
+      provider("github", async () => [githubActivity("newer", "2026-08-30T12:05:00Z")]),
+      provider("bluesky", async () => [blueskyActivity("newer", "2026-08-30T12:04:00Z")]),
+    ];
+    const later = new Date(+NOW + 6 * 60_000);
+    await expect(refreshScheduledActivity({ cache: partial, providers, logger, now: later })).rejects.toThrow("persistence failed");
+    expect(writes).toEqual(["activity:archive:v3", "activity:state:v3"]);
+    expect(cache.values.get(failedKey)).toBe(before.get(failedKey));
+    const feed = await getInitialActivityFeed({ cache, now: later });
+    // Head freshness describes the successfully stored head, independently of history.
+    expect(feed.delayed).toBe(failedKey === "activity:state:v3");
+    fail = false;
+    const retryAt = new Date(+later + 60_000);
+    await refreshScheduledActivity({ cache: partial, providers, logger, now: retryAt });
+    expect((await getInitialActivityFeed({ cache, now: retryAt })).delayed).toBe(false);
+    expect((await getActivityHistory({ cache })).events.some(event => event.id === "bluesky:newer")).toBe(true);
+  }
+});
