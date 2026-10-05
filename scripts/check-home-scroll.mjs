@@ -27,8 +27,10 @@ try {
       });
       const height = await page.locator("#activity").evaluate((el) => el.getBoundingClientRect().height);
       assert(height > 0, "Feed must have space before status resolves");
+      const scrollMs = [];
       for (let visit = 0; visit < 3; visit++) {
         await page.evaluate(() => scrollTo({ top: 0, behavior: "instant" }));
+        const scrollStarted = performance.now();
         if (mobile) {
           const session = await context.newCDPSession(page);
           await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 195, y: 650 }] });
@@ -42,6 +44,7 @@ try {
           await page.mouse.wheel(0, 650);
         }
         await page.waitForFunction(() => scrollY > 20, null, { timeout: 1000 });
+        scrollMs.push(Math.round(performance.now() - scrollStarted));
         const y = await page.evaluate(() => scrollY);
         assert(y > 20, "Scroll must respond while status is unavailable");
         if (visit < 2) {
@@ -53,7 +56,7 @@ try {
           await page.locator("#activity").waitFor();
         }
       }
-      console.log(JSON.stringify({ mobile, status, ...navigation, feedHeight: height, totalMs: Math.round(performance.now() - started), navigations: 3 }));
+      console.log(JSON.stringify({ mobile, status, ...navigation, feedHeight: height, scrollMs, totalMs: Math.round(performance.now() - started), navigations: 3 }));
       await context.close();
     }
   }

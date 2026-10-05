@@ -193,44 +193,72 @@ and blocked images can hide a real open.
 
 ### Background activity refresh
 
-The existing `kualta-site` Worker refreshes GitHub/Bluesky activity with a
-Cloudflare Cron Trigger (`* * * * *`), even when nobody visits. Both home HTML and
-`/activity/rows` read `ACTIVITY_CACHE` only. Empty or unavailable cache data renders
-unknown/delayed status immediately; activity never gates scrolling. Successful
-snapshots retain their original source timestamps through provider failures.
-Provider requests are aborted after five seconds; KV reads have a 250ms budget.
-Existing sanitizers strip private repository names, targets, raw IDs and tokens
-before anything enters the shared cache (only existing anonymous activity signals
-are retained).
+The existing `kualta-site` Cron Trigger (`* * * * *`) refreshes GitHub/Bluesky
+even when nobody visits. It hands work to one private `ACTIVITY_STORE`
+SQLite-backed Durable Object; provider normalization and full archive work stay
+out of the page Worker's CPU budget. Home HTML and `/activity/rows` only read
+snapshots. Empty/unavailable status never gates scrolling. Provider requests are
+aborted after five seconds, initial HTML reads have a total 250ms budget, and
+asynchronous head/history reads allow two seconds. The cron handoff is bounded
+to 15 seconds. There is no public refresh endpoint or visitor-triggered refresh.
 
-Before deploying, apply `0007_activity_refresh.sql` to the existing
-`kualta-newsletter` D1 database. It adds one coordination row, with no subscriber
-data, so duplicate cron deliveries refresh at most once per scheduled minute.
-No new service or credential is required: the Worker uses its existing KV, D1 and
-`GITHUB_ACTIVITY_TOKEN`. Do not deploy this change before the migration. The normal
-build preserves the custom Worker entry and cron configuration in
-`dist/server/wrangler.json`. Cron changes can take up to 15 minutes to propagate;
-KV is eventually consistent, so freshness labels reflect successful provider
-fetches rather than promising exact global one-minute visibility. Check Worker
-cron logs and `signals delayed` after rollout. This branch does not deploy itself.
+The object deduplicates each scheduled minute across callers and restarts, with
+no long-running timer. It atomically commits the sanitized archive and head;
+failed persistence preserves both previous snapshots. Failed providers retain
+their last successful timestamps and data. Existing sanitizers strip private
+repository names, targets, raw IDs, tokens and unused Bluesky viewer metadata
+before anything enters persistent storage. Snapshot strings use 32Ki-character
+chunks, preserving Unicode pairs and at most 1,024 chunks; shrinking a snapshot
+removes obsolete chunks in batches of at most 128 keys.
 
-Capacity prerequisite: a successful minute refresh writes at least 1,440 KV state
-updates/day, plus changed archives. This exceeds Workers KV's free 1,000-write/day
-allowance. Confirm the existing account's KV capacity before rollout; if it needs
-a paid upgrade, obtain approval first. No plan or billing change is made here.
+First refresh reads the existing `ACTIVITY_CACHE` and rewrites validated canonical
+snapshots into the object. It neither clears nor writes legacy KV. Older history,
+coverage, edits/deletion reconciliation and source freshness semantics remain.
+Initial HTML can use the legacy snapshot if an object read fails; failed polls
+and history reads fail explicitly so the client can retain/retry visible data.
+Without the new binding, the former KV/D1 implementation remains available.
+Its already-applied `0007_activity_refresh.sql` is still required for that fallback
+and the deployment workflow's existing read-only preflight.
 
-CPU capacity is a separate prerequisite. Cloudflare's
+**Rollout approval is required:** `wrangler.jsonc` prepares a new private binding
+and an `activity-store-v1` class migration with `new_sqlite_classes` for
+`ActivityStatusCache`. An approved deployment creates that persistent resource;
+the build preserves the class export, binding and migration in
+`dist/server/wrangler.json`. No remote migration, subscription or credential
+change is performed while preparing this code. Verify the existing deployment
+token can apply Worker class migrations before rollout; ask for setup if blocked.
+For rollback, set `ACTIVITY_STORE_MODE=legacy` while retaining the class export,
+binding and migration tag. This restores the old KV/D1 read/cron paths without
+deleting object history; legacy KV then reflects its last pre-object snapshot.
+Do not delete the namespace to roll back application behavior.
+
+Cloudflare documents SQLite Durable Objects on Workers Free and a default
+30-second invocation CPU budget. Free allowances are 100,000 requests/day,
+13,000 GB-s/day, 5 million SQLite rows read/day, 100,000 rows written/day and 5GB
+account storage; other objects share those limits. Cron adds 1,440 object requests
+per day, plus visitor reads. A 649KB archive fixture uses about 20 archive chunks;
+even changing it every minute plus claim/head writes is about 35,000 rows/day.
+At the five-second provider timeout, minute refreshes add about 900 GB-s/day
+before storage/visitor overhead. Measure real account-wide usage and leave room
+for traffic; Free excess operations fail rather than enabling a paid upgrade.
+See [Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
+and [pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+
+The legacy KV/D1 backend has separate capacity constraints: successful minute
+refreshes write at least 1,440 KV state updates/day, plus changed archives,
+exceeding KV's free 1,000-write/day allowance. Cloudflare's
 [Worker limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time)
 give Free Cron Triggers a 10ms CPU budget; a minute cron on Paid has a 30-second
 budget. Increasing fetch/KV timeouts or adding `waitUntil` does not increase CPU
 capacity. A scheduled `exceededCpu` outcome can occur after the coordination
 claim advances, before any source timestamp is stored. An advancing D1 claim
 therefore proves delivery, not a successful refresh. Verify the active Worker
-limit and account entitlement; a higher-capacity plan requires separate approval.
+limit and account entitlement; any higher-capacity plan requires separate approval.
 Do not reduce the minute cadence as a workaround without agreeing to the change
-in freshness. After an approved capacity change and deployment, require repeated
-successful cron outcomes and advancing source timestamps, and check KV capacity
-against the successful write rate as well.
+in freshness. After an approved object rollout, require repeated successful cron
+outcomes, advancing source timestamps and acceptable object usage. Cron changes
+can take up to 15 minutes to propagate; providers can themselves lag. This branch
+does not deploy itself.
 
 The archive sort parses each timestamp once instead of doing so in every
 comparison. To reproduce a local CPU comparison with synthetic data only:
@@ -243,7 +271,8 @@ PROFILE_MODE=cron node --cpu-prof --cpu-prof-dir=/tmp /tmp/profile-activity.mjs
 `PROFILE_CALENDAR_DAYS`, `PROFILE_POSTS` and `PROFILE_RUNS` adjust the fixture.
 `PROFILE_MODE=head` or `history` isolates cache reads. `providers` runs the real
 provider normalizers against synthetic JSON; `full-cron` also includes archive
-work. `PROFILE_PROVIDER_CALENDAR_DAYS` controls the fixture's upstream calendar
+work. `handoff` isolates the lightweight cron path with a mock object response;
+it excludes the object's work and real IPC. `PROFILE_PROVIDER_CALENDAR_DAYS` controls the fixture's upstream calendar
 size independently of its stored history. Rejected fixtures fail the run.
 The script does not access remote storage or upstreams. Its Node/V8 process CPU
 includes local GC and, for provider/full-cron modes, JSON parsing and provider
@@ -261,16 +290,8 @@ work to an hourly cron leaves the same per-invocation CPU limit. Existing D1
 could hold indexed event rows and small head/freshness state without minute KV
 writes, but that requires prepared schema/code, measured D1 usage, and an
 approved migration and rollout. Unchanged event upserts must avoid rewriting
-every row each minute. No history is dropped or storage migrated here.
-
-Another supported option is a singleton SQLite-backed Durable Object on the
-existing Cloudflare account. Cloudflare documents availability on Workers Free,
-a default 30-second CPU limit per Durable Object invocation, and separate
-SQLite storage allowances. It can own refresh work and the shared snapshots,
-avoiding minute KV writes. This needs an approved new binding/class migration
-and measured account-wide request, duration and storage usage, rather than an
-automatic paid-plan change. See [Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
-and [pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+every row each minute. The implemented object approach instead keeps the
+existing full-history semantics and gives them a suitable invocation budget.
 
 If **signals delayed** appears, at least one provider has no successful timestamp
 or was last fetched over five minutes ago. It is independent of the last event's

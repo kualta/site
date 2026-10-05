@@ -1,7 +1,26 @@
 import { refreshScheduledActivity } from "./feed";
+import { activityStore } from "./durable";
 
 /** One atomic D1 claim per minute, across isolates and duplicate cron delivery. */
 export async function runActivityCron(env: Cloudflare.Env, scheduledTime: number, refresh = refreshScheduledActivity): Promise<void> {
+  const store = activityStore(env);
+  if (store) {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const response = await Promise.race([
+        store.fetch("https://activity.internal/refresh", {
+          method: "POST", body: JSON.stringify({ scheduledTime }),
+          headers: { "content-type": "application/json" }, signal: controller.signal,
+        }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => { controller.abort(); reject(new Error("Activity store refresh timed out")); }, 15_000);
+        }),
+      ]);
+      if (!response.ok) throw new Error("Activity store refresh failed");
+      return;
+    } finally { clearTimeout(timer); }
+  }
   if (!env.ACTIVITY_CACHE || !env.NEWSLETTER_DB) throw new Error("Activity cron bindings are missing");
   const minute = Math.floor(scheduledTime / 60_000);
   let claim;

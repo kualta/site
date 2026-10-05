@@ -1,6 +1,6 @@
 ---
 import { env } from "cloudflare:workers";
-import { getInitialActivityFeed } from "@/lib/activity/feed";
+import { getSharedActivityFeed } from "@/lib/activity/shared";
 import { formatLastSeenTime } from "@/lib/activity/presence";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
@@ -19,7 +19,7 @@ const contacts = (contactsData as Contact[])
   .filter((c) => c.is_main)
   .reverse();
 
-const initialActivity = await getInitialActivityFeed({ cache: env.ACTIVITY_CACHE });
+const initialActivity = await getSharedActivityFeed(env);
 const lastSeenAt = initialActivity.lastSeenAt;
 
 const month = new Date().getMonth();

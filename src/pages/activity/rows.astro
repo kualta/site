@@ -1,6 +1,7 @@
 ---
 import ActivityRows from "@/components/activity/ActivityRows.astro";
-import { decodeActivityCursor, getInitialActivityFeed, getActivityHistory } from "@/lib/activity";
+import { decodeActivityCursor } from "@/lib/activity";
+import { getSharedActivityFeed, getSharedActivityHistory } from "@/lib/activity/shared";
 import { env } from "cloudflare:workers";
 
 // serves both halves of the feed's paging: the newest rows for the live poll,
@@ -10,17 +11,12 @@ export const partial = true;
 
 const ROW_LIMIT = 20;
 const before = Astro.url.searchParams.get("before");
-const cache = env.ACTIVITY_CACHE;
 
 // Both paths read shared data only; the scheduled Worker keeps it warm.
 const feed = before
   ? null
-  : await getInitialActivityFeed({
-      cache,
-      cacheReadTimeoutMs: 2_000,
-      requireReadableCache: true,
-    });
-const page = feed ?? (await getActivityHistory({ cache, before, limit: ROW_LIMIT * 5 }));
+  : await getSharedActivityFeed(env, true);
+const page = feed ?? (await getSharedActivityHistory(env, before!));
 
 const from = decodeActivityCursor(before);
 const boundarySeen = Boolean(

@@ -2,6 +2,7 @@
 import { getActivityHistory, getInitialActivityFeed, refreshScheduledActivity } from "../src/lib/activity/feed";
 import { githubProvider } from "../src/lib/activity/providers/github";
 import { blueskyProvider } from "../src/lib/activity/providers/bluesky";
+import { runActivityCron } from "../src/lib/activity/scheduled";
 import type { ActivityEvent, ActivityProvider, ProviderContext } from "../src/lib/activity/types";
 
 const now = new Date("2026-10-05T13:00:00.000Z");
@@ -13,7 +14,7 @@ const providerDays = Number(process.env.PROFILE_PROVIDER_CALENDAR_DAYS ?? calend
 const githubEvents = Number(process.env.PROFILE_GITHUB_EVENTS ?? 100);
 const runs = Number(process.env.PROFILE_RUNS ?? 100);
 const mode = process.env.PROFILE_MODE ?? "cron";
-if (!["cron", "full-cron", "bounded-cron", "providers", "head", "history"].includes(mode)) throw new Error("Invalid PROFILE_MODE");
+if (!["cron", "full-cron", "bounded-cron", "providers", "handoff", "head", "history"].includes(mode)) throw new Error("Invalid PROFILE_MODE");
 if (![calendarDays, postCount, providerDays, githubEvents, runs].every(Number.isSafeInteger) || Math.min(calendarDays, postCount, providerDays, githubEvents) < 0 || githubEvents > 100 || runs < 2) {
   throw new Error("Fixture counts must be nonnegative integers, PROFILE_GITHUB_EVENTS at most 100, and PROFILE_RUNS at least 2");
 }
@@ -76,12 +77,16 @@ const fixtureFetch: ProviderContext["fetch"] = async (input, init) => {
   return new Response(payload, { headers: { "Content-Type": "application/json" } });
 };
 const logger = { info() {}, warn() { throw new Error("Rejected fixture or failed cache operation; CPU result is invalid"); } };
+const handoffEnv: Cloudflare.Env = { ACTIVITY_STORE: { idFromName: name => name,
+  get: () => ({ fetch: async () => new Response(null, { status: 204 }) }),
+} };
 const samples: { cpuMs: number; elapsedMs: number }[] = [];
 for (let i = 0; i < runs; i++) {
   const date = new Date(+now + i * 60_000);
   const started = performance.now();
   const cpu = process.cpuUsage();
-  if (mode === "head") await getInitialActivityFeed({ cache, logger, now: date });
+  if (mode === "handoff") await runActivityCron(handoffEnv, +date);
+  else if (mode === "head") await getInitialActivityFeed({ cache, logger, now: date });
   else if (mode === "history") await getActivityHistory({ cache, logger });
   else if (mode === "providers") {
     const context: ProviderContext = { fetch: fixtureFetch, signal: new AbortController().signal, now: date, secrets: { githubToken: "offline-fixture" } };
