@@ -73,32 +73,34 @@ try {
       );
       await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
       await page.waitForFunction(() => document.querySelector("[data-signals-delayed]")?.hidden);
-      const refresh = page.getByRole("button", { name: "Refresh activity" });
+      assert.equal(await page.getByRole("button", { name: "Refresh activity" }).count(), 0);
+      assert.equal(await page.locator("[data-refresh-activity]").count(), 0);
       const feedback = page.locator("[data-activity-refresh-status]");
+      assert.equal(await feedback.getAttribute("role"), "status");
       await page.waitForFunction(() => document.querySelector("[data-activity-list]")?.dataset.activityPolling !== "true");
       stale = true;
-      await refresh.click();
-      await page.waitForFunction(() => document.querySelector("[data-activity-refresh-status]")?.textContent.includes("still delayed"));
+      await page.clock.fastForward(61_000);
+      await page.waitForFunction(() => !document.querySelector("[data-signals-delayed]")?.hidden);
       assert.equal(await page.locator("[data-signals-delayed]").evaluate(el => el.hidden), false);
       stale = false;
       fail = true;
-      await refresh.click();
+      await page.clock.fastForward(61_000);
       await page.waitForFunction(() => document.querySelector("[data-activity-refresh-status]")?.textContent.includes("could not refresh"));
-      assert.equal(await refresh.isEnabled(), true);
+      assert.equal(await feedback.isVisible(), true);
       fail = false;
-      await refresh.click();
-      await page.waitForFunction(() => document.querySelector("[data-activity-refresh-status]")?.textContent === "Activity refreshed.");
+      await page.clock.fastForward(121_000);
+      await page.waitForFunction(() => document.querySelector("[data-signals-delayed]")?.hidden);
+      assert.equal(await feedback.isHidden(), true);
       if (skew > 0) {
         hanging = true;
         const timeoutStarted = Date.now();
-        await refresh.click();
-        assert.match(await feedback.textContent(), /Refreshing activity/);
-        assert.equal(await refresh.isEnabled(), false);
+        await page.clock.fastForward(61_000);
+        await page.waitForFunction(() => document.querySelector("[data-activity-list]")?.dataset.activityPolling === "true");
         await page.mouse.wheel(0, 500);
         await page.waitForFunction(() => scrollY > 20, null, { timeout: 1000 });
         await page.waitForFunction(() => document.querySelector("[data-activity-refresh-status]")?.textContent.includes("could not refresh"), null, { timeout: 10_000 });
         assert(Date.now() - timeoutStarted < 10_000);
-        assert.equal(await refresh.isEnabled(), true);
+        await page.waitForFunction(() => document.querySelector("[data-activity-list]")?.dataset.activityPolling !== "true");
       }
       console.log(
         JSON.stringify({
@@ -108,8 +110,9 @@ try {
           delayedAfterFiveMinutes: true,
           failedPollRetainsSnapshot: true,
           successfulRecovery: true,
-          manualFeedback: true,
-          ...(skew > 0 ? { boundedManualTimeoutAndResponsiveScroll: true } : {}),
+          manualControlRemoved: true,
+          automaticFeedback: true,
+          ...(skew > 0 ? { boundedPollTimeoutAndResponsiveScroll: true } : {}),
           requests,
         }),
       );

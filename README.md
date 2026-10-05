@@ -324,9 +324,9 @@ complete; failed writes fail the cron. Cache logs distinguish `quota-exceeded`,
 `rate-limited`, `timeout`, `invalid-snapshot`, and `cache-unavailable` without
 printing platform error details. If providers succeed but the snapshot stops
 advancing, check these cache codes and the account's KV write usage/limit. A paid
-capacity change requires approval; the refresh button cannot repair storage quota
-or credentials. It reports progress, failure, or continued delayed signals while
-keeping the last visible snapshot and scrolling usable.
+capacity change requires approval. Automatic polling reports read failures and
+continued delayed signals while keeping the last visible snapshot and scrolling
+usable.
 Head and archive writes are independent: a successful head write can remain fresh
 while a failed history write is reported and retried on the next minute.
 
@@ -338,7 +338,7 @@ post identity. Anonymous AppView readback replaces it when the same URI and CID
 are indexed. Failed publication retains the draft; delayed indexing retains the
 acknowledged card. Navigation and cache refresh reconcile by post identity and
 preserve history. Posts written in other Bluesky clients still depend on public
-indexing and the existing minute refresh; **Refresh activity** reads the latest
+indexing and the existing minute refresh; the page automatically reads the latest
 shared snapshot.
 
 Each post's options can copy its `kualta.dev/post/<did>/<rkey>` permalink or its
