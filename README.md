@@ -244,6 +244,18 @@ report `verify-0007-migration-and-D1`; provider failures report sanitized codes
 such as `missing-token` or `timeout`. Successful provider results and advancing
 source timestamps establish recovery; missing events alone do not indicate failure.
 
+Provider success alone does not establish a stored refresh. Cron now reports
+`stage: persistence` with `result: stored` only after required snapshot writes
+complete; failed writes fail the cron. Cache logs distinguish `quota-exceeded`,
+`rate-limited`, `timeout`, `invalid-snapshot`, and `cache-unavailable` without
+printing platform error details. If providers succeed but the snapshot stops
+advancing, check these cache codes and the account's KV write usage/limit. A paid
+capacity change requires approval; the refresh button cannot repair storage quota
+or credentials. It reports progress, failure, or continued delayed signals while
+keeping the last visible snapshot and scrolling usable.
+Head and archive writes are independent: a successful head write can remain fresh
+while a failed history write is reported and retried on the next minute.
+
 ### Feed publication and post permalinks
 
 Publishing from the home composer inserts the acknowledged repository record in

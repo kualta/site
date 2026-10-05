@@ -29,7 +29,6 @@ const renderCard = canRenderBlueskyPost(event.post);
 const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : null;
 ---
 <article class="w-full min-w-0" data-post-uri={event.uri} data-post-cid={event.post.cid} data-post-action={event.action}>
-  <div class="flex justify-end"><post-link-menu data-uri={event.uri} /></div>
   {
     renderCard ? (
       <div
@@ -50,21 +49,24 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
           {gallery && <div class="grid grid-cols-2 gap-1 p-4">{media.map((image) => <a href={image.src}><div class="image-grid-item"><img class="w-full rounded-lg" src={image.thumbnail} alt={image.alt} loading="lazy" /></div></a>)}</div>}
         </bluesky-media>
         <bluesky-post-actions data-uri={event.uri} />
-        <a
-          href={event.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          class="site-bluesky-time font-mono text-xs tabular-nums text-secondary-text"
-          aria-label={`View this Bluesky activity from ${absoluteTime}`}
-        >
-          <time
-            datetime={event.occurredAt}
-            title={absoluteTime}
-            data-activity-relative-time
+        <div class="site-bluesky-meta">
+          <post-link-menu data-uri={event.uri} />
+          <a
+            href={event.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            class="site-bluesky-time font-mono text-xs tabular-nums text-secondary-text"
+            aria-label={`View this Bluesky activity from ${absoluteTime}`}
           >
-            {formatRelativeTime(event.occurredAt)}
-          </time>
-        </a>
+            <time
+              datetime={event.occurredAt}
+              title={absoluteTime}
+              data-activity-relative-time
+            >
+              {formatRelativeTime(event.occurredAt)}
+            </time>
+          </a>
+        </div>
       </div>
     ) : (
       <div
@@ -82,6 +84,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
           >
             {authorName}
           </a>
+          <post-link-menu data-uri={event.uri} />
           <time
             datetime={event.occurredAt}
             title={absoluteTime}
@@ -144,7 +147,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
   /* the embed aligns the name block to the top of the avatar, which reads as
      lifted next to a round image; centring the two settles the row */
   .site-bluesky-card .bluesky-post-container .post-header {
-    padding-inline-end: 2.5rem;
+    padding-inline-end: 5.5rem;
     align-items: center;
   }
 
@@ -157,11 +160,17 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     display: none;
   }
 
-  .site-bluesky-time {
+  .site-bluesky-meta {
     position: absolute;
     inset-block-start: 1rem;
     inset-inline-end: 1rem;
     z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .site-bluesky-time {
     line-height: 1.2;
     text-decoration: none;
     white-space: nowrap;

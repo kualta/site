@@ -100,6 +100,7 @@ try {
       /Could not copy/,
     );
     await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelector(".post-menu-trigger")?.getAttribute("aria-expanded") === "false");
     assert.equal(await page.getByRole("button", { name: "Post options" }).getAttribute("aria-expanded"), "false");
     await page.evaluate(
       (html) => window.reconcile(html),

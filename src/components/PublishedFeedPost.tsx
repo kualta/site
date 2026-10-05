@@ -2,6 +2,7 @@ import { RichText } from "@atproto/api";
 import { blueskyProfileUrl } from "@/lib/bluesky/urls";
 import type { PublishedFeedPost as Post } from "@/lib/bluesky/published-feed";
 import PostLinkMenu from "./PostLinkMenu";
+import { formatAbsoluteTime, formatRelativeTime } from "@/lib/activity/presence";
 
 export default function PublishedFeedPost({ post }: { post: Post }) {
   const text = new RichText({ text: post.record.text, facets: post.record.facets });
@@ -17,7 +18,12 @@ export default function PublishedFeedPost({ post }: { post: Post }) {
             <span className="block text-xs">@{post.author.handle}</span>
           </span>
         </a>
-        <PostLinkMenu uri={post.uri} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <PostLinkMenu uri={post.uri} />
+          <time dateTime={post.record.createdAt} title={formatAbsoluteTime(post.record.createdAt)} className="font-mono text-xs tabular-nums text-secondary-text" data-activity-relative-time>
+            {formatRelativeTime(post.record.createdAt)}
+          </time>
+        </div>
       </div>
       <p className="my-3 whitespace-pre-wrap break-words">
         {[...text.segments()].map((part, i) => {

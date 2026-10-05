@@ -48,6 +48,18 @@ const GITHUB_ACTIONS = new Set<string>(GITHUB_ACTIVITY_ACTIONS);
 
 const DEFAULT_PROVIDERS: readonly ActivityProvider[] = [githubProvider, blueskyProvider];
 
+class CacheTimeout extends Error {}
+
+/** Fixed codes only: platform errors can contain request data or credentials. */
+function cacheErrorCode(error: unknown): string {
+  if (error instanceof CacheTimeout) return "timeout";
+  if (error instanceof SyntaxError) return "invalid-snapshot";
+  const message = error instanceof Error ? error.message : "";
+  if (/quota|daily.*limit|limit.*(?:day|daily)/i.test(message)) return "quota-exceeded";
+  if (/429|too many requests|rate.?limit/i.test(message)) return "rate-limited";
+  return "cache-unavailable";
+}
+
 type ActivityLogger = Pick<Console, "info" | "warn">;
 
 interface GetActivityFeedOptions {
@@ -284,7 +296,7 @@ async function bounded<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([work, new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Activity cache timed out")), timeoutMs);
+      timer = setTimeout(() => reject(new CacheTimeout("Activity cache timed out")), timeoutMs);
     })]);
   } finally {
     clearTimeout(timer);
@@ -306,10 +318,10 @@ async function readStored<T>(
     if (!serialized) return undefined;
 
     const value = parse(JSON.parse(serialized));
-    if (!value && requireReadable) throw new Error("Invalid activity snapshot");
+    if (!value && requireReadable) throw new SyntaxError("Invalid activity snapshot");
     return value ? { value, serialized } : undefined;
-  } catch {
-    logger.warn("activity cache result", { key, cacheState: "read-error", error: "cache-read-failed" });
+  } catch (error) {
+    logger.warn("activity cache result", { key, cacheState: "read-error", error: cacheErrorCode(error) });
     if (requireReadable) throw new Error("Activity cache is unavailable; preserving existing snapshot");
     return undefined;
   }
@@ -321,16 +333,18 @@ async function writeStored(
   value: unknown,
   previous: string | undefined,
   logger: ActivityLogger,
-): Promise<void> {
-  if (!cache) return;
+): Promise<boolean> {
+  if (!cache) return true;
 
   const serialized = JSON.stringify(value);
-  if (serialized === previous) return;
+  if (serialized === previous) return true;
 
   try {
     await bounded(cache.put(key, serialized), 2_000);
-  } catch {
-    logger.warn("activity cache result", { key, cacheState: "write-error", error: "cache-write-failed" });
+    return true;
+  } catch (error) {
+    logger.warn("activity cache result", { key, cacheState: "write-error", error: cacheErrorCode(error) });
+    return false;
   }
 }
 
@@ -465,6 +479,7 @@ async function refreshActivity(
   now: Date,
   logger: ActivityLogger,
   known?: StoredEntry<StoredState>,
+  requirePersistence = false,
 ): Promise<StoredState> {
   const providers = options.providers ?? DEFAULT_PROVIDERS;
   const state = known ?? (await readStored(options.cache, STATE_KEY, parseState, logger, true, options.cacheReadTimeoutMs ?? 2_000));
@@ -495,10 +510,17 @@ async function refreshActivity(
     events: events.slice(0, HEAD_EVENTS),
   };
 
-  await writeStored(options.cache, ARCHIVE_KEY, { version: STORE_VERSION, events }, archive?.serialized, logger);
+  const archiveWritten = await writeStored(options.cache, ARCHIVE_KEY, { version: STORE_VERSION, events }, archive?.serialized, logger);
+  let stateWritten = true;
   if (shouldWriteState(state?.value, next, now)) {
-    await writeStored(options.cache, STATE_KEY, next, state?.serialized, logger);
+    stateWritten = await writeStored(options.cache, STATE_KEY, next, state?.serialized, logger);
   }
+
+  if (requirePersistence && (!archiveWritten || !stateWritten)) {
+    logger.warn("activity cron result", { stage: "persistence", result: "failed" });
+    throw new Error("Activity snapshot persistence failed; verify cache result codes and KV capacity");
+  }
+  if (requirePersistence) logger.info("activity cron result", { stage: "persistence", result: "stored" });
 
   return next;
 }
@@ -568,7 +590,7 @@ export async function getInitialActivityFeed(options: GetActivityFeedOptions = {
 
 /** Called only by the scheduled Worker, never by a public request. */
 export async function refreshScheduledActivity(options: GetActivityFeedOptions): Promise<void> {
-  await refreshActivity(options, options.now ?? new Date(), options.logger ?? console);
+  await refreshActivity(options, options.now ?? new Date(), options.logger ?? console, undefined, true);
 }
 
 export async function getActivityFeed(options: GetActivityFeedOptions = {}): Promise<ActivityFeed> {
