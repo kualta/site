@@ -219,6 +219,33 @@ updates/day, plus changed archives. This exceeds Workers KV's free 1,000-write/d
 allowance. Confirm the existing account's KV capacity before rollout; if it needs
 a paid upgrade, obtain approval first. No plan or billing change is made here.
 
+CPU capacity is a separate prerequisite. Cloudflare's
+[Worker limits](https://developers.cloudflare.com/workers/platform/limits/#cpu-time)
+give Free Cron Triggers a 10ms CPU budget; a minute cron on Paid has a 30-second
+budget. Increasing fetch/KV timeouts or adding `waitUntil` does not increase CPU
+capacity. A scheduled `exceededCpu` outcome can occur after the coordination
+claim advances, before any source timestamp is stored. An advancing D1 claim
+therefore proves delivery, not a successful refresh. Verify the active Worker
+limit and account entitlement; a higher-capacity plan requires separate approval.
+Do not reduce the minute cadence as a workaround without agreeing to the change
+in freshness. After an approved capacity change and deployment, require repeated
+successful cron outcomes and advancing source timestamps, and check KV capacity
+against the successful write rate as well.
+
+The archive sort parses each timestamp once instead of doing so in every
+comparison. To reproduce a local CPU comparison with synthetic data only:
+
+```sh
+bun build scripts/profile-activity.ts --target=node --outfile=/tmp/profile-activity.mjs
+PROFILE_MODE=cron node --cpu-prof --cpu-prof-dir=/tmp /tmp/profile-activity.mjs
+```
+
+`PROFILE_CALENDAR_DAYS`, `PROFILE_POSTS` and `PROFILE_RUNS` adjust the fixture.
+`PROFILE_MODE=head` or `history` isolates cache reads. The script does not access
+remote storage or providers. Its Node/V8 process CPU includes local GC but omits
+D1 and upstream response normalization; it is not Cloudflare CPU accounting or a
+guarantee that a 10ms deployment will work.
+
 If **signals delayed** appears, at least one provider has no successful timestamp
 or was last fetched over five minutes ago. It is independent of the last event's
 age: a person can be inactive while the sources remain fresh. The client keeps

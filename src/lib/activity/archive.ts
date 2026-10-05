@@ -42,7 +42,12 @@ function occurredAtMs(event: ActivityEvent): number {
 }
 
 export function sortEventsNewestFirst(events: readonly ActivityEvent[]): ActivityEvent[] {
-  return [...events].sort((left, right) => occurredAtMs(right) - occurredAtMs(left));
+  // Archives contain thousands of rows. Parsing inside the comparator repeats
+  // the same work for every comparison and consumes the cron's CPU budget.
+  return events
+    .map((event) => ({ event, at: occurredAtMs(event) }))
+    .sort((left, right) => right.at - left.at)
+    .map(({ event }) => event);
 }
 
 /**
