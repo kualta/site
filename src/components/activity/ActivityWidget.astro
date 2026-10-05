@@ -199,15 +199,22 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   }
 
   /** keeps the reader's place when rows are added above what they are looking at */
-  function preserveScroll(mutate: () => void): void {
-    const scrolled = window.scrollY;
-    const { scrollHeight } = document.documentElement;
+  function preserveScroll(list: HTMLOListElement, mutate: () => void): void {
+    const inFeed = (list.closest("#activity")?.getBoundingClientRect().top ?? 0) <= 0;
+    // Rows below the viewport cannot move what the reader is looking at.
+    const existing = [...list.children] as HTMLElement[];
+    const anchor = inFeed ? existing.find((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.top < window.innerHeight && rect.bottom > 0;
+    }) : undefined;
+    const top = anchor?.getBoundingClientRect().top;
+    const id = anchor?.dataset.activityRow;
     mutate();
-
-    const shift = document.documentElement.scrollHeight - scrollHeight;
-    // at the top of the page there is nothing to keep in place, and scrolling
-    // there would fight the snap that holds the name in view
-    if (scrolled > 0 && shift !== 0) window.scrollTo({ top: scrolled + shift, behavior: "instant" });
+    if (top === undefined || !id) return;
+    const replacement = ([...list.children] as HTMLElement[]).find((row) => row.dataset.activityRow === id);
+    if (!replacement) return;
+    const shift = replacement.getBoundingClientRect().top - top;
+    if (shift !== 0) window.scrollTo({ top: window.scrollY + shift, behavior: "instant" });
   }
 
   function applyMeta(list: HTMLOListElement, meta: HTMLElement | null): void {
@@ -282,7 +289,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
 
     const existing = [...list.children] as HTMLElement[];
     const merged = mergeNewestRows(existing, rows);
-    if (merged !== existing) preserveScroll(() => list.replaceChildren(...merged));
+    if (merged !== existing) preserveScroll(list, () => list.replaceChildren(...merged));
     if (!existing.some(row => row.dataset.activityRow === rows[rows.length - 1]?.dataset.activityRow)) { list.dataset.activityExhausted = "false"; delete list.dataset.activityOlderCursor; }
     updateActivityClock();
   }

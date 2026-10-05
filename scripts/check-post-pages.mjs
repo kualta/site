@@ -233,6 +233,7 @@ try {
   mode = "ok";
   process.argv[2] = "http://127.0.0.1:8799";
   await import("./check-home-scroll.mjs");
+  await import("./check-home-snap.mjs");
   await import("./check-activity-recovery.mjs");
 } finally {
   await browser.close();
