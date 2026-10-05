@@ -241,10 +241,36 @@ PROFILE_MODE=cron node --cpu-prof --cpu-prof-dir=/tmp /tmp/profile-activity.mjs
 ```
 
 `PROFILE_CALENDAR_DAYS`, `PROFILE_POSTS` and `PROFILE_RUNS` adjust the fixture.
-`PROFILE_MODE=head` or `history` isolates cache reads. The script does not access
-remote storage or providers. Its Node/V8 process CPU includes local GC but omits
-D1 and upstream response normalization; it is not Cloudflare CPU accounting or a
+`PROFILE_MODE=head` or `history` isolates cache reads. `providers` runs the real
+provider normalizers against synthetic JSON; `full-cron` also includes archive
+work. `PROFILE_PROVIDER_CALENDAR_DAYS` controls the fixture's upstream calendar
+size independently of its stored history. Rejected fixtures fail the run.
+The script does not access remote storage or upstreams. Its Node/V8 process CPU
+includes local GC and, for provider/full-cron modes, JSON parsing and provider
+normalization. It omits network and D1; it is not Cloudflare CPU accounting or a
 guarantee that a 10ms deployment will work.
+
+`bounded-cron` is a diagnostic experiment that omits retained history. Use it
+with a small provider calendar to estimate savings from separating history and
+the minute refresh; it must never be treated as a deployable cache design. A
+bounded redesign must durably store sanitized deltas before acknowledging
+freshness, preserve edit/deletion reconciliation within observed provider
+windows, and maintain honest coverage and last-success timestamps. Historical
+backfills must also use bounded batches: moving the same full archive/calendar
+work to an hourly cron leaves the same per-invocation CPU limit. Existing D1
+could hold indexed event rows and small head/freshness state without minute KV
+writes, but that requires prepared schema/code, measured D1 usage, and an
+approved migration and rollout. Unchanged event upserts must avoid rewriting
+every row each minute. No history is dropped or storage migrated here.
+
+Another supported option is a singleton SQLite-backed Durable Object on the
+existing Cloudflare account. Cloudflare documents availability on Workers Free,
+a default 30-second CPU limit per Durable Object invocation, and separate
+SQLite storage allowances. It can own refresh work and the shared snapshots,
+avoiding minute KV writes. This needs an approved new binding/class migration
+and measured account-wide request, duration and storage usage, rather than an
+automatic paid-plan change. See [Durable Object limits](https://developers.cloudflare.com/durable-objects/platform/limits/)
+and [pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 
 If **signals delayed** appears, at least one provider has no successful timestamp
 or was last fetched over five minutes ago. It is independent of the last event's
