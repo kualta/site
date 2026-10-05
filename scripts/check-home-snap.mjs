@@ -26,8 +26,14 @@ async function swipe(context, page, points) {
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await session.detach();
 }
-function rows(extra = 0, tailHeight = 200) {
-  return Array.from({ length: 20 + extra }, (_, i) => `<li data-activity-row="fixture:${i - extra}" style="height:${i === 19 + extra ? tailHeight : 200}px;flex-shrink:0">Public row ${i - extra}</li>`).join("");
+function rows(extra = 0, tailHeight = 200, boundary = false) {
+  return Array.from({ length: 20 + extra }, (_, i) => {
+    const id = i - extra;
+    const separator = boundary && id === 4
+      ? '<li data-activity-boundary class="flex w-full items-center gap-3 py-1 text-xs text-secondary-text"><span class="h-px flex-1 bg-current opacity-20"></span><span>bluesky history ends here</span><span class="h-px flex-1 bg-current opacity-20"></span></li>'
+      : "";
+    return separator + `<li data-activity-row="fixture:${id}" style="height:${id === 19 ? tailHeight : 200}px;flex-shrink:0">Public row ${id}</li>`;
+  }).join("");
 }
 function metadata() {
   return `<span hidden data-activity-meta data-server-now="${new Date().toISOString()}" data-fresh-until="${new Date(Date.now() + 300000).toISOString()}" data-delayed="false"></span>`;
@@ -39,6 +45,7 @@ try {
       const page = await context.newPage();
       let extra = 0;
       let tailHeight = 200;
+      let boundary = false;
       let requests = 0;
       let releaseInitial;
       const initial = new Promise(resolve => { releaseInitial = resolve; });
@@ -47,7 +54,7 @@ try {
         if (status === "failed") return route.abort();
         if (status === "slow") return;
         if (requests === 1) await initial;
-        await route.fulfill({ contentType: "text/html", body: metadata() + rows(extra, tailHeight) });
+        await route.fulfill({ contentType: "text/html", body: metadata() + rows(extra, tailHeight, boundary) });
       });
       await page.goto(origin, { waitUntil: "domcontentloaded" });
       await page.locator("#activity").waitFor();
@@ -177,10 +184,31 @@ try {
         await page.waitForFunction(() => document.querySelector('[data-activity-row="fixture:-2"]'));
         assert(Math.abs((await position(page)).y - beforeTailChange - 212) <= 2, "Only the row inserted above the viewport may move scroll position");
 
+        // The history separator has no row ID; anchor the visible activity below it.
+        boundary = true;
+        extra = 3;
+        await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+        await page.waitForFunction(() => document.querySelector('[data-activity-row="fixture:-3"]'));
+        await page.evaluate(() => scrollTo({ top: document.querySelector("[data-activity-boundary]").getBoundingClientRect().top + scrollY + 8, behavior: "instant" }));
+        await pause(page, 200);
+        assert(await page.locator("[data-activity-list]").evaluate(list => {
+          const firstVisible = [...list.children].find(el => el.getBoundingClientRect().bottom > 0);
+          return firstVisible.hasAttribute("data-activity-boundary");
+        }), "The separator must be the first visible child for this regression");
+        const rowBelowBoundary = page.locator('[data-activity-row="fixture:4"]');
+        const beforeBoundaryPoll = await rowBelowBoundary.evaluate(el => el.getBoundingClientRect().top);
+        extra = 4;
+        await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+        await page.waitForFunction(() => document.querySelector('[data-activity-row="fixture:-4"]'));
+        await pause(page, 200);
+        const boundaryDrift = await rowBelowBoundary.evaluate(el => el.getBoundingClientRect().top) - beforeBoundaryPoll;
+        assert(Math.abs(boundaryDrift) <= 2, "Polling must preserve the visible row when the history separator is first visible");
+        console.log(JSON.stringify({ mobile, separatorFirstVisible: true, prependedRowHeight: 212, rowDriftPx: boundaryDrift }));
+
         // Real generated HTML with warm feed fixtures lets Astro restore a deep reading position.
         await page.route(url => url.pathname === "/", async route => {
           const response = await route.fetch();
-          const body = (await response.text()).replace(/(<ol[^>]*data-activity-list[^>]*>)[\s\S]*?<\/ol>/, `$1${rows(extra, tailHeight)}</ol>`);
+          const body = (await response.text()).replace(/(<ol[^>]*data-activity-list[^>]*>)[\s\S]*?<\/ol>/, `$1${rows(extra, tailHeight, boundary)}</ol>`);
           await route.fulfill({ response, body });
         });
         const restored = (await position(page)).y;

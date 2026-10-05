@@ -204,6 +204,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     // Rows below the viewport cannot move what the reader is looking at.
     const existing = [...list.children] as HTMLElement[];
     const anchor = inFeed ? existing.find((row) => {
+      if (!row.dataset.activityRow) return false;
       const rect = row.getBoundingClientRect();
       return rect.top < window.innerHeight && rect.bottom > 0;
     }) : undefined;
