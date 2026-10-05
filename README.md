@@ -359,4 +359,5 @@ CHROMIUM_PATH=/usr/bin/chromium node scripts/check-post-pages.mjs
 The composer fixture stubs only authentication and repository writes; it exercises
 the real composer, media processing, local reconciliation and link controls. The
 permalink checks run the compiled Worker with a stubbed public AppView and also
-exercise cold-cache home scrolling and activity freshness recovery.
+exercise cold-cache home scrolling, hero-to-feed gestures, feed position retention,
+history restoration and activity freshness recovery on desktop and mobile.

@@ -87,7 +87,15 @@ Astro.response.headers.set("cache-control", "no-store");
   </button>
 
   <script>
+    import { transitionFirstScreen } from "@/scripts/first-screen-scroll";
+
     document.addEventListener("astro:page-load", () => {
+      const feed = document.getElementById("activity");
+      if (feed) {
+        const release = transitionFirstScreen(feed);
+        document.addEventListener("astro:before-swap", release, { once: true });
+      }
+
       const button = document.querySelector<HTMLButtonElement>(".feed-back-top");
       if (!button) return;
       button.addEventListener("click", () => {
@@ -106,14 +114,18 @@ Astro.response.headers.set("cache-control", "no-store");
     }
 
     @media (prefers-reduced-motion: reduce) {
+      html:has([data-activity-screen]) {
+        scroll-behavior: auto;
+      }
+
       .home-activity-link {
         transition: none;
       }
     }
 
-    /* Gently align the two sections without intercepting wheel or touch input. */
+    /* The oversized feed remains freely scrollable; only the gap has two stops. */
     html:has([data-activity-screen]) {
-      scroll-snap-type: y proximity;
+      scroll-snap-type: y mandatory;
     }
 
     [data-activity-screen] {
