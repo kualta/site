@@ -19,7 +19,80 @@ function release(post: PublishedFeedPost) {
   for (const media of post.media) URL.revokeObjectURL(media.url);
   post.media = [];
 }
-/** Only retain acknowledged writes in this browser's memory, never shared/private state. */
+
+const STORAGE_KEY = "bluesky-published-posts";
+// Indexing and the minute refresh normally serve the post well within this.
+const RETAIN_MS = 60 * 60_000;
+type StoredPost = Pick<PublishedFeedPost, "cid" | "record" | "author"> & { canonical?: string; savedAt: number };
+function updateStored(change: (stored: Record<string, StoredPost>) => boolean) {
+  try {
+    const stored: Record<string, StoredPost> = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") ?? {};
+    if (!change(stored)) return;
+    if (Object.keys(stored).length) localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    else localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* Storage may be unavailable; the post stays in this page's memory. */
+  }
+}
+function forgetStored(uri: string) {
+  updateStored((stored) => {
+    if (!(uri in stored)) return false;
+    delete stored[uri];
+    return true;
+  });
+}
+/** The CDN serves uploaded blobs before the AppView indexes the post. */
+function storedMedia(did: string, record: AppBskyFeedPost.Record): PublishedFeedPost["media"] {
+  const embed = record.embed as { $type?: string; images?: unknown[]; items?: unknown[] } | undefined;
+  const images = embed?.$type === "app.bsky.embed.gallery" ? embed.items : embed?.images;
+  return (images ?? []).flatMap((value) => {
+    const { image, alt } = value as { image?: { ref?: { $link?: unknown } }; alt?: unknown };
+    const cid = image?.ref?.$link;
+    if (typeof cid !== "string") return [];
+    return [
+      { url: `https://cdn.bsky.app/img/feed_fullsize/plain/${did}/${cid}@jpeg`, alt: String(alt ?? ""), video: false },
+    ];
+  });
+}
+function canonicalRow(html: string, post: PublishedFeedPost): HTMLElement | undefined {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const row = template.content.querySelector<HTMLElement>("li[data-activity-row]");
+  const card = row?.querySelector<HTMLElement>("[data-post-uri]");
+  if (
+    row &&
+    card?.dataset.postUri === post.uri &&
+    card.dataset.postCid === post.cid &&
+    card.dataset.postAction === "post"
+  )
+    return row;
+}
+/** A reload keeps acknowledged posts until the shared feed serves them. */
+function restoreStoredPosts() {
+  updateStored((stored) => {
+    let changed = false;
+    for (const [uri, entry] of Object.entries(stored)) {
+      if (
+        !(Date.now() - entry?.savedAt < RETAIN_MS) ||
+        parsePostUri(uri)?.did !== entry.author?.did ||
+        typeof entry.record?.text !== "string"
+      ) {
+        delete stored[uri];
+        changed = true;
+        continue;
+      }
+      const post: PublishedFeedPost = { uri, cid: entry.cid, record: entry.record, author: entry.author, media: [] };
+      post.canonical = entry.canonical ? canonicalRow(entry.canonical, post) : undefined;
+      if (!post.canonical) post.media = storedMedia(entry.author.did, entry.record);
+      posts.set(uri, post);
+      if (!post.canonical) void hydratePublishedPost(uri);
+    }
+    return changed;
+  });
+}
+if (typeof window !== "undefined") restoreStoredPosts();
+
+/** Acknowledged writes stay in this browser only, never shared/private state. */
 export function rememberPublishedPost(
   result: { uri: string; cid: string; record: AppBskyFeedPost.Record },
   author: PublishedFeedPost["author"],
@@ -39,6 +112,10 @@ export function rememberPublishedPost(
   const previous = posts.get(post.uri);
   if (previous) release(previous);
   posts.set(post.uri, post);
+  updateStored((stored) => {
+    stored[post.uri] = { cid: post.cid, record: post.record, author, savedAt: Date.now() };
+    return true;
+  });
   window.dispatchEvent(new Event("bluesky:published"));
   void hydratePublishedPost(post.uri);
   return post;
@@ -57,6 +134,7 @@ export function reconcilePublishedRows(rows: HTMLElement[]): HTMLElement[] {
     ) {
       post.canonical = row.cloneNode(true) as HTMLElement;
       release(post);
+      forgetStored(post.uri);
     }
   }
   const local = [...posts.values()]
@@ -115,19 +193,15 @@ async function hydratePublishedPost(uri: string) {
     try {
       const response = await fetch(`${sitePostPath(uri)}/row`, { signal: AbortSignal.timeout(4000) });
       if (!response.ok) continue;
-      const template = document.createElement("template");
-      template.innerHTML = await response.text();
-      const row = template.content.querySelector<HTMLElement>("li[data-activity-row]");
-      const card = row?.querySelector<HTMLElement>("[data-post-uri]");
-      if (
-        !row ||
-        card?.dataset.postUri !== uri ||
-        card.dataset.postCid !== post.cid ||
-        card.dataset.postAction !== "post"
-      )
-        continue;
+      const row = canonicalRow(await response.text(), post);
+      if (!row) continue;
       post.canonical = row;
       release(post);
+      updateStored((stored) => {
+        if (!stored[uri]) return false;
+        stored[uri].canonical = row.outerHTML;
+        return true;
+      });
       window.dispatchEvent(new Event("bluesky:published"));
       return;
     } catch {
