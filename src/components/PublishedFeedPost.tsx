@@ -20,7 +20,12 @@ export default function PublishedFeedPost({ post }: { post: Post }) {
         </a>
         <div className="flex shrink-0 items-center gap-1.5">
           <PostLinkMenu uri={post.uri} />
-          <time dateTime={post.record.createdAt} title={formatAbsoluteTime(post.record.createdAt)} className="font-mono text-xs tabular-nums text-secondary-text" data-activity-relative-time>
+          <time
+            dateTime={post.record.createdAt}
+            title={formatAbsoluteTime(post.record.createdAt)}
+            className="font-mono text-xs tabular-nums text-secondary-text"
+            data-activity-relative-time
+          >
             {formatRelativeTime(post.record.createdAt)}
           </time>
         </div>
@@ -59,9 +64,6 @@ export default function PublishedFeedPost({ post }: { post: Post }) {
           <img key={media.url} src={media.url} alt={media.alt} className="w-full rounded-lg" />
         ),
       )}
-      <p className="mt-3 text-xs text-secondary-text" role="status">
-        Published to Bluesky. Public indexing may take a moment.
-      </p>
     </article>
   );
 }
