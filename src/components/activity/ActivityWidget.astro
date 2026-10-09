@@ -230,7 +230,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     // The time under the name lives outside the widget.
     for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
       time.dateTime = meta.dataset.lastSeen ?? "";
-      time.hidden = !meta.dataset.lastSeen;
+      time.hidden = false;
     }
 
     const delayed = widget.querySelector<HTMLElement>("[data-signals-delayed]");
@@ -413,7 +413,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     }
 
     for (const time of document.querySelectorAll<HTMLTimeElement>("[data-activity-last-seen]")) {
-      if (time.dateTime) morphLastSeen(time, formatLastSeenTime(time.dateTime, now));
+      morphLastSeen(time, time.dateTime ? formatLastSeenTime(time.dateTime, now) : "last seen status unavailable");
     }
   }
 

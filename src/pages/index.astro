@@ -1,5 +1,5 @@
 ---
-import { env, waitUntil } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { getSharedActivityFeed } from "@/lib/activity/shared";
 import { formatLastSeenTime } from "@/lib/activity/presence";
 import BaseLayout from "@/layouts/BaseLayout.astro";
@@ -19,7 +19,7 @@ const contacts = (contactsData as Contact[])
   .filter((c) => c.is_main)
   .reverse();
 
-const initialActivity = await getSharedActivityFeed(env, false, { origin: Astro.url.origin, waitUntil });
+const initialActivity = await getSharedActivityFeed(env);
 const lastSeenAt = initialActivity.lastSeenAt;
 
 const month = new Date().getMonth();
@@ -61,8 +61,8 @@ Astro.response.headers.set("cache-control", "no-store");
         class="home-activity-link flex min-h-[42px] shrink-0 flex-col items-center gap-2 text-xs text-secondary-text
                hover:opacity-70"
       >
-        <time class="tabular-nums" data-activity-last-seen datetime={lastSeenAt ?? undefined} hidden={!lastSeenAt}>
-          {lastSeenAt && formatLastSeenTime(lastSeenAt)}
+        <time class="tabular-nums" data-activity-last-seen datetime={lastSeenAt ?? undefined}>
+          {lastSeenAt ? formatLastSeenTime(lastSeenAt) : "last seen status unavailable"}
         </time>
         <FiChevronDown className="animate-bounce motion-reduce:animate-none" size={18} aria-hidden="true" />
         <span class="sr-only">Jump to recent activity</span>
@@ -75,7 +75,7 @@ Astro.response.headers.set("cache-control", "no-store");
       aria-label="Kualta's recent activity"
       data-activity-screen
     >
-      <ActivityWidget feed={lastSeenAt ? initialActivity : undefined}>
+      <ActivityWidget feed={initialActivity}>
         <FeedComposer slot="composer" client:load />
       </ActivityWidget>
     </section>
