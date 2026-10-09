@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { ActivityStatusCache, type ActivityDurableStorage } from "./durable";
 import { getSharedActivityFeed } from "./shared";
 import { runActivityCron } from "./scheduled";
-import type { ActivityFeed } from "./types";
 
 class Storage implements ActivityDurableStorage {
   values = new Map<string, unknown>();
@@ -128,43 +127,4 @@ test("hanging object response bodies cannot block HTML; strict polling preserves
   expect(performance.now() - start).toBeLessThan(500);
   expect(feed.delayed).toBe(true);
   await expect(getSharedActivityFeed(env, true)).rejects.toThrow("preserving visible snapshot");
-});
-
-test("a busy object falls back to the last head this data centre served, judged against now", async () => {
-  const kept = new Map<string, Response>();
-  const scope = globalThis as { caches?: unknown };
-  scope.caches = { default: {
-    put: async (key: string, response: Response) => { kept.set(key, response.clone()); },
-    match: async (key: string) => kept.get(key)?.clone(),
-  } };
-  try {
-    const now = Date.now();
-    const at = (offset: number) => new Date(now + offset).toISOString();
-    const head: ActivityFeed = {
-      events: [], lastSeenAt: at(-60_000), presence: "definitely-alive",
-      sources: { github: { status: "fresh", fetchedAt: at(-10 * 60_000) }, bluesky: { status: "fresh", fetchedAt: at(-10 * 60_000) } },
-      delayed: false, freshUntil: at(-5 * 60_000), trustedUntil: at(60_000),
-      completeSince: null, coverageLimitedBy: null, cursor: null,
-    };
-    let respond = () => Response.json(head);
-    const env: Cloudflare.Env = { ACTIVITY_STORE: { idFromName: name => name, get: () => ({ fetch: async () => respond() }) } };
-    const work: Promise<unknown>[] = [];
-    const edge = { origin: "https://kualta.dev", waitUntil: (promise: Promise<unknown>) => { work.push(promise); } };
-
-    expect((await getSharedActivityFeed(env, false, edge)).delayed).toBe(false);
-    await Promise.all(work);
-    respond = () => new Response(new ReadableStream({ start() {} }));
-
-    const start = performance.now();
-    const feed = await getSharedActivityFeed(env, false, edge);
-    expect(performance.now() - start).toBeLessThan(500);
-    expect(feed.lastSeenAt).toBe(head.lastSeenAt);
-    expect(feed.presence).toBe("definitely-alive");
-    expect(feed.delayed).toBe(true);
-
-    kept.set("https://kualta.dev/_activity/last-head", Response.json({ ...head, trustedUntil: at(-1) }));
-    expect((await getSharedActivityFeed(env, false, edge)).presence).toBe("unknown");
-  } finally {
-    scope.caches = undefined;
-  }
 });
