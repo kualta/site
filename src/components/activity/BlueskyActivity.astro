@@ -24,6 +24,11 @@ const authorName = event.author.displayName
   : `@${event.author.handle}`;
 const gallery = event.post.embed?.$type === "app.bsky.embed.gallery#view";
 const media = getBlueskyMedia(event.post.embed);
+// a link shared without its card gets the one Bluesky would have drawn
+const linkCard =
+  event.linkPreview && !event.post.embed
+    ? { ...event.post, embed: { $type: "app.bsky.embed.external#view" as const, external: event.linkPreview } }
+    : undefined;
 const renderCard = canRenderBlueskyPost(event.post);
 // a repost otherwise reads as someone else's post appearing out of nowhere
 const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : null;
@@ -45,7 +50,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
           </p>
         )}
         <bluesky-media data-media={JSON.stringify(media)}>
-          <BlueskyPost post={gallery ? { ...event.post, embed: undefined } : event.post} />
+          <BlueskyPost post={gallery ? { ...event.post, embed: undefined } : (linkCard ?? event.post)} />
           {gallery && <div class="grid grid-cols-2 gap-1 p-4">{media.map((image) => <a href={image.src}><div class="image-grid-item"><img class="w-full rounded-lg" src={image.thumbnail} alt={image.alt} loading="lazy" /></div></a>)}</div>}
         </bluesky-media>
         <bluesky-post-actions data-uri={event.uri} />

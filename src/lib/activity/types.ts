@@ -1,4 +1,5 @@
 import type { Post as BlueskyPostView } from "@astro-community/astro-embed-bluesky";
+import type { AppBskyEmbedExternal } from "@atcute/bluesky";
 
 export const ACTIVITY_SOURCES = ["github", "bluesky"] as const;
 
@@ -105,7 +106,12 @@ export interface BlueskyActivity extends BaseActivity {
     handle: string;
   };
   post: BlueskyPostView;
+  /** a card for a link the post shares without one; null once the page had nothing to show */
+  linkPreview?: LinkPreview | null;
 }
+
+/** the card Bluesky would have drawn for a link, as its external embed view holds it */
+export type LinkPreview = Pick<AppBskyEmbedExternal.ViewExternal, "uri" | "title" | "description" | "thumb">;
 
 export type ActivityEvent = GitHubActivity | BlueskyActivity;
 
