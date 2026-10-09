@@ -39,6 +39,27 @@ test("public reads verify author and discard private viewer fields", async () =>
     ).status,
   ).toBe(503);
 });
+test("a bare link gets its card, and a slow card never costs the post", async () => {
+  const link = "https://example.com/";
+  const linked = {
+    ...post,
+    record: {
+      ...post.record,
+      text: link,
+      facets: [{ index: { byteStart: 0, byteEnd: link.length }, features: [{ $type: "app.bsky.richtext.facet#link", uri: link }] }],
+    },
+  };
+  const upstream = (card: () => Promise<Response>) =>
+    (async (input: RequestInfo | URL) =>
+      String(input).startsWith("https://cardyb.bsky.app/") ? card() : Response.json({ posts: [linked] })) as typeof fetch;
+
+  const result = await loadPublicPost(uri, upstream(async () => Response.json({ title: "Example Domain", description: "" })));
+  expect(result.status === 200 && result.event.linkPreview).toEqual({ uri: link, title: "Example Domain", description: "" });
+
+  const slow = await loadPublicPost(uri, upstream(() => new Promise(() => {})), 3_000, 20);
+  expect(slow.status).toBe(200);
+  expect(slow.status === 200 && slow.event).not.toHaveProperty("linkPreview");
+});
 test("missing, invalid, malformed, failed and hung upstream are bounded and honest", async () => {
   expect((await loadPublicPost(uri, response({ posts: [] }))).status).toBe(404);
   expect((await loadPublicPost("invalid", response({ posts: [post] }))).status).toBe(404);

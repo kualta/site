@@ -10,6 +10,7 @@ import {
 } from "./archive";
 import { getPresenceState } from "./presence";
 import { sanitizeBlueskyPostView } from "./bluesky-post";
+import { attachLinkPreviews, sanitizeLinkPreview } from "./link-preview";
 import { blueskyProvider } from "./providers/bluesky";
 import { githubProvider } from "./providers/github";
 import {
@@ -204,6 +205,7 @@ function sanitizeBlueskyEvent(value: unknown): BlueskyActivity | undefined {
   const displayName = post?.author.displayName?.trim().slice(0, 200);
   const text = post?.record.text;
   const action = event?.action;
+  const linkPreview = sanitizeLinkPreview(event?.linkPreview);
 
   if (
     !id?.startsWith("bluesky:") ||
@@ -232,6 +234,7 @@ function sanitizeBlueskyEvent(value: unknown): BlueskyActivity | undefined {
       ...(displayName ? { displayName } : {}),
     },
     post,
+    ...(linkPreview !== undefined ? { linkPreview } : {}),
   };
 }
 
@@ -382,6 +385,10 @@ function sanitizedProviderError(error: unknown): string {
   return "unknown";
 }
 
+function activityFetch(options: GetActivityFeedOptions): ActivityFetch {
+  return (input, init) => (options.fetch ?? globalThis.fetch)(input, init);
+}
+
 async function fetchProvider(
   provider: ActivityProvider,
   options: GetActivityFeedOptions,
@@ -399,14 +406,9 @@ async function fetchProvider(
   });
 
   try {
-    const fetchActivity: ActivityFetch = (input, init) => {
-      if (options.fetch) return options.fetch(input, init);
-      return globalThis.fetch(input, init);
-    };
-
     return await Promise.race([
       provider.fetch({
-        fetch: fetchActivity,
+        fetch: activityFetch(options),
         signal: controller.signal,
         now,
         secrets: { githubToken: options.githubToken },
@@ -484,11 +486,18 @@ async function refreshActivity(
   const providers = options.providers ?? DEFAULT_PROVIDERS;
   const state = known ?? (await readStored(options.cache, STATE_KEY, parseState, logger, true, options.cacheReadTimeoutMs ?? 2_000));
   const archive = await readStored(options.cache, ARCHIVE_KEY, parseArchive, logger, true, options.cacheReadTimeoutMs ?? 2_000);
-  const results = await Promise.all(providers.map((provider) => loadSource(provider, options, now, logger)));
+  const stored = archive?.value ?? state?.value.events ?? [];
+  const results = await Promise.all(
+    providers.map(async (provider) => {
+      const result = await loadSource(provider, options, now, logger);
+      if (!result.events) return result;
+      return { ...result, events: await attachLinkPreviews(result.events, stored, activityFetch(options)) };
+    }),
+  );
 
   const sources = { ...(state?.value.sources ?? emptySources()) };
   const attemptedAt = now.toISOString();
-  let history = archive?.value ?? state?.value.events ?? [];
+  let history = stored;
   const fresh: ActivityEvent[] = [];
 
   for (const result of results) {

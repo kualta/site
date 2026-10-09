@@ -317,6 +317,45 @@ describe("getActivityFeed", () => {
     expect(serialized).not.toContain("secret-repo");
     expect(serialized).toContain('"error":"unknown"');
   });
+
+  test("stores a bare link's card once and keeps it across refreshes", async () => {
+    const cache = new MemoryCache();
+    const link = "https://www.youtube.com/watch?v=nEX-9exMc1A";
+    const event = blueskyActivity("link", "2026-08-30T11:00:00Z") as BlueskyActivity;
+    const linked: BlueskyActivity = {
+      ...event,
+      post: {
+        ...event.post,
+        record: {
+          ...event.post.record,
+          text: link,
+          facets: [
+            {
+              index: { byteStart: 0, byteEnd: link.length },
+              features: [{ $type: "app.bsky.richtext.facet#link", uri: link }],
+            },
+          ],
+        },
+      } as BlueskyActivity["post"],
+    };
+    let lookups = 0;
+    const options = {
+      cache,
+      logger,
+      providers: [provider("github", async () => []), provider("bluesky", async () => [linked])],
+      fetch: async () => {
+        lookups += 1;
+        return Response.json({ title: "A video", description: "", image: "https://elsewhere.example/thumb.jpg" });
+      },
+    };
+
+    await getActivityFeed({ ...options, now: NOW });
+    const feed = await getActivityFeed({ ...options, now: new Date(NOW.getTime() + 2 * 60_000) });
+
+    expect(lookups).toBe(1);
+    const [stored] = feed.events;
+    expect(stored.source === "bluesky" && stored.linkPreview).toEqual({ uri: link, title: "A video", description: "" });
+  });
 });
 
 describe("activity history", () => {
