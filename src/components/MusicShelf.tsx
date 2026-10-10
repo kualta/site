@@ -735,17 +735,61 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
         hidden={!expanded}
         className="music-full grid w-full grow lg:h-[calc(100dvh-8rem)] lg:min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_19rem] xl:grid-cols-[23rem_minmax(0,1fr)_23rem]"
       >
-        {!active.score && (
-          <aside
-            className={`lyrics-rail order-last max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:order-none lg:flex lg:max-h-none lg:p-12 ${
-              pane === "lyrics" ? "flex" : "hidden"
-            }`}
-          >
-            <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h2>
-            <MusicCheckbox label="focus sync" checked={lyricsFocus} onChange={setLyricsFocus} />
-            <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
-          </aside>
-        )}
+        <aside
+          className={`rail order-last max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:order-none lg:flex lg:max-h-none lg:p-12 ${
+            active.score || pane === "records" ? "flex" : "hidden"
+          }`}
+        >
+          <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h2>
+
+          <div className="flex flex-wrap gap-1.5">
+            {FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${filter === key ? "is-on" : ""}`}
+                onClick={() => setFilter(key)}
+                aria-pressed={filter === key}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Scrollable>
+            <ul className="queue flex w-full flex-col gap-1">
+              {shown.map((track) => (
+                <li key={track.slug}>
+                  <button
+                    type="button"
+                    className={`queue-item flex w-full items-center gap-3 rounded-xl p-1.5 text-left transition-transform active:scale-[0.98] ${
+                      track.slug === activeSlug ? "is-current" : ""
+                    }`}
+                    onClick={() => open(track)}
+                    aria-current={track.slug === activeSlug}
+                  >
+                    <div className="w-12 shrink-0">
+                      <Vinyl track={track} spinning={track.slug === activeSlug && playing} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div lang={langFor(track.title)} className="truncate text-sm font-medium leading-tight">
+                        {track.title}
+                      </div>
+                      <div className="truncate text-xs text-secondary-text">{track.originalArtist ?? AUTHOR}</div>
+                    </div>
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-secondary-text">
+                      {formatTime(track.duration)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Scrollable>
+          {shown.length === 0 && (
+            <p className="font-mono text-xs text-secondary-text">
+              no {filter === "cover" ? "covers" : "originals"} yet
+            </p>
+          )}
+        </aside>
 
         <section
           ref={expanded ? surfaceRef : undefined}
@@ -889,61 +933,17 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
           )}
         </section>
 
-        <aside
-          className={`rail max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:flex lg:max-h-none lg:p-12 ${
-            active.score || pane === "records" ? "flex" : "hidden"
-          }`}
-        >
-          <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h2>
-
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${filter === key ? "is-on" : ""}`}
-                onClick={() => setFilter(key)}
-                aria-pressed={filter === key}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <Scrollable>
-            <ul className="queue flex w-full flex-col gap-1">
-              {shown.map((track) => (
-                <li key={track.slug}>
-                  <button
-                    type="button"
-                    className={`queue-item flex w-full items-center gap-3 rounded-xl p-1.5 text-left transition-transform active:scale-[0.98] ${
-                      track.slug === activeSlug ? "is-current" : ""
-                    }`}
-                    onClick={() => open(track)}
-                    aria-current={track.slug === activeSlug}
-                  >
-                    <div className="w-12 shrink-0">
-                      <Vinyl track={track} spinning={track.slug === activeSlug && playing} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div lang={langFor(track.title)} className="truncate text-sm font-medium leading-tight">
-                        {track.title}
-                      </div>
-                      <div className="truncate text-xs text-secondary-text">{track.originalArtist ?? AUTHOR}</div>
-                    </div>
-                    <span className="shrink-0 font-mono text-xs tabular-nums text-secondary-text">
-                      {formatTime(track.duration)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Scrollable>
-          {shown.length === 0 && (
-            <p className="font-mono text-xs text-secondary-text">
-              no {filter === "cover" ? "covers" : "originals"} yet
-            </p>
-          )}
-        </aside>
+        {!active.score && (
+          <aside
+            className={`lyrics-rail max-h-[62vh] w-full min-h-0 flex-col gap-4 p-6 lg:flex lg:max-h-none lg:p-12 ${
+              pane === "lyrics" ? "flex" : "hidden"
+            }`}
+          >
+            <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h2>
+            <MusicCheckbox label="focus sync" checked={lyricsFocus} onChange={setLyricsFocus} />
+            <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
+          </aside>
+        )}
       </div>
     </div>
   );
