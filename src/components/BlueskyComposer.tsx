@@ -99,15 +99,19 @@ export default function BlueskyComposer({
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [text, auth.agent]);
+  }, [text, auth.profile]);
   const length = new RichText({
     text: text.trim() + (images.length ? `${text.trim() && mediaTextSuffix ? "\n\n" : ""}${mediaTextSuffix}` : ""),
   }).graphemeLength;
-  const submitDisabled = busy || preparing || (length === 0 && images.length === 0) || length > 300;
+  // A remembered account renders before its session is restored; writing can
+  // start, posting waits for the agent.
+  const submitDisabled = !auth.agent || busy || preparing || (length === 0 && images.length === 0) || length > 300;
 
-  if (!auth.agent) {
+  if (!auth.profile) {
+    // Until auth settles the visitor may well be signed in, so the button
+    // keeps its space without offering a login that may not be needed.
     return (
-      <div className={className}>
+      <div className={`${className} ${auth.restoring ? "invisible" : ""}`}>
         <BlueskyLogin fullWidth label={loginLabel} />
       </div>
     );
@@ -115,7 +119,7 @@ export default function BlueskyComposer({
 
   return (
     <section className={`${className} rounded-xl bg-secondary p-4 dark:bg-dark-secondary`} aria-label={label}>
-      <div className={`flex min-h-10 items-center gap-3 ${auth.agent ? "mb-4" : ""}`} aria-label="Post author">
+      <div className={`flex min-h-10 items-center gap-3 ${auth.profile ? "mb-4" : ""}`} aria-label="Post author">
         {auth.profile ? (
           <a
             className="flex min-w-0 items-center gap-3"
@@ -150,8 +154,8 @@ export default function BlueskyComposer({
           <BlueskyLogin fullWidth label={loginLabel} />
         )}
       </div>
-      {auth.agent && context}
-      {auth.agent && (
+      {auth.profile && context}
+      {auth.profile && (
         <form
           id={`${id}-form`}
           onSubmit={(event) => {
@@ -210,7 +214,7 @@ export default function BlueskyComposer({
           {mediaError}
         </p>
       )}
-      {auth.agent && (
+      {auth.profile && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <input
@@ -275,7 +279,7 @@ export default function BlueskyComposer({
               Preparing media…
             </span>
           )}
-          {auth.agent && (
+          {auth.profile && (
             <button
               type="submit"
               form={`${id}-form`}

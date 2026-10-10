@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { normalizeBlueskyCallbackUrl, safeReturnPath } from "./auth";
+import { normalizeBlueskyCallbackUrl, parseRememberedAccount, safeReturnPath } from "./auth";
 import { BLUESKY_SCOPE, blueskyClientMetadata } from "./metadata";
 
 describe("OAuth return paths", () => {
@@ -65,5 +65,51 @@ describe("OAuth callback canonicalization", () => {
         replaceState: () => { throw new Error("Unexpected URL rewrite"); },
       });
     }
+  });
+});
+
+describe("Remembered account", () => {
+  it("restores only the public profile fields it needs", () => {
+    const stored = JSON.stringify({
+      profile: {
+        did: "did:plc:example",
+        handle: "kualta.dev",
+        displayName: "kualta",
+        avatar: "https://cdn.bsky.app/img/avatar.jpg",
+        followersCount: 3,
+      },
+      canUploadMedia: true,
+    });
+    expect(parseRememberedAccount(stored)).toEqual({
+      profile: {
+        did: "did:plc:example",
+        handle: "kualta.dev",
+        displayName: "kualta",
+        avatar: "https://cdn.bsky.app/img/avatar.jpg",
+      },
+      canUploadMedia: true,
+    });
+  });
+  it("treats missing, malformed, or tampered storage as signed out", () => {
+    for (const value of [
+      null,
+      "",
+      "not json",
+      "{}",
+      JSON.stringify({ profile: { did: "plc:missing-prefix", handle: "kualta.dev" } }),
+      JSON.stringify({ profile: { did: "did:plc:example" } }),
+    ]) {
+      expect(parseRememberedAccount(value)).toBeNull();
+    }
+  });
+  it("drops avatars that are not https and media access that is not explicitly granted", () => {
+    const stored = JSON.stringify({
+      profile: { did: "did:plc:example", handle: "kualta.dev", avatar: "javascript:alert(1)" },
+      canUploadMedia: "yes",
+    });
+    expect(parseRememberedAccount(stored)).toEqual({
+      profile: { did: "did:plc:example", handle: "kualta.dev", displayName: undefined, avatar: undefined },
+      canUploadMedia: false,
+    });
   });
 });

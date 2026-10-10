@@ -60,7 +60,7 @@ export default function FeedComposer() {
     }
   }
 
-  if (auth.agent && auth.profile?.did !== siteIdentity.did) return null;
+  if (auth.profile && auth.profile.did !== siteIdentity.did) return null;
 
   return (
     <BlueskyComposer

@@ -6,11 +6,61 @@ export interface BlueskyAuthSnapshot {
   agent: Agent | null;
   canUploadMedia?: boolean;
   loading: boolean;
+  /** The stored session has not been checked yet, so signed-out is not known. */
+  restoring: boolean;
   error: string | null;
   profile: { did: string; handle: string; displayName?: string; avatar?: string } | null;
 }
-const initial: BlueskyAuthSnapshot = { agent: null, loading: true, error: null, profile: null };
-let snapshot = initial;
+type BlueskyProfile = NonNullable<BlueskyAuthSnapshot["profile"]>;
+interface RememberedAccount {
+  profile: BlueskyProfile;
+  canUploadMedia: boolean;
+}
+const ACCOUNT_KEY = "bluesky-account:v1";
+/** The last signed-in account, read back from storage that anything on the origin could have written. */
+export function parseRememberedAccount(value: string | null): RememberedAccount | null {
+  try {
+    const stored = JSON.parse(value ?? "null");
+    const profile = stored?.profile;
+    if (typeof profile?.did !== "string" || !profile.did.startsWith("did:") || typeof profile.handle !== "string")
+      return null;
+    return {
+      profile: {
+        did: profile.did,
+        handle: profile.handle,
+        displayName: typeof profile.displayName === "string" ? profile.displayName : undefined,
+        avatar: typeof profile.avatar === "string" && profile.avatar.startsWith("https://") ? profile.avatar : undefined,
+      },
+      canUploadMedia: stored.canUploadMedia === true,
+    };
+  } catch {
+    return null;
+  }
+}
+function storedAccount(): string | null {
+  try {
+    return localStorage.getItem(ACCOUNT_KEY);
+  } catch {
+    return null;
+  }
+}
+function rememberAccount(account: RememberedAccount | null) {
+  try {
+    if (!account) localStorage.removeItem(ACCOUNT_KEY);
+    else {
+      const { did, handle, displayName, avatar } = account.profile;
+      const profile = { did, handle, displayName, avatar };
+      localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ profile, canUploadMedia: account.canUploadMedia }));
+    }
+  } catch {
+    /* Storage may be unavailable; the session still restores, only later. */
+  }
+}
+const initial: BlueskyAuthSnapshot = { agent: null, loading: true, restoring: true, error: null, profile: null };
+// A reload shows the remembered account straight away; `agent` stays null, so
+// nothing can be posted until the stored session has actually been restored.
+const remembered = typeof window === "undefined" ? null : parseRememberedAccount(storedAccount());
+let snapshot: BlueskyAuthSnapshot = remembered ? { ...initial, ...remembered } : initial;
 let client: BrowserOAuthClient | undefined;
 let initialization: Promise<void> | undefined;
 const listeners = new Set<() => void>();
@@ -62,7 +112,9 @@ async function initialize() {
     const options = {
       handleResolver: "https://bsky.social",
       onSessionDeleted: (did: string) => {
-        if (snapshot.profile?.did === did) update({ agent: null, profile: null, loading: false });
+        if (snapshot.profile?.did !== did) return;
+        rememberAccount(null);
+        update({ agent: null, profile: null, loading: false });
       },
     };
     if (["localhost", "127.0.0.1", "[::1]"].includes(hostname)) {
@@ -78,29 +130,51 @@ async function initialize() {
       client = new BrowserOAuthClient({ clientMetadata: blueskyClientMetadata(origin), ...options });
     }
     normalizeBlueskyCallbackUrl(window.location, window.history);
-    const result = await client.init();
+    // Restore from storage alone: a stale access token is refreshed by the
+    // first request that needs it rather than holding up every page load.
+    const result = await client.init(false);
     if (result) {
-      const agent = new Agent(result.session);
-      const profile = await agent
-        .getProfile({ actor: result.session.sub })
-        .then(({ data }) => data)
-        .catch(() => ({ did: result.session.sub, handle: result.session.sub }));
-      const { scope } = await result.session.getTokenInfo();
+      const { session } = result;
+      const agent = new Agent(session);
+      const { scope } = await session.getTokenInfo(false);
       const permissions = scope.split(" ");
       const canUploadMedia =
         permissions.includes("blob:*/*") ||
         ["blob:image/png", "blob:video/mp4"].every((value) => permissions.includes(value));
-      update({ agent, profile, canUploadMedia, loading: false, error: null });
+      const known = snapshot.profile?.did === session.sub ? snapshot.profile : null;
+      const profile = known ?? (await fetchProfile(agent, session.sub)) ?? { did: session.sub, handle: session.sub };
+      update({ agent, profile, canUploadMedia, loading: false, restoring: false, error: null });
+      rememberAccount({ profile, canUploadMedia });
+      // A remembered profile is shown first and brought up to date afterwards.
+      if (known)
+        void fetchProfile(agent, session.sub).then((fresh) => {
+          if (!fresh || snapshot.agent !== agent) return;
+          update({ profile: fresh });
+          rememberAccount({ profile: fresh, canUploadMedia });
+        });
       if (window.location.pathname === "/auth/bluesky") {
         window.location.replace(safeReturnPath(result.state));
       }
-    } else update({ loading: false });
+    } else {
+      rememberAccount(null);
+      update({ loading: false, restoring: false, profile: null });
+    }
   } catch (error) {
+    rememberAccount(null);
     update({
+      agent: null,
+      profile: null,
       loading: false,
+      restoring: false,
       error: error instanceof Error ? error.message : "Bluesky sign-in failed. Please try again.",
     });
   }
+}
+function fetchProfile(agent: Agent, actor: string): Promise<BlueskyProfile | null> {
+  return agent
+    .getProfile({ actor })
+    .then(({ data }) => data)
+    .catch(() => null);
 }
 export async function getBlueskyAgent(): Promise<Agent | null> {
   await initializeBlueskyAuth();
@@ -131,6 +205,7 @@ export async function signOut() {
   update({ loading: true, error: null });
   try {
     if (did && client) await client.revoke(did);
+    rememberAccount(null);
     update({ agent: null, profile: null, loading: false });
   } catch (error) {
     update({ loading: false, error: error instanceof Error ? error.message : "Unable to sign out. Please try again." });
