@@ -1,10 +1,20 @@
 <script is:inline>
   (function () {
-    try {
-      const stored = localStorage.getItem("theme");
-      document.documentElement.classList.toggle("dark", stored ? stored === "dark" : true);
-    } catch (_) {
-      document.documentElement.classList.add("dark");
+    function apply(root) {
+      let dark = true;
+      try {
+        const stored = localStorage.getItem("theme");
+        if (stored) dark = stored === "dark";
+      } catch (_) {}
+      root.classList.toggle("dark", dark);
     }
+    apply(document.documentElement);
+    // The router copies each new page's <html> class, which is rendered dark,
+    // so the stored choice has to reach the incoming page before it is swapped in.
+    if (window.__themeFollowsNavigation) return;
+    window.__themeFollowsNavigation = true;
+    document.addEventListener("astro:before-swap", function (event) {
+      apply(event.newDocument.documentElement);
+    });
   })();
 </script>
