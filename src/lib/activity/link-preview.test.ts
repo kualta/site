@@ -6,7 +6,10 @@ const DID = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 const CID = "bafyreid3l3mpwbadpafmoajnc2ukaaf42cmnti6shcomrrqnqq4ctap5xy";
 const TIME = "2026-08-30T12:00:00.000Z";
 const VIDEO = "https://www.youtube.com/watch?v=nEX-9exMc1A";
-const THUMB = "https://cardyb.bsky.app/v1/image?url=https%3A%2F%2Fi.ytimg.com%2Fvi%2FnEX-9exMc1A%2Fhqdefault.jpg";
+const proxied = (url: string) => `https://cardyb.bsky.app/v1/image?url=${encodeURIComponent(url)}` as const;
+const SMALL_THUMB = proxied("https://i.ytimg.com/vi/nEX-9exMc1A/hqdefault.jpg");
+const LARGE_THUMB = proxied("https://i.ytimg.com/vi/nEX-9exMc1A/maxresdefault.jpg");
+const SMALL_THUMB_ALIAS = proxied("https://i.ytimg.com/vi/nEX-9exMc1A/0.jpg");
 
 function linkFacet(uri: string, byteStart: number) {
   return {
@@ -37,16 +40,23 @@ function blueskyPost(rkey: string, facets?: unknown[], extra: Record<string, unk
   };
 }
 
-function cardService(handler: (link: string) => Response | Promise<Response>) {
+function cardService(handler: (link: string) => Response | Promise<Response>, largeThumbnailStatus = 200) {
   const asked: string[] = [];
-  const fetch: ActivityFetch = async (input) => {
+  const checked: string[] = [];
+  const fetch: ActivityFetch = async (input, init) => {
     const url = new URL(String(input));
+    if (url.hostname === "i.ytimg.com") {
+      expect(init?.method).toBe("HEAD");
+      checked.push(url.href);
+      return new Response(null, { status: largeThumbnailStatus });
+    }
+
     expect(url.origin + url.pathname).toBe("https://cardyb.bsky.app/v1/extract");
     const link = url.searchParams.get("url") ?? "";
     asked.push(link);
     return handler(link);
   };
-  return { asked, fetch };
+  return { asked, checked, fetch };
 }
 
 const youtubeCard = () =>
@@ -56,7 +66,7 @@ const youtubeCard = () =>
     url: VIDEO,
     title: "The Morning After I Killed Myself",
     description: "YouTube video by illneas",
-    image: THUMB,
+    image: SMALL_THUMB,
   });
 
 function previewOf(event: ActivityEvent | undefined) {
@@ -81,7 +91,9 @@ describe("previewableLink", () => {
 
 describe("sanitizeLinkPreview", () => {
   test("keeps only thumbnails the card service proxies", () => {
-    expect(sanitizeLinkPreview({ uri: VIDEO, title: "t", description: "", thumb: THUMB })?.thumb).toBe(THUMB);
+    expect(sanitizeLinkPreview({ uri: VIDEO, title: "t", description: "", thumb: SMALL_THUMB })?.thumb).toBe(
+      SMALL_THUMB,
+    );
     expect(
       sanitizeLinkPreview({ uri: VIDEO, title: "t", description: "", thumb: "https://i.ytimg.com/x.jpg" }),
     ).toEqual({
@@ -99,17 +111,45 @@ describe("sanitizeLinkPreview", () => {
 });
 
 describe("attachLinkPreviews", () => {
-  test("gives a bare link the card Bluesky would draw for it", async () => {
+  test("gives a bare link its card, with YouTube's 1280×720 thumbnail over the oEmbed one", async () => {
     const service = cardService(youtubeCard);
     const [event] = await attachLinkPreviews([blueskyPost("p", [linkFacet(VIDEO, 0)])], [], service.fetch);
 
     expect(service.asked).toEqual([VIDEO]);
+    expect(service.checked).toEqual(["https://i.ytimg.com/vi/nEX-9exMc1A/maxresdefault.jpg"]);
     expect(previewOf(event)).toEqual({
       uri: VIDEO,
       title: "The Morning After I Killed Myself",
       description: "YouTube video by illneas",
-      thumb: THUMB,
+      thumb: LARGE_THUMB,
     });
+  });
+
+  test("a video without a larger thumbnail settles on the small one and is not checked again", async () => {
+    const missing = cardService(youtubeCard, 404);
+    const [event] = await attachLinkPreviews([blueskyPost("p", [linkFacet(VIDEO, 0)])], [], missing.fetch);
+    expect(event?.source === "bluesky" && event.linkPreview?.thumb).toBe(SMALL_THUMB_ALIAS);
+
+    const later = cardService(youtubeCard);
+    await attachLinkPreviews([blueskyPost("p", [linkFacet(VIDEO, 0)])], [event as ActivityEvent], later.fetch);
+    expect([...later.asked, ...later.checked]).toEqual([]);
+  });
+
+  test("sharpens a stored card's small thumbnail without asking for the card again", async () => {
+    const linkPreview: LinkPreview = { uri: VIDEO, title: "t", description: "", thumb: SMALL_THUMB };
+    const stored = { ...blueskyPost("p", [linkFacet(VIDEO, 0)]), linkPreview };
+
+    const service = cardService(youtubeCard);
+    const [sharpened] = await attachLinkPreviews([blueskyPost("p", [linkFacet(VIDEO, 0)])], [stored], service.fetch);
+    expect(service.asked).toEqual([]);
+    expect(previewOf(sharpened)).toEqual({ ...linkPreview, thumb: LARGE_THUMB });
+
+    const [kept] = await attachLinkPreviews(
+      [blueskyPost("p", [linkFacet(VIDEO, 0)])],
+      [stored],
+      cardService(youtubeCard, 503).fetch,
+    );
+    expect(previewOf(kept)).toEqual(linkPreview);
   });
 
   test("carries a known card or a known miss forward instead of asking again", async () => {

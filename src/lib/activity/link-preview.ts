@@ -6,7 +6,9 @@ import { asRecord } from "./validation";
 // matches the one the post would have carried; it also proxies the thumbnail,
 // so a visitor's browser never contacts the linked site
 const CARD_API = "https://cardyb.bsky.app/v1/extract";
+const CARD_IMAGE_API = "https://cardyb.bsky.app/v1/image";
 const CARD_IMAGE_HOST = "cardyb.bsky.app";
+const YOUTUBE_OEMBED_THUMBNAIL = /^https:\/\/i\.ytimg\.com\/vi\/([\w-]+)\/hqdefault\.jpg$/;
 const LINK_FACET = "app.bsky.richtext.facet#link";
 const MAX_URL_LENGTH = 2048;
 const MAX_TITLE_LENGTH = 300;
@@ -31,6 +33,34 @@ function cardImage(value: unknown): Uri | undefined {
   if (!url) return undefined;
   const { protocol, hostname } = new URL(url);
   return protocol === "https:" && hostname === CARD_IMAGE_HOST ? url : undefined;
+}
+
+function proxiedImage(url: string): Uri {
+  const proxy = new URL(CARD_IMAGE_API);
+  proxy.searchParams.set("url", url);
+  return proxy.href as Uri;
+}
+
+/** the video behind a thumbnail cardyb took from YouTube's oEmbed, which stops at 480×360 */
+function smallYouTubeThumbnail(thumb: string | undefined): string | undefined {
+  if (!thumb) return undefined;
+  return new URL(thumb).searchParams.get("url")?.match(YOUTUBE_OEMBED_THUMBNAIL)?.[1];
+}
+
+/**
+ * Most videos also have a 1280×720 thumbnail. One without keeps the small
+ * image under its 0.jpg alias, the same file, so the stored card records that
+ * the larger one was already looked for.
+ */
+async function sharperThumbnail(preview: LinkPreview, fetch: ActivityFetch, signal: AbortSignal): Promise<LinkPreview> {
+  const video = smallYouTubeThumbnail(preview.thumb);
+  if (!video) return preview;
+
+  const large = `https://i.ytimg.com/vi/${video}/maxresdefault.jpg`;
+  const response = await fetch(large, { method: "HEAD", signal });
+  if (response.ok) return { ...preview, thumb: proxiedImage(large) };
+  if (response.status === 404) return { ...preview, thumb: proxiedImage(`https://i.ytimg.com/vi/${video}/0.jpg`) };
+  return preview;
 }
 
 function clippedText(value: unknown, maxLength: number): string {
@@ -89,9 +119,13 @@ async function lookUpLinkPreview(
 
     const card = asRecord(await response.json());
     if (!card) return undefined;
-    return (
-      sanitizeLinkPreview({ uri: link, title: card.title, description: card.description, thumb: card.image }) ?? null
-    );
+    const preview = sanitizeLinkPreview({
+      uri: link,
+      title: card.title,
+      description: card.description,
+      thumb: card.image,
+    });
+    return preview ? await sharperThumbnail(preview, fetch, signal) : null;
   } catch {
     return undefined;
   }
@@ -112,19 +146,26 @@ export async function attachLinkPreviews(
     if (event.source === "bluesky" && event.linkPreview !== undefined) previews.set(event.uri, event.linkPreview);
   }
 
-  const wanted = new Map<string, string>();
+  const wanted = new Map<string, (signal: AbortSignal) => Promise<LinkPreview | null | undefined>>();
   for (const event of events) {
-    if (event.source !== "bluesky" || previews.has(event.uri) || wanted.size >= MAX_LOOKUPS) continue;
-    const link = previewableLink(event.post);
-    if (link) wanted.set(event.uri, link);
+    if (event.source !== "bluesky" || wanted.size >= MAX_LOOKUPS) continue;
+
+    const stored = previews.get(event.uri);
+    if (!previews.has(event.uri)) {
+      const link = previewableLink(event.post);
+      if (link) wanted.set(event.uri, (signal) => lookUpLinkPreview(link, fetch, signal));
+    } else if (stored && smallYouTubeThumbnail(stored.thumb)) {
+      // only the thumbnail is looked up again, so a failure never costs the card
+      wanted.set(event.uri, (signal) => sharperThumbnail(stored, fetch, signal).catch(() => undefined));
+    }
   }
 
   if (wanted.size > 0) {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const lookups = Promise.all(
-      [...wanted].map(async ([uri, link]) => {
-        const preview = await lookUpLinkPreview(link, fetch, controller.signal);
+      [...wanted].map(async ([uri, lookUp]) => {
+        const preview = await lookUp(controller.signal);
         if (preview !== undefined) previews.set(uri, preview);
       }),
     );
