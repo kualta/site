@@ -416,6 +416,13 @@ body[data-music-page] :is(.lyrics-rail, .rail) {
   padding-bottom: calc(2rem + env(safe-area-inset-bottom));
 }
 
+/* beside the deck the rails sit as far from the bottom as from the sides (lg:p-12) */
+@media (min-width: 1024px) {
+  body[data-music-page] :is(.lyrics-rail, .rail) {
+    padding-bottom: calc(3rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* the words sit opposite the crate, so the deck keeps the middle */
 @media (min-width: 1024px) {
   .lyrics-rail {
