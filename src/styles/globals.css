@@ -371,7 +371,7 @@ html {
   background-color: currentColor;
 }
 
-/* the records rail: pinned right, full height, its own scroll */
+/* the records rail: pinned left, full height, its own scroll */
 @media (min-width: 1024px) {
   .rail {
     max-height: 100%;
