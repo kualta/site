@@ -1,5 +1,5 @@
 import { uploadMedia, type ComposerAttachment } from "./media";
-import { AppBskyFeedPost, RichText, Agent } from "@atproto/api";
+import { AppBskyFeedPost, RichText, Agent, type AppBskyFeedDefs } from "@atproto/api";
 
 export async function fetchInteractionPost(agent: Agent, uri: string) {
   const { data } = await agent.getPosts({ uris: [uri] });
@@ -33,6 +33,37 @@ export async function togglePostRepost(agent: Agent, uri: string, knownRepost?: 
   }
   const repost = await agent.repost(post.uri, post.cid);
   return { ...post, repostCount: (post.repostCount ?? 0) + 1, viewer: { ...post.viewer, repost: repost.uri } };
+}
+
+/** Thrown when the earlier repost was deleted but its replacement was not written, so the post is no longer reposted. */
+export class RepostRemovedError extends Error {
+  constructor(readonly post: AppBskyFeedDefs.PostView) {
+    super("Your earlier repost was removed, but the new one failed. Repost to try again.");
+  }
+}
+
+/** The AppView ignores a second repost of the same post, so replace the existing record to resurface it in feeds. */
+export async function repostAgain(agent: Agent, uri: string, knownRepost?: string | null) {
+  const post = await fetchInteractionPost(agent, uri);
+  const existing = knownRepost === undefined ? post.viewer?.repost : knownRepost;
+  if (existing) await agent.deleteRepost(existing);
+  // An existing record the AppView has not indexed yet is missing from repostCount.
+  const indexed = post.viewer?.repost ? 1 : 0;
+  try {
+    const repost = await agent.repost(post.uri, post.cid);
+    return {
+      ...post,
+      repostCount: (post.repostCount ?? 0) + 1 - indexed,
+      viewer: { ...post.viewer, repost: repost.uri },
+    };
+  } catch (cause) {
+    if (!existing) throw cause;
+    throw new RepostRemovedError({
+      ...post,
+      repostCount: Math.max(0, (post.repostCount ?? 0) - indexed),
+      viewer: { ...post.viewer, repost: undefined },
+    });
+  }
 }
 
 export async function replyToPost(agent: Agent, uri: string, text: string, images: ComposerAttachment[] = []) {
