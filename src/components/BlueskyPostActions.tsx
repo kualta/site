@@ -2,7 +2,15 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 import type { AppBskyFeedDefs } from "@atproto/api";
 import { FiHeart, FiMessageCircle, FiRepeat } from "react-icons/fi";
 import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
-import { fetchInteractionPost, replyToPost, togglePostLike, togglePostRepost } from "@/lib/bluesky/interactions";
+import {
+  fetchInteractionPost,
+  replyToPost,
+  RepostRemovedError,
+  repostAgain,
+  togglePostLike,
+  togglePostRepost,
+} from "@/lib/bluesky/interactions";
+import { usePopoverMenu } from "@/lib/popover-menu";
 
 import BlueskyComposer from "./BlueskyComposer";
 import type { ComposerAttachment } from "@/lib/bluesky/media";
@@ -43,7 +51,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
     };
   }, [auth.agent, uri]);
 
-  async function act(action: "like" | "repost" | "reply") {
+  async function act(action: "like" | "repost" | "repost-again" | "reply") {
     if (acting.current || (action !== "reply" && !post)) return;
     acting.current = true;
     const previous = post;
@@ -51,10 +59,12 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
       const field = action === "like" ? "like" : "repost";
       const count = action === "like" ? "likeCount" : "repostCount";
       const selected = Boolean(post.viewer?.[field]);
+      let delta = selected ? -1 : 1;
+      if (action === "repost-again") delta = 0;
       setPost({
         ...post,
-        [count]: Math.max(0, (post[count] ?? 0) + (selected ? -1 : 1)),
-        viewer: { ...post.viewer, [field]: selected ? undefined : "pending" },
+        [count]: Math.max(0, (post[count] ?? 0) + delta),
+        viewer: { ...post.viewer, [field]: delta < 0 ? undefined : "pending" },
       });
     }
     setBusy(true);
@@ -70,11 +80,16 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
         setReplyOpen(false);
         setNotice("Reply published on Bluesky.");
         setPost((value) => (value ? { ...value, replyCount: (value.replyCount ?? 0) + 1 } : value));
+      } else if (action === "like") {
+        setPost(await togglePostLike(agent, uri));
       } else {
-        setPost(await (action === "like" ? togglePostLike : togglePostRepost)(agent, uri));
+        // The menu acts on the repost shown here, which the AppView may not have indexed yet.
+        const known = previous?.viewer?.repost ?? null;
+        setPost(await (action === "repost" ? togglePostRepost : repostAgain)(agent, uri, known));
       }
     } catch (cause) {
-      if (action !== "reply") setPost(previous);
+      if (cause instanceof RepostRemovedError) setPost(cause.post);
+      else if (action !== "reply") setPost(previous);
       setError(cause instanceof Error ? cause.message : "Could not complete this action. Please try again.");
     } finally {
       acting.current = false;
@@ -99,18 +114,13 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           <FiHeart size={18} aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
           {post?.likeCount ? ` ${post.likeCount}` : ""}
         </button>
-        <button
-          type="button"
-          className={reactionClass}
-          aria-label={post?.viewer?.repost ? "Undo repost" : "Repost"}
-          title={post?.viewer?.repost ? "Undo repost" : "Repost"}
-          aria-pressed={!!post?.viewer?.repost}
+        <RepostButton
+          reposted={!!post?.viewer?.repost}
+          count={post?.repostCount}
           disabled={busy || auth.loading || !post}
-          onClick={() => void act("repost")}
-        >
-          <FiRepeat size={18} aria-hidden="true" className={post?.viewer?.repost ? "text-[#16a34a]" : ""} />
-          {post?.repostCount ? ` ${post.repostCount}` : ""}
-        </button>
+          onRepost={() => void act("repost")}
+          onRepostAgain={() => void act("repost-again")}
+        />
         <button
           type="button"
           className={reactionClass}
@@ -159,5 +169,59 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function RepostButton({
+  reposted,
+  count,
+  disabled,
+  onRepost,
+  onRepostAgain,
+}: {
+  reposted: boolean;
+  count?: number;
+  disabled: boolean;
+  onRepost: () => void;
+  onRepostAgain: () => void;
+}) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const open = usePopoverMenu(trigger, panel, "start");
+
+  function choose(action: () => void) {
+    panel.current?.hidePopover();
+    trigger.current?.focus();
+    action();
+  }
+
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        className={reactionClass}
+        aria-label={reposted ? "Repost options" : "Repost"}
+        title={reposted ? "Repost options" : "Repost"}
+        aria-pressed={reposted}
+        aria-expanded={reposted ? open : undefined}
+        aria-controls={reposted ? id : undefined}
+        popoverTarget={reposted ? id : undefined}
+        disabled={disabled}
+        onClick={reposted ? undefined : onRepost}
+      >
+        <FiRepeat size={18} aria-hidden="true" className={reposted ? "text-[#16a34a]" : ""} />
+        {count ? ` ${count}` : ""}
+      </button>
+      <div ref={panel} id={id} popover="auto" className="post-menu-panel" role="group" aria-label="Repost options">
+        <button type="button" onClick={() => choose(onRepostAgain)}>
+          Repost again
+        </button>
+        <button type="button" onClick={() => choose(onRepost)}>
+          Undo repost
+        </button>
+      </div>
+    </>
   );
 }

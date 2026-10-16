@@ -29,7 +29,10 @@ are rejected. HTTPS preview deployments use metadata at their own origin.
 The shared activity feed remains public and cacheable. Each visitor fetches their
 own reaction state using their authenticated agent. Actions use fresh post CIDs;
 removal uses the visitor's actual like/repost record URI. Replies retain the
-original thread root. Custom elements mount controls in fetched/paginated rows
+original thread root. Selecting an existing repost opens a menu to repost again
+or undo it. Repost again deletes the old record and writes a new one, which puts
+the post back at the top of followers' feeds. The AppView ignores a second repost
+record while the first one exists. Custom elements mount controls in fetched/paginated rows
 and unmount removed rows without leaking subscriptions.
 
 ## Article comments

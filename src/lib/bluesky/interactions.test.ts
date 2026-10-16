@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent } from "@atproto/api";
-import { replyToPost, togglePostLike, togglePostRepost } from "./interactions";
+import { RepostRemovedError, replyToPost, repostAgain, togglePostLike, togglePostRepost } from "./interactions";
 
 const uri = "at://did:plc:author/app.bsky.feed.post/post";
 function mockAgent(viewer: Record<string, unknown> = {}, reply?: unknown) {
@@ -67,6 +67,32 @@ describe("Bluesky interactions", () => {
       ["deleteLike", "at://me/like/just-created"],
       ["deleteRepost", "at://me/repost/just-created"],
     ]);
+  });
+  test("repost again replaces the existing record with a fresh one", async () => {
+    const { agent, calls } = mockAgent({ repost: "at://me/repost/existing" });
+    const post = await repostAgain(agent, uri);
+    expect(calls).toEqual([
+      ["deleteRepost", "at://me/repost/existing"],
+      ["repost", [uri, "fresh-cid"]],
+    ]);
+    expect(post.viewer.repost).toBe("at://me/repost/1");
+    expect(post.repostCount).toBe(3);
+  });
+  test("repost again counts a confirmed repost the AppView has not indexed", async () => {
+    const { agent, calls } = mockAgent();
+    const post = await repostAgain(agent, uri, "at://me/repost/just-created");
+    expect(calls[0]).toEqual(["deleteRepost", "at://me/repost/just-created"]);
+    expect(post.repostCount).toBe(4);
+  });
+  test("repost again reports the removed repost when the new write fails", async () => {
+    const { agent } = mockAgent({ repost: "at://me/repost/existing" });
+    agent.repost = async () => {
+      throw new Error("offline");
+    };
+    const failure = await repostAgain(agent, uri).catch((cause) => cause);
+    expect(failure).toBeInstanceOf(RepostRemovedError);
+    expect(failure.post.viewer.repost).toBeUndefined();
+    expect(failure.post.repostCount).toBe(2);
   });
   test("replies retain the thread root and use a fresh parent reference", async () => {
     const root = { uri: "at://original/app.bsky.feed.post/root", cid: "root-cid" };
