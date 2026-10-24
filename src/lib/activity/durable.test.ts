@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { ActivityStatusCache, type ActivityDurableStorage } from "./durable";
 import { getSharedActivityFeed } from "./shared";
 import { runActivityCron } from "./scheduled";
@@ -7,6 +7,9 @@ import type { ActivityFeed } from "./types";
 class Storage implements ActivityDurableStorage {
   values = new Map<string, unknown>();
   failKey?: string;
+  alarmAt: number | null = null;
+  async getAlarm() { return this.alarmAt; }
+  async setAlarm(scheduledTime: number) { this.alarmAt = scheduledTime; }
   async get<T>(key: string) { return this.values.get(key) as T | undefined; }
   async put(key: string, value: unknown) {
     if (key === this.failKey) throw new Error("fake platform failure includes sensitive data");
@@ -24,6 +27,64 @@ const time = () => Math.floor(Date.now() / 60_000) * 60_000;
 const refreshRequest = (scheduledTime: number) => new Request("https://activity.internal/refresh", { method: "POST", body: JSON.stringify({ scheduledTime }) });
 const archiveKey = "activity:archive:v3";
 const stateKey = "activity:state:v3";
+
+test("visitor reads bootstrap a persistent alarm without provider work or postponing recovery", async () => {
+  const storage = new Storage();
+  let calls = 0;
+  const object = new ActivityStatusCache({ storage }, {}, async () => { calls++; });
+  const before = Date.now();
+  expect((await object.fetch(new Request("https://activity.internal/head"))).status).toBe(200);
+  const alarmAt = storage.alarmAt;
+  expect(alarmAt).toBeGreaterThanOrEqual(before + 60_000);
+  expect(alarmAt).toBeLessThanOrEqual(Date.now() + 60_000);
+  expect((await object.fetch(new Request("https://activity.internal/head"))).status).toBe(200);
+  expect(storage.alarmAt).toBe(alarmAt);
+  expect(calls).toBe(0);
+});
+
+test("alarms keep refreshing without cron or visits, survive restarts, and share cron's minute claim", async () => {
+  const storage = new Storage();
+  const clock = spyOn(Date, "now").mockReturnValue(time());
+  let calls = 0;
+  const refresh = async () => { calls++; };
+  try {
+    const object = new ActivityStatusCache({ storage }, {}, refresh);
+    expect((await object.fetch(refreshRequest(Date.now()))).status).toBe(204);
+    expect(storage.alarmAt).toBe(Date.now() + 60_000);
+    await object.alarm();
+    expect(calls).toBe(1);
+    clock.mockReturnValue(Date.now() + 60_000);
+    const restarted = new ActivityStatusCache({ storage }, {}, refresh);
+    await restarted.alarm();
+    expect(calls).toBe(2);
+    expect((await restarted.fetch(refreshRequest(Date.now()))).status).toBe(204);
+    expect(calls).toBe(2);
+    clock.mockReturnValue(Date.now() + 60_000);
+    await restarted.alarm();
+    expect(calls).toBe(3);
+    expect(storage.alarmAt).toBe(Date.now() + 60_000);
+  } finally { clock.mockRestore(); }
+});
+
+test("a failed alarm refresh leaves a wake-up for the next minute and recovers", async () => {
+  const storage = new Storage();
+  const clock = spyOn(Date, "now").mockReturnValue(time());
+  let failed = true;
+  let calls = 0;
+  const object = new ActivityStatusCache({ storage }, {}, async () => {
+    calls++;
+    if (failed) throw new Error("upstream failure");
+  });
+  try {
+    await object.alarm();
+    expect(storage.alarmAt).toBe(Date.now() + 60_000);
+    failed = false;
+    clock.mockReturnValue(Date.now() + 60_000);
+    await object.alarm();
+    expect(calls).toBe(2);
+    expect(storage.alarmAt).toBe(Date.now() + 60_000);
+  } finally { clock.mockRestore(); }
+});
 
 test("durable refresh deduplicates delivery and retries next minute after failed atomic persistence", async () => {
   const storage = new Storage();

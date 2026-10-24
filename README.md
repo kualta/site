@@ -200,7 +200,12 @@ out of the page Worker's CPU budget. Home HTML and `/activity/rows` only read
 snapshots. Empty/unavailable status never gates scrolling. Provider requests are
 aborted after five seconds, initial HTML reads have a total 250ms budget, and
 asynchronous head/history reads allow two seconds. The cron handoff is bounded
-to 15 seconds. There is no public refresh endpoint or visitor-triggered refresh.
+to 15 seconds. There is no public refresh endpoint or provider work on visitor
+requests. Head reads and cron deliveries ensure a persistent one-minute alarm
+exists; reads never postpone it. The alarm rearms before refreshing, so refreshes
+continue without visits if Cron Trigger delivery stops, including after a failed
+refresh or object restart. Cron and alarms share the same minute claim to avoid
+duplicate provider fetches.
 
 The object deduplicates each scheduled minute across callers and restarts, with
 no long-running timer. It atomically commits the sanitized archive and head;
