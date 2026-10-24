@@ -6,6 +6,8 @@ export interface ActivityDurableStorage {
   put(key: string, value: unknown): Promise<void>;
   delete(keys: string[]): Promise<number>;
   transaction<T>(work: (storage: ActivityDurableStorage) => Promise<T>): Promise<T>;
+  getAlarm(): Promise<number | null>;
+  setAlarm(scheduledTime: number): Promise<void>;
 }
 
 export interface ActivityDurableNamespace {
@@ -14,6 +16,7 @@ export interface ActivityDurableNamespace {
 }
 
 const CLAIM_KEY = "activity:claimed-minute:v1";
+const REFRESH_INTERVAL_MS = 60_000;
 // Even three-byte BMP text stays below 128KiB, including storage metadata.
 const CHUNK_CHARS = 32 * 1024;
 const MAX_CHUNKS = 1_024;
@@ -67,6 +70,24 @@ export class ActivityStatusCache {
     private env: Cloudflare.Env,
     private refreshFeed = refreshScheduledActivity,
   ) {}
+
+  /** Persist a second wake-up path in case Cron Trigger delivery stops. */
+  private async ensureAlarm(): Promise<void> {
+    if (await this.context.storage.getAlarm() === null) {
+      await this.context.storage.setAlarm(Date.now() + REFRESH_INTERVAL_MS);
+    }
+  }
+
+  async alarm(): Promise<void> {
+    // Arm the next wake-up before upstream work, including failed refreshes.
+    await this.context.storage.setAlarm(Date.now() + REFRESH_INTERVAL_MS);
+    try {
+      // Cron and alarm delivery share the same persistent minute claim.
+      await this.refresh(Date.now());
+    } catch {
+      console.warn("activity alarm result", { result: "failed" });
+    }
+  }
 
   private cache(staged?: Map<string, string>): ActivityCacheStore {
     return {
@@ -123,10 +144,14 @@ export class ActivityStatusCache {
         const body = await request.json() as { scheduledTime?: unknown };
         const time = body?.scheduledTime;
         if (typeof time !== "number" || !Number.isSafeInteger(time) || time < 0 || time > Date.now() + 5 * 60_000) return new Response("Invalid scheduled time", { status: 400 });
+        await this.ensureAlarm();
         await this.refresh(time);
         return new Response(null, { status: 204 });
       }
       if (request.method === "GET" && url.pathname === "/head") {
+        // Bootstrap existing objects without fetching providers on a visitor read.
+        // Repeated reads never postpone an already scheduled alarm.
+        await this.ensureAlarm();
         return Response.json(await getInitialActivityFeed({ cache: this.cache(), requireReadableCache: true, cacheReadTimeoutMs: 2_000 }), { headers: { "cache-control": "no-store" } });
       }
       if (request.method === "GET" && url.pathname === "/history") {

@@ -30,7 +30,21 @@ const modules = (await readdir("dist/server", { recursive: true })).filter(file 
   .sort((a, b) => a === "entry.mjs" ? -1 : b === "entry.mjs" ? 1 : a.localeCompare(b))
   .map(file => ({ type: "ESModule", path: resolve("dist/server", file) }));
 const mf = new Miniflare({
-  modules, modulesRoot: resolve("dist/server"), compatibilityDate: "2026-05-18", compatibilityFlags: ["nodejs_compat"],
+  // Only this local harness can expedite and inspect the production class's alarm.
+  modules: [{ type: "ESModule", path: resolve("dist/server/activity-alarm-fixture.mjs"), contents: `
+    import { ActivityStatusCache as ProductionCache } from "./entry.mjs";
+    export { default } from "./entry.mjs";
+    export class ActivityStatusCache extends ProductionCache {
+      constructor(context, env) { super(context, env); this.testStorage = context.storage; }
+      async fetch(request) {
+        if (new URL(request.url).pathname === "/_test/alarm") {
+          if (request.method === "POST") await this.testStorage.setAlarm(Date.now());
+          return Response.json({ at: await this.testStorage.getAlarm() });
+        }
+        return super.fetch(request);
+      }
+    }
+  ` }, ...modules], modulesRoot: resolve("dist/server"), compatibilityDate: "2026-05-18", compatibilityFlags: ["nodejs_compat"],
   kvNamespaces: ["SESSION", "ACTIVITY_CACHE"], durableObjects: { ACTIVITY_STORE: { className: "ActivityStatusCache", useSQLite: true } },
   bindings: { GITHUB_ACTIVITY_TOKEN: "offline-fixture" },
   outboundService: async (request) => {
@@ -101,7 +115,26 @@ try {
   mode = "ok";
   assert.equal((await callRefresh(start + 180_000)).status, 204);
   assert(Date.parse((await head()).sources.github.fetchedAt) > Date.parse(fresh.sources.github.fetchedAt));
+
+  // An existing stale object recovers from its alarm with no cron delivery.
+  const alarmObject = namespace.get(namespace.idFromName("alarm-recovery-fixture"));
+  const alarmHead = async () => (await alarmObject.fetch("https://activity.internal/head")).json();
+  const beforeAlarm = requests;
+  assert.equal((await alarmHead()).sources.github.fetchedAt, oldTime);
+  assert.equal(requests, beforeAlarm, "Bootstrapping an alarm must not fetch providers on a visitor read");
+  const alarmTime = async () => (await (await alarmObject.fetch("https://activity.internal/_test/alarm")).json()).at;
+  assert(await alarmTime() > Date.now(), "Head reads must persist a recovery alarm");
+  await alarmObject.fetch("https://activity.internal/_test/alarm", { method: "POST" });
+  const alarmDeadline = performance.now() + 5_000;
+  let alarmFeed;
+  do {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    alarmFeed = await alarmHead();
+  } while (alarmFeed.delayed && performance.now() < alarmDeadline);
+  assert.equal(alarmFeed.delayed, false, "A real platform alarm must recover the stale feed without cron");
+  assert(Date.parse(alarmFeed.lastSeenAt) > Date.parse(old.lastSeenAt));
+  assert(await alarmTime() > Date.now(), "The alarm must persist its next wake-up");
   console.log(JSON.stringify({ compiledSQLiteObject: true, archiveBytes: Buffer.byteLength(legacyArchive), bootstrapRetainsHistory: true,
     noLegacyKVWrites: true, noVisitorProviderCalls: true, deduplicatedRefresh: true, privacyPreserved: true,
-    failedAndSlowSourcesPreserveFreshness: true, recovery: true, refreshMs, slowRefreshMs, readDuringRefreshMs }));
+    failedAndSlowSourcesPreserveFreshness: true, recovery: true, alarmRecoveryWithoutCron: true, refreshMs, slowRefreshMs, readDuringRefreshMs }));
 } finally { await mf.dispose(); }
