@@ -34,7 +34,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
         data-reposted={repostedOn ? "true" : undefined}
       >
         {repostedOn && (
-          <p class="flex items-center gap-1.5 px-4 pt-4 text-xs text-secondary-text">
+          <p class="flex items-center gap-1.5 px-4 pt-3 text-xs text-secondary-text">
             <FiRepeat className="shrink-0" size={12} aria-hidden="true" />
             <span>
               kualta reposted on <time datetime={event.occurredAt}>{repostedOn}</time>
