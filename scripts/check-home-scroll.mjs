@@ -47,8 +47,10 @@ try {
         scrollMs.push(Math.round(performance.now() - scrollStarted));
         const y = await page.evaluate(() => scrollY);
         assert(y > 20, "Scroll must respond while status is unavailable");
+        await page.waitForFunction(() => location.pathname === "/feed", null, { timeout: 2000 });
         if (visit < 2) {
           await page.evaluate(() => scrollTo({ top: 0, behavior: "instant" }));
+          await page.waitForFunction(() => location.pathname === "/", null, { timeout: 1000 });
           await page.locator('.site-header a[href="/projects"]').click();
           await page.waitForURL(/\/projects\/?$/, { waitUntil: "domcontentloaded" });
           await page.goBack({ waitUntil: "domcontentloaded" });
@@ -56,7 +58,13 @@ try {
           await page.locator("#activity").waitFor();
         }
       }
-      console.log(JSON.stringify({ mobile, status, ...navigation, feedHeight: height, scrollMs, totalMs: Math.round(performance.now() - started), navigations: 3 }));
+      // a fresh tab, as a shared link opens; the same tab would restore its own position
+      const visitor = await context.newPage();
+      await visitor.goto(`${origin}/feed`, { waitUntil: "domcontentloaded" });
+      const feedTop = await visitor.locator("#activity").evaluate((el) => el.getBoundingClientRect().top);
+      assert(Math.abs(feedTop) <= 1, `/feed must open at the feed, not ${feedTop}px from it`);
+      assert.equal(new URL(await visitor.locator('link[rel="canonical"]').getAttribute("href")).pathname, "/");
+      console.log(JSON.stringify({ mobile, status, ...navigation, feedHeight: height, scrollMs, totalMs: Math.round(performance.now() - started), navigations: 3, feedPath: true }));
       await context.close();
     }
   }
