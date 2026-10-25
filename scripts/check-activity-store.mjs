@@ -56,14 +56,18 @@ const mf = new Miniflare({
       const post = makePost("newpost", new Date(now).toISOString());
       return Response.json({ feed: [{ post: { ...post, viewer: { like: `at://${did}/app.bsky.feed.like/private-viewer` }, debug: { token: "private-debug" } } }] });
     }
+    if (url.hostname === "github.com") {
+      assert.equal(url.pathname, "/users/kualta/contributions");
+      assert.equal(request.headers.get("authorization"), null);
+      const date = new Date(now).toISOString().slice(0, 10);
+      return new Response(`<td data-date="${date}" id="day"></td><tool-tip for="day">20 contributions on today.</tool-tip>`);
+    }
     assert.equal(url.hostname, "api.github.com");
     if (url.pathname === "/user") return Response.json({ login: "kualta" });
     if (url.pathname === "/users/kualta/events") return Response.json([{ id: "private-raw-id", type: "PushEvent", public: false,
       created_at: new Date(now).toISOString(), repo: { name: "private-repository" }, payload: { head: "private-target" } }]);
     assert.equal(url.pathname, "/graphql");
-    const body = await request.json();
-    if (body.query.includes("contributionYears")) return Response.json({ data: { user: { contributionsCollection: { contributionYears: [new Date(now).getUTCFullYear()] } } } });
-    return Response.json({ data: { user: { [`y${new Date(now).getUTCFullYear()}`]: { contributionCalendar: { weeks: [{ contributionDays: [{ date: new Date(now).toISOString().slice(0, 10), contributionCount: 20 }] }] } } } } });
+    return Response.json({ data: { user: { contributionsCollection: { contributionYears: [new Date(now).getUTCFullYear()] } } } });
   },
 });
 try {

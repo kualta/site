@@ -197,9 +197,19 @@ The existing `kualta-site` Cron Trigger (`* * * * *`) refreshes GitHub/Bluesky
 even when nobody visits. It hands work to one private `ACTIVITY_STORE`
 SQLite-backed Durable Object; provider normalization and full archive work stay
 out of the page Worker's CPU budget. Home HTML and `/activity/rows` only read
-snapshots. Empty/unavailable status never gates scrolling. Provider requests are
-aborted after five seconds, initial HTML reads have a total 250ms budget, and
-asynchronous head/history reads allow two seconds. The cron handoff is bounded
+snapshots. Empty/unavailable status never gates scrolling.
+
+GitHub daily totals come from the public profile's contribution-calendar cells
+and tooltips, including anonymized private contributions enabled on the profile.
+The token is used only for account verification, detailed events and available
+years: GraphQL calendar counts can undercount repositories outside its access.
+Each refresh rereads every available year's public calendar, so previously
+undercounted days are corrected in the existing archive without a cache reset.
+Calendar requests carry no token or cookies; failed requests or unrecognized
+markup preserve the last successful GitHub snapshot and its freshness timestamp.
+
+Provider requests are aborted after five seconds, initial HTML reads have a total
+250ms budget, and asynchronous head/history reads allow two seconds. The cron handoff is bounded
 to 15 seconds. There is no public refresh endpoint or provider work on visitor
 requests. Head reads and cron deliveries ensure a persistent one-minute alarm
 exists; reads never postpone it. The alarm rearms before refreshing, so refreshes

@@ -111,7 +111,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           disabled={busy || auth.loading || !post}
           onClick={() => void act("like")}
         >
-          <FiHeart size={18} aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
+          <FiHeart size={14} aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
           {post?.likeCount ? ` ${post.likeCount}` : ""}
         </button>
         <RepostButton
@@ -131,7 +131,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           disabled={busy || auth.loading || post?.viewer?.replyDisabled}
           onClick={() => setReplyOpen(!replyOpen)}
         >
-          <FiMessageCircle size={18} aria-hidden="true" />
+          <FiMessageCircle size={14} aria-hidden="true" />
           {post?.replyCount ? ` ${post.replyCount}` : ""}
         </button>
       </div>
@@ -211,7 +211,7 @@ function RepostButton({
         disabled={disabled}
         onClick={reposted ? undefined : onRepost}
       >
-        <FiRepeat size={18} aria-hidden="true" className={reposted ? "text-[#16a34a]" : ""} />
+        <FiRepeat size={14} aria-hidden="true" className={reposted ? "text-[#16a34a]" : ""} />
         {count ? ` ${count}` : ""}
       </button>
       <div ref={panel} id={id} popover="auto" className="post-menu-panel" role="group" aria-label="Repost options">
