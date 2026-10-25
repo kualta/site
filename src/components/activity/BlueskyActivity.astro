@@ -134,6 +134,22 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     padding-top: 0.5rem;
   }
 
+  /* the action row closes a post with its own padding, so the text above it
+     keeps only a small gap instead of a full card's worth */
+  .site-bluesky-card :is(.site-bluesky-root-post, .site-bluesky-thread-post):has(> bluesky-post-actions > *)
+    .bluesky-post-container .post-content {
+    padding-bottom: 0.25rem;
+  }
+
+  /* each comment follows a post that already closed on its own padding */
+  .site-bluesky-card .site-bluesky-thread-post .bluesky-post-container .post-content {
+    padding-top: 0.5rem;
+  }
+
+  .site-bluesky-thread-post .site-bluesky-meta {
+    inset-block-start: 0.5rem;
+  }
+
   .site-bluesky-card .bluesky-post-container .logo-link {
     display: none;
   }
@@ -181,10 +197,16 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     position: absolute;
     inset-inline-start: 35px;
     top: 64px;
-    bottom: -8px;
+    /* the next comment's avatar starts 8px into it, so ending here leaves the same 8px gap */
+    bottom: 0;
     width: 2px;
     border-radius: 999px;
     background: color-mix(in oklab, var(--secondary-text) 30%, transparent);
+  }
+
+  /* comments start on a half padding, so their avatars, and the rail under them, sit 8px higher */
+  .site-bluesky-thread-post:not(:last-child)::before {
+    top: 56px;
   }
 
   /* the repost line takes the top padding, so the original post's avatar sits higher */
@@ -213,11 +235,6 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
   :is(.site-bluesky-thread-post, .site-bluesky-card:has(.site-bluesky-conversation) > .site-bluesky-root-post)
     bluesky-media > .grid {
     margin-inline-start: 3rem;
-  }
-
-  /* The repost label affects only the original post's header. */
-  .site-bluesky-card[data-reposted] .site-bluesky-thread-post .bluesky-post-container .post-content {
-    padding-top: 1rem;
   }
 
   /* the embed crops every image container to 1.91/1, which cuts the top and
