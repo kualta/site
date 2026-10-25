@@ -25,14 +25,6 @@ const isGitlab = project.git_link?.includes("gitlab.com");
     <span class="font-medium whitespace-nowrap">{project.full_name || project.name}</span>
     <span class="min-w-0 truncate text-sm text-secondary-text">{project.description}</span>
   </a>
-  <span class="relative flex w-5 shrink-0 justify-center text-secondary-text">
-    {project.status === "archived" && (
-      <IconTooltip label="archived">
-        <FiArchive aria-hidden="true" />
-        <span class="sr-only">archived</span>
-      </IconTooltip>
-    )}
-  </span>
   <span class="w-5 shrink-0 flex justify-center">
     {project.git_link && (
       <IconTooltip label={isGitlab ? "GitLab" : "GitHub"}>
@@ -48,8 +40,14 @@ const isGitlab = project.git_link?.includes("gitlab.com");
       </IconTooltip>
     )}
   </span>
-  <span class="w-5 shrink-0 flex justify-center">
-    {project.link && (
+  <!-- an archived project has nowhere live to link to, so its badge takes the website's place -->
+  <span class="w-5 shrink-0 flex justify-center text-secondary-text">
+    {project.status === "archived" ? (
+      <IconTooltip label="archived">
+        <FiArchive aria-hidden="true" />
+        <span class="sr-only">archived</span>
+      </IconTooltip>
+    ) : project.link && (
       <IconTooltip label="website">
         <a
           href={project.link}
