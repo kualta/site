@@ -31,6 +31,8 @@ interface Props {
   type?: "website" | "article";
   article?: Article;
   noindex?: boolean;
+  /** the path search engines should credit, for pages served under more than one */
+  canonicalPath?: string;
   atprotoDocument?: string;
   /** extra schema.org nodes for whatever this page actually is */
   schema?: object[];
@@ -45,6 +47,7 @@ const {
   type = "website",
   article,
   noindex = false,
+  canonicalPath,
   atprotoDocument,
   schema = [],
 } = Astro.props;
@@ -59,7 +62,7 @@ const documentTitle = pageTitle(title);
 const metaDescription = exactDescription && description !== undefined
   ? description
   : pageDescription(description);
-const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+const canonical = new URL(canonicalPath ?? Astro.url.pathname, Astro.site).toString();
 const og = ogImage(image, Astro.site);
 const month = new Date().getMonth();
 const isChristmas = month >= 10;
