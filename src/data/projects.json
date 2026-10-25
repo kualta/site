@@ -180,11 +180,11 @@
     "id": 16,
     "name": "fntn",
     "description": "collaborative blogging platform",
-    "link": "https://fountain.ink",
+    "link": null,
     "git_link": "https://github.com/fountain-ink",
     "language": "TypeScript",
     "date": "2024-07-01",
-    "status": "complete",
+    "status": "archived",
     "tech_stack": [
       "React",
       "Lens",
