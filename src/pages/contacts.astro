@@ -39,21 +39,21 @@ const schema = [
     {profile.description && (
       <p class="mt-3 whitespace-pre-line text-center text-sm text-secondary-text">{profile.description}</p>
     )}
-    <div class="mt-10 flex w-full max-w-[16rem] flex-col gap-2">
+    <div class="mt-10 flex w-full max-w-[18rem] flex-col gap-2.5">
       {contacts.map((contact) => (
         <a
           href={contact.link}
           target="_blank"
           rel="noopener noreferrer me"
-          class="flex items-center gap-3 rounded-xl bg-secondary px-4 py-2 text-lg drop-shadow-sm
+          class="flex items-center justify-center gap-3.5 rounded-xl bg-secondary px-5 py-3 text-xl drop-shadow-sm
                  dark:bg-dark-secondary [&:hover>*]:opacity-70"
         >
-          <span class="w-5 flex shrink-0 justify-center text-secondary-text" aria-hidden="true">
-            <ContactIcon platform={contact.platform} size={18} />
+          <span class="w-6 flex shrink-0 justify-center text-secondary-text" aria-hidden="true">
+            <ContactIcon platform={contact.platform} size={22} />
           </span>
           <!-- the line box centers on cap height, but the names are lowercase, so the
-               x-height they are mostly made of sits 2px low until lifted -->
-          <span class="-translate-y-0.5 font-medium">{contact.platform}</span>
+               x-height they are mostly made of sits low until lifted by 0.12em -->
+          <span class="-translate-y-[0.12em] font-medium">{contact.platform}</span>
         </a>
       ))}
     </div>
