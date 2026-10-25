@@ -37,8 +37,8 @@ const schema = [
           class="flex flex-row items-baseline gap-2 min-w-0 flex-grow hover:opacity-70"
         >
           <span class="font-medium whitespace-nowrap">{contact.platform}</span>
-          <span class="min-w-0 truncate text-sm text-secondary-text">{contact.label}</span>
-          <span class="ml-auto w-5 shrink-0 flex justify-center text-secondary-text" aria-hidden="true">
+          <span class="ml-auto min-w-0 truncate text-sm text-secondary-text">{contact.label}</span>
+          <span class="w-5 shrink-0 flex justify-center text-secondary-text" aria-hidden="true">
             <ContactIcon platform={contact.platform} size={16} />
           </span>
         </a>
