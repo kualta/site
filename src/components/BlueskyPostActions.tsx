@@ -16,7 +16,7 @@ import BlueskyComposer from "./BlueskyComposer";
 import type { ComposerAttachment } from "@/lib/bluesky/media";
 
 const reactionClass =
-  "inline-flex h-8 min-w-[2.75rem] items-center justify-center gap-1 rounded-lg border border-[color:transparent] text-xs hover:opacity-60 focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50";
+  "inline-flex h-6 min-w-[2.75rem] items-center justify-center gap-1 rounded-lg border border-[color:transparent] text-xs hover:opacity-60 focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50";
 
 const buttonClass =
   "inline-flex min-h-10 min-w-10 justify-center items-center gap-1.5 rounded-lg border border-[color:transparent] px-2 text-xs hover:bg-primary focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50 dark:hover:bg-dark-primary";
