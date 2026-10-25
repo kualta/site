@@ -8,6 +8,8 @@
   "workers_dev": true,
   "preview_urls": true,
   "vars": { "ACTIVITY_STORE_MODE": "enabled" },
+  // serve links/index.html at /links and redirect /links/ to it
+  "assets": { "html_handling": "drop-trailing-slash" },
   "durable_objects": {
     "bindings": [{ "name": "ACTIVITY_STORE", "class_name": "ActivityStatusCache" }]
   },

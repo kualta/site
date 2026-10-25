@@ -32,6 +32,9 @@ buildImageManifest();
 export default defineConfig({
   site: SITE,
   output: "static",
+  // pairs with html_handling in wrangler.jsonc, which serves /links and
+  // redirects /links/ to it
+  trailingSlash: "never",
   // The equivalent origin guard lives in middleware, with a signed RFC 8058
   // unsubscribe exception for mail clients that do not send an Origin header.
   security: { checkOrigin: false },

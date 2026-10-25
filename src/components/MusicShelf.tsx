@@ -682,7 +682,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
       {!expanded && started && !dismissed && (
         <section ref={surfaceRef} className="music-mini" aria-label="Music player">
           <a
-            href={`/music/${active.slug}/`}
+            href={`/music/${active.slug}`}
             className="flex min-w-0 flex-1 items-center gap-3"
             aria-label={`Open ${active.title} in music`}
           >

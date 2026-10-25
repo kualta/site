@@ -101,6 +101,8 @@ export function articleRecord(config, slug, source) {
   const { data, body } = readArticle(source);
   if (data.draft === true) return null;
   if (typeof data.title !== "string" || !data.title.trim()) throw new Error(`${slug}: missing title`);
+  // published records key on this exact path, so it keeps the slash the site
+  // used to serve; the site redirects it to the slashless page
   const path = `/posts/${slug}/`;
   const { markdown, textContent } = portableContent(body, `${config.url}${path}`);
   const publishedAt = new Date(data.publishedTime ?? data.date).toISOString();

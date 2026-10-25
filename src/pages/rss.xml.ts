@@ -28,7 +28,7 @@ export const GET: APIRoute = async ({ site }) => {
 
   const items = posts
     .map((post) => {
-      const link = `${base}/posts/${post.filename}/`;
+      const link = `${base}/posts/${post.filename}`;
       // media:content rather than enclosure: the spec wants a byte length on an
       // enclosure and there is none to hand at build time
       const type = MIME[post.preview.split(".").pop()?.toLowerCase() ?? ""];
@@ -41,7 +41,9 @@ export const GET: APIRoute = async ({ site }) => {
         "    <item>",
         `      <title>${esc(post.title)}</title>`,
         `      <link>${esc(link)}</link>`,
-        `      <guid isPermaLink="true">${esc(link)}</guid>`,
+        // readers key items on the guid, so it keeps the slash posts were first
+        // published under; a new guid would show every post as unread again
+        `      <guid isPermaLink="true">${esc(`${link}/`)}</guid>`,
         `      <description>${esc(post.summary)}</description>`,
         `      <pubDate>${new Date(post.publishedTime).toUTCString()}</pubDate>`,
         ...post.tags.map((tag) => `      <category>${esc(tag)}</category>`),
@@ -57,7 +59,7 @@ export const GET: APIRoute = async ({ site }) => {
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>${esc(`${SITE_NAME} - posts`)}</title>
-    <link>${esc(`${base}/posts/`)}</link>
+    <link>${esc(`${base}/posts`)}</link>
     <description>${esc(`Essays by ${SITE_NAME}`)}</description>
     <language>en-us</language>
     <lastBuildDate>${new Date(newest).toUTCString()}</lastBuildDate>

@@ -13,7 +13,7 @@ const projects = [...(projectsData as Project[])]
 const schema = [
   {
     "@type": "ItemList",
-    "@id": `${SITE_URL}/projects/#list`,
+    "@id": `${SITE_URL}/projects#list`,
     numberOfItems: projects.length,
     itemListElement: projects.map((project, index) => ({
       "@type": "ListItem",

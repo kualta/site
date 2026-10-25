@@ -9,12 +9,12 @@ const tracks = [...(musicData as Track[])].sort((a, b) => b.date.localeCompare(a
 const schema = [
   {
     "@type": "ItemList",
-    "@id": `${SITE_URL}/music/#list`,
+    "@id": `${SITE_URL}/music#list`,
     numberOfItems: tracks.length,
     itemListElement: tracks.map((track, index) => ({
       "@type": "ListItem",
       position: index + 1,
-      url: `${SITE_URL}/music/${track.slug}/`,
+      url: `${SITE_URL}/music/${track.slug}`,
       name: track.title,
     })),
   },

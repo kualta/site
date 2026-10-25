@@ -34,8 +34,8 @@ const person = {
 /** the blog is one entity across the site, so posts can point back at it */
 const blog = {
   "@type": "Blog",
-  "@id": `${SITE_URL}/posts/#blog`,
-  url: `${SITE_URL}/posts/`,
+  "@id": `${SITE_URL}/posts#blog`,
+  url: `${SITE_URL}/posts`,
   name: `${SITE_NAME} - posts`,
   publisher: { "@id": `${SITE_URL}/#person` },
   inLanguage: "en-US",
@@ -80,7 +80,7 @@ const segments = path.split("/").filter(Boolean);
 const crumbs = [{ name: SITE_NAME, item: `${SITE_URL}/` }];
 segments.forEach((segment, index) => {
   const isLast = index === segments.length - 1;
-  const trail = `${SITE_URL}/${segments.slice(0, index + 1).join("/")}/`;
+  const trail = `${SITE_URL}/${segments.slice(0, index + 1).join("/")}`;
   const label = LABELS[segment] ?? (isLast ? title : segment.replace(/-/g, " "));
   crumbs.push({ name: label, item: trail });
 });
@@ -108,7 +108,7 @@ const page = {
   primaryImageOfPage: { "@id": `${canonical}#primaryimage` },
   ...(crumbs.length > 1 ? { breadcrumb: { "@id": `${canonical}#breadcrumb` } } : {}),
   ...(isHome ? { about: { "@id": `${SITE_URL}/#person` } } : {}),
-  ...(isPostsIndex ? { mainEntity: { "@id": `${SITE_URL}/posts/#blog` } } : {}),
+  ...(isPostsIndex ? { mainEntity: { "@id": `${SITE_URL}/posts#blog` } } : {}),
   inLanguage: "en-US",
 };
 
@@ -132,7 +132,7 @@ if (isArticle && article) {
     author: { "@id": `${SITE_URL}/#person` },
     publisher: { "@id": `${SITE_URL}/#person` },
     mainEntityOfPage: { "@id": canonical },
-    isPartOf: { "@id": `${SITE_URL}/posts/#blog` },
+    isPartOf: { "@id": `${SITE_URL}/posts#blog` },
     ...(article.tags?.length ? { keywords: article.tags.join(", ") } : {}),
     ...(article.section ? { articleSection: article.section } : {}),
     ...(article.wordCount ? { wordCount: article.wordCount } : {}),
