@@ -41,7 +41,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
             </span>
           </p>
         )}
-        <div class="relative">
+        <div class="site-bluesky-root-post relative">
           <BlueskyPostContent event={event} />
         </div>
         <bluesky-post-thread data-uri={event.uri} />
@@ -172,8 +172,11 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
 
   .site-bluesky-thread-post { position: relative; }
 
-  /* The rail follows the avatar column, leaving long text and media room to grow. */
-  .site-bluesky-thread-post:not(:last-child)::before {
+  /* The rail follows the avatar column, leaving long text and media room to grow.
+     Once comments load, the original post takes the same layout so one rail
+     runs from its avatar into the first comment. */
+  .site-bluesky-thread-post:not(:last-child)::before,
+  .site-bluesky-card:has(.site-bluesky-conversation) > .site-bluesky-root-post::before {
     content: "";
     position: absolute;
     inset-inline-start: 35px;
@@ -184,22 +187,31 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     background: color-mix(in oklab, var(--secondary-text) 30%, transparent);
   }
 
-  .site-bluesky-thread-post .bluesky-post-container .post-header {
+  /* the repost line takes the top padding, so the original post's avatar sits higher */
+  .site-bluesky-card[data-reposted]:has(.site-bluesky-conversation) > .site-bluesky-root-post::before {
+    top: 52px;
+  }
+
+  :is(.site-bluesky-thread-post, .site-bluesky-card:has(.site-bluesky-conversation) > .site-bluesky-root-post)
+    .bluesky-post-container .post-header {
     grid-template-columns: 40px minmax(0, 1fr);
   }
 
   .site-bluesky-thread-post .user-info { overflow-wrap: anywhere; }
 
-  .site-bluesky-thread-post .bluesky-post-container .post-content > :not(.post-header):not(.timestamp) {
+  :is(.site-bluesky-thread-post, .site-bluesky-card:has(.site-bluesky-conversation) > .site-bluesky-root-post)
+    .bluesky-post-container .post-content > :not(.post-header):not(.timestamp) {
     margin-inline-start: 3rem;
   }
 
-  .site-bluesky-thread-post > bluesky-post-actions {
+  :is(.site-bluesky-thread-post, .site-bluesky-card:has(.site-bluesky-conversation) > .site-bluesky-root-post)
+    > bluesky-post-actions {
     display: block;
     margin-inline-start: 3rem;
   }
 
-  .site-bluesky-thread-post bluesky-media > .grid {
+  :is(.site-bluesky-thread-post, .site-bluesky-card:has(.site-bluesky-conversation) > .site-bluesky-root-post)
+    bluesky-media > .grid {
     margin-inline-start: 3rem;
   }
 
