@@ -18,6 +18,10 @@ import type { ComposerAttachment } from "@/lib/bluesky/media";
 const reactionClass =
   "inline-flex h-6 min-w-[2.75rem] items-center justify-center gap-1 rounded-lg border border-[color:transparent] text-xs hover:opacity-60 focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50";
 
+// the palette pink is a background tint, so light mode keeps its hue at ink depth
+const pressedClass = "text-[color:oklch(from_var(--primary)_0.62_0.14_h)] dark:text-primary";
+const reactionStroke = 2.5;
+
 const buttonClass =
   "inline-flex min-h-10 min-w-10 justify-center items-center gap-1.5 rounded-lg border border-[color:transparent] px-2 text-xs hover:bg-primary focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50 dark:hover:bg-dark-primary";
 
@@ -112,7 +116,12 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           disabled={busy || auth.loading || !post}
           onClick={() => void act("like")}
         >
-          <FiHeart size={14} aria-hidden="true" className={post?.viewer?.like ? "fill-current text-rose-500" : ""} />{" "}
+          <FiHeart
+            size={14}
+            strokeWidth={reactionStroke}
+            aria-hidden="true"
+            className={post?.viewer?.like ? `fill-current ${pressedClass}` : ""}
+          />{" "}
           {post?.likeCount ? ` ${post.likeCount}` : ""}
         </button>
         <RepostButton
@@ -132,7 +141,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           disabled={busy || auth.loading || post?.viewer?.replyDisabled}
           onClick={() => setReplyOpen(!replyOpen)}
         >
-          <FiMessageCircle size={14} aria-hidden="true" />
+          <FiMessageCircle size={14} strokeWidth={reactionStroke} aria-hidden="true" />
           {post?.replyCount ? ` ${post.replyCount}` : ""}
         </button>
       </div>
@@ -212,7 +221,7 @@ function RepostButton({
         disabled={disabled}
         onClick={reposted ? undefined : onRepost}
       >
-        <FiRepeat size={14} aria-hidden="true" className={reposted ? "text-[#16a34a]" : ""} />
+        <FiRepeat size={14} strokeWidth={reactionStroke} aria-hidden="true" className={reposted ? pressedClass : ""} />
         {count ? ` ${count}` : ""}
       </button>
       <div ref={panel} id={id} popover="auto" className="post-menu-panel" role="group" aria-label="Repost options">
