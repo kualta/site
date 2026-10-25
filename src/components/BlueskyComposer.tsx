@@ -186,7 +186,7 @@ export default function BlueskyComposer({
             disabled={busy}
             aria-describedby={`${id}-count`}
             style={{ background: "transparent", color: "inherit" }}
-            className="block w-full resize-none overflow-hidden rounded-lg border-0 p-3 pb-10 text-base leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2"
+            className="block w-full resize-none overflow-hidden rounded-lg border border-[color:transparent] p-3 pb-10 text-base leading-relaxed"
           />
           <span
             id={`${id}-count`}
