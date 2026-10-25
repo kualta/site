@@ -23,6 +23,18 @@ const post = {
     ],
   },
 };
+const readerDid = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+const comment = {
+  ...post, uri: `at://${readerDid}/app.bsky.feed.post/comment`, embed: undefined,
+  author: { did: readerDid, handle: "reader.test", displayName: "Reader", avatar: "https://cdn.bsky.app/reader.jpg" },
+  record: { ...post.record, text: "Are the good times coming soon?", reply: { root: { uri, cid: post.cid }, parent: { uri, cid: post.cid } } },
+};
+const reply = {
+  ...post, uri: `at://${did}/app.bsky.feed.post/reply`, embed: undefined,
+  author: { ...post.author, avatar: "https://cdn.bsky.app/owner.jpg" },
+  record: { ...post.record, text: "Yes! Really looking forward to sharing more with everyone.", reply: { root: { uri, cid: post.cid }, parent: { uri: comment.uri, cid: comment.cid } } },
+};
+const threadNode = (post, replies = []) => ({ $type: "app.bsky.feed.defs#threadViewPost", post, replies });
 let mode = "ok";
 const assetRoot = resolve("dist/client");
 const mime = {
@@ -67,6 +79,9 @@ const mf = new Miniflare({
     if (new URL(request.url).hostname === "public.api.bsky.app") {
       if (mode === "slow") await new Promise((resolve) => setTimeout(resolve, 10_000));
       if (mode === "failed") return new Response("Unavailable", { status: 503 });
+      if (new URL(request.url).pathname.endsWith("getPostThread")) {
+        return Response.json({ thread: threadNode(post, mode === "conversation" ? [threadNode(comment, [threadNode(reply)])] : []) });
+      }
       return Response.json({
         posts:
           mode === "missing"
@@ -88,7 +103,9 @@ const mf = new Miniflare({
                           })),
                         },
                       }
-                    : post,
+                    : mode === "conversation"
+                      ? { ...post, embed: undefined }
+                      : post,
               ],
       });
     }
@@ -193,6 +210,41 @@ try {
     await viewer.getByRole("button", { name: "Close media viewer" }).click();
     await viewer.waitFor({ state: "hidden" });
     assert.equal(page.url(), url);
+    mode = "conversation";
+    const fragment = await context.request.get(`${url}/thread`);
+    assert.equal(fragment.status(), 200);
+    assert.match(await fragment.text(), /site-bluesky-conversation/);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".site-bluesky-conversation").waitFor();
+    assert.equal(await page.locator(".site-bluesky-card").count(), 1);
+    assert.equal(await page.locator(".site-bluesky-thread-post").count(), 2);
+    assert.match(await card.textContent(), /Are the good times coming soon/);
+    assert.match(await card.textContent(), /Really looking forward/);
+    const avatars = await page.locator(".site-bluesky-thread-post .post-header > .avatar").all();
+    const firstAvatar = await avatars[0].boundingBox();
+    const secondAvatar = await avatars[1].boundingBox();
+    assert.equal(firstAvatar.x, secondAvatar.x);
+    const rail = await page.locator(".site-bluesky-thread-post").first().evaluate(el => {
+      const style = getComputedStyle(el, "::before");
+      const rect = el.getBoundingClientRect();
+      return { x: rect.x + parseFloat(style.left) + parseFloat(style.width) / 2,
+        start: rect.y + parseFloat(style.top), end: rect.bottom - parseFloat(style.bottom) };
+    });
+    assert(Math.abs(rail.x - firstAvatar.x - firstAvatar.width / 2) < 1);
+    assert(rail.start > firstAvatar.y + firstAvatar.height);
+    assert(rail.end < secondAvatar.y);
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.locator(".site-bluesky-thread-post post-link-menu button").first().click();
+    await page.getByRole("button", { name: "Copy kualta.dev link" }).click();
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `https://kualta.dev/post/${encodeURIComponent(readerDid)}/comment`);
+    for (const dark of [false, true]) {
+      await page.evaluate(dark => document.documentElement.classList.toggle("dark", dark), dark);
+      if (process.env.SCREENSHOT_DIR) await page.screenshot({ path: resolve(process.env.SCREENSHOT_DIR, `thread-${mobile ? "mobile" : "desktop"}-${dark ? "dark" : "light"}.png`) });
+    }
+    mode = "failed";
+    await page.evaluate(() => window.dispatchEvent(new Event("bluesky:reply-published")));
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator(".site-bluesky-thread-post").count(), 2);
     mode = "labeled";
     assert.equal((await page.reload({ waitUntil: "domcontentloaded" })).status(), 200);
     assert.equal(await page.locator("[data-bluesky-fallback]").count(), 1);
@@ -220,6 +272,9 @@ try {
         noHorizontalOverflow: true,
         publicImage: true,
         compactNativeMenu: true,
+        expandedConversation: true,
+        connectedAvatars: true,
+        threadFailureRetainsContent: true,
         menuLeftOfTimestamp: true,
         nativeEscapeAndLightDismiss: true,
         metadata: true,

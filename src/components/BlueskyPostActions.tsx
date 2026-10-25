@@ -75,6 +75,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
       if (!agent) throw new Error("Log in again to update your reaction.");
       if (action === "reply") {
         await replyToPost(agent, uri, text, images);
+        window.dispatchEvent(new Event("bluesky:reply-published"));
         setImages([]);
         setText("");
         setReplyOpen(false);

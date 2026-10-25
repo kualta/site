@@ -1,0 +1,29 @@
+---
+import { BlueskyPost } from "@astro-community/astro-embed-bluesky";
+import { getBlueskyMedia } from "@/lib/activity/bluesky-media";
+import { formatAbsoluteTime, formatRelativeTime } from "@/lib/activity";
+import type { BlueskyActivity } from "@/lib/activity/types";
+interface Props { event: BlueskyActivity }
+const { event } = Astro.props;
+const absoluteTime = formatAbsoluteTime(event.occurredAt);
+const gallery = event.post.embed?.$type === "app.bsky.embed.gallery#view";
+const media = getBlueskyMedia(event.post.embed);
+const linkCard = event.linkPreview && !event.post.embed
+  ? { ...event.post, embed: { $type: "app.bsky.embed.external#view" as const, external: event.linkPreview } }
+  : undefined;
+---
+<bluesky-media data-media={JSON.stringify(media)}>
+  <BlueskyPost post={gallery ? { ...event.post, embed: undefined } : (linkCard ?? event.post)} />
+  {gallery && <div class="grid grid-cols-2 gap-1 p-4">{media.map((image) => <a href={image.src}><div class="image-grid-item"><img class="w-full rounded-lg" src={image.thumbnail} alt={image.alt} loading="lazy" /></div></a>)}</div>}
+</bluesky-media>
+<bluesky-post-actions data-uri={event.uri} />
+<div class="site-bluesky-meta">
+  <post-link-menu data-uri={event.uri} />
+  <a href={event.url} target="_blank" rel="noreferrer noopener"
+    class="site-bluesky-time font-mono text-xs tabular-nums text-secondary-text"
+    aria-label={`View this Bluesky activity from ${absoluteTime}`}>
+    <time datetime={event.occurredAt} title={absoluteTime} data-activity-relative-time>
+      {formatRelativeTime(event.occurredAt)}
+    </time>
+  </a>
+</div>
