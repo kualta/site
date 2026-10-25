@@ -15,8 +15,10 @@ import { usePopoverMenu } from "@/lib/popover-menu";
 import BlueskyComposer from "./BlueskyComposer";
 import type { ComposerAttachment } from "@/lib/bluesky/media";
 
+// icons sit at the start of equal slots, and the row is pulled back by the
+// slot's inset, so the first icon lines up with the post text above it
 const reactionClass =
-  "inline-flex h-6 min-w-[2.75rem] items-center justify-center gap-1 rounded-lg border border-[color:transparent] text-xs hover:opacity-60 focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50";
+  "inline-flex h-6 min-w-[2.75rem] items-center justify-start gap-1 rounded-lg border border-[color:transparent] px-[7px] text-xs hover:opacity-60 focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50";
 
 // the palette pink is a background tint, so light mode keeps its hue at ink depth
 const pressedClass = "text-[color:oklch(from_var(--primary)_0.62_0.14_h)] dark:text-primary";
@@ -105,8 +107,8 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
   if (!auth.agent) return null;
 
   return (
-    <div className="px-3 pb-3" aria-label="Bluesky post actions">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="px-4 pb-3" aria-label="Bluesky post actions">
+      <div className="-ml-2 flex flex-wrap items-center gap-4">
         <button
           type="button"
           className={reactionClass}
