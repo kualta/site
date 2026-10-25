@@ -236,71 +236,76 @@ async function fetchContributionYears(context: ProviderContext, token: string, n
   return [...new Set(usable)].sort((left, right) => right - left);
 }
 
-function contributionsQuery(years: readonly number[]): string {
-  const fields = years
-    .map(
-      (year) =>
-        `y${year}: contributionsCollection(from: "${year}-01-01T00:00:00Z", to: "${year}-12-31T23:59:59Z") {
-          contributionCalendar { weeks { contributionDays { date contributionCount } } }
-        }`,
-    )
-    .join("\n");
-  return `query($login: String!) { user(login: $login) { ${fields} } }`;
+function calendarAttribute(tag: string, name: string): string | undefined {
+  return new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(tag)?.slice(1).find(Boolean);
 }
 
-function collectContributionDays(collection: unknown, now: Date, days: ActivityEvent[]): void {
-  const weeks = recordField(asRecord(collection), "contributionCalendar")?.weeks;
-  if (!Array.isArray(weeks)) throw new Error("GitHub returned an invalid contributions response");
-
-  for (const week of weeks) {
-    const contributionDays = asRecord(week)?.contributionDays;
-    if (!Array.isArray(contributionDays)) throw new Error("GitHub returned an invalid contributions response");
-
-    for (const entry of contributionDays) {
-      const day = asRecord(entry);
-      const date = stringField(day, "date");
-      const count = day?.contributionCount;
-      if (!date || !CONTRIBUTION_DAY.test(date) || typeof count !== "number" || !Number.isInteger(count)) {
-        throw new Error("GitHub returned an invalid contributions response");
-      }
-      if (count <= 0) continue;
-
-      // a day is summarised at its end, but never dated into the future
-      const endOfDay = Date.parse(`${date}T23:59:59.999Z`);
-      const occurredAt = safeDate(new Date(Math.min(endOfDay, now.getTime())).toISOString());
-      if (!occurredAt) continue;
-
-      days.push({
-        id: `github:contributions:${date}`,
-        source: "github",
-        kind: "contributions",
-        occurredAt,
-        count: Math.min(count, MAX_CONTRIBUTIONS_PER_DAY),
-      });
-    }
+/** Pair each dated cell with its tooltip; intensity levels are not counts. */
+export function normalizeContributionCalendar(html: string, year: number, now: Date): ActivityEvent[] {
+  const counts = new Map<string, number>();
+  for (const match of html.matchAll(/<tool-tip\b[^>]*>([^<]*)<\/tool-tip>/g)) {
+    const id = calendarAttribute(match[0], "for");
+    const total = /^(No|\d{1,3}(?:,\d{3})+|\d+) contributions? on\s/.exec(match[1].trim());
+    if (!id || !total) continue;
+    const count = total[1] === "No" ? 0 : Number(total[1].replaceAll(",", ""));
+    if (Number.isSafeInteger(count)) counts.set(id, count);
   }
+
+  const days: ActivityEvent[] = [];
+  const dates = new Set<string>();
+  for (const match of html.matchAll(/<td\b[^>]*\bdata-date\s*=[^>]*>/g)) {
+    const date = calendarAttribute(match[0], "data-date");
+    const id = calendarAttribute(match[0], "id");
+    const count = id ? counts.get(id) : undefined;
+    const endOfDay = date ? Date.parse(`${date}T23:59:59.999Z`) : NaN;
+    if (
+      !date ||
+      !CONTRIBUTION_DAY.test(date) ||
+      !date.startsWith(`${year}-`) ||
+      !Number.isFinite(endOfDay) ||
+      new Date(endOfDay).toISOString().slice(0, 10) !== date ||
+      count === undefined ||
+      dates.has(date)
+    ) {
+      throw new Error("GitHub returned an invalid contributions calendar");
+    }
+    dates.add(date);
+    if (count === 0 || date > now.toISOString().slice(0, 10)) continue;
+
+    days.push({
+      id: `github:contributions:${date}`,
+      source: "github",
+      kind: "contributions",
+      // Today's observation time stays stable in the archive until its count changes.
+      occurredAt: new Date(Math.min(endOfDay, now.getTime())).toISOString(),
+      count: Math.min(count, MAX_CONTRIBUTIONS_PER_DAY),
+    });
+  }
+  // Login/error pages and changed markup must retain the last good snapshot.
+  if (!dates.size) throw new Error("GitHub returned an invalid contributions calendar");
+  return days;
 }
 
 /**
- * The calendar is the only GitHub history that reaches past the events API's
- * three-day window. A collection covers at most a year, so every year the
- * account has contributions for is aliased into one request — the whole history
- * for a single point of the GraphQL budget.
+ * GraphQL calendar totals depend on the token's repository access, even for the
+ * account owner. The public profile includes anonymized private contributions
+ * when the owner enables them, so read those exact counts without credentials.
+ * GraphQL is only used to discover the available years.
  */
 async function fetchContributionDays(context: ProviderContext, token: string, now: Date): Promise<ActivityEvent[]> {
   const years = await fetchContributionYears(context, token, now);
-  if (!years.length) return [];
-
-  const body = await fetchGraphQL(context, token, {
-    query: contributionsQuery(years),
-    variables: { login: GITHUB_USERNAME },
-  });
-  const user = recordField(recordField(body, "data"), "user");
-  if (!user) throw new Error("GitHub returned an invalid contributions response");
-
-  const days: ActivityEvent[] = [];
-  for (const year of years) collectContributionDays(user[`y${year}`], now, days);
-  return days;
+  const calendars = await Promise.all(
+    years.map(async (year) => {
+      const url = `https://github.com/users/${GITHUB_USERNAME}/contributions?from=${year}-01-01&to=${year}-12-31`;
+      const response = await context.fetch(url, {
+        headers: { Accept: "text/html", "Accept-Language": "en-US", "User-Agent": "kualta.dev" },
+        signal: context.signal,
+      });
+      if (!response.ok) throw new Error(`GitHub request failed with status ${response.status}`);
+      return normalizeContributionCalendar(await response.text(), year, now);
+    }),
+  );
+  return calendars.flat();
 }
 
 async function fetchGitHubActivity(context: ProviderContext): Promise<ActivityEvent[]> {

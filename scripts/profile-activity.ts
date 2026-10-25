@@ -51,27 +51,29 @@ const providers: ActivityProvider[] = [
   { id: "bluesky", async fetch() { return events.filter(event => event.source === "bluesky").slice(0, 100); } },
 ];
 // All raw response bytes are prepared outside the samples. The real providers
-// still parse JSON, validate schemas and hash synthetic GitHub identifiers.
+// still parse JSON/HTML, validate schemas and hash synthetic GitHub identifiers.
 const days = Array.from({ length: providerDays }, (_, i) => ({
   date: new Date(+now - (i + 1) * 86_400_000).toISOString().slice(0, 10),
   contributionCount: 20,
 }));
 const years = [...new Set(days.map(day => Number(day.date.slice(0, 4))))];
-const calendars = Object.fromEntries(years.map(year => [`y${year}`, { contributionCalendar: { weeks: [{ contributionDays:
-  days.filter(day => day.date.startsWith(String(year)))
-}] } }]));
+const calendars = new Map(years.map(year => [year, days.filter(day => day.date.startsWith(String(year))).map(day =>
+  `<td data-date="${day.date}" id="day-${day.date}"></td><tool-tip for="day-${day.date}">${day.contributionCount} contributions on fixture day.</tool-tip>`
+).join("")]));
 const rawEvents = JSON.stringify(Array.from({ length: githubEvents }, (_, i) => ({ id: `synthetic-${i}`, type: "PushEvent", public: i % 2 === 0,
   created_at: now.toISOString(), repo: { name: "kualta/site" }, payload: { head: "a".repeat(40) } })));
 const rawPosts = JSON.stringify({ feed: events.filter(event => event.source === "bluesky").slice(0, 100).map(event => ({ post: event.source === "bluesky" ? event.post : undefined })) });
 const rawYears = JSON.stringify({ data: { user: { contributionsCollection: { contributionYears: years } } } });
-const rawCalendar = JSON.stringify({ data: { user: calendars } });
-const fixtureFetch: ProviderContext["fetch"] = async (input, init) => {
+const fixtureFetch: ProviderContext["fetch"] = async (input) => {
   const url = new URL(String(input));
   let payload: string;
   if (url.hostname === "public.api.bsky.app") payload = rawPosts;
+  else if (url.hostname === "github.com" && url.pathname === "/users/kualta/contributions") {
+    return new Response(calendars.get(Number(url.searchParams.get("from")?.slice(0, 4))), { headers: { "Content-Type": "text/html" } });
+  }
   else if (url.hostname !== "api.github.com") throw new Error("Unexpected fixture upstream");
   else if (url.pathname === "/user") payload = '{"login":"kualta"}';
-  else if (url.pathname === "/graphql") payload = String(init?.body).includes("contributionYears") ? rawYears : rawCalendar;
+  else if (url.pathname === "/graphql") payload = rawYears;
   else if (url.pathname === "/users/kualta/events") payload = rawEvents;
   else throw new Error("Unexpected fixture endpoint");
   return new Response(payload, { headers: { "Content-Type": "application/json" } });
@@ -98,6 +100,6 @@ for (let i = 0; i < runs; i++) {
   samples.push({ cpuMs: (used.user + used.system) / 1000, elapsedMs: performance.now() - started });
 }
 const ordered = samples.slice(1).map(sample => sample.cpuMs).sort((a, b) => a - b);
-console.log(JSON.stringify({ mode, calendarDays, postCount, providerDays, githubEvents, events: events.length, bytes, upstreamBytes: { events: rawEvents.length, posts: rawPosts.length, calendar: rawCalendar.length }, runs, first: samples[0],
+console.log(JSON.stringify({ mode, calendarDays, postCount, providerDays, githubEvents, events: events.length, bytes, upstreamBytes: { events: rawEvents.length, posts: rawPosts.length, calendar: [...calendars.values()].reduce((sum, html) => sum + html.length, 0) }, runs, first: samples[0],
   cpuMedianMs: ordered[Math.floor(ordered.length * 0.5)], cpuP95Ms: ordered[Math.floor(ordered.length * 0.95)],
-  note: `Synthetic Node/V8 process CPU; includes local GC${["providers", "full-cron", "bounded-cron"].includes(mode) ? " and real provider normalization of fixture JSON" : ", excludes upstream normalization"}, excludes network and D1. ${mode === "bounded-cron" ? "Retained history intentionally omitted; persistence design not implemented. " : ""}Not Cloudflare CPU accounting.` }));
+  note: `Synthetic Node/V8 process CPU; includes local GC${["providers", "full-cron", "bounded-cron"].includes(mode) ? " and real provider normalization of fixture JSON/HTML" : ", excludes upstream normalization"}, excludes network and D1. ${mode === "bounded-cron" ? "Retained history intentionally omitted; persistence design not implemented. " : ""}Not Cloudflare CPU accounting.` }));
