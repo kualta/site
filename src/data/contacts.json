@@ -16,10 +16,26 @@
     "is_main": true
   },
   {
-    "id": 4,
-    "platform": "farcaster",
+    "id": 6,
+    "platform": "ethereum",
     "label": "kualta.eth",
-    "link": "https://farcaster.xyz/kualta.eth",
+    "link": "https://app.ens.domains/kualta.eth",
+    "description": null,
+    "is_main": false
+  },
+  {
+    "id": 7,
+    "platform": "youtube",
+    "label": "@kualta",
+    "link": "https://www.youtube.com/@kualta",
+    "description": null,
+    "is_main": false
+  },
+  {
+    "id": 8,
+    "platform": "instagram",
+    "label": "kualtx",
+    "link": "https://www.instagram.com/kualtx",
     "description": null,
     "is_main": false
   },
