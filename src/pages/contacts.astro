@@ -25,7 +25,7 @@ const schema = [
 >
   <h1 class="sr-only">contacts</h1>
   <!-- the cards share one grid through subgrid, so every handle starts on the same line -->
-  <div class="max-w-xl w-full grow content-start grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-2 p-4">
+  <div class="max-w-xl w-full grow content-start grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2 p-4">
     {contacts.map((contact) => (
       <div
         class="col-span-full grid grid-cols-subgrid rounded-xl bg-secondary px-4 py-2 text-lg drop-shadow-sm
@@ -37,11 +37,11 @@ const schema = [
           rel="noopener noreferrer me"
           class="col-span-full grid grid-cols-subgrid items-center hover:opacity-70"
         >
-          <span class="font-medium whitespace-nowrap">{contact.platform}</span>
-          <span class="truncate text-sm text-secondary-text">{contact.label}</span>
           <span class="w-5 flex justify-center text-secondary-text" aria-hidden="true">
             <ContactIcon platform={contact.platform} size={18} />
           </span>
+          <span class="font-medium whitespace-nowrap">{contact.platform}</span>
+          <span class="truncate text-sm text-secondary-text">{contact.label}</span>
         </a>
       </div>
     ))}
