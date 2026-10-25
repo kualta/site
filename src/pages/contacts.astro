@@ -3,19 +3,13 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcon from "@/components/ContactIcon.astro";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
-import { SITE_NAME, SITE_URL } from "@/lib/seo";
+import { SITE_URL } from "@/lib/seo";
 import { loadBlueskyProfile } from "@/lib/bluesky/profile";
 
-/** splits "contact@kualta.dev" so the name, not the mailbox, starts the handle column */
-function splitHandle(label: string): { prefix: string; rest: string } {
-  const start = Math.max(label.indexOf(SITE_NAME), 0);
-  return { prefix: label.slice(0, start), rest: label.slice(start) };
-}
-
 const profile = await loadBlueskyProfile();
-const contacts = [...(contactsData as Contact[])]
-  .sort((a, b) => (a.platform.length + a.label.length) - (b.platform.length + b.label.length))
-  .map((contact) => ({ ...contact, handle: splitHandle(contact.label) }));
+const contacts = [...(contactsData as Contact[])].sort(
+  (a, b) => (a.platform.length + a.label.length) - (b.platform.length + b.label.length),
+);
 
 const schema = [
   {
@@ -45,25 +39,21 @@ const schema = [
     {profile.description && (
       <p class="mt-3 whitespace-pre-line text-center text-sm text-secondary-text">{profile.description}</p>
     )}
-    <!-- the cards share one grid through subgrid, so every handle starts on the same line -->
-    <div class="mt-6 grid w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2">
+    <div class="mt-10 flex w-full max-w-[18rem] flex-col gap-2.5">
       {contacts.map((contact) => (
         <a
           href={contact.link}
           target="_blank"
           rel="noopener noreferrer me"
-          class="col-span-full grid grid-cols-subgrid items-center rounded-xl bg-secondary px-4 py-2 text-lg
-                 drop-shadow-sm dark:bg-dark-secondary [&:hover>*]:opacity-70"
+          class="flex items-center justify-center gap-3.5 rounded-xl bg-secondary px-5 py-3 text-xl drop-shadow-sm
+                 dark:bg-dark-secondary [&:hover>*]:opacity-70"
         >
-          <span class="w-5 flex justify-center text-secondary-text" aria-hidden="true">
-            <ContactIcon platform={contact.platform} size={18} />
+          <span class="w-6 flex shrink-0 justify-center text-secondary-text" aria-hidden="true">
+            <ContactIcon platform={contact.platform} size={22} />
           </span>
-          <span class="font-medium whitespace-nowrap">{contact.platform}</span>
-          <span class="relative whitespace-nowrap text-sm text-secondary-text">
-            {/* anything before the name hangs into the gap on its left, taking no column width */}
-            {contact.handle.prefix && <span class="absolute right-full">{contact.handle.prefix}</span>}
-            {contact.handle.rest}
-          </span>
+          <!-- the line box centers on cap height, but the names are lowercase, so the
+               x-height they are mostly made of sits low until lifted by 0.12em -->
+          <span class="-translate-y-[0.12em] font-medium">{contact.platform}</span>
         </a>
       ))}
     </div>
