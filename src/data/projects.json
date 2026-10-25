@@ -321,6 +321,7 @@
     "name": "ball",
     "description": "real life 8 ball",
     "link": "https://real8ball.com",
+    "git_link": "https://github.com/kualta/ball",
     "language": "TypeScript",
     "date": "2026-09-21",
     "status": "complete",
