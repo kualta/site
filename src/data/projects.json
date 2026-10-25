@@ -7,7 +7,7 @@
     "git_link": "https://github.com/kualta/fuji.git",
     "language": "C#",
     "date": "2020-09-01",
-    "status": "complete",
+    "status": "archived",
     "tech_stack": [
       "Unity"
     ],
@@ -150,7 +150,7 @@
     "git_link": "https://github.com/kualta/cast.git",
     "language": "Python",
     "date": "2023-06-22",
-    "status": "complete",
+    "status": "archived",
     "tech_stack": [
       "binance",
       "prophet",
@@ -202,7 +202,7 @@
     "git_link": "https://github.com/flow-industries/paper",
     "language": "TypeScript",
     "date": "2024-07-01",
-    "status": "complete",
+    "status": "archived",
     "tech_stack": [
       "React",
       "Lens",
