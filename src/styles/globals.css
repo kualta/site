@@ -21,6 +21,12 @@ body {
   outline-color: var(--text-dark);
 }
 
+/* fields already draw a border, so focus darkens it instead of adding a ring */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), textarea, select):focus-visible {
+  outline: none;
+  border-color: currentColor;
+}
+
 /* Han characters live in both faces, so Chinese has to ask for Huninn by name
    or it renders in M PLUS's Japanese glyph forms */
 :lang(zh),
@@ -1097,6 +1103,7 @@ input[type="checkbox"]:checked {
   background: var(--secondary);
   font: inherit;
   color: inherit;
+  transition: border-color 160ms ease;
 }
 .dark .newsletter-fields input,
 .dark .kaomoji-search { background: var(--secondary-dark); }
@@ -1175,7 +1182,6 @@ body[data-kaomoji-results] > main {
   overscroll-behavior: contain;
   scrollbar-gutter: stable both-edges;
 }
-.kaomoji-search { transition: border-color 160ms ease; }
 .kaomoji-search:is(:focus, :focus-visible) {
   outline: none;
   border-color: currentColor;
@@ -1338,11 +1344,11 @@ body:has(.page-bottom[data-scrolled]) .feed-back-top:hover { opacity: 0.7; }
 .score-scroll > .score-message { position: absolute; inset: 0; z-index: 1; background: transparent; }
 
 .post-link-menu { position: relative; }
-.post-menu-trigger { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 0.375rem; }
-.post-menu-panel { position: fixed; inset: auto; margin: 0; min-width: 13rem; max-width: calc(100vw - 1rem); padding: 0.375rem; border: 1px solid var(--secondary-text); border-radius: 0.5rem; background: var(--bg); color: var(--text); box-shadow: 0 4px 12px #0003; }
-.dark .post-menu-panel { background: var(--bg-dark); color: var(--text-dark); }
-.post-menu-panel :is(button, a) { display: block; width: 100%; text-align: left; padding: 0.75rem; border-radius: 0.5rem; }
-.post-menu-panel :is(button, a):hover { background: var(--secondary); }
-.post-menu-panel :is(button, a):focus-visible, .post-menu-trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-
-.dark .post-menu-panel :is(button, a):hover { background: var(--secondary-dark); }
+.post-menu-trigger { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid transparent; border-radius: 0.5rem; transition: border-color 160ms ease; }
+.post-menu-trigger:focus-visible { outline: none; border-color: currentColor; }
+.post-menu-panel { position: fixed; inset: auto; margin: 0; min-width: 13rem; max-width: calc(100vw - 1rem); padding: 0.375rem; border: 1px solid color-mix(in srgb, currentColor 10%, transparent); border-radius: 1rem; background: var(--secondary); color: var(--text); box-shadow: 0 8px 32px #0002; }
+.dark .post-menu-panel { background: var(--secondary-dark); color: var(--text-dark); box-shadow: 0 8px 32px #0006; }
+/* items sit one padding-width inside the panel, so their corners follow its curve */
+.post-menu-panel :is(button, a) { display: block; width: 100%; text-align: left; padding: 0.75rem; border-radius: 0.625rem; transition: background-color 120ms ease; }
+.post-menu-panel :is(button, a):is(:hover, :focus-visible) { outline: none; background: var(--primary); }
+.dark .post-menu-panel :is(button, a):is(:hover, :focus-visible) { background: var(--primary-dark); }
