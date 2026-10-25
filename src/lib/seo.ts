@@ -1,3 +1,4 @@
+import contacts from "@/data/contacts.json";
 import imageSizes from "@/data/image-sizes.json";
 
 export const SITE_URL = "https://kualta.dev";
@@ -6,11 +7,12 @@ export const TAGLINE = "a servant of many";
 export const TWITTER = "@kualts";
 export const DEFAULT_OG_IMAGE = "/opengraph-image.png";
 
-/** the accounts that make the Person entity resolvable to the same human */
+/**
+ * the accounts that make the Person entity resolvable to the same human,
+ * read from the contacts list so a new account is claimed everywhere at once
+ */
 export const SAME_AS = [
-  "https://github.com/kualta",
-  "https://bsky.app/profile/kualta.dev",
-  "https://farcaster.xyz/kualta.eth",
+  ...contacts.map((contact) => contact.link).filter((link) => link.startsWith("https://")),
   "https://twitter.com/kualts",
 ];
 

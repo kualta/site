@@ -3,10 +3,12 @@ import {
   FiAtSign,
   FiGithub,
   FiGlobe,
+  FiInstagram,
   FiMail,
   FiYoutube,
 } from "react-icons/fi";
 import { RiTwitterXLine } from "react-icons/ri";
+import { TbCurrencyEthereum } from "react-icons/tb";
 import Icons from "./Icons.astro";
 
 interface Props {
@@ -19,6 +21,8 @@ const { platform, size = 18 } = Astro.props;
 {platform === "website" && <FiGlobe size={size} />}
 {platform === "github" && <FiGithub size={size + 2} />}
 {platform === "youtube" && <FiYoutube size={size} />}
+{platform === "instagram" && <FiInstagram size={size} />}
+{platform === "ethereum" && <TbCurrencyEthereum size={size + 4} />}
 {platform === "twitter" && <RiTwitterXLine size={size} />}
 {platform === "farcaster" && <Icons name="farcaster" size={size + 2} />}
 {platform === "bluesky" && <Icons name="bluesky" size={size + 4} />}

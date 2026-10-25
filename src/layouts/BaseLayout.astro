@@ -12,7 +12,7 @@ import CornersScope from "@/components/CornersScope.astro";
 import { Snow } from "@/components/Snow.tsx";
 import { Toaster } from "@/components/Toaster.tsx";
 import SEO from "@/components/SEO.astro";
-import { SITE_NAME, TWITTER, ogImage, pageDescription, pageTitle } from "@/lib/seo";
+import { SAME_AS, SITE_NAME, TWITTER, ogImage, pageDescription, pageTitle } from "@/lib/seo";
 
 export interface Article {
   publishedTime: string;
@@ -85,6 +85,8 @@ const robots = noindex
     {atprotoDocument && <link rel="site.standard.document" href={atprotoDocument} />}
     <meta name="robots" content={robots} />
     <meta name="author" content={SITE_NAME} />
+    <!-- the Person schema's sameAs, repeated as rel=me so profiles that link back can verify the site -->
+    {SAME_AS.map((href) => <link rel="me" href={href} />)}
     <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f8f8f8" media="(prefers-color-scheme: light)" />
 
