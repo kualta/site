@@ -4,7 +4,9 @@ import ContactIcon from "@/components/ContactIcon.astro";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 import { SITE_URL } from "@/lib/seo";
+import { loadBlueskyProfile } from "@/lib/bluesky/profile";
 
+const profile = await loadBlueskyProfile();
 const contacts = [...(contactsData as Contact[])].sort(
   (a, b) => (a.platform.length + a.label.length) - (b.platform.length + b.label.length),
 );
@@ -24,18 +26,28 @@ const schema = [
   canonicalPath="/contacts"
 >
   <h1 class="sr-only">contacts</h1>
-  <!-- the cards share one grid through subgrid, so every handle starts on the same line -->
-  <div class="max-w-xl w-full grow content-start grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2 p-4">
-    {contacts.map((contact) => (
-      <div
-        class="col-span-full grid grid-cols-subgrid rounded-xl bg-secondary px-4 py-2 text-lg drop-shadow-sm
-               dark:bg-dark-secondary"
-      >
+  <div class="flex w-full max-w-xl flex-col items-center p-4">
+    {profile.avatar && (
+      <img
+        src={profile.avatar}
+        alt="kualta"
+        width="96"
+        height="96"
+        class="h-24 w-24 rounded-full object-cover drop-shadow-sm"
+      />
+    )}
+    {profile.description && (
+      <p class="mt-3 whitespace-pre-line text-center text-sm text-secondary-text">{profile.description}</p>
+    )}
+    <!-- the cards share one grid through subgrid, so every handle starts on the same line -->
+    <div class="mt-6 grid w-full grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-2">
+      {contacts.map((contact) => (
         <a
           href={contact.link}
           target="_blank"
           rel="noopener noreferrer me"
-          class="col-span-full grid grid-cols-subgrid items-center hover:opacity-70"
+          class="col-span-full grid grid-cols-subgrid items-center rounded-xl bg-secondary px-4 py-2 text-lg
+                 drop-shadow-sm dark:bg-dark-secondary [&:hover>*]:opacity-70"
         >
           <span class="w-5 flex justify-center text-secondary-text" aria-hidden="true">
             <ContactIcon platform={contact.platform} size={18} />
@@ -43,7 +55,7 @@ const schema = [
           <span class="font-medium whitespace-nowrap">{contact.platform}</span>
           <span class="truncate text-sm text-secondary-text">{contact.label}</span>
         </a>
-      </div>
-    ))}
+      ))}
+    </div>
   </div>
 </BaseLayout>
