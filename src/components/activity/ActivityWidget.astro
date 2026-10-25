@@ -63,7 +63,6 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>
     </div>
   </div>
-  <p class="text-xs text-secondary-text" role="status" data-activity-refresh-status hidden />
   <slot name="composer" />
   <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>
     <ActivityRows
@@ -322,22 +321,14 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
 
   async function pollActivity(list: HTMLOListElement): Promise<void> {
     if (document.visibilityState !== "visible" || !list.isConnected || list.dataset.activityPolling === "true") return;
-    const widget = list.closest<HTMLElement>("[data-activity-widget]");
-    const status = widget?.querySelector<HTMLElement>("[data-activity-refresh-status]");
-    function message(text: string): void {
-      if (!status) return;
-      status.textContent = text;
-      status.hidden = !text;
-    }
     list.dataset.activityPolling = "true";
 
     try {
       await syncNewestRows(list);
       pollFailures = 0;
-      message("");
-    } catch {
+    } catch (error) {
       pollFailures += 1;
-      message("Activity could not refresh. Retrying automatically.");
+      console.warn("Activity could not refresh; retrying automatically", error);
     } finally {
       list.dataset.activityPolling = "false";
       if (list.isConnected) schedulePoll(list);
