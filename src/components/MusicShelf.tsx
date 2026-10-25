@@ -38,6 +38,8 @@ const END_GUARD = 0.25;
 const SEEK_TOLERANCE = 1;
 // long enough for the copy to arrive; past it the clock goes back to telling the truth
 const SEEK_HOLD_MS = 15000;
+// how far into a record the back button restarts it instead of going to the one before
+const RESTART_AFTER = 3;
 // how loud the deck was left, so the next visit starts where it was
 const VOLUME_KEY = "music:volume";
 // unmuting a fader that was dragged to zero has to land somewhere audible
@@ -339,31 +341,6 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
     if (active && expanded) document.title = `${active.title} - kualta`;
   }, [active, expanded]);
 
-  useEffect(() => {
-    if (!active || !visited || !("mediaSession" in navigator)) return;
-
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: active.title,
-      artist: active.artist,
-      artwork: active.cover ? [{ src: active.cover, sizes: "360x360", type: "image/jpeg" }] : [],
-    });
-
-    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ["play", () => audioRef.current?.play()],
-      ["pause", () => audioRef.current?.pause()],
-      ["previoustrack", () => step(-1)],
-      ["nexttrack", () => step(1)],
-    ];
-
-    for (const [action, handler] of handlers) {
-      try {
-        navigator.mediaSession.setActionHandler(action, handler);
-      } catch {
-        // action unsupported in this browser, nothing to do
-      }
-    }
-  }, [active, step, visited]);
-
   const angleAt = (element: HTMLElement, clientX: number, clientY: number) => {
     const box = element.getBoundingClientRect();
     return Math.atan2(clientY - (box.top + box.height / 2), clientX - (box.left + box.width / 2));
@@ -529,6 +506,37 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
     [place],
   );
 
+  const back = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio && audio.currentTime > RESTART_AFTER) seekTo(0);
+    else step(-1);
+  }, [seekTo, step]);
+
+  useEffect(() => {
+    if (!active || !visited || !("mediaSession" in navigator)) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: active.title,
+      artist: active.artist,
+      artwork: active.cover ? [{ src: active.cover, sizes: "360x360", type: "image/jpeg" }] : [],
+    });
+
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ["play", () => audioRef.current?.play()],
+      ["pause", () => audioRef.current?.pause()],
+      ["previoustrack", back],
+      ["nexttrack", () => step(1)],
+    ];
+
+    for (const [action, handler] of handlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {
+        // action unsupported in this browser, nothing to do
+      }
+    }
+  }, [active, back, step, visited]);
+
   const seek = (event: React.ChangeEvent<HTMLInputElement>) => {
     place(Number(event.target.value));
   };
@@ -577,7 +585,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
         case "ArrowUp":
         case "p":
           event.preventDefault();
-          step(-1);
+          back();
           return;
         case "Home":
           event.preventDefault();
@@ -607,7 +615,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, duration, expanded, seekTo, step, toggle, toggleMute]);
+  }, [active, back, duration, expanded, seekTo, step, toggle, toggleMute]);
 
   useEffect(() => {
     let previous: DOMRect | undefined;
@@ -866,7 +874,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
               <button
                 type="button"
                 className="text-secondary-text transition-transform hover:opacity-70 active:scale-[0.96]"
-                onClick={() => step(-1)}
+                onClick={back}
                 aria-label="Previous track"
               >
                 <FiSkipBack />
