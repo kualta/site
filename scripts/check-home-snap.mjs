@@ -206,7 +206,7 @@ try {
         console.log(JSON.stringify({ mobile, separatorFirstVisible: true, prependedRowHeight: 212, rowDriftPx: boundaryDrift }));
 
         // Real generated HTML with warm feed fixtures lets Astro restore a deep reading position.
-        await page.route(url => url.pathname === "/", async route => {
+        await page.route(url => url.pathname === "/" || url.pathname === "/feed", async route => {
           const response = await route.fetch();
           const body = (await response.text()).replace(/(<ol[^>]*data-activity-list[^>]*>)[\s\S]*?<\/ol>/, `$1${rows(extra, tailHeight, boundary)}</ol>`);
           await route.fulfill({ response, body });
@@ -216,12 +216,13 @@ try {
         await page.evaluate(() => document.querySelector('.site-header a[href="/projects"]').click());
         await page.waitForURL(/\/projects\/?$/);
         await page.goBack();
-        await page.waitForURL(url => url.pathname === "/");
+        // a reader deep in the feed left from /feed, so that is where Back returns
+        await page.waitForURL(url => url.pathname === "/feed");
         await at(page, restored);
         await page.goForward();
         await page.waitForURL(/\/projects\/?$/);
         await page.goBack();
-        await page.waitForURL(url => url.pathname === "/");
+        await page.waitForURL(url => url.pathname === "/feed");
         await at(page, restored);
         await reset(page);
         await page.mouse.wheel(0, 40);
