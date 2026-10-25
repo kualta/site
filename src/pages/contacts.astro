@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import ContactIcon from "@/components/ContactIcon.astro";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 import { SITE_URL } from "@/lib/seo";
@@ -22,19 +23,26 @@ const schema = [
   schema={schema}
   canonicalPath="/contacts/"
 >
-  <div class="max-w-xl w-full grow flex flex-col gap-4 p-4">
+  <div class="max-w-xl w-full grow flex flex-col gap-2 p-4">
     <h1 class="sr-only">contacts</h1>
     {contacts.map((contact) => (
-      <a
-        href={contact.link}
-        target="_blank"
-        rel="noopener noreferrer me"
-        class="w-full flex flex-row items-baseline gap-2 hover:opacity-70 text-lg"
+      <div
+        class="flex w-full min-w-0 flex-row items-baseline gap-2 rounded-xl bg-secondary px-4 py-2 text-lg
+               drop-shadow-sm dark:bg-dark-secondary"
       >
-        <span class="font-medium whitespace-nowrap">{contact.platform}</span>
-        <span class="flex-grow border-b border-dotted border-secondary-text opacity-50" />
-        <span class="text-sm text-secondary-text whitespace-nowrap font-mono">{contact.label}</span>
-      </a>
+        <a
+          href={contact.link}
+          target="_blank"
+          rel="noopener noreferrer me"
+          class="flex flex-row items-baseline gap-2 min-w-0 flex-grow hover:opacity-70"
+        >
+          <span class="font-medium whitespace-nowrap">{contact.platform}</span>
+          <span class="min-w-0 truncate text-sm text-secondary-text">{contact.label}</span>
+          <span class="ml-auto w-5 shrink-0 flex justify-center text-secondary-text" aria-hidden="true">
+            <ContactIcon platform={contact.platform} size={16} />
+          </span>
+        </a>
+      </div>
     ))}
   </div>
 </BaseLayout>
