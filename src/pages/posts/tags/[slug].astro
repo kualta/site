@@ -22,13 +22,13 @@ const description = `Essays by kualta tagged ${tagText}`;
 const schema = [
   {
     "@type": "ItemList",
-    "@id": `${SITE_URL}/posts/tags/${filter}/#list`,
+    "@id": `${SITE_URL}/posts/tags/${filter}#list`,
     itemListOrder: "https://schema.org/ItemListOrderDescending",
     numberOfItems: postsForTag.length,
     itemListElement: postsForTag.map((post, index) => ({
       "@type": "ListItem",
       position: index + 1,
-      url: `${SITE_URL}/posts/${post.filename}/`,
+      url: `${SITE_URL}/posts/${post.filename}`,
       name: post.title,
     })),
   },
@@ -39,7 +39,7 @@ const schema = [
     <div class="flex flex-col h-full place-items-center justify-center gap-4 mb-20">
       <h1 class="sr-only">posts tagged {tagText}</h1>
       <div class="flex place-content-center justify-center flex-row flex-wrap p-4">
-        <a href="/posts/" aria-label={`all posts, currently filtered by ${tagText}`}>
+        <a href="/posts" aria-label={`all posts, currently filtered by ${tagText}`}>
           <span class="select-none">•</span>
           <span class="px-4">{tagText}</span>
           <span class="select-none">•</span>

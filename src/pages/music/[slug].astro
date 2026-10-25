@@ -28,7 +28,7 @@ const description = `${track.title}, ${kind} by ${track.artist}`;
 const isoDuration = (seconds: number) =>
   `PT${Math.floor(seconds / 60)}M${String(Math.round(seconds % 60)).padStart(2, "0")}S`;
 
-const url = `${SITE_URL}/music/${track.slug}/`;
+const url = `${SITE_URL}/music/${track.slug}`;
 
 const schema = [
   {

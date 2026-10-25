@@ -77,12 +77,6 @@ export function subscribeBlueskyAuth(listener: () => void) {
     listeners.delete(listener);
   };
 }
-export function normalizeBlueskyCallbackUrl(location: Pick<Location, "pathname" | "search" | "hash">, history: Pick<History, "replaceState" | "state">) {
-  // Cloudflare adds a trailing slash to this static page. The SDK matches
-  // redirect_uri paths exactly, so fix the URL without another HTTP redirect.
-  if (location.pathname === "/auth/bluesky/")
-    history.replaceState(history.state, "", `/auth/bluesky${location.search}${location.hash}`);
-}
 export function safeReturnPath(value: string | null | undefined): string {
   if (
     !value ||
@@ -129,7 +123,6 @@ async function initialize() {
     } else {
       client = new BrowserOAuthClient({ clientMetadata: blueskyClientMetadata(origin), ...options });
     }
-    normalizeBlueskyCallbackUrl(window.location, window.history);
     // Restore from storage alone: a stale access token is refreshed by the
     // first request that needs it rather than holding up every page load.
     const result = await client.init(false);

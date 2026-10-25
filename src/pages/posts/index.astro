@@ -10,13 +10,13 @@ const posts = await getPostsMetadata();
 const schema = [
   {
     "@type": "ItemList",
-    "@id": `${SITE_URL}/posts/#list`,
+    "@id": `${SITE_URL}/posts#list`,
     itemListOrder: "https://schema.org/ItemListOrderDescending",
     numberOfItems: posts.length,
     itemListElement: posts.map((post, index) => ({
       "@type": "ListItem",
       position: index + 1,
-      url: `${SITE_URL}/posts/${post.filename}/`,
+      url: `${SITE_URL}/posts/${post.filename}`,
       name: post.title,
     })),
   },

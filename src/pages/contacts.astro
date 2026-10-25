@@ -12,7 +12,7 @@ const contacts = [...(contactsData as Contact[])].sort(
 const schema = [
   {
     "@type": "ContactPage",
-    "@id": `${SITE_URL}/contacts/#contact`,
+    "@id": `${SITE_URL}/contacts#contact`,
     mainEntity: { "@id": `${SITE_URL}/#person` },
   },
 ];
@@ -21,7 +21,7 @@ const schema = [
   title="contacts"
   description="Contact kualta"
   schema={schema}
-  canonicalPath="/contacts/"
+  canonicalPath="/contacts"
 >
   <div class="max-w-xl w-full grow flex flex-col gap-2 p-4">
     <h1 class="sr-only">contacts</h1>
