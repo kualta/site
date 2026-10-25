@@ -15,6 +15,7 @@ const response = (body: unknown) => (async () => Response.json(body)) as unknown
 test("permalinks round trip safe verified DID and record keys", () => {
   expect(postUriFromPath(sitePostPath(uri))).toBe(uri);
   expect(postUriFromPath(`${sitePostPath(uri)}/row`)).toBe(uri);
+  expect(postUriFromPath(`${sitePostPath(uri)}/thread`)).toBe(uri);
   expect(sitePostUrl(uri)).toStartWith("https://kualta.dev/post/");
   expect(blueskyPostUrl(uri)).toBe(`https://bsky.app/profile/${did}/post/post1`);
   for (const key of ["..", ".", "bad/path", "evil?query", "evil#hash"])

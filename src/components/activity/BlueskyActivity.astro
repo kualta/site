@@ -1,6 +1,5 @@
 ---
-import { BlueskyPost } from "@astro-community/astro-embed-bluesky";
-import { getBlueskyMedia } from "@/lib/activity/bluesky-media";
+import BlueskyPostContent from "./BlueskyPostContent.astro";
 import { FiRepeat } from "react-icons/fi";
 import {
   canRenderBlueskyPost,
@@ -22,13 +21,6 @@ const absoluteTime = formatAbsoluteTime(event.occurredAt);
 const authorName = event.author.displayName
   ? `${event.author.displayName} (@${event.author.handle})`
   : `@${event.author.handle}`;
-const gallery = event.post.embed?.$type === "app.bsky.embed.gallery#view";
-const media = getBlueskyMedia(event.post.embed);
-// a link shared without its card gets the one Bluesky would have drawn
-const linkCard =
-  event.linkPreview && !event.post.embed
-    ? { ...event.post, embed: { $type: "app.bsky.embed.external#view" as const, external: event.linkPreview } }
-    : undefined;
 const renderCard = canRenderBlueskyPost(event.post);
 // a repost otherwise reads as someone else's post appearing out of nowhere
 const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : null;
@@ -49,29 +41,10 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
             </span>
           </p>
         )}
-        <bluesky-media data-media={JSON.stringify(media)}>
-          <BlueskyPost post={gallery ? { ...event.post, embed: undefined } : (linkCard ?? event.post)} />
-          {gallery && <div class="grid grid-cols-2 gap-1 p-4">{media.map((image) => <a href={image.src}><div class="image-grid-item"><img class="w-full rounded-lg" src={image.thumbnail} alt={image.alt} loading="lazy" /></div></a>)}</div>}
-        </bluesky-media>
-        <bluesky-post-actions data-uri={event.uri} />
-        <div class="site-bluesky-meta">
-          <post-link-menu data-uri={event.uri} />
-          <a
-            href={event.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            class="site-bluesky-time font-mono text-xs tabular-nums text-secondary-text"
-            aria-label={`View this Bluesky activity from ${absoluteTime}`}
-          >
-            <time
-              datetime={event.occurredAt}
-              title={absoluteTime}
-              data-activity-relative-time
-            >
-              {formatRelativeTime(event.occurredAt)}
-            </time>
-          </a>
+        <div class="relative">
+          <BlueskyPostContent event={event} />
         </div>
+        <bluesky-post-thread data-uri={event.uri} />
       </div>
     ) : (
       <div
@@ -185,6 +158,56 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     opacity: 0.7;
   }
 
+  bluesky-post-thread { display: block; }
+
+  .site-bluesky-conversation {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .site-bluesky-conversation + .site-bluesky-conversation {
+    margin-top: 0.5rem;
+  }
+
+  .site-bluesky-thread-post { position: relative; }
+
+  /* The rail follows the avatar column, leaving long text and media room to grow. */
+  .site-bluesky-thread-post:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 35px;
+    top: 60px;
+    bottom: -12px;
+    width: 2px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--secondary-text) 30%, transparent);
+  }
+
+  .site-bluesky-thread-post .bluesky-post-container .post-header {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .site-bluesky-thread-post .user-info { overflow-wrap: anywhere; }
+
+  .site-bluesky-thread-post .bluesky-post-container .post-content > :not(.post-header):not(.timestamp) {
+    margin-inline-start: 3rem;
+  }
+
+  .site-bluesky-thread-post > bluesky-post-actions {
+    display: block;
+    margin-inline-start: 3rem;
+  }
+
+  .site-bluesky-thread-post bluesky-media > .grid {
+    margin-inline-start: 3rem;
+  }
+
+  /* The repost label affects only the original post's header. */
+  .site-bluesky-card[data-reposted] .site-bluesky-thread-post .bluesky-post-container .post-content {
+    padding-top: 1rem;
+  }
+
   /* the embed crops every image container to 1.91/1, which cuts the top and
      bottom off anything portrait; nothing here is cropped to fit a box */
   .site-bluesky-card .bluesky-post-container .image-grid-container {
@@ -280,4 +303,5 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
 
 <script>
   import "@/scripts/post-link-menu";
+  import "@/scripts/bluesky-post-thread";
 </script>

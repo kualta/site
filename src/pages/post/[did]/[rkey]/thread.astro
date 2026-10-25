@@ -1,0 +1,20 @@
+---
+import BlueskyPostContent from "@/components/activity/BlueskyPostContent.astro";
+import { loadPostConversations } from "@/lib/bluesky/post-thread";
+import { postUriFromPath } from "@/lib/bluesky/urls";
+export const prerender = false;
+export const partial = true;
+const uri = postUriFromPath(Astro.url.pathname);
+const conversations = await loadPostConversations(uri);
+Astro.response.status = conversations === null ? 503 : 200;
+Astro.response.headers.set("cache-control", "no-store");
+---
+{conversations?.map(({ comment, replies }) => (
+  <ol class="site-bluesky-conversation" aria-label="Comment and replies from kualta">
+    {[comment, ...replies].map((event) => (
+      <li class="site-bluesky-thread-post" data-thread-post-uri={event.uri}>
+        <BlueskyPostContent event={event} />
+      </li>
+    ))}
+  </ol>
+))}
