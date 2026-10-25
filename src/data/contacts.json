@@ -24,6 +24,14 @@
     "is_main": false
   },
   {
+    "id": 9,
+    "platform": "twitter",
+    "label": "kualts",
+    "link": "https://x.com/kualts",
+    "description": null,
+    "is_main": false
+  },
+  {
     "id": 8,
     "platform": "instagram",
     "label": "kualtx",

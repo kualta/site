@@ -11,10 +11,7 @@ export const DEFAULT_OG_IMAGE = "/opengraph-image.png";
  * the accounts that make the Person entity resolvable to the same human,
  * read from the contacts list so a new account is claimed everywhere at once
  */
-export const SAME_AS = [
-  ...contacts.map((contact) => contact.link).filter((link) => link.startsWith("https://")),
-  "https://twitter.com/kualts",
-];
+export const SAME_AS = contacts.map((contact) => contact.link).filter((link) => link.startsWith("https://"));
 
 /**
  * Every tab and every result reads "<page> - kualta", so a bare "posts" or

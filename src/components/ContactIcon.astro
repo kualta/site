@@ -1,5 +1,5 @@
 ---
-import { LuGithub } from "react-icons/lu";
+import { LuGithub, LuTwitter } from "react-icons/lu";
 
 interface Props {
   platform: string;
@@ -11,9 +11,11 @@ const { platform, size = 18 } = Astro.props;
 {
   /* every mark shares one stroke, one corner radius and one optical box, so a
      column of them reads as a set: wide marks sit in a 20x15 card, square ones
-     in 18x18, and GitHub is Lucide's, drawn to the same stroke */
+     in 18x18, and GitHub and the Twitter bird are Lucide's, drawn to the same stroke */
   platform === "github" ? (
     <LuGithub size={size} aria-hidden="true" />
+  ) : platform === "twitter" ? (
+    <LuTwitter size={size} aria-hidden="true" />
   ) : (
     <svg
       width={size}
