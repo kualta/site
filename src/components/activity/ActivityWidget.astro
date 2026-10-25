@@ -145,7 +145,10 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
 </style>
 
 <script>
+  // rows usually arrive from the rows endpoint, where their own component scripts never run
   import "@/scripts/bluesky-post-actions";
+  import "@/scripts/bluesky-post-thread";
+  import "@/scripts/post-link-menu";
   import "@/scripts/published-feed-post";
   import { reconcilePublishedRows, restorePublishedRows, uniqueHistoricalRows, mergeNewestRows } from "@/lib/bluesky/published-feed";
   import {
