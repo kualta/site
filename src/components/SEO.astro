@@ -17,7 +17,7 @@ interface Props {
 const { title, documentTitle, description, canonical, ogImage, type, article, schema = [] } = Astro.props;
 
 const SITE_URL = Astro.site?.toString().replace(/\/$/, "") ?? "https://kualta.dev";
-const path = Astro.url.pathname.replace(/\/$/, "");
+const path = new URL(canonical).pathname.replace(/\/$/, "");
 const isHome = path === "" || path === "/";
 const isPostsIndex = path === "/posts";
 const isArticle = type === "article";
