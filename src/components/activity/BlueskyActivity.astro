@@ -180,8 +180,8 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     content: "";
     position: absolute;
     inset-inline-start: 35px;
-    top: 60px;
-    bottom: -12px;
+    top: 64px;
+    bottom: -8px;
     width: 2px;
     border-radius: 999px;
     background: color-mix(in oklab, var(--secondary-text) 30%, transparent);
@@ -189,7 +189,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
 
   /* the repost line takes the top padding, so the original post's avatar sits higher */
   .site-bluesky-card[data-reposted]:has(.site-bluesky-conversation) > .site-bluesky-root-post::before {
-    top: 52px;
+    top: 56px;
   }
 
   :is(.site-bluesky-thread-post, .site-bluesky-card:has(.site-bluesky-conversation) > .site-bluesky-root-post)
