@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   useSyncExternalStore,
+  type DragEvent,
   type FormEvent,
   type ReactNode,
   type Ref,
@@ -55,6 +56,15 @@ export default function BlueskyComposer({
   const videoPicker = useRef<HTMLInputElement>(null);
   const [preparing, setPreparing] = useState(false);
   const [mediaError, setMediaError] = useState("");
+  const [dropping, setDropping] = useState(false);
+  // dragenter/dragleave fire for every child crossed, so count them to know
+  // when the files actually leave the composer.
+  const dragDepth = useRef(0);
+  function withMediaAccess(open: () => void) {
+    if (!auth.canUploadMedia && auth.profile)
+      void signIn(auth.profile.handle).catch((error) => setMediaError(String(error)));
+    else open();
+  }
   async function attach(files: File[]) {
     if (preparing || busy) return;
     if (
@@ -118,7 +128,35 @@ export default function BlueskyComposer({
   }
 
   return (
-    <section className={`${className} rounded-xl bg-secondary p-4 dark:bg-dark-secondary`} aria-label={label}>
+    <section
+      className={`${className} relative rounded-xl bg-secondary p-4 dark:bg-dark-secondary`}
+      aria-label={label}
+      onDragEnter={(event) => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        dragDepth.current++;
+        setDropping(true);
+      }}
+      onDragOver={(event) => {
+        if (!carriesFiles(event)) return;
+        // Claim every file drag, so a drop while busy never opens the file over the draft.
+        event.preventDefault();
+        event.dataTransfer.dropEffect = busy || preparing ? "none" : "copy";
+      }}
+      onDragLeave={(event) => {
+        if (!carriesFiles(event)) return;
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDropping(false);
+      }}
+      onDrop={(event) => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        dragDepth.current = 0;
+        setDropping(false);
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length) withMediaAccess(() => void attach(files));
+      }}
+    >
       <div className={`flex min-h-10 items-center gap-3 ${auth.profile ? "mb-4" : ""}`} aria-label="Post author">
         {auth.profile ? (
           <a
@@ -239,11 +277,7 @@ export default function BlueskyComposer({
                 images.length >= MAX_IMAGES ||
                 images.some((image) => image.file.type.startsWith("video/"))
               }
-              onClick={() => {
-                if (!auth.canUploadMedia && auth.profile)
-                  void signIn(auth.profile.handle).catch((error) => setMediaError(String(error)));
-                else picker.current?.click();
-              }}
+              onClick={() => withMediaAccess(() => picker.current?.click())}
               className="p-2 disabled:opacity-50"
             >
               <ImageIcon size={20} />
@@ -264,11 +298,7 @@ export default function BlueskyComposer({
               aria-label="Attach video"
               title="Attach video"
               disabled={busy || preparing || images.length > 0}
-              onClick={() => {
-                if (!auth.canUploadMedia && auth.profile)
-                  void signIn(auth.profile.handle).catch((error) => setMediaError(String(error)));
-                else videoPicker.current?.click();
-              }}
+              onClick={() => withMediaAccess(() => videoPicker.current?.click())}
               className="p-2 disabled:opacity-50"
             >
               <VideoIcon size={20} />
@@ -293,6 +323,19 @@ export default function BlueskyComposer({
         </div>
       )}
       {children}
+      {dropping && !busy && !preparing && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-xl bg-secondary text-sm outline-dashed outline-2 -outline-offset-8 dark:bg-dark-secondary"
+        >
+          <ImageIcon size={20} />
+          Drop to attach
+        </div>
+      )}
     </section>
   );
+}
+
+function carriesFiles(event: DragEvent) {
+  return event.dataTransfer.types.includes("Files");
 }

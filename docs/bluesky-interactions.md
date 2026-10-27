@@ -59,7 +59,8 @@ real public writes require a visitor to finish sign-in in the browser.
 ## Media attachments
 
 The shared feed/comment composer accepts up to ten JPEG, PNG, or WebP images,
-or one MP4, MOV, or WebM video. Controls sit to the left of the submit button.
+or one MP4, MOV, or WebM video. Controls sit to the left of the submit button;
+files can also be dropped anywhere on the composer.
 Attachments have previews, editable descriptions, and removal controls. Image-only
 posts are allowed. Failed writes retain attachments. Files stay in memory and are
 not restored after navigation or a reload.
@@ -78,7 +79,7 @@ from jsDelivr; media is processed in a browser worker and is never sent there.
 Only sanitized files reach the visitor's PDS. Video files must carry the local
 sanitizer's in-memory provenance; image files are sanitized again at upload.
 The client requests `blob:image/png` and `blob:video/mp4`; existing sessions
-reauthorize when first selecting an attachment control.
+reauthorize when first selecting an attachment control or dropping a file.
 
 A media comment uses its media embed and appends the canonical article URL with
 an explicit link facet instead of the external link card. The character count

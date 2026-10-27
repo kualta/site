@@ -69,6 +69,25 @@ try {
     assert.equal(await page.evaluate(() => window.written.text), "Actual acknowledged post");
     assert.equal(await page.locator('ol img[alt="Actual attached image"]').count(), 1);
     assert.equal(await page.evaluate(() => window.written.embed.images[0].alt), "Actual attached image");
+    const textbox = page.getByRole("textbox", { name: "Write a Bluesky post" });
+    const transfer = await page.evaluateHandle((data) => {
+      const transfer = new DataTransfer();
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      transfer.items.add(new File([bytes], "dropped.png", { type: "image/png" }));
+      return transfer;
+    }, image);
+    await textbox.dispatchEvent("dragenter", { dataTransfer: transfer });
+    await page.getByText("Drop to attach").waitFor();
+    const dropClaimed = await page.evaluate((transfer) => {
+      const target = document.querySelector("textarea");
+      const fire = (type) =>
+        !target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: transfer }));
+      return fire("dragover") && fire("drop");
+    }, transfer);
+    assert.equal(dropClaimed, true);
+    await page.getByRole("textbox", { name: "Media description" }).waitFor();
+    assert.equal(await page.getByText("Drop to attach").count(), 0);
+    await page.getByRole("button", { name: "Remove attachment" }).click();
     await page.getByRole("button", { name: "Post options" }).click();
     await page.getByRole("button", { name: "Copy kualta.dev link" }).click();
     assert.equal(
@@ -160,6 +179,7 @@ try {
         acknowledgedMs,
         failedWriteRetainsDraft: true,
         failedIndexingKeepsPost: true,
+        dropAttaches: true,
         copyLinks: true,
         staleRefreshAndHistoryDeduplicate: true,
         repeatedNavigation: true,
