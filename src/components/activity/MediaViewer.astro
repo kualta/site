@@ -1,17 +1,17 @@
 ---
-import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolumeX, FiMaximize, FiMinimize } from "react-icons/fi";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, MaximizeIcon, MinimizeIcon, PauseIcon, PlayIcon, VolumeIcon, VolumeMuteIcon } from "@/components/icons";
 ---
 <dialog class="activity-media-viewer" aria-label="Media viewer">
-  <button type="button" class="viewer-round viewer-close" data-media-close autofocus aria-label="Close media viewer"><FiX size={20} /></button>
-  <button type="button" class="viewer-round viewer-previous" data-media-previous aria-label="Previous media"><FiChevronLeft size={22} /></button>
-  <button type="button" class="viewer-round viewer-next" data-media-next aria-label="Next media"><FiChevronRight size={22} /></button>
+  <button type="button" class="viewer-round viewer-close" data-media-close autofocus aria-label="Close media viewer"><CloseIcon size={20} /></button>
+  <button type="button" class="viewer-round viewer-previous" data-media-previous aria-label="Previous media"><ChevronLeftIcon size={22} /></button>
+  <button type="button" class="viewer-round viewer-next" data-media-next aria-label="Next media"><ChevronRightIcon size={22} /></button>
   <div data-media-content></div>
   <p data-media-error role="status" hidden>Unable to load this media. Close the viewer and try again.</p>
 </dialog>
 
-<template id="activity-preview-play"><FiPlay size={16} aria-hidden="true" /></template>
+<template id="activity-preview-play"><PlayIcon size={16} aria-hidden="true" /></template>
 
-<template id="activity-preview-muted"><span class="preview-muted" aria-hidden="true"><FiVolumeX size={14} /></span></template>
+<template id="activity-preview-muted"><span class="preview-muted" aria-hidden="true"><VolumeMuteIcon size={14} /></span></template>
 
 <template id="activity-video-player">
   <div class="activity-video-player" data-paused="true">
@@ -19,14 +19,14 @@ import { FiX, FiChevronLeft, FiChevronRight, FiPlay, FiPause, FiVolume2, FiVolum
     <div class="video-controls" role="group" aria-label="Video controls">
       <input class="video-range video-seek" type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek video" disabled />
       <div class="video-control-row">
-        <button type="button" class="video-control video-toggle" aria-label="Play"><span data-play-icon><FiPlay size={16} /></span><span data-pause-icon hidden><FiPause size={19} /></span></button>
+        <button type="button" class="video-control video-toggle" aria-label="Play"><span data-play-icon><PlayIcon size={16} /></span><span data-pause-icon hidden><PauseIcon size={19} /></span></button>
         <span class="video-time" aria-label="Playback time">0:00 / 0:00</span>
         <div class="video-volume">
-          <button type="button" class="video-control video-mute" aria-label="Mute"><span data-volume-icon><FiVolume2 size={18} /></span><span data-muted-icon hidden><FiVolumeX size={18} /></span></button>
+          <button type="button" class="video-control video-mute" aria-label="Mute"><span data-volume-icon><VolumeIcon size={18} /></span><span data-muted-icon hidden><VolumeMuteIcon size={18} /></span></button>
           <input class="video-range video-volume-range" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume" />
         </div>
         <select class="video-quality" aria-label="Video quality" hidden></select>
-        <button type="button" class="video-control video-fullscreen" aria-label="Enter fullscreen"><span data-expand-icon><FiMaximize size={18} /></span><span data-collapse-icon hidden><FiMinimize size={18} /></span></button>
+        <button type="button" class="video-control video-fullscreen" aria-label="Enter fullscreen"><span data-expand-icon><MaximizeIcon size={18} /></span><span data-collapse-icon hidden><MinimizeIcon size={18} /></span></button>
       </div>
     </div>
   </div>

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
-import { FiBell, FiX } from "react-icons/fi";
+import { BellIcon, CloseIcon } from "@/components/icons";
 import { EmailSubscription } from "./EmailSubscription";
 
 interface Props {
@@ -68,7 +68,7 @@ export function NewsletterSignup({ openNearEnd = true }: Props) {
           }
         }}
       >
-        {open ? <FiX size={22} aria-hidden="true" /> : <FiBell size={22} strokeWidth={1.7} aria-hidden="true" />}
+        {open ? <CloseIcon size={22} aria-hidden="true" /> : <BellIcon size={22} aria-hidden="true" />}
       </button>
       <AnimatePresence initial={false}>
         {open && (

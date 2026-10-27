@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { LuCheck } from "react-icons/lu";
+import { CheckIcon } from "@/components/icons";
 
 interface Props {
   focusOnMount?: boolean;
@@ -73,7 +73,7 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true }: P
           {["Subscribe", "Subscribing…", "Subscribed"].map((label) => (
             <span key={label} className="newsletter-button-label" aria-hidden={label !== buttonLabel} style={{ visibility: label === buttonLabel ? "visible" : "hidden" }}>
               {label}
-              {label === "Subscribed" && <LuCheck aria-hidden="true" />}
+              {label === "Subscribed" && <CheckIcon aria-hidden="true" />}
             </span>
           ))}
         </button>

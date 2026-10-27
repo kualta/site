@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { FiMinus, FiPlus, FiX, FiArrowUpRight, FiPlay, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import { ArrowUpRightIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, MinusIcon, PlayIcon, PlusIcon } from "@/components/icons";
 import type { GalleryPage, GalleryPost } from "@/lib/gallery";
 import type { BlueskyMedia } from "@/lib/activity/bluesky-media";
 import "@/styles/gallery.css";
@@ -169,7 +169,7 @@ export default function Gallery() {
         </div>
         <div className="gallery-zoom" role="group" aria-label="Grid zoom">
           <button aria-label="Smaller thumbnails" disabled={zoom === 1} onClick={() => changeZoom(zoom - 1)}>
-            <FiMinus />
+            <MinusIcon />
           </button>
           <input
             type="range"
@@ -182,7 +182,7 @@ export default function Gallery() {
             onChange={(event) => changeZoom(Number(event.target.value))}
           />
           <button aria-label="Larger thumbnails" disabled={zoom === 5} onClick={() => changeZoom(zoom + 1)}>
-            <FiPlus />
+            <PlusIcon />
           </button>
         </div>
       </header>
@@ -213,7 +213,7 @@ export default function Gallery() {
                 )}
                 {media.kind === "video" && (
                   <span className="gallery-video-mark">
-                    <FiPlay aria-hidden="true" />
+                    <PlayIcon aria-hidden="true" />
                   </span>
                 )}
               </button>
@@ -256,17 +256,17 @@ export default function Gallery() {
                   disabled={selectedIndex === 0}
                   onClick={() => setSelected(items[selectedIndex - 1].id)}
                 >
-                  <FiChevronLeft />
+                  <ChevronLeftIcon />
                 </button>
                 <button
                   aria-label="Next media"
                   disabled={selectedIndex === items.length - 1}
                   onClick={() => setSelected(items[selectedIndex + 1].id)}
                 >
-                  <FiChevronRight />
+                  <ChevronRightIcon />
                 </button>
                 <button aria-label="Close post" onClick={close}>
-                  <FiX />
+                  <CloseIcon />
                 </button>
               </div>
             </div>
@@ -297,7 +297,7 @@ export default function Gallery() {
                   })}
                 </time>
                 <a href={current.post.url} target="_blank" rel="noreferrer">
-                  View post <FiArrowUpRight />
+                  View post <ArrowUpRightIcon />
                 </a>
               </div>
             </div>

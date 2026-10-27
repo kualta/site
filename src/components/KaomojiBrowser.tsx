@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { searchKaomoji, type KaomojiIndex } from "@/lib/kaomoji-search";
-import { FiChevronLeft, FiChevronRight, FiChevronsLeft, FiChevronsRight, FiX } from "react-icons/fi";
+import { ChevronLeftIcon, ChevronRightIcon, ChevronsLeftIcon, ChevronsRightIcon, CloseIcon } from "@/components/icons";
 
 interface Props {
   initialEntries: string[];
@@ -126,7 +126,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
           />
           {query && (
             <button type="button" className="kaomoji-clear" aria-label="Clear search" onClick={clearSearch}>
-              <FiX aria-hidden="true" size={18} />
+              <CloseIcon aria-hidden="true" size={18} />
             </button>
           )}
         </div>
@@ -167,7 +167,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             onClick={() => goToPage(1)}
             aria-label="First page"
           >
-            <FiChevronsLeft aria-hidden="true" size={18} />
+            <ChevronsLeftIcon aria-hidden="true" size={18} />
           </button>
           <button
             type="button"
@@ -176,7 +176,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             onClick={() => goToPage(page - 1)}
             aria-label="Previous page"
           >
-            <FiChevronLeft aria-hidden="true" size={18} />
+            <ChevronLeftIcon aria-hidden="true" size={18} />
           </button>
           <span className="flex items-center font-mono tabular-nums shrink-0">
             <span className="text-right" style={{ width: `${pageDigits}ch` }}>
@@ -192,7 +192,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             onClick={() => goToPage(page + 1)}
             aria-label="Next page"
           >
-            <FiChevronRight aria-hidden="true" size={18} />
+            <ChevronRightIcon aria-hidden="true" size={18} />
           </button>
           <button
             type="button"
@@ -201,7 +201,7 @@ export default function KaomojiBrowser({ initialEntries, total, pageSize }: Prop
             onClick={() => goToPage(pageCount)}
             aria-label="Last page"
           >
-            <FiChevronsRight aria-hidden="true" size={18} />
+            <ChevronsRightIcon aria-hidden="true" size={18} />
           </button>
         </nav>
         {error && (

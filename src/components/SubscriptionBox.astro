@@ -1,8 +1,8 @@
 ---
-import { FiBell } from "react-icons/fi";
+import { BellIcon } from "@/components/icons";
 import { EmailSubscription } from "./EmailSubscription.tsx";
 ---
 <div class="flex gap-4 items-start w-full max-w-xl mx-auto p-2 pl-4">
-  <span class="pt-3" aria-hidden="true"><FiBell size={22} strokeWidth={2} /></span>
+  <span class="pt-3" aria-hidden="true"><BellIcon size={22} /></span>
   <EmailSubscription client:load />
 </div>

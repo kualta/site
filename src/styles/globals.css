@@ -640,15 +640,15 @@ input[type="checkbox"]:checked {
   opacity: 0.85;
 }
 
+/* the play mark is drawn centered on its triangle's centroid, so it needs no nudge here */
 .icon-swap {
-  --icon-nudge: 0px;
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   opacity: 0;
   filter: blur(4px);
-  transform: translateX(var(--icon-nudge)) scale(0.25);
+  transform: scale(0.25);
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out),
@@ -658,12 +658,7 @@ input[type="checkbox"]:checked {
 .icon-swap.is-shown {
   opacity: 1;
   filter: blur(0px);
-  transform: translateX(var(--icon-nudge)) scale(1);
-}
-
-/* the play triangle reads centered only when nudged off geometric center */
-.icon-play {
-  --icon-nudge: 1px;
+  transform: scale(1);
 }
 
 /* reduced motion keeps the fades that explain state, drops everything that moves */

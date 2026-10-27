@@ -1,4 +1,4 @@
-import { FiImage, FiVideo } from "react-icons/fi";
+import { ImageIcon, VideoIcon } from "@/components/icons";
 import ComposerMedia from "./ComposerMedia";
 import { sanitizeAttachment, MAX_IMAGES, type ComposerAttachment } from "@/lib/bluesky/media";
 import { blueskyProfileUrl } from "@/lib/bluesky/urls";
@@ -246,7 +246,7 @@ export default function BlueskyComposer({
               }}
               className="p-2 disabled:opacity-50"
             >
-              <FiImage size={20} />
+              <ImageIcon size={20} />
             </button>
             <input
               ref={videoPicker}
@@ -271,7 +271,7 @@ export default function BlueskyComposer({
               }}
               className="p-2 disabled:opacity-50"
             >
-              <FiVideo size={20} />
+              <VideoIcon size={20} />
             </button>
           </div>
           {preparing && (

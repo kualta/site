@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import type { AppBskyFeedDefs } from "@atproto/api";
-import { FiHeart, FiMessageCircle, FiRepeat } from "react-icons/fi";
+import { CommentIcon, HeartIcon, RepeatIcon } from "@/components/icons";
 import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import {
   fetchInteractionPost,
@@ -118,7 +118,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           disabled={busy || auth.loading || !post}
           onClick={() => void act("like")}
         >
-          <FiHeart
+          <HeartIcon
             size={14}
             strokeWidth={reactionStroke}
             aria-hidden="true"
@@ -143,7 +143,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           disabled={busy || auth.loading || post?.viewer?.replyDisabled}
           onClick={() => setReplyOpen(!replyOpen)}
         >
-          <FiMessageCircle size={14} strokeWidth={reactionStroke} aria-hidden="true" />
+          <CommentIcon size={14} strokeWidth={reactionStroke} aria-hidden="true" />
           {post?.replyCount ? ` ${post.replyCount}` : ""}
         </button>
       </div>
@@ -223,7 +223,7 @@ function RepostButton({
         disabled={disabled}
         onClick={reposted ? undefined : onRepost}
       >
-        <FiRepeat size={14} strokeWidth={reactionStroke} aria-hidden="true" className={reposted ? pressedClass : ""} />
+        <RepeatIcon size={14} strokeWidth={reactionStroke} aria-hidden="true" className={reposted ? pressedClass : ""} />
         {count ? ` ${count}` : ""}
       </button>
       <div ref={panel} id={id} popover="auto" className="post-menu-panel" role="group" aria-label="Repost options">

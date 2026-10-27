@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { FiMoreHorizontal } from "react-icons/fi";
+import { MoreIcon } from "@/components/icons";
 import { blueskyPostUrl, sitePostUrl } from "@/lib/bluesky/urls";
 import { usePopoverMenu } from "@/lib/popover-menu";
 
@@ -32,7 +32,7 @@ export default function PostLinkMenu({ uri }: { uri: string }) {
         popoverTarget={id}
         className="post-menu-trigger"
       >
-        <FiMoreHorizontal size={14} aria-hidden="true" />
+        <MoreIcon size={14} aria-hidden="true" />
       </button>
       <div ref={panel} id={id} popover="auto" className="post-menu-panel" role="group" aria-label="Post links">
         <button type="button" onClick={() => void copy(sitePostUrl(uri))}>

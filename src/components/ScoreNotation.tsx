@@ -1,6 +1,6 @@
 import { MusicCheckbox } from "@/components/MusicCheckbox";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { FiDownload, FiMinus, FiPlus } from "react-icons/fi";
+import { DownloadIcon, MinusIcon, PlusIcon } from "@/components/icons";
 import type { AlphaTabApi } from "@coderline/alphatab";
 import bravuraUrl from "@coderline/alphatab/font/Bravura.woff2?url";
 
@@ -221,7 +221,7 @@ export function ScoreNotation({ source, title, audioRef, onSeek }: Props) {
             disabled={zoom <= 70 || state !== "ready"}
             onClick={() => setZoom(Math.max(70, zoom - 10))}
           >
-            <FiMinus />
+            <MinusIcon />
           </button>
           <span>{zoom}%</span>
           <button
@@ -230,10 +230,10 @@ export function ScoreNotation({ source, title, audioRef, onSeek }: Props) {
             disabled={zoom >= 150 || state !== "ready"}
             onClick={() => setZoom(Math.min(150, zoom + 10))}
           >
-            <FiPlus />
+            <PlusIcon />
           </button>
           <a href={source} download aria-label={`Download ${title} score`}>
-            <FiDownload />
+            <DownloadIcon />
           </a>
         </div>
       </div>

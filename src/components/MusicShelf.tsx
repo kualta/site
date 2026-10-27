@@ -1,17 +1,7 @@
 import { MusicCheckbox } from "@/components/MusicCheckbox";
 import { flushSync } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  FiPause,
-  FiPlay,
-  FiRepeat,
-  FiSkipBack,
-  FiSkipForward,
-  FiVolume1,
-  FiVolume2,
-  FiVolumeX,
-  FiX,
-} from "react-icons/fi";
+import { CloseIcon, PauseIcon, PlayIcon, RepeatIcon, SkipBackIcon, SkipForwardIcon, VolumeIcon, VolumeLowIcon, VolumeMuteIcon } from "@/components/icons";
 import { ScoreNotation } from "@/components/ScoreNotation.tsx";
 import { LyricsPanel } from "@/components/LyricsPanel";
 import { Scrollable } from "@/components/Scrollable";
@@ -710,10 +700,10 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
             onClick={toggle}
             aria-label={playing ? "Pause" : "Play"}
           >
-            {playing ? <FiPause /> : <FiPlay />}
+            {playing ? <PauseIcon /> : <PlayIcon />}
           </button>
           <button type="button" className="music-mini-button" onClick={() => step(1)} aria-label="Next track">
-            <FiSkipForward />
+            <SkipForwardIcon />
           </button>
           <button
             type="button"
@@ -724,7 +714,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
             }}
             aria-label="Close player"
           >
-            <FiX />
+            <CloseIcon />
           </button>
           <input
             className="vinyl-seek music-mini-seek"
@@ -855,7 +845,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
                 aria-pressed={muted}
                 aria-label={muted ? "Unmute" : "Mute"}
               >
-                {level === 0 ? <FiVolumeX /> : level < 0.5 ? <FiVolume1 /> : <FiVolume2 />}
+                {level === 0 ? <VolumeMuteIcon /> : level < 0.5 ? <VolumeLowIcon /> : <VolumeIcon />}
               </button>
               <input
                 className="vinyl-seek vinyl-volume"
@@ -877,7 +867,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
                 onClick={back}
                 aria-label="Previous track"
               >
-                <FiSkipBack />
+                <SkipBackIcon />
               </button>
               <button
                 type="button"
@@ -887,8 +877,8 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
                 aria-label={playing ? "Pause" : "Play"}
               >
                 <span className="relative block h-4 w-4">
-                  <FiPlay className={`icon-swap icon-play ${playing ? "" : "is-shown"}`} />
-                  <FiPause className={`icon-swap ${playing ? "is-shown" : ""}`} />
+                  <PlayIcon className={`icon-swap ${playing ? "" : "is-shown"}`} />
+                  <PauseIcon className={`icon-swap ${playing ? "is-shown" : ""}`} />
                 </span>
               </button>
               <button
@@ -897,7 +887,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
                 onClick={() => step(1)}
                 aria-label="Next track"
               >
-                <FiSkipForward />
+                <SkipForwardIcon />
               </button>
             </div>
 
@@ -910,7 +900,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
               aria-pressed={repeat}
               aria-label={repeat ? "Repeat on" : "Repeat off"}
             >
-              <FiRepeat />
+              <RepeatIcon />
             </button>
           </div>
 
