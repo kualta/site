@@ -41,8 +41,15 @@ Run from this checkout:
 bun install --frozen-lockfile
 bun run publisher:setup
 bun run publisher connect
-bun run publisher start
+bun run publisher install
 ```
+
+`install` registers the helper as a LaunchAgent (`dev.kualta.publisher`) that
+starts at login and restarts if it exits, logging to `.publisher/helper.log`.
+It records this checkout, the current Node binary and `PATH`; run it again after
+moving either. `bun run publisher uninstall` removes it. `bun run publisher start`
+runs the helper in the foreground instead; stop the background helper first, since
+only one helper can hold the OAuth port.
 
 In the composer, expand **Laptop connection**, generate a key, and paste it into
 `publisher connect`. A new key revokes the previous one. Then use **Accounts** in
@@ -64,7 +71,7 @@ the OAuth session and deletes the local tokens; other platforms remove their
 local browser profiles. Connections expire after fifteen minutes; interactive
 sign-in waits up to ten minutes. Connect one account at a time.
 
-Keep the helper terminal running while posting. It polls Cloudflare. AT Protocol
+The helper posts whenever the laptop is awake and online. It polls Cloudflare. AT Protocol
 OAuth returns to a loopback-only listener at `127.0.0.1:43827/oauth/callback`;
 no public tunnel is needed. That port also ensures only one helper uses the
 OAuth session at a time. Closing the laptop leaves queued work waiting.
