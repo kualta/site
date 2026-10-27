@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FiX } from "react-icons/fi";
+import { CloseIcon } from "@/components/icons";
 import type { ComposerAttachment } from "@/lib/bluesky/media";
 export default function ComposerMedia({
   image,
@@ -27,7 +27,7 @@ export default function ComposerMedia({
         aria-label="Remove attachment"
         className="absolute right-1 top-1 rounded-full bg-secondary dark:bg-dark-secondary p-2"
       >
-        <FiX />
+        <CloseIcon />
       </button>
       <input
         aria-label="Media description"

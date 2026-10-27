@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MdOutlineDarkMode, MdOutlineLightMode } from "react-icons/md";
+import { MoonIcon, SunIcon } from "@/components/icons";
 
 function readTheme(): "dark" | "light" {
   if (typeof document === "undefined") return "dark";
@@ -41,9 +41,9 @@ export function ThemeToggle({
     <div className="w-8 h-8 flex items-center justify-center rounded-xl active:text-secondary-text">
       <button type="button" onClick={toggle} aria-label="Toggle theme">
         {theme === "dark" ? (
-          <MdOutlineLightMode size={22} aria-hidden="true" />
+          <SunIcon size={22} aria-hidden="true" />
         ) : (
-          <MdOutlineDarkMode size={22} aria-hidden="true" />
+          <MoonIcon size={22} aria-hidden="true" />
         )}
       </button>
     </div>

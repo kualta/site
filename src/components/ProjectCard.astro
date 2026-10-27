@@ -1,8 +1,7 @@
 ---
 import type { Project } from "@/types";
 import IconTooltip from "@/components/IconTooltip.astro";
-import { FiArchive, FiExternalLink, FiGithub } from "react-icons/fi";
-import { LuGitlab } from "react-icons/lu";
+import { ArchiveIcon, ExternalLinkIcon, GithubIcon, GitlabIcon } from "@/components/icons";
 
 interface Props {
   project: Project;
@@ -35,7 +34,7 @@ const isGitlab = project.git_link?.includes("gitlab.com");
           class="text-secondary-text hover:opacity-70"
           aria-label={`${project.full_name || project.name} on ${isGitlab ? "GitLab" : "GitHub"}`}
         >
-          {isGitlab ? <LuGitlab /> : <FiGithub />}
+          {isGitlab ? <GitlabIcon /> : <GithubIcon />}
         </a>
       </IconTooltip>
     )}
@@ -44,7 +43,7 @@ const isGitlab = project.git_link?.includes("gitlab.com");
   <span class="w-5 shrink-0 flex justify-center text-secondary-text">
     {project.status === "archived" ? (
       <IconTooltip label="archived">
-        <FiArchive aria-hidden="true" />
+        <ArchiveIcon aria-hidden="true" />
         <span class="sr-only">archived</span>
       </IconTooltip>
     ) : project.link && (
@@ -56,7 +55,7 @@ const isGitlab = project.git_link?.includes("gitlab.com");
           class="text-secondary-text hover:opacity-70"
           aria-label={`${project.full_name || project.name} website`}
         >
-          <FiExternalLink />
+          <ExternalLinkIcon />
         </a>
       </IconTooltip>
     )}

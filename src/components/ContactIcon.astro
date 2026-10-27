@@ -1,5 +1,14 @@
 ---
-import { LuGithub } from "react-icons/lu";
+import {
+  BlueskyIcon,
+  EthereumIcon,
+  GithubIcon,
+  type IconComponent,
+  InstagramIcon,
+  MailIcon,
+  XLogoIcon,
+  YoutubeIcon,
+} from "./icons";
 
 interface Props {
   platform: string;
@@ -7,63 +16,15 @@ interface Props {
 }
 
 const { platform, size = 18 } = Astro.props;
+const icons: Record<string, IconComponent> = {
+  github: GithubIcon,
+  youtube: YoutubeIcon,
+  twitter: XLogoIcon,
+  instagram: InstagramIcon,
+  bluesky: BlueskyIcon,
+  email: MailIcon,
+  ethereum: EthereumIcon,
+};
+const Icon = icons[platform];
 ---
-{
-  /* every mark shares one stroke, one corner radius and one optical box, so a
-     column of them reads as a set: wide marks sit in a 20x15 card, square ones
-     in 18x18, and GitHub is Lucide's, drawn to the same stroke */
-  platform === "github" ? (
-    <LuGithub size={size} aria-hidden="true" />
-  ) : (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      {platform === "youtube" && (
-        <>
-          <rect x="2" y="4.5" width="20" height="15" rx="5" />
-          <path d="M10 9v6l5-3z" />
-        </>
-      )}
-      {platform === "twitter" && (
-        // the X: its wide stroke as a soft-cornered band, crossed by the thin
-        // stroke in two pieces that meet the band's edges
-        <>
-          <path d="M4.6 3L7.4 3Q9 3 9.89 4.33L20.11 19.67Q21 21 19.4 21L16.6 21Q15 21 14.11 19.67L3.89 4.33Q3 3 4.6 3Z" />
-          <path d="M3.5 21L10.24 13.86M13.76 10.14L20.5 3" />
-        </>
-      )}
-      {platform === "instagram" && (
-        <>
-          <rect x="3" y="3" width="18" height="18" rx="5" />
-          <circle cx="12" cy="12" r="4" />
-          <path d="M16.75 7.25h.01" />
-        </>
-      )}
-      {platform === "email" && (
-        <>
-          <rect x="2" y="4.5" width="20" height="15" rx="5" />
-          <path d="M6.5 9l4.67 3.19q.83.56 1.66 0L17.5 9" />
-        </>
-      )}
-      {platform === "bluesky" && (
-        // one smooth outline, so the waists meet in clean notches rather
-        // than the cusps a stroked copy of the filled logo leaves behind
-        <path d="M12 10.5C13.2 7.9 15.8 4.7 18.6 3.8C20.1 3.3 21.4 3.8 21.4 5.5C21.4 6.9 21.1 9.2 20.6 10.3C20 11.6 18.8 12.2 17.4 12.7C18.8 13.6 20.9 15.2 19.5 17.6C18.2 19.7 15 20.5 13.5 18C13 17.1 12.4 15.9 12 15C11.6 15.9 11 17.1 10.5 18C9 20.5 5.8 19.7 4.5 17.6C3.1 15.2 5.2 13.6 6.6 12.7C5.2 12.2 4 11.6 3.4 10.3C2.9 9.2 2.6 6.9 2.6 5.5C2.6 3.8 3.9 3.3 5.4 3.8C8.2 4.7 10.8 7.9 12 10.5Z" />
-      )}
-      {platform === "ethereum" && (
-        <>
-          <path d="M11.08 3.31Q12 2 12.92 3.31L18.08 10.69Q19 12 18.08 13.31L12.92 20.69Q12 22 11.08 20.69L5.92 13.31Q5 12 5.92 10.69Z" />
-          <path d="M5.46 12L11.12 15.03Q12 15.5 12.88 15.03L18.54 12" />
-        </>
-      )}
-    </svg>
-  )
-}
+{Icon && <Icon size={size} />}

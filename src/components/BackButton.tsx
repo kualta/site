@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MdArrowBack } from "react-icons/md";
+import { ArrowLeftIcon } from "@/components/icons";
 
 /**
  * `path` arrives from the server so the link is in the markup on first paint.
@@ -23,7 +23,7 @@ export function BackButton({ path: initial = "/" }: { path?: string }) {
   return (
     <div className="w-8 h-8 flex items-center justify-center rounded-xl active:text-secondary-text">
       <a href="/" aria-label="Home">
-        <MdArrowBack size={22} aria-hidden="true" />
+        <ArrowLeftIcon size={22} aria-hidden="true" />
       </a>
     </div>
   );

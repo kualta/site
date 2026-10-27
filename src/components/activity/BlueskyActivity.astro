@@ -1,6 +1,6 @@
 ---
 import BlueskyPostContent from "./BlueskyPostContent.astro";
-import { FiRepeat } from "react-icons/fi";
+import { RepeatIcon } from "@/components/icons";
 import {
   canRenderBlueskyPost,
   formatAbsoluteTime,
@@ -35,7 +35,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
       >
         {repostedOn && (
           <p class="flex items-center gap-1.5 px-4 pt-3 text-xs text-secondary-text">
-            <FiRepeat className="shrink-0" size={12} aria-hidden="true" />
+            <RepeatIcon className="shrink-0" size={12} aria-hidden="true" />
             <span>
               kualta reposted on <time datetime={event.occurredAt}>{repostedOn}</time>
             </span>
