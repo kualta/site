@@ -13,6 +13,7 @@ import { deletePublication } from "./delete.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { createOAuth } from "./oauth.mjs";
+import { install, uninstall } from "./service.mjs";
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const stateDir = join(root, ".publisher");
@@ -83,7 +84,7 @@ if (command === "connect") {
     config.token = token;
     await api("heartbeat", {});
     await save();
-    console.log("Connected. Run bun run publisher start, then connect accounts in the composer.");
+    console.log("Connected. Run bun run publisher install, then connect accounts in the composer.");
   } finally {
     prompt.close();
   }
@@ -163,4 +164,11 @@ if (command === "connect") {
       await new Promise((resolve) => setTimeout(resolve, 10_000));
     }
   }
-} else console.log("Usage: bun run publisher connect | start");
+} else if (command === "install") {
+  if (!config.token) throw new Error("Connect the helper first");
+  const log = await install({ root, stateDir });
+  console.log(`Helper runs in the background and starts at login. Log: ${log}`);
+} else if (command === "uninstall") {
+  await uninstall();
+  console.log("Background helper removed.");
+} else console.log("Usage: bun run publisher connect | start | install | uninstall");
