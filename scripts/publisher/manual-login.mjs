@@ -3,6 +3,9 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// Chrome writes cookies to disk about every 30 seconds and skips that write on SIGTERM,
+// so a sign-in finished moments before confirming would be lost without one more write.
+export const SAVE_COOKIES_MS = 31_000;
 
 /** Credentials are entered in ordinary Chrome, without an automation connection. */
 export async function manualLogin(
@@ -44,7 +47,10 @@ export async function manualLogin(
     const deadline = now() + 10 * 60_000;
     while (now() < deadline) {
       if (failure) throw failure;
-      if ((await active()).confirmed) return;
+      if ((await active()).confirmed) {
+        await wait(SAVE_COOKIES_MS);
+        return;
+      }
       await wait(1000);
     }
     throw new Error("Sign-in timed out. Connect again to continue.");

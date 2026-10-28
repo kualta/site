@@ -81,14 +81,14 @@ export default function PublisherConnections({ online, connected, connections, r
                   {active.state === "working" && active.action === "connect" && platform !== "grain" && (
                     <>
                       <p className="publisher-note">
-                        Sign in in the Chrome window on your laptop, then finish here. Finishing closes that window and
-                        checks the saved session.
+                        Sign in in the Chrome window on your laptop, then finish here. Finishing gives Chrome about 30
+                        seconds to save the session, then closes that window and checks it.
                       </p>
                       <button
                         disabled={busy || !!active.confirmed}
                         onClick={() => void send(`accounts/${active.id}`, { action: "finish" })}
                       >
-                        {active.confirmed ? "Checking…" : "Finish sign-in"}
+                        {active.confirmed ? "Saving session…" : "Finish sign-in"}
                       </button>
                     </>
                   )}
