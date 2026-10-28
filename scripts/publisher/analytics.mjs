@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { Innertube } from "youtubei.js";
 import { openProfile } from "./browser.mjs";
 import { deletionDestination } from "./delete.mjs";
+import { creatorOrigin, findNote } from "./rednote.mjs";
 
 function counts(values) {
   return Object.fromEntries(
@@ -93,8 +94,18 @@ export async function collectAnalytics(
         metrics = counts({ likes: data.gallery.favCount, comments: data.gallery.commentCount });
       }
     } else if (target.platform === "xiaohongshu") {
-      // A note's public page shows "not available" on the web, so its counts come from the creator center instead.
-      throw new Error("Xiaohongshu metrics are paused until they can be read from the creator center");
+      context = await open(join(stateDir, target.platform), true);
+      const page = context.pages()[0] || (await context.newPage());
+      page.setDefaultTimeout(20_000);
+      const { note } = await findNote(page, creatorOrigin(url), id);
+      if (!note) throw new Error("Note not found in the creator center");
+      metrics = counts({
+        views: note.view_count,
+        likes: note.likes,
+        comments: note.comments_count,
+        saves: note.collected_count,
+        shares: note.shared_count,
+      });
     } else {
       context = await open(join(stateDir, target.platform), true);
       const page = context.pages()[0] || (await context.newPage());

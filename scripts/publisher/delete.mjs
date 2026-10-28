@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { recordKey } from "../lib/atproto-content.mjs";
 import { openProfile } from "./browser.mjs";
+import { creatorOrigin, findNote } from "./rednote.mjs";
 const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 
 export function deletionDestination(platform, value, post) {
@@ -137,13 +138,49 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
       }
       return { state: "deleted", message: "Deleted from the platform" };
     }
-    // A note's public page can't delete it: RedNote shows "not available" on the web, and its "More" is the
-    // site menu. Notes are deleted in the creator center.
-    if (target.platform === "xiaohongshu")
-      return {
-        state: "failed",
-        message: "Delete Xiaohongshu notes in the creator center (笔记管理) for now; the note's public page can't delete it.",
-      };
+    if (target.platform === "xiaohongshu") {
+      context = await open(join(stateDir, target.platform));
+      const page = context.pages()[0] || (await context.newPage());
+      page.setDefaultTimeout(15_000);
+      const origin = creatorOrigin(destination.url);
+      const { card } = await findNote(page, origin, destination.id);
+      if (!card) return { state: "deleted", message: "Already removed from the platform" };
+      const receipt = page.waitForResponse(
+        async (response) => {
+          if (!response.ok()) return false;
+          try {
+            return deletionResponse(
+              target.platform,
+              response.url(),
+              response.request().method(),
+              await response.json(),
+              response.request().postData(),
+              destination.id,
+            );
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 30_000 },
+      );
+      receipt.catch(() => {});
+      await card.hover();
+      await card.locator(".note-card__action-btn--del").click();
+      submitted = true;
+      await page
+        .locator('[role="dialog"] button, .d-modal button')
+        .filter({ hasText: /^(确定|删除|确认删除|确认)$/ })
+        .last()
+        .click();
+      try {
+        await receipt;
+      } catch {
+        if (!(await findNote(page, origin, destination.id)).card)
+          return { state: "deleted", message: "Removed: the note is gone from the creator center" };
+        throw new Error("Deletion was not confirmed");
+      }
+      return { state: "deleted", message: "Platform confirmed deletion" };
+    }
     context = await open(join(stateDir, target.platform));
     const page = context.pages()[0] || (await context.newPage());
     page.setDefaultTimeout(15_000);

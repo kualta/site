@@ -179,6 +179,11 @@ Grain receives a separate social.grain.photo.exif record containing only the cap
 
 ### Browser sign-in
 
+Xiaohongshu notes are deleted and measured in the creator center's note manager
+(笔记管理): the helper finds the note's card by id, clicks its delete icon and
+confirms, and reads views, likes, comments, saves and shares from the manager's
+note list. A note's public page can't do either.
+
 RedNote allows one web session per account: signing in to RedNote in another
 browser signs the helper out, so reconnect Xiaohongshu afterwards (and the other
 way round).
