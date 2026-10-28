@@ -92,6 +92,9 @@ export async function collectAnalytics(
         if (data.gallery?.uri !== uri) throw new Error("Gallery not found");
         metrics = counts({ likes: data.gallery.favCount, comments: data.gallery.commentCount });
       }
+    } else if (target.platform === "xiaohongshu") {
+      // A note's public page uses a separate login on RedNote and replaces the creator session's cookie.
+      throw new Error("Xiaohongshu metrics are paused until they can be read from the creator center");
     } else {
       context = await open(join(stateDir, target.platform), true);
       const page = context.pages()[0] || (await context.newPage());
