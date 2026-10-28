@@ -16,6 +16,9 @@ const server = await createServer({
 await server.listen();
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH });
 // 1×1 PNG: enough for previews and uploads.
+// History thumbnails load through <img>, so they're served by route rather than the fetch mock.
+const thumbnail =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="#a7b8d9"/></svg>';
 const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
   "base64",
@@ -38,6 +41,11 @@ try {
       hasTouch: mobile,
     });
     const page = await context.newPage();
+    await page.route("**/api/publisher/media/**", (route) =>
+      route.request().url().endsWith("/m-expired")
+        ? route.fulfill({ status: 404, body: "Expired" })
+        : route.fulfill({ contentType: "image/svg+xml", body: thumbnail }),
+    );
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     // Dark is the page default; mobile covers the light theme.
@@ -63,6 +71,36 @@ try {
       await page.waitForTimeout(300); // let chip transitions settle
       await page.screenshot({ path: path.join(shots, `${name}-${mobile ? "mobile" : "desktop"}.png`), fullPage: true });
     };
+
+    // History: posts grouped by day, one pill per destination, problems inline, actions behind Manage.
+    const history = page.getByRole("region", { name: "Posting history" });
+    await history.getByText("this, too, is modern art").waitFor();
+    const days = await history.locator(".publisher-history-day").allTextContents();
+    assert.deepEqual(days.slice(0, 2), ["Today", "Yesterday"]);
+    assert.equal(days.length, 3);
+    const art = history.locator(".publisher-history-item", { hasText: "this, too, is modern art" });
+    assert.equal(
+      await art.getByRole("link", { name: "Grain" }).getAttribute("href"),
+      "https://example.invalid/grain/post",
+    );
+    assert.equal(await art.locator('[data-tone="gone"]').textContent(), "BlueskyDeleted");
+    await art.getByText("Instagram: Instagram asked to confirm the login", { exact: false }).waitFor();
+    assert.equal(await art.locator(".publisher-history-thumb small").textContent(), "2");
+    assert.equal(
+      await art.locator(".publisher-history-thumb img").evaluate((img) => img.decode().then(() => true)),
+      true,
+    );
+    await history
+      .locator(".publisher-history-item", { hasText: "A clip" })
+      .getByText("Video", { exact: true })
+      .waitFor();
+    assert.equal(await history.locator('.publisher-history-item[data-deleted="true"]').count(), 1);
+    await art.getByRole("button", { name: "Manage" }).click();
+    await art.getByRole("button", { name: "Retry publishing" }).waitFor();
+    await art.getByRole("button", { name: "Delete", exact: true }).waitFor();
+    await art.getByRole("button", { name: "Delete everywhere" }).waitFor();
+    await shot("history");
+    await art.getByRole("button", { name: "Close" }).click();
 
     // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.
     assert.deepEqual(await pressed(), ["Text"]);

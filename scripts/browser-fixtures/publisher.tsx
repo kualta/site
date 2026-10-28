@@ -6,13 +6,66 @@ import "../../src/styles/globals.css";
 const requests: { path: string; method: string; body: unknown }[] = [];
 Object.assign(window, { publisherRequests: requests });
 const json = (value: unknown, status = 200) => Response.json(value, { status });
+const minutes = (count: number) => Date.now() - count * 60_000;
+const target = (platform: string, state: string, extra = {}) => ({
+  id: `${platform}-${state}-${Math.random()}`,
+  platform,
+  state,
+  url: state === "succeeded" ? `https://example.invalid/${platform}/post` : null,
+  message: null,
+  deletion_state: null,
+  deletion_message: null,
+  ...extra,
+});
+// Two days of posts plus an older one, covering every destination state the list shows.
 const history = {
   posts: [
     {
       id: "00000000-0000-4000-8000-000000000001",
-      created_at: Date.parse("2026-10-20T12:00:00Z"),
-      post: { kind: "text", title: "", caption: "An earlier text post\nwith a second line", media: [], alt: "" },
-      targets: [{ id: "t1", platform: "bluesky", state: "succeeded", url: "https://bsky.app/profile/x/post/y" }],
+      created_at: minutes(1),
+      post: {
+        kind: "photo",
+        title: "this, too, is modern art",
+        caption: "Two frames from the gallery walk",
+        media: ["m-photo-1", "m-photo-2"],
+        alt: "",
+      },
+      targets: [
+        target("grain", "succeeded"),
+        target("bluesky", "succeeded", { deletion_state: "deleted", deletion_message: "Deleted from the platform" }),
+        target("instagram", "failed", {
+          message: "Instagram asked to confirm the login. Sign in again from Accounts.",
+        }),
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000002",
+      created_at: minutes(2),
+      post: { kind: "text", title: "", caption: "meow", media: [], alt: "" },
+      targets: [
+        target("bluesky", "succeeded", { deletion_state: "deleted", deletion_message: "Deleted from the platform" }),
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000003",
+      created_at: minutes(24 * 60),
+      post: { kind: "video", title: "A clip", caption: "", media: ["m-expired"], alt: "" },
+      targets: [target("youtube", "working"), target("tiktok", "queued")],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000004",
+      created_at: Date.parse("2026-09-28T22:00:06Z"),
+      post: {
+        kind: "text",
+        title: "",
+        caption: "An earlier text post\nwith a second line that runs long enough to wrap onto another line in the list",
+        media: [],
+        alt: "",
+      },
+      targets: [
+        target("bluesky", "succeeded"),
+        target("twitter", "uncertain", { message: "X did not confirm a post URL. Check X before retrying." }),
+      ],
     },
   ],
   next: null,

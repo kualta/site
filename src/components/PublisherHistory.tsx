@@ -29,36 +29,73 @@ type Props = {
   request: (path: string, body?: unknown) => Promise<any>;
   onError: (message: string) => void;
 };
-const labels: Record<string, string> = {
-  queued: "Queued",
-  working: "Publishing",
-  succeeded: "Published",
-  failed: "Failed",
-  uncertain: "Check platform",
-};
-const deletionLabels: Record<string, string> = {
-  queued: "Deletion queued",
-  working: "Deleting",
-  deleted: "Deleted",
-  failed: "Deletion failed",
-  uncertain: "Check deletion",
-};
-function Preview({ post }: { post: Post["post"] }) {
+type Tone = "ok" | "busy" | "bad" | "warn" | "gone";
+
+/** One destination's state in a word or two, deletion first since it follows publishing. */
+function status(target: Target): { label: string; tone: Tone } {
+  switch (target.deletion_state) {
+    case "deleted":
+      return { label: "Deleted", tone: "gone" };
+    case "queued":
+    case "working":
+      return { label: "Deleting…", tone: "busy" };
+    case "failed":
+      return { label: "Deletion failed", tone: "bad" };
+    case "uncertain":
+      return { label: "Check deletion", tone: "warn" };
+  }
+  switch (target.state) {
+    case "succeeded":
+      return { label: "Published", tone: "ok" };
+    case "queued":
+      return { label: "Queued", tone: "busy" };
+    case "working":
+      return { label: "Publishing…", tone: "busy" };
+    case "failed":
+      return { label: "Failed", tone: "bad" };
+    default:
+      return { label: "Check platform", tone: "warn" };
+  }
+}
+function day(time: number): string {
+  const date = new Date(time);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    ...(date.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+/** Posts arrive newest first, so each day's posts are consecutive. */
+function byDay(posts: Post[]): { day: string; posts: Post[] }[] {
+  const groups: { day: string; posts: Post[] }[] = [];
+  for (const post of posts) {
+    const label = day(post.created_at);
+    if (groups.at(-1)?.day === label) groups.at(-1)?.posts.push(post);
+    else groups.push({ day: label, posts: [post] });
+  }
+  return groups;
+}
+function Thumbnail({ post }: { post: Post["post"] }) {
   const [expired, setExpired] = useState(false);
-  if (post.kind === "text") return <p className="publisher-history-preview publisher-history-text">{post.caption}</p>;
-  if (expired || !post.media.length)
-    return <div className="publisher-history-preview publisher-note">{kindNames[post.kind]} · Preview unavailable</div>;
+  if (post.kind === "text") return null;
   const src = `/api/publisher/media/${post.media[0]}`;
-  return post.kind === "photo" ? (
-    <img
-      className="publisher-history-preview"
-      src={src}
-      alt={post.alts?.[0] || post.alt || post.title}
-      loading="lazy"
-      onError={() => setExpired(true)}
-    />
-  ) : (
-    <video className="publisher-history-preview" src={src} controls preload="none" onError={() => setExpired(true)} />
+  let preview: React.ReactNode;
+  // Uploads expire after seven days; the history stays.
+  if (expired || !post.media.length) preview = <span>{kindNames[post.kind]}</span>;
+  else if (post.kind === "photo")
+    preview = <img src={src} alt={post.alts?.[0] || post.alt || ""} loading="lazy" onError={() => setExpired(true)} />;
+  else preview = <video src={`${src}#t=0.1`} preload="metadata" muted onError={() => setExpired(true)} />;
+  return (
+    <div className="publisher-history-thumb">
+      {preview}
+      {post.media.length > 1 && <small>{post.media.length}</small>}
+    </div>
   );
 }
 export default function PublisherHistory({ request, onError }: Props) {
@@ -66,6 +103,7 @@ export default function PublisherHistory({ request, onError }: Props) {
   const [page, setPage] = useState<Page>({ posts: [], next: null });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   const cursor = cursors[cursors.length - 1];
   const path = `history${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`;
   async function refresh() {
@@ -130,6 +168,111 @@ export default function PublisherHistory({ request, onError }: Props) {
       setBusy(false);
     }
   }
+  function item(post: Post) {
+    const { title, caption } = post.post;
+    const pending = post.targets.some(
+      (t) => ["queued", "working"].includes(t.state) || ["queued", "working"].includes(t.deletion_state || ""),
+    );
+    const removable = post.targets.some((t) => t.state === "succeeded" && t.url && t.deletion_state !== "deleted");
+    const deleted = post.targets.every((t) => t.deletion_state === "deleted");
+    const problems = post.targets.filter((t) => ["bad", "warn"].includes(status(t).tone));
+    const dates = (post.post.datesTaken ?? []).flatMap((date, index) => (date ? [{ date, index }] : []));
+    const manageable = removable || problems.length > 0 || dates.length > 0;
+    const expanded = open === post.id;
+    return (
+      <li key={post.id} className="publisher-history-item" data-deleted={deleted}>
+        <Thumbnail post={post.post} />
+        <div className="publisher-history-body">
+          <div className="publisher-history-head">
+            <p className="publisher-history-text" data-title={Boolean(title)}>
+              {title || caption}
+            </p>
+            <time dateTime={new Date(post.created_at).toISOString()}>
+              {new Date(post.created_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+            </time>
+          </div>
+          {title && caption && <p className="publisher-history-caption">{caption}</p>}
+          <ul className="publisher-history-pills" aria-label="Destinations">
+            {post.targets.map((target) => {
+              const { label, tone } = status(target);
+              const name = platformNames[target.platform];
+              return (
+                <li key={target.id} className="publisher-history-pill" data-tone={tone}>
+                  {tone === "ok" && target.url ? (
+                    <a href={target.url} target="_blank" rel="noreferrer" title={`View on ${name}`}>
+                      {name}
+                    </a>
+                  ) : (
+                    <span>{name}</span>
+                  )}
+                  {tone !== "ok" && <small>{label}</small>}
+                </li>
+              );
+            })}
+            {manageable && (
+              <li>
+                <button
+                  className="publisher-history-manage"
+                  aria-expanded={expanded}
+                  onClick={() => setOpen(expanded ? null : post.id)}
+                >
+                  {expanded ? "Close" : "Manage"}
+                </button>
+              </li>
+            )}
+          </ul>
+          {problems.map((target) => (
+            <p key={target.id} className="publisher-history-problem">
+              {platformNames[target.platform]}: {target.deletion_message || target.message || status(target).label}
+            </p>
+          ))}
+          {expanded && (
+            <div className="publisher-history-panel">
+              {post.targets.map((target) => (
+                <div key={target.id} className="publisher-history-panel-row">
+                  <div>
+                    <span>{platformNames[target.platform]}</span>
+                    <span className="publisher-note" role="status">
+                      {status(target).label}
+                    </span>
+                  </div>
+                  <div className="publisher-actions">
+                    {target.url && target.deletion_state !== "deleted" && (
+                      <a href={target.url} target="_blank" rel="noreferrer">
+                        View post
+                      </a>
+                    )}
+                    {target.state === "succeeded" &&
+                      target.url &&
+                      !["queued", "working", "deleted"].includes(target.deletion_state || "") && (
+                        <button disabled={busy} onClick={() => void remove(post, target)}>
+                          {target.deletion_state ? "Retry deletion" : "Delete"}
+                        </button>
+                      )}
+                    {["failed", "uncertain"].includes(target.state) && !target.deletion_state && (
+                      <button disabled={busy} onClick={() => void retry(post, target)}>
+                        Retry publishing
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {dates.map(({ date, index }) => (
+                <p key={index} className="publisher-note">
+                  Photo {index + 1} · taken {new Date(date).toLocaleString()}
+                </p>
+              ))}
+              {removable && (
+                <button disabled={busy || pending} onClick={() => void remove(post)}>
+                  Delete everywhere
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </li>
+    );
+  }
   return (
     <section className="publisher-history" id="history" aria-label="Posting history">
       <div className="publisher-heading">
@@ -141,85 +284,12 @@ export default function PublisherHistory({ request, onError }: Props) {
       ) : !page.posts.length ? (
         <p className="publisher-history-empty">Your posts will appear here.</p>
       ) : (
-        <div className="publisher-history-grid">
-          {page.posts.map((post) => {
-            const pending = post.targets.some(
-              (t) => ["queued", "working"].includes(t.state) || ["queued", "working"].includes(t.deletion_state || ""),
-            );
-            const removable = post.targets.some(
-              (t) => t.state === "succeeded" && t.url && t.deletion_state !== "deleted",
-            );
-            return (
-              <article key={post.id}>
-                <Preview post={post.post} />
-                <div className="publisher-history-content">
-                  <div className="publisher-history-title">
-                    {/* A text post's preview already is its text. */}
-                    {post.post.kind !== "text" && <h3>{postLabel(post.post)}</h3>}
-                    <span className="publisher-note">
-                      {post.post.kind === "photo"
-                        ? `${post.post.media.length} photo${post.post.media.length === 1 ? "" : "s"}`
-                        : kindNames[post.post.kind]}
-                    </span>
-                  </div>
-                  <time dateTime={new Date(post.created_at).toISOString()}>
-                    {new Date(post.created_at).toLocaleString()}
-                  </time>
-                  {post.post.datesTaken?.map(
-                    (date, index) =>
-                      date && (
-                        <p className="publisher-note" key={index}>
-                          Photo {index + 1} · Taken {new Date(date).toLocaleString()}
-                        </p>
-                      ),
-                  )}
-                  {post.post.kind !== "text" && post.post.caption && (
-                    <p className="publisher-history-caption">{post.post.caption}</p>
-                  )}
-                  {post.targets.map((target) => (
-                    <div className="publisher-history-target" key={target.id}>
-                      <div>
-                        <span>{platformNames[target.platform]}</span>
-                        <span className="publisher-note" role="status">
-                          {target.deletion_state
-                            ? deletionLabels[target.deletion_state]
-                            : labels[target.state] || target.state}
-                        </span>
-                      </div>
-                      <div className="publisher-history-controls">
-                        {target.url && target.deletion_state !== "deleted" && (
-                          <a href={target.url} target="_blank" rel="noreferrer">
-                            View post
-                          </a>
-                        )}
-                        {target.state === "succeeded" &&
-                          target.url &&
-                          !["queued", "working", "deleted"].includes(target.deletion_state || "") && (
-                            <button disabled={busy} onClick={() => void remove(post, target)}>
-                              {target.deletion_state ? "Retry deletion" : "Delete"}
-                            </button>
-                          )}
-                        {["failed", "uncertain"].includes(target.state) && !target.deletion_state && (
-                          <button disabled={busy} onClick={() => void retry(post, target)}>
-                            Retry publishing
-                          </button>
-                        )}
-                      </div>
-                      {(target.deletion_message || target.message) && (
-                        <p className="publisher-note">{target.deletion_message || target.message}</p>
-                      )}
-                    </div>
-                  ))}
-                  {removable && (
-                    <button disabled={busy || pending} onClick={() => void remove(post)}>
-                      Delete everywhere
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        byDay(page.posts).map((group) => (
+          <section key={group.day} aria-label={group.day}>
+            <h3 className="publisher-history-day">{group.day}</h3>
+            <ul className="publisher-history-list">{group.posts.map(item)}</ul>
+          </section>
+        ))
       )}
       <div className="publisher-history-pagination">
         <button
