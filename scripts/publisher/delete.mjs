@@ -81,6 +81,21 @@ export function deletionResponse(platform, responseUrl, method, body, requestBod
   return false;
 }
 
+// What a post's own page says once it no longer exists: the receipt when a reply isn't recognised.
+const goneText = {
+  twitter: /this page doesn.t exist|this post was deleted|this post is unavailable/i,
+  instagram: /this page isn.t available/i,
+  tiktok: /video currently unavailable|couldn.t find this video/i,
+};
+async function gone(page, platform) {
+  if (!goneText[platform]) return false;
+  try {
+    await page.getByText(goneText[platform]).first().waitFor({ timeout: 8_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 export async function deletePublication(deletion, { oauth, stateDir, open = openProfile }) {
   const { target, post } = deletion;
   let submitted = false;
@@ -122,10 +137,17 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
       }
       return { state: "deleted", message: "Deleted from the platform" };
     }
+    // A note's public page uses a separate login on RedNote and replaces the creator session's cookie.
+    if (target.platform === "xiaohongshu")
+      return {
+        state: "failed",
+        message: "Delete Xiaohongshu notes in the creator center (笔记管理) for now; its public page signs the helper out.",
+      };
     context = await open(join(stateDir, target.platform));
     const page = context.pages()[0] || (await context.newPage());
     page.setDefaultTimeout(15_000);
     await page.goto(destination.url);
+    if (await gone(page, target.platform)) return { state: "deleted", message: "Already removed from the platform" };
     page.on("response", (response) => {
       if (!submitted || !response.ok()) return;
       const task = response
@@ -176,7 +198,8 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
       submitted = true;
       await page.getByText("删除", { exact: true }).click();
     }
-    const dialog = page.getByRole("dialog");
+    // X asks in an alert dialog; the others use a plain dialog.
+    const dialog = page.getByRole(target.platform === "twitter" ? "alertdialog" : "dialog");
     const confirmation = dialog.getByRole("button", {
       name:
         target.platform === "youtube"
@@ -207,7 +230,14 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
     receipt.catch(() => {});
     submitted = true;
     await confirmation.click();
-    await receipt;
+    try {
+      await receipt;
+    } catch {
+      await page.goto(destination.url);
+      if (await gone(page, target.platform))
+        return { state: "deleted", message: "Removed: the post's page no longer exists" };
+      throw new Error("Deletion was not confirmed");
+    }
     return { state: "deleted", message: "Platform confirmed deletion" };
   } catch {
     await Promise.allSettled([...responses]);

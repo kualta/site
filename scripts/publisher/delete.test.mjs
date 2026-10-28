@@ -224,3 +224,79 @@ test("RedNote note links are Xiaohongshu publications", () => {
     "Unexpected publication host",
   );
 });
+
+function browserPage({ goneAfter = Number.POSITIVE_INFINITY, reply = true } = {}) {
+  const clicks = [];
+  let checks = 0;
+  const locator = {
+    filter: () => locator,
+    getByTestId: () => locator,
+    getByRole: () => locator,
+    first: () => locator,
+    waitFor: async () => {},
+    click: async () => clicks.push("click"),
+  };
+  const page = {
+    setDefaultTimeout() {},
+    goto: async () => {},
+    locator: () => locator,
+    getByRole: () => locator,
+    // Each check of the post's page reads its text; it says "gone" from the given check on.
+    getByText: () => ({
+      first: () => ({
+        waitFor: async () => {
+          if (++checks < goneAfter) throw new Error("still there");
+        },
+      }),
+    }),
+    on() {},
+    waitForResponse: async () => {
+      if (!reply) throw new Error("timeout");
+    },
+  };
+  return { page, clicks };
+}
+const twitterTarget = { platform: "twitter", state: "succeeded", url: "https://x.com/kualta/status/12345" };
+const opened = (page) => async () => ({ pages: () => [page], close: async () => {} });
+
+test("a post already gone from the platform is marked deleted without touching it", async () => {
+  const { page, clicks } = browserPage({ goneAfter: 1 });
+  const result = await deletePublication({ post, target: twitterTarget }, { stateDir: "/unused", open: opened(page) });
+  expect(result).toEqual({ state: "deleted", message: "Already removed from the platform" });
+  expect(clicks).toEqual([]);
+});
+
+test("without a recognised reply, the post's own page confirms the deletion", async () => {
+  const { page } = browserPage({ goneAfter: 2, reply: false });
+  const result = await deletePublication({ post, target: twitterTarget }, { stateDir: "/unused", open: opened(page) });
+  expect(result).toEqual({ state: "deleted", message: "Removed: the post's page no longer exists" });
+});
+
+test("an unconfirmed deletion whose post is still up stays uncertain", async () => {
+  const { page } = browserPage({ reply: false });
+  const result = await deletePublication({ post, target: twitterTarget }, { stateDir: "/unused", open: opened(page) });
+  expect(result.state).toBe("uncertain");
+});
+
+test("Xiaohongshu deletion never opens the note's public page", async () => {
+  let openedProfile = false;
+  const result = await deletePublication(
+    {
+      post,
+      target: {
+        platform: "xiaohongshu",
+        state: "succeeded",
+        url: "https://www.rednote.com/explore/6ae261940000000013033800",
+      },
+    },
+    {
+      stateDir: "/unused",
+      open: async () => {
+        openedProfile = true;
+        throw new Error("must not open");
+      },
+    },
+  );
+  expect(result.state).toBe("failed");
+  expect(openedProfile).toBe(false);
+});
