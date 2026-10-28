@@ -10,6 +10,12 @@ const projects = [...(projectsData as Project[])]
   .sort((a, b) => (a.status === "complete" ? -1 : 1))
   .sort((a, b) => (a.status === "ongoing" ? -1 : 1));
 
+const latest = [...(projectsData as Project[])]
+  .sort((a, b) => b.date.localeCompare(a.date))
+  .slice(0, 3)
+  .map((project) => project.full_name || project.name)
+  .join(", ");
+
 const schema = [
   {
     "@type": "ItemList",
@@ -33,7 +39,7 @@ const schema = [
 ---
 <BaseLayout
   title="projects"
-  description="Games, tools and web apps by kualta, including a typing trainer, a pomodoro timer and the world's biggest kaomoji library."
+  description={`Projects by kualta. Latest: ${latest}`}
   schema={schema}
 >
   <div class="max-w-xl w-full place-items-center justify-center mb-10">
