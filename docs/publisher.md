@@ -179,6 +179,10 @@ Grain receives a separate social.grain.photo.exif record containing only the cap
 
 ### Browser sign-in
 
+RedNote allows one web session per account: signing in to RedNote in another
+browser signs the helper out, so reconnect Xiaohongshu afterwards (and the other
+way round).
+
 Chrome on macOS copies its ~1.4 GB app into a code-sign clone at each launch and
 removes it only on a normal quit. The sign-in window disables that copy, and the
 helper deletes clones that no running Chrome owns (matched by start time) at
