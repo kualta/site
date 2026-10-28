@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { combined, dailySeries, metricValue, type Metric, type Metrics, type Sample } from "@/lib/publisher/metrics";
-import { platformNames, type Platform } from "@/lib/publisher/presets";
+import { platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
 
 type Target = {
   id: string;
@@ -185,7 +185,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
             <div className="publisher-analytics-posts">
               {page.posts.map((p) => (
                 <button key={p.id} aria-pressed={post?.id === p.id} onClick={() => setSelected(p.id)}>
-                  <strong>{p.post.title}</strong>
+                  <strong>{postLabel(p.post)}</strong>
                   <span>{new Date(p.created_at).toLocaleDateString()}</span>
                   <span>
                     {number(combined(p.targets.map((t) => metricValue(t.metrics, "exposure"))))} views / impressions
@@ -205,7 +205,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
           {post && (
             <div className="publisher-analytics-detail">
               <div className="publisher-heading">
-                <h2>{post.post.title}</h2>
+                <h2>{postLabel(post.post)}</h2>
                 <button
                   disabled={!online || refreshing}
                   onClick={async () => {

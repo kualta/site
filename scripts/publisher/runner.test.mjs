@@ -115,6 +115,60 @@ test("Bluesky video limits are enforced before invoking the platform", async () 
   expect(calls).toBe(0);
 });
 
+test("text posts publish without fetching media and send X no attachment", async () => {
+  let fetched = 0,
+    args;
+  const text = { ...post, kind: "text", title: "", media: [], metadata: { ...post.metadata, twitter: "remove-all" } };
+  const bluesky = await publish(
+    { platform: "bluesky" },
+    text,
+    fixture({
+      api: async () => {
+        fetched++;
+        return new Response("source");
+      },
+      atproto: async (_platform, _config, files) => {
+        expect(files).toEqual([]);
+        return { url: "https://example.invalid/text" };
+      },
+    }),
+  );
+  expect(bluesky.state).toBe("succeeded");
+  expect(fetched).toBe(0);
+  await publish(
+    { platform: "twitter" },
+    text,
+    fixture({
+      python: async (_script, values) => {
+        args = values;
+        return { ok: true, url: "https://example.invalid/x" };
+      },
+    }),
+  );
+  expect(args[args.indexOf("--kind") + 1]).toBe("none");
+  expect(args[args.indexOf("--media") + 1]).toBe("");
+});
+
+test("short videos over three minutes fail before invoking the platform", async () => {
+  let calls = 0;
+  const result = await publish(
+    { platform: "tiktok" },
+    { ...post, kind: "short", media: ["one"] },
+    fixture({
+      process: async (_input, _output, options) => {
+        expect(options.kind).toBe("video");
+        return { duration: 181, bytes: 20, width: 48, height: 64 };
+      },
+      browser: async () => {
+        calls++;
+      },
+    }),
+  );
+  expect(result.state).toBe("failed");
+  expect(result.message).toContain("3 minutes");
+  expect(calls).toBe(0);
+});
+
 test("expired OAuth fails before publishing starts", async () => {
   let called = false;
   const result = await publish(

@@ -134,3 +134,53 @@ test("Grain writes ordered photos and gallery links atomically with stable TID k
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("Bluesky text posts have no embed and larger photo sets use the gallery", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "publisher-bluesky-"));
+  const file = join(dir, "photo.jpg");
+  await writeFile(file, "test bytes");
+  const records = [];
+  const agent = {
+    did: "did:plc:jhvnnnd3adml7t6anu3ay7ip",
+    uploadBlob: async () => ({ data: { blob: { $type: "blob", mimeType: "image/jpeg", size: 10 } } }),
+    com: { atproto: { repo: { createRecord: async (args) => records.push(args) } } },
+  };
+  const authorization = { agent, pdsUrl: new URL("https://owner.pds.example") };
+  try {
+    await publishAtproto("bluesky", authorization, [], [], {
+      id: crypto.randomUUID(),
+      kind: "text",
+      caption: "Just words https://kualta.dev",
+      alt: "",
+    });
+    expect(records[0].record.text).toBe("Just words https://kualta.dev");
+    expect(records[0].record).not.toHaveProperty("embed");
+    expect(records[0].record.facets).toHaveLength(1);
+    const files = Array(5).fill(file);
+    const infos = files.map(() => ({ width: 64, height: 48 }));
+    const alts = files.map((_, i) => `Photo ${i + 1}`);
+    await publishAtproto("bluesky", authorization, files, infos, {
+      id: crypto.randomUUID(),
+      kind: "photo",
+      caption: "Five",
+      alt: "",
+      alts,
+    });
+    const embed = records[1].record.embed;
+    expect(embed.$type).toBe("app.bsky.embed.gallery");
+    expect(embed.items.map((item) => item.alt)).toEqual(alts);
+    expect(embed.items[0].$type).toBe("app.bsky.embed.gallery#image");
+    await publishAtproto("bluesky", authorization, [file], [infos[0]], {
+      id: crypto.randomUUID(),
+      kind: "photo",
+      caption: "One",
+      alt: "Older single description",
+    });
+    expect(records[2].record.embed).toMatchObject({
+      $type: "app.bsky.embed.images",
+      images: [{ alt: "Older single description" }],
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -53,6 +53,35 @@ test("rejects unsupported media, destinations and unsafe post parameters", () =>
   expect(() => validatePost({ ...post(), media: ["../../secret"] })).toThrow();
   expect(() => validatePost({ ...post(), metadata: {} })).toThrow();
 });
+test("text posts carry no media or title and reach only text destinations", () => {
+  const text = { ...post(), kind: "text", title: "", media: [], platforms: ["bluesky", "twitter"], caption: "Hi" };
+  expect(validatePost(text).title).toBe("");
+  expect(() => validatePost({ ...text, caption: "  " })).toThrow("Write something");
+  expect(() => validatePost({ ...text, media: [crypto.randomUUID()] })).toThrow("no media");
+  expect(() => validatePost({ ...text, platforms: ["grain"] })).toThrow("Unsupported");
+  expect(() => validatePost({ ...text, platforms: ["instagram"] })).toThrow("Unsupported");
+  expect(() => validatePost({ ...text, caption: "x".repeat(281) })).toThrow("280");
+});
+test("short videos are one video for video destinations", () => {
+  const short = { ...post(), kind: "short", platforms: ["tiktok", "youtube"] };
+  expect(validatePost(short).kind).toBe("short");
+  expect(() => validatePost({ ...short, media: [crypto.randomUUID(), crypto.randomUUID()] })).toThrow("one video");
+  expect(() => validatePost({ ...short, platforms: ["grain"] })).toThrow("Unsupported");
+  expect(() => validatePost({ ...short, title: "" })).toThrow("title");
+});
+test("photo posts take up to ten photos, four on X, with a description each", () => {
+  const media = Array.from({ length: 10 }, () => crypto.randomUUID());
+  const alts = media.map((_, i) => `Photo ${i}`);
+  expect(validatePost({ ...post(), media, alts, platforms: ["bluesky"] }).alts).toEqual(alts);
+  expect(() => validatePost({ ...post(), media: [...media, crypto.randomUUID()] })).toThrow("1–10");
+  expect(() => validatePost({ ...post(), media: media.slice(0, 5), platforms: ["twitter"] })).toThrow(
+    "X / Twitter supports up to 4 photos",
+  );
+  expect(() => validatePost({ ...post(), alts: ["one", "two"] })).toThrow("Describe each photo");
+  expect(() => validatePost({ ...post(), kind: "video", platforms: ["youtube"], alts: [""] })).toThrow(
+    "Describe each photo",
+  );
+});
 test("pairing secrets are hashed deterministically", async () => {
   const token = "a".repeat(64);
   expect(await hashToken(token)).toHaveLength(64);
