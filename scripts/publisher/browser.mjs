@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { Innertube } from "youtubei.js";
 
 export const destinations = {
@@ -72,20 +73,31 @@ export async function publishBrowser(platform, profile, files, post) {
     let publishedUrl;
     let submitting = false;
     const responses = new Set();
+    // What the page sent after Publish, minus telemetry: evidence when no post is confirmed.
+    const sent = new Set();
+    page.on("request", (request) => {
+      const { host, pathname } = new URL(request.url());
+      if (submitting && request.method() === "POST" && !/apm|\/sec\/|track|log|metric/i.test(host + pathname))
+        sent.add(host + pathname);
+    });
     page.on("response", (response) => {
       if (!submitting) return;
       const url = response.url();
+      // RedNote and Xiaohongshu create notes through /web_api/sns/v2/note, whose response carries the note id.
       const endpoint =
         platform === "tiktok"
           ? /tiktok\.com\/.*(?:publish|\/post\/)/
-          : /(?:xiaohongshu|rednote)\.com\/.*(?:publish|note\/post)(?:[/?]|$)/;
+          : /(?:xiaohongshu|rednote)\.com\/.*(?:publish|note\/post|\/sns\/v2\/note)(?:[/?]|$)/;
       if (response.request().method() !== "POST" || !endpoint.test(url) || !response.ok()) return;
       const task = response
         .json()
         .then((data) => {
           if (data.code !== undefined && data.code !== 0) return;
           if (data.status_code !== undefined && data.status_code !== 0) return;
-          const id = findId(data, platform === "tiktok" ? ["video_id", "item_id"] : ["note_id", "noteId"]);
+          if (data.success === false) return;
+          const note = typeof data.data?.id === "string" && /^[a-f\d]{24}$/.test(data.data.id) ? data.data.id : null;
+          const id =
+            platform === "tiktok" ? findId(data, ["video_id", "item_id"]) : (findId(data, ["note_id", "noteId"]) ?? note);
           if (id)
             publishedUrl =
               platform === "tiktok"
@@ -133,9 +145,24 @@ export async function publishBrowser(platform, profile, files, post) {
     const deadline = Date.now() + 120_000;
     while (!publishedUrl && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 1000));
     await Promise.allSettled([...responses]);
-    return publishedUrl
-      ? { url: publishedUrl }
-      : { uncertain: true, message: "No confirmed post URL. Check the destination before posting again." };
+    if (publishedUrl) return { url: publishedUrl };
+    await page.screenshot({ path: join(profile, "last-error.png") }).catch(() => {});
+    const shown = await page
+      .locator('[role="dialog"]:visible, .d-modal:visible, [class*="toast"]:visible')
+      .first()
+      .innerText({ timeout: 1000 })
+      .catch(() => "");
+    return {
+      uncertain: true,
+      message: [
+        "No confirmed post URL. Check the destination before posting again.",
+        shown && `Page shows: ${shown.replace(/\s+/g, " ").slice(0, 120)}.`,
+        "Screenshot: last-error.png in this destination's profile.",
+        `Sent after Publish: ${[...sent].slice(-5).join(", ") || "nothing"}.`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    };
   } finally {
     await context.close();
   }
