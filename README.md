@@ -347,14 +347,10 @@ while a failed history write is reported and retried on the next minute.
 
 ### Feed publication and post permalinks
 
-Publishing from the home composer inserts the acknowledged repository record in
-that browser session immediately, with its actual text, author, attachments and
-post identity. Anonymous AppView readback replaces it when the same URI and CID
-are indexed. Failed publication retains the draft; delayed indexing retains the
-acknowledged card. Navigation and cache refresh reconcile by post identity and
-preserve history. Posts written in other Bluesky clients still depend on public
-indexing and the existing minute refresh; the page automatically reads the latest
-shared snapshot.
+Posts are written from the publisher at `post.kualta.dev` (see
+`docs/publisher.md`), not from the feed. Like posts from any other Bluesky client,
+they appear once public indexing and the minute refresh pick them up; the page
+automatically reads the latest shared snapshot.
 
 Each post's options can copy its `kualta.dev/post/<did>/<rkey>` permalink or its
 Bluesky URL. Direct permalink requests render the centered public post and share
@@ -363,16 +359,13 @@ return 404 and unavailable upstream reads return 503; neither uses stale fallbac
 or stores visitor authorization in a shared cache. No additional infrastructure
 or migration is required beyond the background-refresh prerequisites above.
 
-Reproduce publication checks without sending real posts:
+Reproduce permalink checks without sending real posts:
 
 ```sh
-CHROMIUM_PATH=/usr/bin/chromium node scripts/check-post-feed.mjs
 bun run build
 CHROMIUM_PATH=/usr/bin/chromium node scripts/check-post-pages.mjs
 ```
 
-The composer fixture stubs only authentication and repository writes; it exercises
-the real composer, media processing, local reconciliation and link controls. The
-permalink checks run the compiled Worker with a stubbed public AppView and also
+The permalink checks run the compiled Worker with a stubbed public AppView and also
 exercise cold-cache home scrolling, hero-to-feed gestures, feed position retention,
 history restoration and activity freshness recovery on desktop and mobile.

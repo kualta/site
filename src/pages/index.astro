@@ -4,7 +4,6 @@ import { getSharedActivityFeed } from "@/lib/activity/shared";
 import { formatLastSeenTime } from "@/lib/activity/presence";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcons from "@/components/ContactIcons.astro";
-import FeedComposer from "@/components/FeedComposer";
 import ActivityWidget from "@/components/activity/ActivityWidget.astro";
 import { ChevronDownIcon, ChevronUpIcon } from "@/components/icons";
 import type { Contact } from "@/types";
@@ -75,9 +74,7 @@ Astro.response.headers.set("cache-control", "no-store");
       aria-label="Kualta's recent activity"
       data-activity-screen
     >
-      <ActivityWidget feed={lastSeenAt ? initialActivity : undefined}>
-        <FeedComposer slot="composer" client:load />
-      </ActivityWidget>
+      <ActivityWidget feed={lastSeenAt ? initialActivity : undefined} />
     </section>
     <!-- /feed is this page opened at the feed. Inline, so a direct visit lands there
          as the page parses rather than once every image has loaded -->

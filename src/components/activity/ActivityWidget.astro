@@ -63,7 +63,6 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
       <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>
     </div>
   </div>
-  <slot name="composer" />
   <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>
     <ActivityRows
       events={feed?.events ?? []}
@@ -148,8 +147,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   import "@/scripts/bluesky-post-actions";
   import "@/scripts/bluesky-post-thread";
   import "@/scripts/post-link-menu";
-  import "@/scripts/published-feed-post";
-  import { reconcilePublishedRows, restorePublishedRows, uniqueHistoricalRows, mergeNewestRows } from "@/lib/bluesky/published-feed";
+  import { uniqueHistoricalRows, mergeNewestRows } from "@/lib/activity/rows";
   import {
     formatLastSeenTime,
     formatRelativeTime,
@@ -283,7 +281,7 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     }
     updateActivityClock();
     if (initial) {
-      list.replaceChildren(...reconcilePublishedRows(rows));
+      list.replaceChildren(...rows);
       updateActivityClock();
       void fillActivityList(list);
       return;
@@ -434,7 +432,6 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
   function initializeActivityWidget(): void {
     if (activityClock) window.clearInterval(activityClock);
     window.clearTimeout(pollTimer);
-    for (const list of document.querySelectorAll<HTMLOListElement>("[data-activity-list]")) restorePublishedRows(list);
     updateActivityClock();
     activityClock = window.setInterval(updateActivityClock, 60_000);
 
@@ -443,9 +440,6 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     }
   }
 
-  window.addEventListener("bluesky:published", () => {
-    for (const list of document.querySelectorAll<HTMLOListElement>("[data-activity-list]")) restorePublishedRows(list);
-  });
   document.addEventListener("astro:page-load", initializeActivityWidget);
   initializeActivityWidget();
 </script>

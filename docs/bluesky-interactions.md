@@ -58,7 +58,7 @@ real public writes require a visitor to finish sign-in in the browser.
 
 ## Media attachments
 
-The shared feed/comment composer accepts up to ten JPEG, PNG, or WebP images,
+The comment and reply composer accepts up to ten JPEG, PNG, or WebP images,
 or one MP4, MOV, or WebM video. Controls sit to the left of the submit button;
 files can also be dropped anywhere on the composer.
 Attachments have previews, editable descriptions, and removal controls. Image-only
