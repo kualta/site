@@ -14,6 +14,7 @@ import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { createOAuth } from "./oauth.mjs";
 import { install, uninstall } from "./service.mjs";
+import { sweepChromeClones } from "./clones.mjs";
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const stateDir = join(root, ".publisher");
@@ -101,6 +102,13 @@ if (command === "connect") {
   }
   console.log("Publisher ready. Keep this terminal open. Ctrl+C stops the helper.");
   setInterval(() => api("heartbeat", {}).catch(() => {}), 30_000).unref();
+  // Every Chrome launch copies the 1.4 GB app; copies left by interrupted launches would fill the disk.
+  const sweep = () =>
+    sweepChromeClones()
+      .then((removed) => removed.length && console.log(`Removed ${removed.length} leftover Chrome copies`))
+      .catch((error) => console.error(`Chrome copy cleanup failed: ${error.message}`));
+  void sweep();
+  setInterval(sweep, 10 * 60_000).unref();
   while (true) {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
