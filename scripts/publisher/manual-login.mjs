@@ -28,6 +28,8 @@ export async function manualLogin(
       "--no-default-browser-check",
       "--disable-background-mode",
       "--new-window",
+      // Skip the per-launch 1.4 GB app copy; this window is stopped with SIGTERM, which never removes it.
+      "--disable-features=MacAppCodeSignClone",
       url,
     ],
     { stdio: "ignore" },

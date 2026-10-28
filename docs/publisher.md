@@ -179,6 +179,11 @@ Grain receives a separate social.grain.photo.exif record containing only the cap
 
 ### Browser sign-in
 
+Chrome on macOS copies its ~1.4 GB app into a code-sign clone at each launch and
+removes it only on a normal quit. The sign-in window disables that copy, and the
+helper deletes clones that no running Chrome owns (matched by start time) at
+startup and every ten minutes, so interrupted launches don't fill the disk.
+
 Account connection launches installed Google Chrome directly with a dedicated publisher profile, without Playwright or remote debugging attached while you enter credentials. Finish sign-in in the app waits 31 seconds before closing that Chrome instance: Chrome writes cookies to disk about every 30 seconds and skips that write when the helper closes it, so a sign-in completed moments earlier would otherwise be lost. The helper then reopens the profile to check the saved platform session. Cancelling or timing out also closes only that instance. Restart the helper after updating to use this flow.
 
 This removes the automated login browser from the sign-in step. It does not bypass provider account checks or guarantee automated publishing is accepted. The ordinary personal Chrome profile is never copied, read, or terminated.
