@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import ContactIcon from "@/components/ContactIcon.astro";
+import { EmailSubscription } from "@/components/EmailSubscription.tsx";
 import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 import { SITE_URL } from "@/lib/seo";
@@ -56,6 +57,10 @@ const schema = [
           <span class="-translate-y-[0.12em] font-medium">{contact.platform}</span>
         </a>
       ))}
+      <section class="mt-7 flex w-full flex-col items-center gap-3 text-center" aria-labelledby="newsletter-heading">
+        <h2 id="newsletter-heading" class="text-xl">Subscribe to newsletter</h2>
+        <EmailSubscription client:load compact />
+      </section>
     </div>
   </div>
 </BaseLayout>

@@ -1206,6 +1206,28 @@ body[data-kaomoji-results] > main {
 .newsletter-message:empty { display: none; }
 .newsletter-message[data-error="true"] { opacity: 1; }
 
+.newsletter-form[data-compact] .newsletter-fields { gap: 0; }
+.newsletter-form[data-compact] .newsletter-fields input { height: 2.75rem; }
+.newsletter-form[data-compact] .newsletter-fields button {
+  width: 0;
+  height: 2.75rem;
+  padding: 0;
+  margin-inline-start: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition: width 280ms var(--ease-out), margin-inline-start 280ms var(--ease-out), opacity 160ms ease, visibility 280ms;
+}
+.newsletter-form[data-compact][data-has-email] .newsletter-fields button {
+  width: 2.75rem;
+  margin-inline-start: 0.4rem;
+  opacity: 1;
+  visibility: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .newsletter-form[data-compact] .newsletter-fields button { transition: none; }
+}
+
 .page-bottom {
   position: absolute;
   inset: auto 0 0;
