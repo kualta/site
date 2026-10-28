@@ -124,19 +124,30 @@
 .publisher-history-pill a::after { content:" ↗"; color:var(--secondary-text); }
 .publisher-history-pill a:hover { text-decoration:underline; text-underline-offset:3px; }
 .publisher-history-pill small { color:var(--secondary-text); font-size:12px; }
-.publisher .publisher-history-manage { border:0; background:none; padding:2px 6px; color:var(--secondary-text); }
+.publisher .publisher-history-manage { display:inline-flex; align-items:center; gap:4px; border:0; background:none; padding:2px 6px; color:var(--secondary-text); }
+.publisher-history-manage svg { transition:transform 260ms cubic-bezier(.2,.8,.2,1); }
+.publisher-history-manage[aria-expanded="true"] svg { transform:rotate(180deg); }
 .publisher .publisher-history-manage:hover:not(:disabled) { background:none; color:inherit; }
 .publisher-history-problem { margin:8px 0 0; font-size:12px; color:#a03c30; overflow-wrap:anywhere; }
 .dark .publisher-history-problem { color:#ffc7bd; }
-.publisher-history-panel { margin-top:12px; padding:4px 16px 12px; border:1px solid var(--publisher-line); border-radius:12px; font-size:13px; }
-.publisher-history-panel-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px 0; border-bottom:1px solid var(--publisher-line); }
-.publisher-history-panel-row > div:first-child { display:flex; gap:10px; align-items:baseline; }
-.publisher-history-panel-row .publisher-actions { align-items:center; }
-.publisher-history-panel a { text-decoration:underline; text-underline-offset:3px; }
-.publisher-history-panel > p { margin:10px 0 0; }
-.publisher-history-panel > button { margin-top:12px; }
+/* Height animates through a 0fr→1fr grid row; the middle div clips while the body keeps its border. */
+.publisher-history-panel { display:grid; grid-template-rows:0fr; opacity:0; transform:translateY(-4px); transition:grid-template-rows 280ms cubic-bezier(.2,.8,.2,1), opacity 200ms ease, transform 280ms cubic-bezier(.2,.8,.2,1); }
+.publisher-history-panel[data-open="true"] { grid-template-rows:1fr; opacity:1; transform:none; }
+.publisher-history-panel > div { min-height:0; overflow:hidden; }
+.publisher-history-panel-body { margin-top:12px; padding:4px 6px 10px; border:1px solid var(--publisher-line); border-radius:12px; font-size:13px; }
+.publisher-history-panel-row { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--publisher-line); }
+.publisher-history-panel-row > a, .publisher-history-panel-row > div { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; padding:10px; border-radius:8px; }
+.publisher-history-panel-row > a { transition:background-color 160ms; }
+.publisher-history-panel-row > a:hover { background:var(--publisher-accent); }
+.publisher-history-panel-row > a > span:first-child::after { content:" ↗"; color:var(--secondary-text); }
+.publisher-history-panel-row > button { margin-right:4px; }
+.publisher .publisher-history-icon { display:grid; place-items:center; width:32px; height:32px; padding:0; border-radius:999px; color:var(--secondary-text); }
+.publisher .publisher-history-icon:hover:not(:disabled) { color:#a03c30; }
+.dark .publisher .publisher-history-icon:hover:not(:disabled) { color:#ffc7bd; }
+.publisher-history-panel-body > p { margin:10px 10px 0; }
+.publisher-history-panel-body > button { margin:12px 10px 2px; }
 @keyframes publisher-pulse { 50% { opacity:.3; } }
-@media (prefers-reduced-motion:reduce) { .publisher-history-pill[data-tone="busy"]::before { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .publisher-history-pill[data-tone="busy"]::before { animation:none; } .publisher-history-panel, .publisher-history-manage svg, .publisher-history-panel-row > a { transition:none; } }
 .publisher-history-pagination { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
 .publisher-history-empty { color:var(--secondary-text); padding:40px 0; border-top:1px solid var(--publisher-line); }
 @media(min-width:1000px) { .publisher-compose { grid-template-columns:minmax(0,1fr) 320px; gap:64px; } }

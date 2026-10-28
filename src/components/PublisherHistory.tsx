@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronDownIcon, TrashIcon } from "@/components/icons";
 import { kindNames, platformNames, postLabel, type Platform, type PostKind } from "@/lib/publisher/presets";
 
 type Target = {
@@ -9,6 +10,10 @@ type Target = {
   message: string | null;
   deletion_state: string | null;
   deletion_message: string | null;
+  started_at: number | null;
+  /** Missing on posts published before it was recorded; started_at is close. */
+  finished_at?: number | null;
+  deleted_at: number | null;
 };
 type Post = {
   id: string;
@@ -56,6 +61,21 @@ function status(target: Target): { label: string; tone: Tone } {
     default:
       return { label: "Check platform", tone: "warn" };
   }
+}
+/** When the destination reached its current state, if it has settled. */
+function settledAt(target: Target): number | null {
+  if (target.deletion_state) return target.deletion_state === "deleted" ? target.deleted_at : null;
+  if (!["succeeded", "failed", "uncertain"].includes(target.state)) return null;
+  return target.finished_at ?? target.started_at;
+}
+function when(time: number): string {
+  const date = new Date(time);
+  const today = date.toDateString() === new Date().toDateString();
+  return date.toLocaleString(undefined, {
+    ...(today ? {} : { month: "short", day: "numeric" }),
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 function day(time: number): string {
   const date = new Date(time);
@@ -214,9 +234,11 @@ export default function PublisherHistory({ request, onError }: Props) {
                 <button
                   className="publisher-history-manage"
                   aria-expanded={expanded}
+                  aria-controls={`manage-${post.id}`}
                   onClick={() => setOpen(expanded ? null : post.id)}
                 >
                   {expanded ? "Close" : "Manage"}
+                  <ChevronDownIcon size={14} />
                 </button>
               </li>
             )}
@@ -226,47 +248,65 @@ export default function PublisherHistory({ request, onError }: Props) {
               {platformNames[target.platform]}: {target.deletion_message || target.message || status(target).label}
             </p>
           ))}
-          {expanded && (
-            <div className="publisher-history-panel">
-              {post.targets.map((target) => (
-                <div key={target.id} className="publisher-history-panel-row">
-                  <div>
-                    <span>{platformNames[target.platform]}</span>
-                    <span className="publisher-note" role="status">
-                      {status(target).label}
-                    </span>
-                  </div>
-                  <div className="publisher-actions">
-                    {target.url && target.deletion_state !== "deleted" && (
-                      <a href={target.url} target="_blank" rel="noreferrer">
-                        View post
-                      </a>
-                    )}
-                    {target.state === "succeeded" &&
-                      target.url &&
-                      !["queued", "working", "deleted"].includes(target.deletion_state || "") && (
-                        <button disabled={busy} onClick={() => void remove(post, target)}>
-                          {target.deletion_state ? "Retry deletion" : "Delete"}
-                        </button>
-                      )}
-                    {["failed", "uncertain"].includes(target.state) && !target.deletion_state && (
-                      <button disabled={busy} onClick={() => void retry(post, target)}>
-                        Retry publishing
-                      </button>
-                    )}
-                  </div>
+          {manageable && (
+            // Stays mounted so opening and closing can animate; inert keeps it out of reach while closed.
+            <div id={`manage-${post.id}`} className="publisher-history-panel" data-open={expanded} inert={!expanded}>
+              <div>
+                <div className="publisher-history-panel-body">
+                  {post.targets.map((target) => {
+                    const name = platformNames[target.platform];
+                    const at = settledAt(target);
+                    const summary = (
+                      <>
+                        <span>{name}</span>
+                        <span className="publisher-note" role="status">
+                          {status(target).label}
+                          {at && <time dateTime={new Date(at).toISOString()}> · {when(at)}</time>}
+                        </span>
+                      </>
+                    );
+                    return (
+                      <div key={target.id} className="publisher-history-panel-row">
+                        {target.url && target.deletion_state !== "deleted" ? (
+                          <a href={target.url} target="_blank" rel="noreferrer" title={`View on ${name}`}>
+                            {summary}
+                          </a>
+                        ) : (
+                          <div>{summary}</div>
+                        )}
+                        {target.state === "succeeded" &&
+                          target.url &&
+                          !["queued", "working", "deleted"].includes(target.deletion_state || "") && (
+                            <button
+                              className="publisher-history-icon"
+                              disabled={busy}
+                              aria-label={target.deletion_state ? `Retry deleting from ${name}` : `Delete from ${name}`}
+                              title={target.deletion_state ? "Retry deletion" : "Delete"}
+                              onClick={() => void remove(post, target)}
+                            >
+                              <TrashIcon size={16} />
+                            </button>
+                          )}
+                        {["failed", "uncertain"].includes(target.state) && !target.deletion_state && (
+                          <button disabled={busy} onClick={() => void retry(post, target)}>
+                            Retry publishing
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {dates.map(({ date, index }) => (
+                    <p key={index} className="publisher-note">
+                      Photo {index + 1} · taken {new Date(date).toLocaleString()}
+                    </p>
+                  ))}
+                  {removable && (
+                    <button disabled={busy || pending} onClick={() => void remove(post)}>
+                      Delete everywhere
+                    </button>
+                  )}
                 </div>
-              ))}
-              {dates.map(({ date, index }) => (
-                <p key={index} className="publisher-note">
-                  Photo {index + 1} · taken {new Date(date).toLocaleString()}
-                </p>
-              ))}
-              {removable && (
-                <button disabled={busy || pending} onClick={() => void remove(post)}>
-                  Delete everywhere
-                </button>
-              )}
+              </div>
             </div>
           )}
         </div>
