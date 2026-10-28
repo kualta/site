@@ -39,6 +39,7 @@ try {
       viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 },
       isMobile: mobile,
       hasTouch: mobile,
+      reducedMotion: mobile ? "reduce" : "no-preference",
     });
     const page = await context.newPage();
     await page.route("**/api/publisher/media/**", (route) =>
@@ -50,9 +51,14 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     // Dark is the page default; mobile covers the light theme.
     await page.goto(`http://127.0.0.1:8797/publisher.html?theme=${mobile ? "light" : "dark"}`);
-    const presets = page.getByRole("navigation", { name: "Presets" });
-    await presets.getByRole("button", { name: "Text" }).waitFor();
-    assert.deepEqual(await presets.getByRole("button").allTextContents(), ["Text", "Photo", "Video", "Short video"]);
+    const shareTo = page.getByRole("complementary", { name: "Share to" });
+    const presets = shareTo.getByRole("navigation", { name: "Presets" });
+    await presets.getByRole("button", { name: "Text post", exact: true }).waitFor();
+    assert.deepEqual(await presets.getByRole("button").allTextContents(), ["Photo", "Long video", "Text post", "Short-form video"]);
+    assert.equal(await page.getByRole("navigation", { name: "Presets" }).count(), 1);
+    assert.equal(await page.getByRole("textbox", { name: "Post" }).count(), 1);
+    if (mobile)
+      assert.equal(await presets.getByRole("button").first().evaluate((el) => getComputedStyle(el).transitionDuration), "0s");
     const pressed = () => presets.locator('[aria-pressed="true"]').allTextContents();
     const checked = () =>
       page
@@ -103,7 +109,7 @@ try {
     await art.getByRole("button", { name: "Close" }).click();
 
     // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.
-    assert.deepEqual(await pressed(), ["Text"]);
+    assert.deepEqual(await pressed(), ["Text post"]);
     assert.equal(await title.count(), 0);
     await page.getByRole("textbox", { name: "Post" }).fill("Hello from the composer");
     assert.equal(await page.locator(".publisher-count").textContent(), "23 / 280 · X / Twitter");
@@ -111,7 +117,7 @@ try {
     assert.equal(await reason("Instagram"), "needs media");
     assert.equal(await reason("YouTube"), "needs a video");
     await page.reload();
-    await presets.getByRole("button", { name: "Text" }).waitFor();
+    await presets.getByRole("button", { name: "Text post", exact: true }).waitFor();
     assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Hello from the composer");
     await shot("text");
     await page.getByRole("button", { name: "Publish to 2 places" }).click();
@@ -145,19 +151,69 @@ try {
     await page.getByRole("button", { name: "Publish to 2 places" }).click();
     await page.getByRole("alert").getByText("Add a title for Grain.").waitFor();
     await title.fill("Two photos");
+    await page.getByRole("textbox", { name: "Post" }).fill("Two photo caption");
+    await descriptions.nth(0).fill("A description to keep");
+    const date = page.getByRole("textbox", { name: "Date taken for photo-1.png", exact: true });
+    await page.waitForFunction(() => !document.querySelector('input[type="datetime-local"]').disabled);
+    await date.fill("2026-10-01T12:34:56");
+    const previewURLs = await page.locator(".publisher-previews img").evaluateAll((imgs) => imgs.map((img) => img.src));
+    await shareTo.getByText("Preset settings", { exact: true }).click();
+    await shareTo.getByRole("textbox", { name: "Default caption" }).fill("Two photo caption");
+
+    // Presets change destinations only, even when the draft matches a saved caption default.
+    await presets.getByRole("button", { name: "Long video", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    assert.deepEqual(await pressed(), ["Long video"]);
+    assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Two photo caption");
+    assert.deepEqual(await checked(), []);
+    assert.equal(await page.locator(".publish-button").isDisabled(), true);
+    await shareTo.getByText("None of the selected destinations take these photos.").waitFor();
+    assert.equal(await title.count(), 0);
+    await shareTo.getByRole("textbox", { name: "Default caption" }).fill("Video default");
+    await presets.getByRole("button", { name: "Photo", exact: true }).focus();
+    await page.keyboard.press("Space");
+    assert.equal(await title.inputValue(), "Two photos");
+    assert.equal(await descriptions.nth(0).inputValue(), "A description to keep");
+    assert.equal(await date.inputValue(), "2026-10-01T12:34:56");
+    assert.deepEqual(await page.locator(".publisher-previews img").evaluateAll((imgs) => imgs.map((img) => img.src)), previewURLs);
+    assert.deepEqual(await checked(), ["Grain", "Instagram"]);
+    await page.keyboard.press("Tab");
+    assert.equal(await presets.getByRole("button", { name: "Long video", exact: true }).evaluate((el) => el === document.activeElement), true);
+    assert.equal(await presets.getByRole("button", { name: "Long video", exact: true }).evaluate((el) => getComputedStyle(el).outlineStyle), "solid");
+    await page.getByRole("textbox", { name: "Post" }).fill("");
+    await presets.getByRole("button", { name: "Long video", exact: true }).click();
+    assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "");
+    await presets.getByRole("button", { name: "Text post", exact: true }).click();
+    assert.deepEqual(await checked(), ["Bluesky", "X / Twitter"]);
+    assert.equal(await descriptions.nth(0).inputValue(), "A description to keep");
+    await presets.getByRole("button", { name: "Photo", exact: true }).click();
+    assert.equal(await title.inputValue(), "Two photos");
+    await page.getByRole("textbox", { name: "Post" }).fill("Two photo caption");
+    await shareTo.getByText("Preset settings", { exact: true }).click();
+    await shot("photo-preserved");
     await page.getByRole("button", { name: "Publish to 2 places" }).click();
     const photo = await queued(page);
     assert.deepEqual(photo.platforms.toSorted(), ["grain", "instagram"]);
     assert.equal(photo.title, "Two photos");
+    assert.equal(photo.caption, "Two photo caption");
+    assert.equal(photo.alts[0], "A description to keep");
+    assert.equal(photo.datesTaken[0], new Date("2026-10-01T12:34:56").toISOString());
 
     // A video on the Short video preset: Grain sits out, and YouTube and Xiaohongshu need a title.
-    await presets.getByRole("button", { name: "Short video" }).click();
+    await presets.getByRole("button", { name: "Short-form video" }).click();
     await attach(video);
     await page.locator(".publisher-previews video").waitFor(); // the duration is read first
     assert.equal(await reason("Grain"), "needs photos");
     assert.deepEqual(await checked(), ["Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
     await page.getByRole("textbox", { name: "Video description (Bluesky)" }).fill("A short clip");
     await title.fill("A clip");
+    await presets.getByRole("button", { name: "Photo", exact: true }).click();
+    assert.deepEqual(await checked(), ["Instagram"]);
+    await presets.getByRole("button", { name: "Long video", exact: true }).click();
+    assert.deepEqual(await checked(), ["YouTube"]);
+    assert.equal(await title.inputValue(), "A clip");
+    assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky)" }).inputValue(), "A short clip");
+    await presets.getByRole("button", { name: "Short-form video" }).click();
     await shot("video");
     await page.getByRole("button", { name: "Queue post" }).click();
     const clip = await queued(page);
@@ -166,11 +222,99 @@ try {
     assert.deepEqual(clip.platforms.toSorted(), ["bluesky", "tiktok", "twitter", "xiaohongshu", "youtube"]);
 
     // Photos and a video together are refused; removing media returns to a text post.
+    await attach(photos(1));
+    await descriptions.nth(0).fill("Keep this if the next selection is invalid");
     await attach([...photos(1), video]);
     await page.getByText("Attach up to 10 photos (30 MB each) or one video (90 MB).").waitFor();
+    assert.equal(await descriptions.nth(0).inputValue(), "Keep this if the next selection is invalid");
+    assert.equal(await page.locator(".publisher-previews img").count(), 1);
+    await attach(photos(11));
+    assert.equal(await descriptions.nth(0).inputValue(), "Keep this if the next selection is invalid");
     await attach(photos(1));
     await page.getByRole("button", { name: "Remove media" }).click();
     assert.equal(await reason("Grain"), "needs photos");
+    // Custom presets remain editable and survive a reload, alongside the active draft.
+    await presets.getByRole("button", { name: "Text post", exact: true }).click();
+    await shareTo.getByText("Preset settings", { exact: true }).click();
+    await shareTo.getByRole("button", { name: "Duplicate", exact: true }).click();
+    await shareTo.getByRole("textbox", { name: "Name", exact: true }).fill("My destinations");
+    await page.locator(".publisher-destinations label", { hasText: "X / Twitter" }).getByRole("checkbox").uncheck();
+    await page.getByRole("textbox", { name: "Post" }).fill("Custom preset draft");
+    await page.reload();
+    await presets.getByRole("button", { name: "My destinations", exact: true }).waitFor();
+    assert.deepEqual(await pressed(), ["My destinations"]);
+    assert.deepEqual(await checked(), ["Bluesky"]);
+    assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Custom preset draft");
+    if (mobile) {
+      await presets.getByRole("button", { name: "Text post", exact: true }).tap();
+      assert.deepEqual(await checked(), ["Bluesky", "X / Twitter"]);
+    }
+    for (const width of [320, 768]) {
+      await page.setViewportSize({ width, height: 900 });
+      await shot(`layout-${width}`);
+      const overflow = await page.evaluate(() => ({
+        width: innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        elements: [...document.querySelectorAll("body *")]
+          .filter((el) => el.getBoundingClientRect().right > innerWidth)
+          .map((el) => `${el.tagName}.${el.className}`),
+      }));
+      assert.equal(overflow.scrollWidth <= width, true, JSON.stringify(overflow));
+    }
+    // Upload errors keep an editable draft. An unconfirmed queue response freezes it for an identical retry.
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 });
+    await presets.getByRole("button", { name: "Photo", exact: true }).click();
+    await attach(photos(1));
+    await title.fill("Retry title");
+    await page.getByRole("textbox", { name: "Post" }).fill("Retry caption");
+    await descriptions.nth(0).fill("Retry description");
+    await page.waitForFunction(() => !document.querySelector('input[type="datetime-local"]').disabled);
+    await page.evaluate(() => {
+      const fetch = window.fetch;
+      window.publisherAttempts = { uploads: 0, jobs: [] };
+      window.fetch = async (input, init) => {
+        if (String(input).endsWith("/media")) {
+          window.publisherAttempts.uploads++;
+          if (window.publisherAttempts.uploads === 1) {
+            await new Promise((resolve) => { window.releaseUpload = resolve; });
+            return Response.json({ error: "Test upload failure" }, { status: 500 });
+          }
+        }
+        if (String(input).endsWith("/jobs")) {
+          window.publisherAttempts.jobs.push(JSON.parse(init.body));
+          if (window.publisherAttempts.jobs.length === 1)
+            return Response.json({ error: "Test queue response failure" }, { status: 500 });
+        }
+        return fetch(input, init);
+      };
+    });
+    await page.getByRole("button", { name: "Publish to 2 places" }).click();
+    await page.waitForFunction(() => typeof window.releaseUpload === "function");
+    assert.equal(await page.getByRole("button", { name: "Uploading…" }).isDisabled(), true);
+    assert.equal(await presets.getByRole("button", { name: "Photo", exact: true }).isDisabled(), true);
+    assert.equal(await title.isDisabled(), true);
+    assert.equal(await page.getByRole("button", { name: "Remove media" }).isDisabled(), true);
+    await page.evaluate(() => window.releaseUpload());
+    await page.getByRole("alert").getByText("Test upload failure").waitFor();
+    assert.equal(await presets.getByRole("button", { name: "Photo", exact: true }).isEnabled(), true);
+    assert.equal(await title.inputValue(), "Retry title");
+    assert.equal(await descriptions.nth(0).inputValue(), "Retry description");
+    await page.getByRole("button", { name: "Publish to 2 places" }).click();
+    await page.getByRole("alert").getByText("Test queue response failure").waitFor();
+    assert.equal(await presets.getByRole("button", { name: "Photo", exact: true }).isDisabled(), true);
+    assert.equal(await title.isDisabled(), true);
+    assert.equal(await title.inputValue(), "Retry title");
+    await shot("queue-retry");
+    await page.getByRole("button", { name: "Retry queue request" }).click();
+    await queued(page);
+    await page.getByRole("status").getByText("Queued. Your laptop will publish each destination once.").waitFor();
+    const attempts = await page.evaluate(() => window.publisherAttempts);
+    assert.equal(attempts.uploads, 2);
+    assert.equal(attempts.jobs.length, 2);
+    assert.deepEqual(attempts.jobs[0], attempts.jobs[1]);
+    assert.equal(await page.locator(".publisher-previews img").count(), 0);
+    assert.equal(await title.count(), 0);
+    assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Two photo caption");
     assert.deepEqual(errors, []);
     await context.close();
   }

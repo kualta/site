@@ -4,26 +4,48 @@ test("default presets are destination sets with the owner's choices", () => {
   const prefs = defaultPreferences();
   expect(prefs.active).toBe("text");
   expect(Object.fromEntries(prefs.presets.map((p) => [p.name, p.platforms]))).toEqual({
-    Text: ["bluesky", "twitter"],
+    "Text post": ["bluesky", "twitter"],
     Photo: ["instagram", "grain"],
-    Video: ["youtube"],
-    "Short video": ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"],
+    "Long video": ["youtube"],
+    "Short-form video": ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"],
   });
   for (const p of prefs.presets) {
     expect(p.metadata.twitter).toBe("remove-all");
     expect(p.metadata.xiaohongshu).toBe("remove-all");
   }
 });
+test("legacy built-in labels update without replacing saved choices or custom presets", () => {
+  const stored = defaultPreferences();
+  for (const p of stored.presets) {
+    p.name = { photo: "Photo", text: "Text", video: "Video", short: "Short video" }[p.id]!;
+    p.platforms = ["instagram", "twitter"];
+    p.caption = "Saved caption";
+    p.visibility = "UNLISTED";
+    p.metadata.grain = "remove-all";
+  }
+  stored.presets.push({ ...stored.presets[0], id: "custom", name: "Video" });
+  stored.presets.find((p) => p.id === "photo")!.name = "My photos";
+  const parsed = parsePreferences(JSON.stringify(stored));
+  expect(parsed.active).toBe("text");
+  expect(parsed.presets.map((p) => p.name)).toEqual([
+    "My photos", "Long video", "Text post", "Short-form video", "Video",
+  ]);
+  for (let i = 0; i < stored.presets.length; i++) {
+    expect({ ...parsed.presets[i], name: stored.presets[i].name }).toEqual(stored.presets[i]);
+  }
+  expect(parsePreferences(JSON.stringify(parsed))).toEqual(parsed);
+});
 test("stored preferences round trip, drop unknown destinations and keep kind-era presets", () => {
   const prefs = defaultPreferences();
   prefs.active = "video";
   const stored = JSON.parse(JSON.stringify(prefs));
-  stored.presets[0].kind = "text";
-  stored.presets[0].platforms.push("grain", "bogus");
+  const text = stored.presets.find((p: { id: string }) => p.id === "text");
+  text.kind = "text";
+  text.platforms.push("grain", "bogus");
   const parsed = parsePreferences(JSON.stringify(stored));
   expect(parsed.active).toBe("video");
-  expect(parsed.presets[0].platforms).toEqual(["grain", "bluesky", "twitter"]);
-  expect(parsed.presets[0]).not.toHaveProperty("kind");
+  expect(parsed.presets.find((p) => p.id === "text")?.platforms).toEqual(["grain", "bluesky", "twitter"]);
+  expect(parsed.presets.find((p) => p.id === "text")).not.toHaveProperty("kind");
   expect(parsePreferences("not json")).toEqual(defaultPreferences());
   expect(parsePreferences('{"version":1,"presets":[]}')).toEqual(defaultPreferences());
 });

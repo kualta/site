@@ -2,7 +2,7 @@
 .dark .publisher { --publisher-surface: var(--secondary-dark); --publisher-accent: var(--primary-dark); }
 .publisher-page { color-scheme: light; }
 .dark .publisher-page { color-scheme: dark; }
-.publisher * { box-sizing: border-box; }
+.publisher,.publisher * { box-sizing: border-box; }
 .publisher-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:72px; }
 .publisher a { color:inherit; text-decoration:none; }
 .publisher-header a { font-size:24px; font-weight:400; letter-spacing:.025em; }
@@ -16,8 +16,10 @@
 .publisher input:not([type=checkbox]):not([type=file]),.publisher textarea,.publisher select { width:100%; color:inherit; background:var(--publisher-surface); border:1px solid var(--publisher-line); border-radius:12px; padding:10px 12px; font:inherit; margin-top:7px; }
 .publisher textarea { resize:vertical; min-height:60px; }
 .publisher-heading select { width:auto; min-width:130px; margin:0; }
-.publisher-presets { display:flex; flex-wrap:wrap; gap:8px; margin:-8px 0 32px; }
-.publisher .publisher-presets button { transition:background-color 160ms, border-color 160ms, color 160ms; }
+.publisher-presets { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
+.publisher .publisher-presets button { font-size:13px; overflow-wrap:anywhere; max-width:100%; transition:background-color 160ms, border-color 160ms, color 160ms; }
+.publisher .publisher-presets button:focus-visible { outline:2px solid var(--text); outline-offset:3px; }
+.dark .publisher .publisher-presets button:focus-visible { outline-color:var(--text-dark); }
 .publisher .publisher-presets button[aria-pressed="true"], .publisher .publisher-presets button[aria-pressed="true"]:hover { background:var(--text); border-color:var(--text); color:var(--bg); }
 .dark .publisher .publisher-presets button[aria-pressed="true"], .dark .publisher .publisher-presets button[aria-pressed="true"]:hover { background:var(--text-dark); border-color:var(--text-dark); color:var(--bg-dark); }
 .publisher-photo-details fieldset { border:1px solid var(--publisher-line); border-radius:16px; padding:16px 16px 0; margin:0 0 16px; min-width:0; }

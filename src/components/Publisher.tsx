@@ -249,9 +249,6 @@ export default function Publisher() {
   }
   function selectPreset(id: string) {
     setPreferences((p) => ({ ...p, active: id }));
-    // Keep what was typed; only swap one default caption for another.
-    if (!caption.trim() || caption === preset.caption)
-      setCaption(preferences.presets.find((p) => p.id === id)?.caption || "");
     submission.current = null;
   }
   function clearMedia() {
@@ -339,18 +336,6 @@ export default function Publisher() {
             <div className="publisher-heading">
               <h1>New post</h1>
             </div>
-            <nav className="publisher-presets" aria-label="Presets">
-              {preferences.presets.map((p) => (
-                <button
-                  key={p.id}
-                  aria-pressed={p.id === preset.id}
-                  disabled={busy || submitted}
-                  onClick={() => selectPreset(p.id)}
-                >
-                  {p.name}
-                </button>
-              ))}
-            </nav>
             <div className="publisher-compose">
               <section>
                 <label>
@@ -481,8 +466,20 @@ export default function Publisher() {
                   </label>
                 )}
               </section>
-              <aside>
-                <h2>Share to</h2>
+              <aside aria-labelledby="publisher-share-to">
+                <h2 id="publisher-share-to">Share to</h2>
+                <nav className="publisher-presets" aria-label="Presets">
+                  {preferences.presets.map((p) => (
+                    <button
+                      key={p.id}
+                      aria-pressed={p.id === preset.id}
+                      disabled={busy || submitted}
+                      onClick={() => selectPreset(p.id)}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </nav>
                 <div className="publisher-destinations">
                   {platforms.map((p) => (
                     <label key={p} data-unavailable={Boolean(reasons[p])}>
