@@ -60,6 +60,16 @@ export async function openProfile(path, headless = false) {
     locale: "en-US",
   });
 }
+/** A compact outline of a JSON reply, e.g. {success,code,data:{id}}, for evidence without the values. */
+function outline(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return typeof value;
+  const keys = Object.entries(value)
+    .slice(0, 8)
+    .map(([key, item]) => (item && typeof item === "object" && !Array.isArray(item) ? `${key}:${outline(item)}` : key));
+  return `{${keys.join(",")}}`;
+}
+// RedNote and Xiaohongshu create notes with this request; its reply carries the note id.
+const createNote = /\/web_api\/sns\/v\d+\/note(?:[/?]|$)/;
 function findId(value, names) {
   if (!value || typeof value !== "object") return null;
   for (const [key, item] of Object.entries(value)) {
@@ -96,6 +106,7 @@ export async function publishBrowser(platform, profile, files, post) {
     }
     let publishedUrl;
     let submitting = false;
+    let reply;
     const responses = new Set();
     // What the page sent after Publish, minus telemetry: evidence when no post is confirmed.
     const sent = new Set();
@@ -107,15 +118,19 @@ export async function publishBrowser(platform, profile, files, post) {
     page.on("response", (response) => {
       if (!submitting) return;
       const url = response.url();
-      // RedNote and Xiaohongshu create notes through /web_api/sns/v2/note, whose response carries the note id.
       const endpoint =
         platform === "tiktok"
           ? /tiktok\.com\/.*(?:publish|\/post\/)/
-          : /(?:xiaohongshu|rednote)\.com\/.*(?:publish|note\/post|\/sns\/v2\/note)(?:[/?]|$)/;
-      if (response.request().method() !== "POST" || !endpoint.test(url) || !response.ok()) return;
+          : new RegExp(`(?:xiaohongshu|rednote)\\.com\\/.*(?:publish|note\\/post)(?:[/?]|$)|${createNote.source}`);
+      if (response.request().method() !== "POST" || !endpoint.test(url)) return;
+      if (!response.ok()) {
+        reply = `${response.status()}`;
+        return;
+      }
       const task = response
         .json()
         .then((data) => {
+          reply = `${response.status()} ${outline(data)}${typeof data.msg === "string" && data.msg ? ` "${data.msg.slice(0, 60)}"` : ""}`;
           if (data.code !== undefined && data.code !== 0) return;
           if (data.status_code !== undefined && data.status_code !== 0) return;
           if (data.success === false) return;
@@ -161,9 +176,17 @@ export async function publishBrowser(platform, profile, files, post) {
         .first();
       await publish.waitFor({ timeout: 10 * 60_000 });
       submitting = true;
-      if (await publish.evaluate((element) => element.localName === "xhs-publish-btn"))
-        await clickShadowButton(page, "xhs-publish-btn", "发布");
-      else await publish.click();
+      if (await publish.evaluate((element) => element.localName === "xhs-publish-btn")) {
+        // 发布 ignores clicks while photos are still uploading: click until the note request goes out, never after.
+        let requested = false;
+        page.on("request", (request) => {
+          if (request.method() === "POST" && createNote.test(request.url())) requested = true;
+        });
+        for (let attempt = 0; attempt < 12 && !requested; attempt++) {
+          await clickShadowButton(page, "xhs-publish-btn", "发布");
+          for (let tick = 0; tick < 20 && !requested; tick++) await page.waitForTimeout(500);
+        }
+      } else await publish.click();
     } else {
       await page.locator('input[type="file"]').first().setInputFiles(files);
       await page.locator('[contenteditable="true"]').first().fill(post.caption);
@@ -185,6 +208,7 @@ export async function publishBrowser(platform, profile, files, post) {
       message: [
         "No confirmed post URL. Check the destination before posting again.",
         shown && `Page shows: ${shown.replace(/\s+/g, " ").slice(0, 120)}.`,
+        reply && `Publish reply: ${reply}.`,
         "Screenshot: last-error.png in this destination's profile.",
         `Sent after Publish: ${[...sent].slice(-5).join(", ") || "nothing"}.`,
       ]
