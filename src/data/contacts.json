@@ -40,6 +40,14 @@
     "is_main": false
   },
   {
+    "id": 10,
+    "platform": "tiktok",
+    "label": "kualtx",
+    "link": "https://www.tiktok.com/@kualtx",
+    "description": null,
+    "is_main": false
+  },
+  {
     "id": 5,
     "platform": "bluesky",
     "label": "kualta.dev",
