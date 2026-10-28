@@ -278,25 +278,60 @@ test("an unconfirmed deletion whose post is still up stays uncertain", async () 
   expect(result.state).toBe("uncertain");
 });
 
-test("Xiaohongshu deletion never opens the note's public page", async () => {
-  let openedProfile = false;
-  const result = await deletePublication(
-    {
-      post,
-      target: {
-        platform: "xiaohongshu",
-        state: "succeeded",
-        url: "https://www.rednote.com/explore/6ae261940000000013033800",
-      },
+function rednotePage({ present = true } = {}) {
+  const visited = [];
+  const clicks = [];
+  const control = (name) => ({
+    click: async () => clicks.push(name),
+    hover: async () => {},
+    filter: () => control(name),
+    last: () => control(name),
+  });
+  const card = { first: () => card, count: async () => (present ? 1 : 0), hover: async () => {}, locator: control };
+  const cards = { first: () => ({ waitFor: async () => {} }), count: async () => 3 };
+  const page = {
+    on() {},
+    off() {},
+    setDefaultTimeout() {},
+    goto: async (url) => visited.push(url),
+    locator: (selector) => {
+      if (selector === "div.note-card") return cards;
+      if (selector.startsWith("div.note-card[")) return card;
+      return control(selector);
     },
-    {
-      stateDir: "/unused",
-      open: async () => {
-        openedProfile = true;
-        throw new Error("must not open");
-      },
+    mouse: { wheel: async () => {} },
+    waitForTimeout: async () => {},
+    waitForResponse: async (predicate) => {
+      const response = {
+        ok: () => true,
+        url: () => "https://webapi.rednote.com/web_api/sns/capa/postgw/note/delete",
+        json: async () => ({ code: 0, success: true }),
+        request: () => ({ method: () => "POST", postData: () => '{"note_id":"6ae261940000000013033800"}' }),
+      };
+      if (!(await predicate(response))) throw new Error("not the receipt");
+      return response;
     },
-  );
-  expect(result.state).toBe("failed");
-  expect(openedProfile).toBe(false);
+  };
+  return { page, visited, clicks };
+}
+const rednoteTarget = {
+  platform: "xiaohongshu",
+  state: "succeeded",
+  url: "https://www.rednote.com/explore/6ae261940000000013033800",
+};
+
+test("Xiaohongshu notes are deleted from the creator center, never their public page", async () => {
+  const { page, visited, clicks } = rednotePage();
+  const result = await deletePublication({ post, target: rednoteTarget }, { stateDir: "/unused", open: opened(page) });
+  expect(result).toEqual({ state: "deleted", message: "Platform confirmed deletion" });
+  expect(visited).toEqual(["https://creator.rednote.com/new/note-manager"]);
+  expect(clicks[0]).toBe(".note-card__action-btn--del");
+  expect(clicks).toHaveLength(2);
+});
+
+test("a note missing from the fully loaded note manager is already removed", async () => {
+  const { page, clicks } = rednotePage({ present: false });
+  const result = await deletePublication({ post, target: rednoteTarget }, { stateDir: "/unused", open: opened(page) });
+  expect(result).toEqual({ state: "deleted", message: "Already removed from the platform" });
+  expect(clicks).toEqual([]);
 });
