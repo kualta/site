@@ -7,7 +7,7 @@ const requests: { path: string; method: string; body: unknown }[] = [];
 Object.assign(window, { publisherRequests: requests });
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 const minutes = (count: number) => Date.now() - count * 60_000;
-const target = (platform: string, state: string, extra = {}) => ({
+const target = (platform: string, state: string, extra: Record<string, unknown> = {}) => ({
   id: `${platform}-${state}-${Math.random()}`,
   platform,
   state,
@@ -15,6 +15,9 @@ const target = (platform: string, state: string, extra = {}) => ({
   message: null,
   deletion_state: null,
   deletion_message: null,
+  started_at: state === "queued" ? null : Date.now() - 40_000,
+  finished_at: ["succeeded", "failed", "uncertain"].includes(state) ? Date.now() - 20_000 : null,
+  deleted_at: "deletion_state" in extra ? Date.now() - 10_000 : null,
   ...extra,
 });
 // Two days of posts plus an older one, covering every destination state the list shows.

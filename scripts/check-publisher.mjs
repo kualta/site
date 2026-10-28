@@ -101,7 +101,7 @@ try {
     assert.equal(days.length, 3);
     const art = history.locator(".publisher-history-item", { hasText: "this, too, is modern art" });
     assert.equal(
-      await art.getByRole("link", { name: "Grain" }).getAttribute("href"),
+      await art.locator(".publisher-history-pills").getByRole("link", { name: "Grain" }).getAttribute("href"),
       "https://example.invalid/grain/post",
     );
     assert.equal(await art.locator('[data-tone="gone"]').textContent(), "BlueskyDeleted");
@@ -116,12 +116,24 @@ try {
       .getByText("Video", { exact: true })
       .waitFor();
     assert.equal(await history.locator('.publisher-history-item[data-deleted="true"]').count(), 1);
+    // Manage opens an animated panel: rows link to each post, show when they settled, and delete by icon.
+    const panel = art.locator(".publisher-history-panel");
+    assert.equal(await panel.getAttribute("data-open"), "false");
     await art.getByRole("button", { name: "Manage" }).click();
+    assert.equal(await panel.getAttribute("data-open"), "true");
+    const grainRow = panel.locator(".publisher-history-panel-row", { hasText: "Grain" });
+    assert.equal(await grainRow.getByRole("link").getAttribute("href"), "https://example.invalid/grain/post");
+    assert.match(await grainRow.locator("time").textContent(), /\d/);
+    assert.equal(
+      await panel.locator(".publisher-history-panel-row", { hasText: "Bluesky" }).getByRole("link").count(),
+      0,
+    );
+    await art.getByRole("button", { name: "Delete from Grain" }).waitFor();
     await art.getByRole("button", { name: "Retry publishing" }).waitFor();
-    await art.getByRole("button", { name: "Delete", exact: true }).waitFor();
     await art.getByRole("button", { name: "Delete everywhere" }).waitFor();
     await shot("history");
     await art.getByRole("button", { name: "Close" }).click();
+    assert.equal(await panel.getAttribute("data-open"), "false");
 
     // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.
     assert.deepEqual(await pressed(), ["Text post"]);

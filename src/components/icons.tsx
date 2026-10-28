@@ -78,6 +78,10 @@ export const MinimizeIcon = icon(
   "MinimizeIcon",
   <path d="M8.5 3.5v2a3 3 0 0 1-3 3h-2M20.5 8.5h-2a3 3 0 0 1-3-3v-2M15.5 20.5v-2a3 3 0 0 1 3-3h2M3.5 15.5h2a3 3 0 0 1 3 3v2" />,
 );
+export const TrashIcon = icon(
+  "TrashIcon",
+  <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10.5 11v5M13.5 11v5" />,
+);
 export const ArchiveIcon = icon(
   "ArchiveIcon",
   <>
@@ -96,10 +100,7 @@ export const HeartIcon = icon(
   "HeartIcon",
   <path d="M12 20.2S3.5 15.4 3.5 9.4c0-2.8 2.1-4.9 4.7-4.9 1.6 0 3 .8 3.8 2.1.8-1.3 2.2-2.1 3.8-2.1 2.6 0 4.7 2.1 4.7 4.9 0 6-8.5 10.8-8.5 10.8z" />,
 );
-export const CommentIcon = icon(
-  "CommentIcon",
-  <path d="M8.41 19.2A8.5 8.5 0 1 0 4.3 15.09L3.6 19.6q-.2 1 .8.7z" />,
-);
+export const CommentIcon = icon("CommentIcon", <path d="M8.41 19.2A8.5 8.5 0 1 0 4.3 15.09L3.6 19.6q-.2 1 .8.7z" />);
 export const RepeatIcon = icon(
   "RepeatIcon",
   <path d="M3.5 11.5V10a4 4 0 0 1 4-4h13M17 2.5L20.5 6 17 9.5M20.5 12.5V14a4 4 0 0 1-4 4h-13M7 21.5L3.5 18 7 14.5" />,

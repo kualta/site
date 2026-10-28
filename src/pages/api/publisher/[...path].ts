@@ -307,9 +307,9 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (data.state === "succeeded" && !url) return json({ error: "A confirmed post URL is required" }, 400);
       const result = await db
         .prepare(
-          "UPDATE publisher_targets SET state = ?, message = ?, url = ? WHERE id = ? AND claim = ? AND state IN ('working','uncertain')",
+          "UPDATE publisher_targets SET state = ?, message = ?, url = ?, finished_at = ? WHERE id = ? AND claim = ? AND state IN ('working','uncertain')",
         )
-        .bind(data.state, String(data.message || "").slice(0, 500), url, data.id, data.claim)
+        .bind(data.state, String(data.message || "").slice(0, 500), url, Date.now(), data.id, data.claim)
         .run();
       return json({ ok: result.meta.changes > 0 });
     }
@@ -323,7 +323,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         return json({ error: "Confirm the destination has no duplicate first" }, 400);
       const result = await db
         .prepare(
-          "UPDATE publisher_targets SET state = 'queued', claim = NULL, started_at = NULL, message = NULL, url = NULL WHERE job_id = ? AND platform = ? AND state IN ('failed','uncertain')",
+          "UPDATE publisher_targets SET state = 'queued', claim = NULL, started_at = NULL, finished_at = NULL, message = NULL, url = NULL WHERE job_id = ? AND platform = ? AND state IN ('failed','uncertain')",
         )
         .bind(data.job, data.platform)
         .run();
