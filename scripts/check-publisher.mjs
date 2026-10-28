@@ -131,6 +131,7 @@ try {
     await art.getByRole("button", { name: "Delete from Grain" }).waitFor();
     await art.getByRole("button", { name: "Retry publishing" }).waitFor();
     await art.getByRole("button", { name: "Delete everywhere" }).waitFor();
+    await grainRow.getByRole("link").hover();
     await shot("history");
     await art.getByRole("button", { name: "Close" }).click();
     assert.equal(await panel.getAttribute("data-open"), "false");
