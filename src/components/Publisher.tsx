@@ -6,17 +6,16 @@ import { useEffect, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import {
   defaultPreferences,
-  kindNames,
-  kinds,
   MAX_PHOTOS,
   MAX_PRESETS,
   parsePreferences,
-  photoLimits,
   platforms,
   platformNames,
-  SHORT_MAX_SECONDS,
-  support,
+  postKind,
   STORAGE_KEY,
+  textLimits,
+  titled,
+  unsupported,
   type Preferences,
   type Preset,
   type Platform,
@@ -36,6 +35,11 @@ async function api(path: string, body?: unknown, method = body === undefined ? "
   return data;
 }
 const DRAFT_KEY = "publisher.draft";
+const unavailableFor: Record<PostKind, string> = {
+  text: "text-only posts",
+  photo: "these photos",
+  video: "this video",
+};
 /** Resolves undefined when this browser cannot read the file; the laptop checks it again. */
 function videoDuration(file: File): Promise<number | undefined> {
   return new Promise((resolve) => {
@@ -57,6 +61,7 @@ export default function Publisher() {
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [ready, setReady] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [videoSeconds, setVideoSeconds] = useState<number>();
   const [datesTaken, setDatesTaken] = useState<string[]>([]);
   const [readingDates, setReadingDates] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -191,22 +196,20 @@ export default function Publisher() {
     setNotice("");
     try {
       if (readingDates) throw new Error("Reading photo dates. Try again in a moment.");
-      if (!preset.platforms.length) throw new Error("Choose at least one destination.");
-      const text = preset.kind === "text";
-      const photo = preset.kind === "photo";
-      if (text) {
-        if (!caption.trim()) throw new Error("Write something to post.");
-      } else if (!files.length || !title.trim()) throw new Error("Add media and a title.");
+      if (!destinations.length) throw new Error(`None of the selected destinations take ${unavailableFor[kind]}.`);
+      if (kind === "text" && !caption.trim()) throw new Error("Write something to post.");
+      if (needsTitle && !title.trim()) throw new Error(`Add a title for ${titledNames}.`);
+      const photo = kind === "photo";
       const payload = (id: string, media: string[]) => ({
         id,
         media,
-        kind: preset.kind,
-        title: text ? "" : title,
+        kind,
+        title: needsTitle ? title : "",
         caption,
-        alt: photo ? "" : alt,
+        alt: kind === "video" ? alt : "",
         alts: photo ? alts : undefined,
         datesTaken: photo ? datesTaken.map((date) => (date ? new Date(date).toISOString() : null)) : undefined,
-        platforms: preset.platforms,
+        platforms: destinations,
         metadata: preset.metadata,
         visibility: preset.visibility,
       });
@@ -232,12 +235,10 @@ export default function Publisher() {
       setSubmitted(true);
       await api("jobs", pending.payload);
       setSubmitted(false);
-      submission.current = null;
-      setFiles([]);
+      clearMedia();
       setTitle("");
       setAlt("");
       setCaption(preset.caption);
-      if (input.current) input.current.value = "";
       setNotice("Queued. Your laptop will publish each destination once.");
       await refresh();
     } catch (e) {
@@ -251,43 +252,51 @@ export default function Publisher() {
     // Keep what was typed; only swap one default caption for another.
     if (!caption.trim() || caption === preset.caption)
       setCaption(preferences.presets.find((p) => p.id === id)?.caption || "");
+    submission.current = null;
+  }
+  function clearMedia() {
     setFiles([]);
+    setVideoSeconds(undefined);
     if (input.current) input.current.value = "";
     submission.current = null;
   }
-  function selectKind(kind: PostKind) {
-    if (preset.kind === kind) return;
-    const next = preferences.presets.find((p) => p.kind === kind);
-    if (next) selectPreset(next.id);
-  }
-  const photoLimit = Math.min(MAX_PHOTOS, ...preset.platforms.map((p) => photoLimits[p] ?? MAX_PHOTOS));
   async function chooseFiles(next: File[]) {
-    const photo = preset.kind === "photo";
+    if (!next.length) return;
+    const photos = next.filter((f) => f.type.startsWith("image/"));
+    const videos = next.filter((f) => f.type.startsWith("video/"));
     if (
-      next.length > (photo ? photoLimit : 1) ||
-      next.some((f) => f.size > (photo ? 30e6 : 90e6) || !f.type.startsWith(photo ? "image/" : "video/"))
+      photos.length + videos.length !== next.length ||
+      (videos.length > 0 && next.length > 1) ||
+      photos.length > MAX_PHOTOS ||
+      photos.some((f) => f.size > 30e6) ||
+      videos.some((f) => f.size > 90e6)
     ) {
-      setError(photo ? `Choose up to ${photoLimit} photos, 30 MB each.` : "Choose one video of up to 90 MB.");
+      setError(`Attach up to ${MAX_PHOTOS} photos (30 MB each) or one video (90 MB).`);
       return;
     }
-    if (preset.kind === "short" && next.length && ((await videoDuration(next[0])) ?? 0) > SHORT_MAX_SECONDS) {
-      setError("Short videos are up to 3 minutes. Use Video for longer clips.");
-      return;
-    }
+    setVideoSeconds(videos.length ? await videoDuration(videos[0]) : undefined);
     setFiles(next);
     submission.current = null;
     setError("");
   }
-  const kindPresets = preferences.presets.filter((p) => p.kind === preset.kind);
-  const textLimit = preset.platforms.includes("twitter") ? 280 : 300;
-  const pickerHint = {
-    text: "",
-    photo: `Up to ${photoLimit} photos · 30 MB each`,
-    video: "One video · up to 90 MB",
-    short: "One video · up to 3 minutes · 90 MB",
-  }[preset.kind];
-  let publishLabel = `Publish to ${preset.platforms.length} ${preset.platforms.length === 1 ? "place" : "places"}`;
-  const missingPlatforms = preset.platforms.filter((platform) => !connectedPlatforms.includes(platform));
+  // The attachments decide the kind; the preset's destinations that can't take it are skipped.
+  const kind = postKind(files);
+  const reasons = Object.fromEntries(
+    platforms.map((p) => [p, unsupported(p, kind, files.length, videoSeconds)]),
+  ) as Record<Platform, string | null>;
+  const destinations = preset.platforms.filter((p) => !reasons[p]);
+  const titledNames = destinations
+    .filter((p) => titled.includes(p))
+    .map((p) => platformNames[p])
+    .join(", ");
+  const needsTitle = titledNames !== "";
+  const strictest = destinations
+    .filter((p) => textLimits[p])
+    .sort((a, b) => (textLimits[a] ?? 0) - (textLimits[b] ?? 0))[0];
+  const textLimit = strictest && textLimits[strictest];
+  const textLength = [...caption].length;
+  let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
+  const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
   if (submitted) publishLabel = "Retry queue request";
   if (busy) publishLabel = "Uploading…";
@@ -329,55 +338,56 @@ export default function Publisher() {
           <div hidden={tab !== "compose"}>
             <div className="publisher-heading">
               <h1>New post</h1>
-              {kindPresets.length > 1 && (
-                <select
-                  aria-label="Preset"
-                  value={preset.id}
-                  disabled={busy || submitted}
-                  onChange={(e) => selectPreset(e.target.value)}
-                >
-                  {kindPresets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              )}
             </div>
-            <nav className="publisher-kinds" aria-label="Content type">
-              {kinds.map((kind) => (
+            <nav className="publisher-presets" aria-label="Presets">
+              {preferences.presets.map((p) => (
                 <button
-                  key={kind}
-                  aria-pressed={preset.kind === kind}
+                  key={p.id}
+                  aria-pressed={p.id === preset.id}
                   disabled={busy || submitted}
-                  onClick={() => selectKind(kind)}
+                  onClick={() => selectPreset(p.id)}
                 >
-                  {kindNames[kind]}
+                  {p.name}
                 </button>
               ))}
             </nav>
             <div className="publisher-compose">
               <section>
-                {preset.kind !== "text" && (
-                  <label className="media-picker">
-                    <input
-                      ref={input}
-                      type="file"
-                      accept={preset.kind === "photo" ? "image/*" : "video/*"}
-                      multiple={preset.kind === "photo"}
-                      disabled={busy || submitted}
-                      onChange={(e) => void chooseFiles(Array.from(e.target.files || []))}
-                    />
-                    <span>
-                      {files.length ? "Replace media" : preset.kind === "photo" ? "Choose photos" : "Choose a video"}
-                    </span>
-                    <small>{pickerHint}</small>
-                  </label>
-                )}
+                <label>
+                  Post
+                  <textarea
+                    value={caption}
+                    maxLength={5000}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setCaption(e.target.value);
+                      submission.current = null;
+                    }}
+                    placeholder="What's happening?"
+                    rows={5}
+                  />
+                  {strictest && textLimit && (
+                    <small className="publisher-count" data-over={textLength > textLimit}>
+                      {textLength} / {textLimit} · {platformNames[strictest]}
+                    </small>
+                  )}
+                </label>
+                <label className="media-picker">
+                  <input
+                    ref={input}
+                    type="file"
+                    accept="image/*,video/*"
+                    multiple
+                    disabled={busy || submitted}
+                    onChange={(e) => void chooseFiles(Array.from(e.target.files || []))}
+                  />
+                  <span>{files.length ? "Replace media" : "Add photos or a video"}</span>
+                  <small>Optional · up to {MAX_PHOTOS} photos (30 MB each) or one video (90 MB)</small>
+                </label>
                 {!!previews.length && (
                   <div className="publisher-previews">
                     {previews.map((url, i) =>
-                      preset.kind === "photo" ? (
+                      kind === "photo" ? (
                         <img key={url} src={url} alt={files[i]?.name || "Selected photo"} />
                       ) : (
                         <video key={url} src={url} controls />
@@ -385,9 +395,16 @@ export default function Publisher() {
                     )}
                   </div>
                 )}
-                {preset.kind === "photo" && files.length > 0 && (
+                {!!files.length && (
+                  <div className="publisher-actions publisher-media-actions">
+                    <button disabled={busy || submitted} onClick={clearMedia}>
+                      Remove media
+                    </button>
+                  </div>
+                )}
+                {kind === "photo" && (
                   <div className="publisher-photo-details">
-                    {preset.platforms.includes("grain") && (
+                    {destinations.includes("grain") && (
                       <p className="publisher-note">
                         Date taken · Grain · {Intl.DateTimeFormat().resolvedOptions().timeZone}. Photos without a
                         timezone use this timezone. Read from the original photo; edit or clear before posting.
@@ -412,7 +429,7 @@ export default function Publisher() {
                             placeholder="Describe this photo for screen readers"
                           />
                         </label>
-                        {preset.platforms.includes("grain") && (
+                        {destinations.includes("grain") && (
                           <label>
                             Date taken
                             <input
@@ -433,41 +450,7 @@ export default function Publisher() {
                     ))}
                   </div>
                 )}
-                {preset.kind !== "text" && (
-                  <label>
-                    Title
-                    <input
-                      value={title}
-                      maxLength={100}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setTitle(e.target.value);
-                        submission.current = null;
-                      }}
-                      placeholder="A moment worth sharing"
-                    />
-                  </label>
-                )}
-                <label>
-                  {preset.kind === "text" ? "Post" : "Caption"}
-                  <textarea
-                    value={caption}
-                    maxLength={5000}
-                    disabled={busy || submitted}
-                    onChange={(e) => {
-                      setCaption(e.target.value);
-                      submission.current = null;
-                    }}
-                    placeholder={preset.kind === "text" ? "What's happening?" : "Say something…"}
-                    rows={5}
-                  />
-                  {preset.kind === "text" && (
-                    <small className="publisher-count" data-over={[...caption].length > textLimit}>
-                      {[...caption].length} / {textLimit}
-                    </small>
-                  )}
-                </label>
-                {(preset.kind === "video" || preset.kind === "short") && (
+                {kind === "video" && (
                   <label>
                     Video description (Bluesky)
                     <input
@@ -482,32 +465,48 @@ export default function Publisher() {
                     />
                   </label>
                 )}
+                {needsTitle && (
+                  <label>
+                    Title · {titledNames}
+                    <input
+                      value={title}
+                      maxLength={100}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setTitle(e.target.value);
+                        submission.current = null;
+                      }}
+                      placeholder="A moment worth sharing"
+                    />
+                  </label>
+                )}
               </section>
               <aside>
                 <h2>Share to</h2>
                 <div className="publisher-destinations">
-                  {platforms
-                    .filter((p) => support[p].includes(preset.kind))
-                    .map((p) => (
-                      <label key={p}>
-                        <span>{platformNames[p]}</span>
-                        <input
-                          type="checkbox"
-                          checked={preset.platforms.includes(p)}
-                          disabled={busy || submitted}
-                          onChange={() => {
-                            submission.current = null;
-                            updatePreset({
-                              platforms: preset.platforms.includes(p)
-                                ? preset.platforms.filter((v) => v !== p)
-                                : [...preset.platforms, p],
-                            });
-                          }}
-                        />
-                      </label>
-                    ))}
+                  {platforms.map((p) => (
+                    <label key={p} data-unavailable={Boolean(reasons[p])}>
+                      <span>
+                        {platformNames[p]}
+                        {reasons[p] && <small>{reasons[p]}</small>}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={preset.platforms.includes(p) && !reasons[p]}
+                        disabled={busy || submitted || Boolean(reasons[p])}
+                        onChange={() => {
+                          submission.current = null;
+                          updatePreset({
+                            platforms: preset.platforms.includes(p)
+                              ? preset.platforms.filter((v) => v !== p)
+                              : [...preset.platforms, p],
+                          });
+                        }}
+                      />
+                    </label>
+                  ))}
                 </div>
-                {preset.platforms.includes("youtube") && (
+                {destinations.includes("youtube") && (
                   <label>
                     YouTube visibility
                     <select
@@ -539,31 +538,26 @@ export default function Publisher() {
                       onChange={(e) => updatePreset({ caption: e.target.value.slice(0, 5000) })}
                     />
                   </label>
-                  <p className="publisher-note">
-                    {preset.kind === "text"
-                      ? "Saved in this browser."
-                      : "Saved in this browser. Videos remove all optional metadata."}
-                  </p>
-                  {preset.kind !== "text" &&
-                    preset.platforms.map((p) => (
-                      <label key={p}>
-                        {platformNames[p]} metadata
-                        <select
-                          value={preset.metadata[p]}
-                          onChange={(e) =>
-                            updatePreset({
-                              metadata: {
-                                ...preset.metadata,
-                                [p]: e.target.value as "remove-location" | "remove-all",
-                              },
-                            })
-                          }
-                        >
-                          <option value="remove-location">Remove location · keep camera settings</option>
-                          <option value="remove-all">Remove all optional metadata</option>
-                        </select>
-                      </label>
-                    ))}
+                  <p className="publisher-note">Saved in this browser. Videos remove all optional metadata.</p>
+                  {preset.platforms.map((p) => (
+                    <label key={p}>
+                      {platformNames[p]} photo metadata
+                      <select
+                        value={preset.metadata[p]}
+                        onChange={(e) =>
+                          updatePreset({
+                            metadata: {
+                              ...preset.metadata,
+                              [p]: e.target.value as "remove-location" | "remove-all",
+                            },
+                          })
+                        }
+                      >
+                        <option value="remove-location">Remove location · keep camera settings</option>
+                        <option value="remove-all">Remove all optional metadata</option>
+                      </select>
+                    </label>
+                  ))}
                   <div className="publisher-actions">
                     <button
                       disabled={busy || submitted || preferences.presets.length >= MAX_PRESETS}
@@ -575,13 +569,11 @@ export default function Publisher() {
                       Duplicate
                     </button>
                     <button
-                      disabled={busy || submitted || kindPresets.length === 1}
+                      disabled={busy || submitted || preferences.presets.length === 1}
                       onClick={() =>
                         setPreferences((p) => {
-                          // Each content tab keeps at least one preset.
                           const remaining = p.presets.filter((v) => v.id !== preset.id);
-                          const next = remaining.find((v) => v.kind === preset.kind) ?? remaining[0];
-                          return { ...p, active: next.id, presets: remaining };
+                          return { ...p, active: remaining[0].id, presets: remaining };
                         })
                       }
                     >
@@ -591,14 +583,15 @@ export default function Publisher() {
                 </details>
                 <button
                   className="publish-button"
-                  disabled={
-                    busy || !preset.platforms.length || (preset.kind === "text" ? !caption.trim() : !files.length)
-                  }
+                  disabled={busy || !destinations.length || (kind === "text" && !caption.trim())}
                   onClick={submit}
                 >
                   {publishLabel}
                 </button>
-                {preset.kind !== "text" && (
+                {!destinations.length && (
+                  <p className="publisher-note">None of the selected destinations take {unavailableFor[kind]}.</p>
+                )}
+                {!!files.length && (
                   <p className="publisher-note">
                     Media stays private in Cloudflare. Your laptop removes metadata before publishing.
                   </p>

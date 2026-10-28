@@ -149,26 +149,6 @@ test("text posts publish without fetching media and send X no attachment", async
   expect(args[args.indexOf("--media") + 1]).toBe("");
 });
 
-test("short videos over three minutes fail before invoking the platform", async () => {
-  let calls = 0;
-  const result = await publish(
-    { platform: "tiktok" },
-    { ...post, kind: "short", media: ["one"] },
-    fixture({
-      process: async (_input, _output, options) => {
-        expect(options.kind).toBe("video");
-        return { duration: 181, bytes: 20, width: 48, height: 64 };
-      },
-      browser: async () => {
-        calls++;
-      },
-    }),
-  );
-  expect(result.state).toBe("failed");
-  expect(result.message).toContain("3 minutes");
-  expect(calls).toBe(0);
-});
-
 test("expired OAuth fails before publishing starts", async () => {
   let called = false;
   const result = await publish(

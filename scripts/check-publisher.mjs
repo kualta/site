@@ -3,7 +3,7 @@ import path from "node:path";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 
-// Drives the publisher's content tabs with a mocked API: what each tab asks for and what it queues.
+// Drives the publisher's composer with a mocked API: what each mix of text and media can reach, and what it queues.
 const root = process.cwd();
 const shots = process.env.SCREENSHOT_DIR;
 const server = await createServer({
@@ -42,72 +42,101 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     // Dark is the page default; mobile covers the light theme.
     await page.goto(`http://127.0.0.1:8797/publisher.html?theme=${mobile ? "light" : "dark"}`);
-    const kinds = page.getByRole("navigation", { name: "Content type" });
-    await kinds.getByRole("button", { name: "Photo" }).waitFor();
-    assert.deepEqual(await kinds.getByRole("button").allTextContents(), ["Text", "Photo", "Video", "Short video"]);
-    const pressed = () => kinds.locator('[aria-pressed="true"]').allTextContents();
+    const presets = page.getByRole("navigation", { name: "Presets" });
+    await presets.getByRole("button", { name: "Text" }).waitFor();
+    assert.deepEqual(await presets.getByRole("button").allTextContents(), ["Text", "Photo", "Video", "Short video"]);
+    const pressed = () => presets.locator('[aria-pressed="true"]').allTextContents();
     const checked = () =>
       page
         .locator(".publisher-destinations label")
         .filter({ has: page.locator("input:checked") })
         .allTextContents();
+    const reason = (name) =>
+      page.locator(".publisher-destinations label", { hasText: name }).locator("small").textContent();
+    const attach = (files) => page.locator('input[type="file"]').setInputFiles(files);
+    const photos = (count) =>
+      Array.from({ length: count }, (_, i) => ({ name: `photo-${i + 1}.png`, mimeType: "image/png", buffer: png }));
+    const video = { name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not decodable") };
+    const title = page.getByRole("textbox", { name: /^Title/ });
     const shot = async (name) => {
       if (!shots) return;
-      await page.waitForTimeout(300); // let tab transitions settle
+      await page.waitForTimeout(300); // let chip transitions settle
       await page.screenshot({ path: path.join(shots, `${name}-${mobile ? "mobile" : "desktop"}.png`), fullPage: true });
     };
 
-    // Text: no media or title, a counter for the strictest destination, and a draft that survives a reload.
-    await kinds.getByRole("button", { name: "Text" }).click();
-    assert.equal(await page.locator('input[type="file"]').count(), 0);
-    assert.equal(await page.getByRole("textbox", { name: "Title" }).count(), 0);
-    await page.getByRole("textbox", { name: "Post" }).fill("Hello from the text tab");
-    assert.equal(await page.locator(".publisher-count").textContent(), "23 / 280");
-    await page.reload();
-    await kinds.getByRole("button", { name: "Text" }).click();
-    assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Hello from the text tab");
+    // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.
     assert.deepEqual(await pressed(), ["Text"]);
+    assert.equal(await title.count(), 0);
+    await page.getByRole("textbox", { name: "Post" }).fill("Hello from the composer");
+    assert.equal(await page.locator(".publisher-count").textContent(), "23 / 280 · X / Twitter");
+    assert.equal(await reason("Grain"), "needs photos");
+    assert.equal(await reason("Instagram"), "needs media");
+    assert.equal(await reason("YouTube"), "needs a video");
+    await page.reload();
+    await presets.getByRole("button", { name: "Text" }).waitFor();
+    assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Hello from the composer");
     await shot("text");
     await page.getByRole("button", { name: "Publish to 2 places" }).click();
     const text = await queued(page);
     assert.equal(text.kind, "text");
     assert.deepEqual(text.media, []);
-    assert.equal(text.title, "");
     assert.deepEqual(text.platforms, ["bluesky", "twitter"]);
 
-    // Photo: five photos, each with its own description.
-    await kinds.getByRole("button", { name: "Photo" }).click();
-    assert.deepEqual(await pressed(), ["Photo"]);
-    await page
-      .locator('input[type="file"]')
-      .setInputFiles(
-        Array.from({ length: 5 }, (_, i) => ({ name: `photo-${i + 1}.png`, mimeType: "image/png", buffer: png })),
-      );
+    // The same preset with five photos: X takes four, so Bluesky alone gets them, each described; no title needed.
+    await page.getByRole("textbox", { name: "Post" }).fill("Five photos");
+    await attach(photos(5));
+    assert.equal(await reason("X / Twitter"), "takes up to 4 photos");
     const descriptions = page.getByRole("textbox", { name: "Description (Grain / Bluesky)" });
     assert.equal(await descriptions.count(), 5);
     for (let i = 0; i < 5; i++) await descriptions.nth(i).fill(`Photo ${i + 1} described`);
-    await page.getByRole("textbox", { name: "Title" }).fill("Five photos");
-    await shot("photo");
-    await page.getByRole("button", { name: "Publish to 2 places" }).click();
-    const photo = await queued(page);
-    assert.equal(photo.kind, "photo");
-    assert.equal(photo.media.length, 5);
+    assert.equal(await title.count(), 0);
+    await shot("text-photos");
+    await page.getByRole("button", { name: "Publish to 1 place" }).click();
+    const textPhotos = await queued(page);
+    assert.equal(textPhotos.kind, "photo");
+    assert.deepEqual(textPhotos.platforms, ["bluesky"]);
+    assert.equal(textPhotos.caption, "Five photos");
     assert.deepEqual(
-      photo.alts,
+      textPhotos.alts,
       Array.from({ length: 5 }, (_, i) => `Photo ${i + 1} described`),
     );
 
-    // Short video: one video, up to three minutes, with a video description.
-    await kinds.getByRole("button", { name: "Short video" }).click();
-    await page.getByText("One video · up to 3 minutes · 90 MB").waitFor();
-    await page.getByRole("textbox", { name: "Video description (Bluesky)" }).waitFor();
-    assert.deepEqual(await pressed(), ["Short video"]);
+    // The Photo preset includes Grain, which publishes a title, so one is asked for.
+    await presets.getByRole("button", { name: "Photo" }).click();
+    await attach(photos(2));
+    await page.getByRole("button", { name: "Publish to 2 places" }).click();
+    await page.getByRole("alert").getByText("Add a title for Grain.").waitFor();
+    await title.fill("Two photos");
+    await page.getByRole("button", { name: "Publish to 2 places" }).click();
+    const photo = await queued(page);
+    assert.deepEqual(photo.platforms.toSorted(), ["grain", "instagram"]);
+    assert.equal(photo.title, "Two photos");
+
+    // A video on the Short video preset: Grain sits out, and YouTube and Xiaohongshu need a title.
+    await presets.getByRole("button", { name: "Short video" }).click();
+    await attach(video);
+    await page.locator(".publisher-previews video").waitFor(); // the duration is read first
+    assert.equal(await reason("Grain"), "needs photos");
     assert.deepEqual(await checked(), ["Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
-    await shot("short");
+    await page.getByRole("textbox", { name: "Video description (Bluesky)" }).fill("A short clip");
+    await title.fill("A clip");
+    await shot("video");
+    await page.getByRole("button", { name: "Queue post" }).click();
+    const clip = await queued(page);
+    assert.equal(clip.kind, "video");
+    assert.equal(clip.alt, "A short clip");
+    assert.deepEqual(clip.platforms.toSorted(), ["bluesky", "tiktok", "twitter", "xiaohongshu", "youtube"]);
+
+    // Photos and a video together are refused; removing media returns to a text post.
+    await attach([...photos(1), video]);
+    await page.getByText("Attach up to 10 photos (30 MB each) or one video (90 MB).").waitFor();
+    await attach(photos(1));
+    await page.getByRole("button", { name: "Remove media" }).click();
+    assert.equal(await reason("Grain"), "needs photos");
     assert.deepEqual(errors, []);
     await context.close();
   }
-  console.log("Publisher content tabs passed on desktop and mobile.");
+  console.log("Publisher composer passed on desktop and mobile.");
 } finally {
   await browser.close();
   await server.close();
