@@ -92,8 +92,11 @@ contain original metadata until the helper prepares each destination's copy.
 
 - One composer takes text and, optionally, up to ten photos or one video. The
   attachments decide what the post is: text alone, photos, or a video.
-- Presets are saved destination sets (Text: Bluesky + X; Photo: Instagram + Grain;
-  Video: YouTube; Short video: YouTube, Xiaohongshu, TikTok, X and Bluesky). Each
+- The **Share to** preset tabs are saved destination sets (Photo: Instagram + Grain;
+  Long video: YouTube; Text post: Bluesky + X; Short-form video: YouTube,
+  Xiaohongshu, TikTok, X and Bluesky). Switching presets preserves the title, text,
+  attachments and their descriptions/dates; default captions apply when starting
+  a fresh draft or after queueing. Custom presets and saved settings are retained. Each
   destination shows whether it can take the current post and why not: Grain needs
   photos, YouTube and TikTok need a video, Instagram and Xiaohongshu need media, X
   takes up to four photos, Bluesky takes videos up to three minutes. Selected

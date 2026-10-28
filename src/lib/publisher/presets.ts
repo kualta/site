@@ -95,10 +95,10 @@ export function defaultPreferences(): Preferences {
     version: 1,
     active: "text",
     presets: [
-      preset("text", "Text", ["bluesky", "twitter"]),
       preset("photo", "Photo", ["instagram", "grain"]),
-      preset("video", "Video", ["youtube"]),
-      preset("short", "Short video", ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"]),
+      preset("video", "Long video", ["youtube"]),
+      preset("text", "Text post", ["bluesky", "twitter"]),
+      preset("short", "Short-form video", ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"]),
     ],
   };
 }
@@ -115,6 +115,8 @@ export function parsePreferences(raw: string | null): Preferences {
     )
       return defaultPreferences();
     const presets: Preset[] = [];
+    const defaults = defaultPreferences().presets;
+    const legacyNames: Record<string, string> = { text: "Text", video: "Video", short: "Short video" };
     for (const p of value.presets) {
       if (
         !p ||
@@ -128,9 +130,13 @@ export function parsePreferences(raw: string | null): Preferences {
         if (p.metadata?.[platform] === "remove-all" || p.metadata?.[platform] === "remove-location")
           metadata[platform] = p.metadata[platform];
       // Presets saved with a content kind keep their destinations; the kind no longer limits them.
+      // Rename only unchanged built-in labels, preserving custom names and settings.
+      const name = legacyNames[p.id] && p.name === legacyNames[p.id]
+        ? defaults.find((item) => item.id === p.id)?.name
+        : p.name;
       presets.push({
         id: p.id,
-        name: typeof p.name === "string" ? p.name.slice(0, 50) : "Preset",
+        name: typeof name === "string" ? name.slice(0, 50) : "Preset",
         platforms: platforms.filter((platform) => Array.isArray(p.platforms) && p.platforms.includes(platform)),
         metadata,
         visibility: ["PUBLIC", "UNLISTED", "PRIVATE"].includes(p.visibility) ? p.visibility : "PRIVATE",
