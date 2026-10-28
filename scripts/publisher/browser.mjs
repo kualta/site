@@ -26,6 +26,30 @@ export async function clickUploadTab(page, label) {
     if (await tab.evaluate((el) => Number(getComputedStyle(el).opacity) > 0.5)) return tab.click();
   throw new Error(`Xiaohongshu's ${label} tab is not showing`);
 }
+/** xhs-publish-btn draws 暂存离开 and 发布 side by side in a closed shadow root, so its centre is the gap between them. */
+export async function clickShadowButton(page, host, label) {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { root } = await cdp.send("DOM.getDocument", { depth: -1, pierce: true });
+    const find = (node, test, parent = null) => {
+      if (test(node)) return { node, parent };
+      for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? [])]) {
+        const found = find(child, test, node);
+        if (found) return found;
+      }
+      return null;
+    };
+    const owner = find(root, (node) => node.nodeName === host.toUpperCase())?.node;
+    const text = owner && find(owner, (node) => node.nodeType === 3 && node.nodeValue.trim() === label);
+    if (!text) throw new Error(`Xiaohongshu's ${label} button is missing`);
+    const { model } = await cdp.send("DOM.getBoxModel", { nodeId: text.parent.nodeId });
+    const xs = model.border.filter((_, i) => i % 2 === 0);
+    const ys = model.border.filter((_, i) => i % 2 === 1);
+    await page.mouse.click((Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2);
+  } finally {
+    await cdp.detach();
+  }
+}
 export async function openProfile(path, headless = false) {
   return chromium.launchPersistentContext(path, {
     channel: "chrome",
@@ -129,13 +153,17 @@ export async function publishBrowser(platform, profile, files, post) {
         )
         .first()
         .fill(post.caption);
-      submitting = true;
-      await page
+      // Publish turns on once uploads finish, which can take a while for video.
+      const publish = page
         .locator(
           'xhs-publish-btn:not([is-publish="false"]):not([submit-disabled="true"]), .publish-page-publish-btn button.bg-red:not([disabled]):not([aria-disabled="true"]):not(.disabled)',
         )
-        .first()
-        .click({ timeout: 10 * 60_000 });
+        .first();
+      await publish.waitFor({ timeout: 10 * 60_000 });
+      submitting = true;
+      if (await publish.evaluate((element) => element.localName === "xhs-publish-btn"))
+        await clickShadowButton(page, "xhs-publish-btn", "发布");
+      else await publish.click();
     } else {
       await page.locator('input[type="file"]').first().setInputFiles(files);
       await page.locator('[contenteditable="true"]').first().fill(post.caption);
