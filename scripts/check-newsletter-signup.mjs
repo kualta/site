@@ -54,7 +54,7 @@ try {
       await page.locator("html").evaluate((el) => el.classList.contains("dark")),
       scenario.colorScheme === "dark",
     );
-    const section = page.getByRole("region", { name: "Subscribe to newsletter" });
+    const section = page.getByRole("region", { name: "newsletter" });
     const input = section.getByRole("textbox", { name: "Email address" });
     const button = section.locator('button[type="submit"]');
     const form = section.locator("form");
@@ -168,7 +168,7 @@ try {
   const page = await browser.newPage();
   for (const alias of ["contacts", "socials"]) {
     await page.goto(`${origin}/${alias}`, { waitUntil: "networkidle" });
-    assert.equal(await page.getByRole("heading", { name: "Subscribe to newsletter", exact: true }).count(), 1);
+    assert.equal(await page.getByRole("heading", { name: "newsletter", exact: true }).count(), 1);
     assert.equal(await page.locator(".newsletter-dock").count(), 0);
   }
   await page.goto(`${origin}/join`, { waitUntil: "networkidle" });
