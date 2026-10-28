@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { platformNames, type Platform } from "@/lib/publisher/presets";
+import { kindNames, platformNames, postLabel, type Platform, type PostKind } from "@/lib/publisher/presets";
 
 type Target = {
   id: string;
@@ -16,10 +16,11 @@ type Post = {
   post: {
     title: string;
     caption: string;
-    kind: "photo" | "video";
+    kind: PostKind;
     media: string[];
     datesTaken?: (string | null)[];
     alt: string;
+    alts?: string[];
   };
   targets: Target[];
 };
@@ -44,18 +45,15 @@ const deletionLabels: Record<string, string> = {
 };
 function Preview({ post }: { post: Post["post"] }) {
   const [expired, setExpired] = useState(false);
+  if (post.kind === "text") return <p className="publisher-history-preview publisher-history-text">{post.caption}</p>;
   if (expired || !post.media.length)
-    return (
-      <div className="publisher-history-preview publisher-note">
-        {post.kind === "photo" ? "Photo" : "Video"} · Preview unavailable
-      </div>
-    );
+    return <div className="publisher-history-preview publisher-note">{kindNames[post.kind]} · Preview unavailable</div>;
   const src = `/api/publisher/media/${post.media[0]}`;
   return post.kind === "photo" ? (
     <img
       className="publisher-history-preview"
       src={src}
-      alt={post.alt || post.title}
+      alt={post.alts?.[0] || post.alt || post.title}
       loading="lazy"
       onError={() => setExpired(true)}
     />
@@ -99,7 +97,7 @@ export default function PublisherHistory({ request, onError }: Props) {
       : post.targets.filter((t) => t.state === "succeeded" && t.url && t.deletion_state !== "deleted");
     if (
       !confirm(
-        `Permanently delete “${post.post.title}” from ${destinations
+        `Permanently delete “${postLabel(post.post)}” from ${destinations
           .map((t) => platformNames[t.platform])
           .join(", ")}? This cannot be undone. History will be kept.`,
       )
@@ -156,11 +154,12 @@ export default function PublisherHistory({ request, onError }: Props) {
                 <Preview post={post.post} />
                 <div className="publisher-history-content">
                   <div className="publisher-history-title">
-                    <h3>{post.post.title}</h3>
+                    {/* A text post's preview already is its text. */}
+                    {post.post.kind !== "text" && <h3>{postLabel(post.post)}</h3>}
                     <span className="publisher-note">
                       {post.post.kind === "photo"
                         ? `${post.post.media.length} photo${post.post.media.length === 1 ? "" : "s"}`
-                        : "Video"}
+                        : kindNames[post.post.kind]}
                     </span>
                   </div>
                   <time dateTime={new Date(post.created_at).toISOString()}>
@@ -174,7 +173,9 @@ export default function PublisherHistory({ request, onError }: Props) {
                         </p>
                       ),
                   )}
-                  {post.post.caption && <p className="publisher-history-caption">{post.post.caption}</p>}
+                  {post.post.kind !== "text" && post.post.caption && (
+                    <p className="publisher-history-caption">{post.post.caption}</p>
+                  )}
                   {post.targets.map((target) => (
                     <div className="publisher-history-target" key={target.id}>
                       <div>

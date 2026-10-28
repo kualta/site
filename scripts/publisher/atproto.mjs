@@ -9,6 +9,8 @@ export async function publishAtproto(platform, authorization, files, infos, post
   const wait = options.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   if (agent.did !== owner) throw new Error("The AT Protocol account must belong to kualta");
   const createdAt = new Date().toISOString();
+  // Older jobs carry one description for every photo.
+  const alt = (i) => post.alts?.[i] ?? post.alt;
   const blobs = [];
   if (post.kind === "photo") {
     for (const file of files)
@@ -45,7 +47,7 @@ export async function publishAtproto(platform, authorization, files, infos, post
         value: {
           $type: "social.grain.photo",
           photo: blobs[i],
-          alt: post.alt,
+          alt: alt(i),
           aspectRatio: { width: infos[i].width, height: infos[i].height },
           createdAt,
         },
@@ -83,16 +85,21 @@ export async function publishAtproto(platform, authorization, files, infos, post
     return { url: `https://grain.social/profile/${owner}/gallery/${rkey}` };
   }
   let embed;
-  if (post.kind === "photo")
-    embed = {
-      $type: "app.bsky.embed.images",
-      images: blobs.map((image, i) => ({
-        image,
-        alt: post.alt,
-        aspectRatio: { width: infos[i].width, height: infos[i].height },
-      })),
-    };
-  else {
+  if (post.kind === "photo") {
+    const images = blobs.map((image, i) => ({
+      image,
+      alt: alt(i),
+      aspectRatio: { width: infos[i].width, height: infos[i].height },
+    }));
+    // Bluesky lays out up to four images inline; larger sets use the gallery embed.
+    embed =
+      images.length > 4
+        ? {
+            $type: "app.bsky.embed.gallery",
+            items: images.map((image) => ({ $type: "app.bsky.embed.gallery#image", ...image })),
+          }
+        : { $type: "app.bsky.embed.images", images };
+  } else if (post.kind !== "text") {
     const { data: auth } = await agent.com.atproto.server.getServiceAuth({
       aud: `did:web:${authorization.pdsUrl.host}`,
       lxm: "com.atproto.repo.uploadBlob",
@@ -139,7 +146,7 @@ export async function publishAtproto(platform, authorization, files, infos, post
       $type: "app.bsky.feed.post",
       text: rich.text,
       facets: rich.facets,
-      embed,
+      ...(embed ? { embed } : {}),
       createdAt,
     },
   });

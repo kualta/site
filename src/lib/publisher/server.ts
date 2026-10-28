@@ -1,5 +1,15 @@
 import type { NewsletterDB } from "@/lib/newsletter/types";
-import { platforms, support, type Platform, type MetadataPolicy } from "./presets";
+import {
+  kinds,
+  MAX_PHOTOS,
+  photoLimits,
+  platformNames,
+  platforms,
+  support,
+  type MetadataPolicy,
+  type Platform,
+  type PostKind,
+} from "./presets";
 
 export interface MediaBucket {
   put(key: string, body: ArrayBuffer, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
@@ -11,10 +21,12 @@ export interface MediaBucket {
 }
 export interface Post {
   id: string;
-  kind: "photo" | "video";
+  kind: PostKind;
   title: string;
   caption: string;
   alt: string;
+  /** Per-photo descriptions; `alt` describes a video and older photo posts. */
+  alts?: string[];
   media: string[];
   datesTaken?: (string | null)[];
   platforms: Platform[];
@@ -29,15 +41,24 @@ export async function hashToken(token: string): Promise<string> {
 }
 export function validatePost(value: unknown): Post {
   const p = value as Post;
-  if (!p || !validId(p.id) || !["photo", "video"].includes(p.kind)) throw new Error("Invalid post");
+  if (!p || !validId(p.id) || !kinds.includes(p.kind)) throw new Error("Invalid post");
   if (
     !Array.isArray(p.media) ||
-    !p.media.length ||
-    p.media.length > 4 ||
+    p.media.length > MAX_PHOTOS ||
     p.media.some((id) => !validId(id)) ||
     new Set(p.media).size !== p.media.length
   )
-    throw new Error("Choose 1–4 photos or one video");
+    throw new Error(`Choose 1–${MAX_PHOTOS} photos or one video`);
+  if (p.kind === "text" && p.media.length) throw new Error("Text posts have no media");
+  if (p.kind !== "text" && !p.media.length) throw new Error(`Choose 1–${MAX_PHOTOS} photos or one video`);
+  if (
+    p.alts !== undefined &&
+    (p.kind !== "photo" ||
+      !Array.isArray(p.alts) ||
+      p.alts.length !== p.media.length ||
+      p.alts.some((alt) => typeof alt !== "string" || alt.length > 1000))
+  )
+    throw new Error("Describe each photo in up to 1,000 characters");
   if (
     p.datesTaken !== undefined &&
     (p.kind !== "photo" ||
@@ -53,7 +74,7 @@ export function validatePost(value: unknown): Post {
       ))
   )
     throw new Error("Choose a valid date taken for each photo");
-  if (p.kind === "video" && p.media.length !== 1) throw new Error("Choose one video");
+  if ((p.kind === "video" || p.kind === "short") && p.media.length !== 1) throw new Error("Choose one video");
   if (
     !Array.isArray(p.platforms) ||
     !p.platforms.length ||
@@ -66,11 +87,15 @@ export function validatePost(value: unknown): Post {
       throw new Error("Unsupported destination");
     if (!["remove-all", "remove-location"].includes(p.metadata?.[platform]))
       throw new Error("Choose a metadata policy");
+    const limit = photoLimits[platform] ?? MAX_PHOTOS;
+    if (p.kind === "photo" && p.media.length > limit)
+      throw new Error(`${platformNames[platform]} supports up to ${limit} photos`);
   }
-  if (typeof p.title !== "string" || !p.title.trim() || p.title.length > 100)
+  if (typeof p.title !== "string" || p.title.length > 100 || (p.kind !== "text" && !p.title.trim()))
     throw new Error("Add a title of up to 100 characters");
   if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
     throw new Error("Caption or alt text is too long");
+  if (p.kind === "text" && !p.caption.trim()) throw new Error("Write something to post");
   if (p.platforms.includes("grain")) {
     const encoder = new TextEncoder();
     if (encoder.encode(p.title.trim()).length > 100 || encoder.encode(p.caption).length > 1000)
@@ -91,6 +116,7 @@ export function validatePost(value: unknown): Post {
     title: p.title.trim(),
     caption: p.caption,
     alt: p.alt,
+    ...(p.alts ? { alts: p.alts } : {}),
     media: p.media,
     ...(p.datesTaken ? { datesTaken: p.datesTaken } : {}),
     platforms: p.platforms,

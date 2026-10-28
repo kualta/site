@@ -90,10 +90,20 @@ contain original metadata until the helper prepares each destination's copy.
 
 ## Publishing behavior
 
-- Photos default to Instagram + Grain. Videos default to YouTube, Xiaohongshu,
-  TikTok, X and Bluesky. Every compatible destination is toggleable. Duplicate a
-  preset to create another; settings save immediately. Up to four photos or one
-  video per post; uploads are bounded to 30 MB/photo and 90 MB/video.
+- The composer has a tab per content type, each with its own presets:
+  - **Text** posts to Bluesky and X with no media or title. Links, mentions and
+    hashtags become Bluesky facets; the counter follows X's 280 characters when X is
+    selected, otherwise Bluesky's 300.
+  - **Photo** defaults to Instagram + Grain; Bluesky, X and Xiaohongshu are
+    available. Up to ten photos (X takes four), each with its own description for
+    Grain and Bluesky. Bluesky shows more than four as a gallery.
+  - **Video** defaults to YouTube.
+  - **Short video** defaults to YouTube, Xiaohongshu, TikTok, X and Bluesky, and
+    accepts clips of up to three minutes; the laptop checks the length again.
+- Every compatible destination is toggleable. Duplicate a preset to create another;
+  settings save immediately, and the title and caption draft survives a reload.
+  Uploads are bounded to 30 MB/photo and 90 MB/video. Run
+  `node scripts/check-publisher.mjs` to exercise the tabs in a browser.
 - Photos are decoded into fresh pixels, oriented, and encoded as JPEG. The
   location-removal policy restores only camera/lens make/model and exposure
   settings. GPS, comments, timestamps, identifiers, thumbnails, XMP, IPTC and
