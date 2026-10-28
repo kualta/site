@@ -121,7 +121,10 @@ contain original metadata until the helper prepares each destination's copy.
 - X and Instagram reuse the MIT Crossposter browser adapters (vendored source,
   pinned commit and local changes are recorded under `scripts/publisher/vendor`).
   YouTube uses youtubei.js with the isolated signed-in profile's cookies.
-  TikTok/XHS have browser-upload adapters. XHS upload selectors follow
+  TikTok/XHS have browser-upload adapters. RedNote (international) accounts sign in
+  on rednote.com, whose session does not open xiaohongshu.com; the helper checks and
+  publishes on creator.rednote.com when the profile is signed in there, and links notes
+  as www.rednote.com/explore/<id>. XHS upload selectors follow
   https://github.com/xpzouying/xiaohongshu-mcp (commit a5c8f77); its custom
   publish widget is checked for the disabled state before clicking. Browser layouts, login challenges and
   permissions can change; these adapters need acceptance with the owner's real

@@ -9,6 +9,14 @@ export const destinations = {
   tiktok: "https://www.tiktok.com/tiktokstudio/upload",
   xiaohongshu: "https://creator.xiaohongshu.com/publish/publish",
 };
+// RedNote, Xiaohongshu's international site, signs accounts in on rednote.com, and that
+// session doesn't open xiaohongshu.com: publish where the profile is signed in.
+const rednote = "https://creator.rednote.com/publish/publish";
+export async function destination(platform, context) {
+  if (platform !== "xiaohongshu") return destinations[platform];
+  const cookies = await context.cookies(rednote);
+  return cookies.some((cookie) => cookie.name === "web_session" && cookie.value) ? rednote : destinations.xiaohongshu;
+}
 export async function openProfile(path, headless = false) {
   return chromium.launchPersistentContext(path, {
     channel: "chrome",
@@ -62,7 +70,7 @@ export async function publishBrowser(platform, profile, files, post) {
       const endpoint =
         platform === "tiktok"
           ? /tiktok\.com\/.*(?:publish|\/post\/)/
-          : /xiaohongshu\.com\/.*(?:publish|note\/post)(?:[/?]|$)/;
+          : /(?:xiaohongshu|rednote)\.com\/.*(?:publish|note\/post)(?:[/?]|$)/;
       if (response.request().method() !== "POST" || !endpoint.test(url) || !response.ok()) return;
       const task = response
         .json()
@@ -74,13 +82,16 @@ export async function publishBrowser(platform, profile, files, post) {
             publishedUrl =
               platform === "tiktok"
                 ? `https://www.tiktok.com/@_/video/${id}`
-                : `https://www.xiaohongshu.com/explore/${id}`;
+                : `${explore}/${id}`;
         })
         .catch(() => {})
         .finally(() => responses.delete(task));
       responses.add(task);
     });
-    await page.goto(destinations[platform]);
+    const url = await destination(platform, context);
+    // Notes open on the site the account published from.
+    const explore = url === rednote ? "https://www.rednote.com/explore" : "https://www.xiaohongshu.com/explore";
+    await page.goto(url);
     if (platform === "xiaohongshu") {
       await page
         .getByText(post.kind === "photo" ? "上传图文" : "上传视频", { exact: true })

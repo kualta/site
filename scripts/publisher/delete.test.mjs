@@ -141,6 +141,16 @@ test("browser deletion receipts require platform success, not just an HTTP respo
   ).toBe(true);
   expect(
     deletionResponse(
+      "xiaohongshu",
+      "https://creator.rednote.com/api/note/delete",
+      "POST",
+      { code: 0 },
+      "12345",
+      "12345",
+    ),
+  ).toBe(true);
+  expect(
+    deletionResponse(
       "youtube",
       "https://studio.youtube.com/youtubei/v1/video_manager/delete_video",
       "POST",
@@ -203,4 +213,14 @@ test("browser deletion confirms the exact post and closes its profile", async ()
   expect(confirmed).toBe(true);
   expect(closed).toBe(true);
   expect(result.state).toBe("deleted");
+});
+test("RedNote note links are Xiaohongshu publications", () => {
+  const post = { id: crypto.randomUUID() };
+  expect(deletionDestination("xiaohongshu", "https://www.rednote.com/explore/65f1a2b3c4d5e6f7a8b9c0d1", post)).toEqual({
+    id: "65f1a2b3c4d5e6f7a8b9c0d1",
+    url: "https://www.rednote.com/explore/65f1a2b3c4d5e6f7a8b9c0d1",
+  });
+  expect(() => deletionDestination("xiaohongshu", "https://www.rednote.example/explore/65f1a2b3", post)).toThrow(
+    "Unexpected publication host",
+  );
 });

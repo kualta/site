@@ -20,7 +20,7 @@ export function deletionDestination(platform, value, post) {
     instagram: ["www.instagram.com", "instagram.com"],
     youtube: ["youtu.be", "www.youtube.com", "youtube.com"],
     tiktok: ["www.tiktok.com", "tiktok.com"],
-    xiaohongshu: ["www.xiaohongshu.com", "xiaohongshu.com"],
+    xiaohongshu: ["www.xiaohongshu.com", "xiaohongshu.com", "www.rednote.com", "rednote.com"],
   };
   if (!hosts[platform]?.includes(url.hostname)) throw new Error("Unexpected publication host");
   let id;
@@ -72,7 +72,7 @@ export function deletionResponse(platform, responseUrl, method, body, requestBod
     );
   if (platform === "xiaohongshu")
     return (
-      /(^|\.)xiaohongshu\.com$/.test(host) &&
+      /(^|\.)(?:xiaohongshu|rednote)\.com$/.test(host) &&
       /\/note\/delete\/?$/.test(path) &&
       hasId &&
       body?.code === 0 &&

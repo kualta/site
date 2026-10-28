@@ -118,7 +118,7 @@ export async function collectAnalytics(
           twitter: /^(?:[^.]+\.)?(?:x|twitter)\.com$/,
           instagram: /(^|\.)instagram\.com$/,
           tiktok: /(^|\.)tiktok\.com$/,
-          xiaohongshu: /(^|\.)xiaohongshu\.com$/,
+          xiaohongshu: /(^|\.)(?:xiaohongshu|rednote)\.com$/,
         };
         page.on("response", (response) => {
           if (

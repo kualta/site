@@ -125,3 +125,28 @@ test("manual login finishes before automation opens the saved profile", async ()
   expect(result.state).toBe("succeeded");
   expect(order).toEqual(["manual", "automated"]);
 });
+test("a RedNote account connects Xiaohongshu with its rednote.com session", async () => {
+  const fixture = browserFixture([]);
+  const visited = [];
+  const result = await connectAccount(
+    { id: "fixture", platform: "xiaohongshu", action: "connect" },
+    {
+      ...fixture.deps,
+      open: async () => ({
+        pages: () => [
+          {
+            goto: async (url) => visited.push(url),
+            url: () => visited.at(-1),
+          },
+        ],
+        // The international site keeps the session; xiaohongshu.com has none.
+        cookies: async (url) =>
+          String(url).includes("rednote.com") ? [{ name: "web_session", value: "fixture", expires: -1 }] : [],
+        close: async () => {},
+      }),
+    },
+  );
+  expect(result.state).toBe("succeeded");
+  expect(visited).toEqual(["https://creator.rednote.com/publish/publish"]);
+  expect(fixture.config.platforms).toEqual(["xiaohongshu"]);
+});
