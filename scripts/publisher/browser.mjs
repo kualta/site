@@ -17,6 +17,14 @@ export async function destination(platform, context) {
   const cookies = await context.cookies(rednote);
   return cookies.some((cookie) => cookie.name === "web_session" && cookie.value) ? rednote : destinations.xiaohongshu;
 }
+/** The upload page layers a transparent copy of each tab under the real one, which takes the clicks. */
+export async function clickUploadTab(page, label) {
+  const tabs = page.locator(".creator-tab").filter({ hasText: label });
+  await tabs.first().waitFor();
+  for (const tab of await tabs.all())
+    if (await tab.evaluate((el) => Number(getComputedStyle(el).opacity) > 0.5)) return tab.click();
+  throw new Error(`Xiaohongshu's ${label} tab is not showing`);
+}
 export async function openProfile(path, headless = false) {
   return chromium.launchPersistentContext(path, {
     channel: "chrome",
@@ -93,10 +101,7 @@ export async function publishBrowser(platform, profile, files, post) {
     const explore = url === rednote ? "https://www.rednote.com/explore" : "https://www.xiaohongshu.com/explore";
     await page.goto(url);
     if (platform === "xiaohongshu") {
-      await page
-        .getByText(post.kind === "photo" ? "上传图文" : "上传视频", { exact: true })
-        .first()
-        .click();
+      await clickUploadTab(page, post.kind === "photo" ? "上传图文" : "上传视频");
       if (post.kind === "photo") {
         for (let i = 0; i < files.length; i++) {
           const input =
