@@ -46,7 +46,7 @@ const schema = [
           href={contact.link}
           target="_blank"
           rel="noopener noreferrer me"
-          class="flex items-center justify-center gap-3.5 rounded-xl bg-secondary px-5 py-3 text-xl drop-shadow-sm
+          class="flex items-center justify-center gap-3.5 rounded-xl bg-secondary px-5 py-2 text-xl drop-shadow-sm
                  dark:bg-dark-secondary [&:hover>*]:opacity-70"
         >
           <span class="w-6 flex shrink-0 justify-center text-secondary-text" aria-hidden="true">
@@ -57,9 +57,9 @@ const schema = [
           <span class="-translate-y-[0.12em] font-medium">{contact.platform}</span>
         </a>
       ))}
-      <section class="mt-7 flex w-full flex-col items-center gap-3 text-center" aria-labelledby="newsletter-heading">
-        <h2 id="newsletter-heading" class="text-xl">Subscribe to newsletter</h2>
-        <EmailSubscription client:load compact />
+      <section class="mt-7 flex w-full flex-col items-center gap-3 border-t border-[color-mix(in_srgb,currentColor_18%,transparent)] pt-7 text-center" aria-labelledby="newsletter-heading">
+        <h2 id="newsletter-heading" class="text-base">Subscribe to newsletter</h2>
+        <EmailSubscription client:load compact showHelper={false} />
       </section>
     </div>
   </div>
