@@ -201,6 +201,11 @@ export const InstagramIcon = icon(
     <path d="M16.75 7.25h.01" />
   </>,
 );
+/** the note as one outline: a ring cut open at the top, so the notch beside the stem stays clear */
+export const TiktokIcon = icon(
+  "TiktokIcon",
+  <path d="M12 14.5V4Q12 3 13 3H15Q16 3 16 4A4 4 0 0 0 20 8Q21 8 21 9V11Q21 12 20 12Q18 12 16 10V14.5A6.5 6.5 0 1 1 7 8.5Q8 8.08 8 9.1V12.5A2.5 2.5 0 1 0 12 14.5Z" />,
+);
 export const MailIcon = icon(
   "MailIcon",
   <>
