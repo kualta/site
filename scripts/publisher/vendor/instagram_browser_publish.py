@@ -122,6 +122,15 @@ def dismiss_optional_dialog(page):
     return dismissed
 
 
+def upload_dialog_open(page, timeout):
+    """True once a dialog holding the file picker is on screen."""
+    try:
+        page.locator('[role="dialog"] input[type="file"]').first.wait_for(state="attached", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
 def open_create_dialog(page):
     opened = click_first(
         page,
@@ -140,8 +149,11 @@ def open_create_dialog(page):
             "or this session needs Log in to Instagram again."
         )
 
-    # "New post" expands a menu of options (Post, Reel, Story, Live, Ad). The feed-post
-    # entry is an element with aria-label "Post"; clicking it opens the upload dialog.
+    # Create now opens the upload dialog directly. Older layouts expand a menu of options
+    # (Post, Reel, Story, Live, Ad) whose "Post" entry opens it.
+    if upload_dialog_open(page, timeout=5_000):
+        return
+
     opened_post = click_first(
         page,
         [
