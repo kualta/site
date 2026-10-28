@@ -26,7 +26,7 @@ export function blueskyPostUrl(uri: string): string {
 }
 
 export function postUriFromPath(pathname: string): string {
-  const match = /^\/post\/([^/]+)\/([^/]+)(?:\/(?:row|thread))?\/?$/.exec(pathname);
+  const match = /^\/post\/([^/]+)\/([^/]+)(?:\/thread)?\/?$/.exec(pathname);
   if (!match) return "";
   try {
     const uri = `at://${decodeURIComponent(match[1])}/app.bsky.feed.post/${decodeURIComponent(match[2])}`;
