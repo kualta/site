@@ -137,11 +137,12 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
       }
       return { state: "deleted", message: "Deleted from the platform" };
     }
-    // A note's public page uses a separate login on RedNote and replaces the creator session's cookie.
+    // A note's public page can't delete it: RedNote shows "not available" on the web, and its "More" is the
+    // site menu. Notes are deleted in the creator center.
     if (target.platform === "xiaohongshu")
       return {
         state: "failed",
-        message: "Delete Xiaohongshu notes in the creator center (笔记管理) for now; its public page signs the helper out.",
+        message: "Delete Xiaohongshu notes in the creator center (笔记管理) for now; the note's public page can't delete it.",
       };
     context = await open(join(stateDir, target.platform));
     const page = context.pages()[0] || (await context.newPage());
