@@ -70,7 +70,7 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true, com
           autoComplete="email"
           required
           maxLength={254}
-          placeholder="Your email"
+          placeholder="your@email.com"
           aria-describedby={`${id}-message`}
           readOnly={state === "pending" || state === "success"}
           onInput={(event) => setHasEmail(event.currentTarget.value.length > 0)}
