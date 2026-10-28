@@ -2,6 +2,7 @@ import PublisherAnalytics from "./PublisherAnalytics";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import {
@@ -55,6 +56,46 @@ function videoDuration(file: File): Promise<number | undefined> {
     video.src = url;
   });
 }
+/** A toolbar button that opens its own file picker. */
+function MediaButton({
+  accept,
+  multiple = false,
+  label,
+  hint,
+  Icon,
+  disabled,
+  onFiles,
+}: {
+  accept: string;
+  multiple?: boolean;
+  label: string;
+  hint: string;
+  Icon: IconComponent;
+  disabled: boolean;
+  onFiles: (files: File[]) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        hidden
+        onChange={(event) => {
+          const files = Array.from(event.target.files || []);
+          event.target.value = "";
+          onFiles(files);
+        }}
+      />
+      <button type="button" title={hint} disabled={disabled} onClick={() => input.current?.click()}>
+        <Icon size={18} />
+        {label}
+      </button>
+    </>
+  );
+}
 export default function Publisher() {
   const [tab, setTab] = useState<"compose" | "analytics">("compose");
   const [access, setAccess] = useState<"loading" | "owner" | "signin" | "denied">("loading");
@@ -77,7 +118,7 @@ export default function Publisher() {
   const [helperOnline, setHelperOnline] = useState(false);
   const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const input = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   const submission = useRef<{ id: string; media: string[]; payload?: unknown } | null>(null);
   const preset = preferences.presets.find((p) => p.id === preferences.active) || preferences.presets[0];
   function updatePreset(patch: Partial<Preset>) {
@@ -254,7 +295,6 @@ export default function Publisher() {
   function clearMedia() {
     setFiles([]);
     setVideoSeconds(undefined);
-    if (input.current) input.current.value = "";
     submission.current = null;
   }
   async function chooseFiles(next: File[]) {
@@ -338,9 +378,30 @@ export default function Publisher() {
             </div>
             <div className="publisher-compose">
               <section>
-                <label>
+                <label htmlFor="publisher-post" className="publisher-composer-label">
                   Post
+                </label>
+                {/* Files can also be dropped anywhere on the composer. */}
+                <div
+                  className="publisher-composer"
+                  data-dragging={dragging}
+                  onDragOver={(event) => {
+                    if (!event.dataTransfer.types.includes("Files")) return;
+                    event.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false);
+                  }}
+                  onDrop={(event) => {
+                    if (!event.dataTransfer.files.length) return;
+                    event.preventDefault();
+                    setDragging(false);
+                    if (!busy && !submitted) void chooseFiles(Array.from(event.dataTransfer.files));
+                  }}
+                >
                   <textarea
+                    id="publisher-post"
                     value={caption}
                     maxLength={5000}
                     disabled={busy || submitted}
@@ -351,24 +412,31 @@ export default function Publisher() {
                     placeholder="What's happening?"
                     rows={5}
                   />
-                  {strictest && textLimit && (
-                    <small className="publisher-count" data-over={textLength > textLimit}>
-                      {textLength} / {textLimit} · {platformNames[strictest]}
-                    </small>
-                  )}
-                </label>
-                <label className="media-picker">
-                  <input
-                    ref={input}
-                    type="file"
-                    accept="image/*,video/*"
-                    multiple
-                    disabled={busy || submitted}
-                    onChange={(e) => void chooseFiles(Array.from(e.target.files || []))}
-                  />
-                  <span>{files.length ? "Replace media" : "Add photos or a video"}</span>
-                  <small>Optional · up to {MAX_PHOTOS} photos (30 MB each) or one video (90 MB)</small>
-                </label>
+                  <div className="publisher-composer-tools">
+                    <MediaButton
+                      accept="image/*"
+                      multiple
+                      label="Photos"
+                      hint={`Up to ${MAX_PHOTOS} photos, 30 MB each`}
+                      Icon={ImageIcon}
+                      disabled={busy || submitted}
+                      onFiles={(next) => void chooseFiles(next)}
+                    />
+                    <MediaButton
+                      accept="video/*"
+                      label="Video"
+                      hint="One video, up to 90 MB"
+                      Icon={VideoIcon}
+                      disabled={busy || submitted}
+                      onFiles={(next) => void chooseFiles(next)}
+                    />
+                    {strictest && textLimit && (
+                      <small className="publisher-count" data-over={textLength > textLimit}>
+                        {textLength} / {textLimit} · {platformNames[strictest]}
+                      </small>
+                    )}
+                  </div>
+                </div>
                 {!!previews.length && (
                   <div className="publisher-previews">
                     {previews.map((url, i) =>

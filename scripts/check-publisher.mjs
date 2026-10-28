@@ -54,11 +54,22 @@ try {
     const shareTo = page.getByRole("complementary", { name: "Share to" });
     const presets = shareTo.getByRole("navigation", { name: "Presets" });
     await presets.getByRole("button", { name: "Text post", exact: true }).waitFor();
-    assert.deepEqual(await presets.getByRole("button").allTextContents(), ["Photo", "Long video", "Text post", "Short-form video"]);
+    assert.deepEqual(await presets.getByRole("button").allTextContents(), [
+      "Photo",
+      "Long video",
+      "Text post",
+      "Short-form video",
+    ]);
     assert.equal(await page.getByRole("navigation", { name: "Presets" }).count(), 1);
     assert.equal(await page.getByRole("textbox", { name: "Post" }).count(), 1);
     if (mobile)
-      assert.equal(await presets.getByRole("button").first().evaluate((el) => getComputedStyle(el).transitionDuration), "0s");
+      assert.equal(
+        await presets
+          .getByRole("button")
+          .first()
+          .evaluate((el) => getComputedStyle(el).transitionDuration),
+        "0s",
+      );
     const pressed = () => presets.locator('[aria-pressed="true"]').allTextContents();
     const checked = () =>
       page
@@ -67,7 +78,11 @@ try {
         .allTextContents();
     const reason = (name) =>
       page.locator(".publisher-destinations label", { hasText: name }).locator("small").textContent();
-    const attach = (files) => page.locator('input[type="file"]').setInputFiles(files);
+    // Each toolbar button has its own picker; a lone video goes through the video one.
+    const attach = (files) => {
+      const video = !Array.isArray(files) && files.mimeType.startsWith("video/");
+      return page.locator(`input[type="file"][accept="${video ? "video/*" : "image/*"}"]`).setInputFiles(files);
+    };
     const photos = (count) =>
       Array.from({ length: count }, (_, i) => ({ name: `photo-${i + 1}.png`, mimeType: "image/png", buffer: png }));
     const video = { name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not decodable") };
@@ -128,7 +143,12 @@ try {
 
     // The same preset with five photos: X takes four, so Bluesky alone gets them, each described; no title needed.
     await page.getByRole("textbox", { name: "Post" }).fill("Five photos");
-    await attach(photos(5));
+    const [chooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      page.getByRole("button", { name: "Photos" }).click(),
+    ]);
+    assert.equal(chooser.isMultiple(), true);
+    await chooser.setFiles(photos(5));
     assert.equal(await reason("X / Twitter"), "takes up to 4 photos");
     const descriptions = page.getByRole("textbox", { name: "Description (Grain / Bluesky)" });
     assert.equal(await descriptions.count(), 5);
@@ -175,11 +195,24 @@ try {
     assert.equal(await title.inputValue(), "Two photos");
     assert.equal(await descriptions.nth(0).inputValue(), "A description to keep");
     assert.equal(await date.inputValue(), "2026-10-01T12:34:56");
-    assert.deepEqual(await page.locator(".publisher-previews img").evaluateAll((imgs) => imgs.map((img) => img.src)), previewURLs);
+    assert.deepEqual(
+      await page.locator(".publisher-previews img").evaluateAll((imgs) => imgs.map((img) => img.src)),
+      previewURLs,
+    );
     assert.deepEqual(await checked(), ["Grain", "Instagram"]);
     await page.keyboard.press("Tab");
-    assert.equal(await presets.getByRole("button", { name: "Long video", exact: true }).evaluate((el) => el === document.activeElement), true);
-    assert.equal(await presets.getByRole("button", { name: "Long video", exact: true }).evaluate((el) => getComputedStyle(el).outlineStyle), "solid");
+    assert.equal(
+      await presets
+        .getByRole("button", { name: "Long video", exact: true })
+        .evaluate((el) => el === document.activeElement),
+      true,
+    );
+    assert.equal(
+      await presets
+        .getByRole("button", { name: "Long video", exact: true })
+        .evaluate((el) => getComputedStyle(el).outlineStyle),
+      "solid",
+    );
     await page.getByRole("textbox", { name: "Post" }).fill("");
     await presets.getByRole("button", { name: "Long video", exact: true }).click();
     assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "");
@@ -233,6 +266,16 @@ try {
     await attach(photos(1));
     await page.getByRole("button", { name: "Remove media" }).click();
     assert.equal(await reason("Grain"), "needs photos");
+
+    // Files dropped on the composer attach like the buttons do.
+    const dropped = await page.evaluateHandle(() => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(["x"], "dropped.png", { type: "image/png" }));
+      return transfer;
+    });
+    await page.locator(".publisher-composer").dispatchEvent("drop", { dataTransfer: dropped });
+    await page.getByRole("textbox", { name: "Description (Grain / Bluesky)" }).waitFor();
+    await page.getByRole("button", { name: "Remove media" }).click();
     // Custom presets remain editable and survive a reload, alongside the active draft.
     await presets.getByRole("button", { name: "Text post", exact: true }).click();
     await shareTo.getByText("Preset settings", { exact: true }).click();
@@ -276,7 +319,9 @@ try {
         if (String(input).endsWith("/media")) {
           window.publisherAttempts.uploads++;
           if (window.publisherAttempts.uploads === 1) {
-            await new Promise((resolve) => { window.releaseUpload = resolve; });
+            await new Promise((resolve) => {
+              window.releaseUpload = resolve;
+            });
             return Response.json({ error: "Test upload failure" }, { status: 500 });
           }
         }
