@@ -2,10 +2,10 @@ import type { NewsletterDB } from "@/lib/newsletter/types";
 import {
   kinds,
   MAX_PHOTOS,
-  photoLimits,
   platformNames,
   platforms,
-  support,
+  titled,
+  unsupported,
   type MetadataPolicy,
   type Platform,
   type PostKind,
@@ -74,7 +74,7 @@ export function validatePost(value: unknown): Post {
       ))
   )
     throw new Error("Choose a valid date taken for each photo");
-  if ((p.kind === "video" || p.kind === "short") && p.media.length !== 1) throw new Error("Choose one video");
+  if (p.kind === "video" && p.media.length !== 1) throw new Error("Choose one video");
   if (
     !Array.isArray(p.platforms) ||
     !p.platforms.length ||
@@ -83,15 +83,17 @@ export function validatePost(value: unknown): Post {
   )
     throw new Error("Choose destinations");
   for (const platform of p.platforms) {
-    if (!platforms.includes(platform) || !support[platform].includes(p.kind))
-      throw new Error("Unsupported destination");
+    if (!platforms.includes(platform)) throw new Error("Unsupported destination");
+    const reason = unsupported(platform, p.kind, p.media.length);
+    if (reason) throw new Error(`${platformNames[platform]} ${reason}`);
     if (!["remove-all", "remove-location"].includes(p.metadata?.[platform]))
       throw new Error("Choose a metadata policy");
-    const limit = photoLimits[platform] ?? MAX_PHOTOS;
-    if (p.kind === "photo" && p.media.length > limit)
-      throw new Error(`${platformNames[platform]} supports up to ${limit} photos`);
   }
-  if (typeof p.title !== "string" || p.title.length > 100 || (p.kind !== "text" && !p.title.trim()))
+  if (
+    typeof p.title !== "string" ||
+    p.title.length > 100 ||
+    (p.platforms.some((platform) => titled.includes(platform)) && !p.title.trim())
+  )
     throw new Error("Add a title of up to 100 characters");
   if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
     throw new Error("Caption or alt text is too long");

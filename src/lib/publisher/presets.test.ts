@@ -1,44 +1,48 @@
 import { expect, test } from "bun:test";
-import { defaultPreferences, kinds, mediaKind, parsePreferences, postLabel } from "./presets";
-test("each content tab has a preset with the owner's default destinations", () => {
+import { defaultPreferences, parsePreferences, postKind, postLabel, unsupported } from "./presets";
+test("default presets are destination sets with the owner's choices", () => {
   const prefs = defaultPreferences();
-  expect(prefs.presets.map((p) => p.kind)).toEqual([...kinds]);
-  const destinations = Object.fromEntries(prefs.presets.map((p) => [p.kind, p.platforms]));
-  expect(destinations).toEqual({
-    text: ["bluesky", "twitter"],
-    photo: ["instagram", "grain"],
-    video: ["youtube"],
-    short: ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"],
+  expect(prefs.active).toBe("text");
+  expect(Object.fromEntries(prefs.presets.map((p) => [p.name, p.platforms]))).toEqual({
+    Text: ["bluesky", "twitter"],
+    Photo: ["instagram", "grain"],
+    Video: ["youtube"],
+    "Short video": ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"],
   });
   for (const p of prefs.presets) {
     expect(p.metadata.twitter).toBe("remove-all");
     expect(p.metadata.xiaohongshu).toBe("remove-all");
   }
 });
-test("stored preferences round trip and exclude unsupported destinations", () => {
+test("stored preferences round trip, drop unknown destinations and keep kind-era presets", () => {
   const prefs = defaultPreferences();
   prefs.active = "video";
-  prefs.presets[2].platforms.push("grain");
-  prefs.presets[0].platforms.push("instagram");
-  const parsed = parsePreferences(JSON.stringify(prefs));
+  const stored = JSON.parse(JSON.stringify(prefs));
+  stored.presets[0].kind = "text";
+  stored.presets[0].platforms.push("grain", "bogus");
+  const parsed = parsePreferences(JSON.stringify(stored));
   expect(parsed.active).toBe("video");
-  expect(parsed.presets[2].platforms).not.toContain("grain");
-  expect(parsed.presets[0].platforms).toEqual(["bluesky", "twitter"]);
+  expect(parsed.presets[0].platforms).toEqual(["grain", "bluesky", "twitter"]);
+  expect(parsed.presets[0]).not.toHaveProperty("kind");
   expect(parsePreferences("not json")).toEqual(defaultPreferences());
   expect(parsePreferences('{"version":1,"presets":[]}')).toEqual(defaultPreferences());
 });
-test("preferences saved before text and short video gain those tabs", () => {
-  const saved = defaultPreferences();
-  saved.presets = saved.presets.filter((p) => p.kind === "photo" || p.kind === "video");
-  saved.presets[1].platforms = ["tiktok"];
-  const parsed = parsePreferences(JSON.stringify(saved));
-  expect(parsed.presets.map((p) => p.kind)).toEqual(["photo", "video", "text", "short"]);
-  expect(parsed.presets[1].platforms).toEqual(["tiktok"]);
+test("attachments decide the kind", () => {
+  expect(postKind([])).toBe("text");
+  expect(postKind([{ type: "image/jpeg" }, { type: "image/png" }])).toBe("photo");
+  expect(postKind([{ type: "video/mp4" }])).toBe("video");
 });
-test("short video uploads are videos and text posts have no media", () => {
-  expect(mediaKind("short")).toBe("video");
-  expect(mediaKind("photo")).toBe("photo");
-  expect(mediaKind("text")).toBeNull();
+test("each destination says why it can't take a post", () => {
+  expect(unsupported("bluesky", "text", 0)).toBeNull();
+  expect(unsupported("grain", "text", 0)).toBe("needs photos");
+  expect(unsupported("instagram", "text", 0)).toBe("needs media");
+  expect(unsupported("youtube", "photo", 2)).toBe("needs a video");
+  expect(unsupported("grain", "video", 1)).toBe("needs photos");
+  expect(unsupported("twitter", "photo", 4)).toBeNull();
+  expect(unsupported("twitter", "photo", 5)).toBe("takes up to 4 photos");
+  expect(unsupported("bluesky", "video", 1, 180)).toBeNull();
+  expect(unsupported("bluesky", "video", 1, 181)).toBe("takes videos up to 3 minutes");
+  expect(unsupported("bluesky", "video", 1)).toBeNull();
 });
 test("text posts are listed by their first line", () => {
   expect(postLabel({ title: "", caption: "First line\nsecond" })).toBe("First line");

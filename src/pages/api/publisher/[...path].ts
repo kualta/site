@@ -10,7 +10,7 @@ import {
   validId,
   validatePost,
 } from "@/lib/publisher/server";
-import { mediaKind, platforms } from "@/lib/publisher/presets";
+import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 export const prerender = false;
 
@@ -224,7 +224,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
           .prepare("SELECT kind, job_id FROM publisher_media WHERE id = ?")
           .bind(id)
           .first<{ kind: string; job_id: string | null }>();
-        if (!media || media.kind !== mediaKind(post.kind) || media.job_id)
+        if (!media || media.kind !== post.kind || media.job_id)
           return json({ error: "Media is missing or already queued" }, 400);
       }
       await db.batch([

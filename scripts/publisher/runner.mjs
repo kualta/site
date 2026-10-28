@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { processMedia } from "./process.mjs";
 import { publishAtproto } from "./atproto.mjs";
 import { publishBrowser } from "./browser.mjs";
-const SHORT_MAX_SECONDS = 180;
 
 export async function publish(
   target,
@@ -20,8 +19,8 @@ export async function publish(
   },
 ) {
   const temp = await mkdtemp(join(tmpdir(), "kualta-post-"));
-  // Short videos are video files; text posts have no media.
-  const kind = { photo: "photo", video: "video", short: "video" }[post.kind];
+  // Text posts have no media.
+  const kind = post.kind === "text" ? undefined : post.kind;
   let publishing = false;
   try {
     const files = [],
@@ -42,8 +41,6 @@ export async function publish(
       files.push(output);
       infos.push(info);
     }
-    if (post.kind === "short" && infos[0].duration > SHORT_MAX_SECONDS)
-      throw new Error("Short videos must be at most 3 minutes");
     if (
       kind === "video" &&
       target.platform === "bluesky" &&

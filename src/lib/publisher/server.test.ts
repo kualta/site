@@ -41,7 +41,7 @@ function database() {
 }
 test("rejects unsupported media, destinations and unsafe post parameters", () => {
   expect(validatePost(post()).title).toBe("A photo");
-  expect(() => validatePost({ ...post(), kind: "video" })).toThrow("Unsupported");
+  expect(() => validatePost({ ...post(), kind: "video" })).toThrow("Grain needs photos");
   expect(() => validatePost({ ...post(), platforms: ["bogus"] })).toThrow("Unsupported");
   expect(() =>
     validatePost({
@@ -53,21 +53,23 @@ test("rejects unsupported media, destinations and unsafe post parameters", () =>
   expect(() => validatePost({ ...post(), media: ["../../secret"] })).toThrow();
   expect(() => validatePost({ ...post(), metadata: {} })).toThrow();
 });
-test("text posts carry no media or title and reach only text destinations", () => {
+test("text posts carry no media and reach only text destinations", () => {
   const text = { ...post(), kind: "text", title: "", media: [], platforms: ["bluesky", "twitter"], caption: "Hi" };
   expect(validatePost(text).title).toBe("");
   expect(() => validatePost({ ...text, caption: "  " })).toThrow("Write something");
   expect(() => validatePost({ ...text, media: [crypto.randomUUID()] })).toThrow("no media");
-  expect(() => validatePost({ ...text, platforms: ["grain"] })).toThrow("Unsupported");
-  expect(() => validatePost({ ...text, platforms: ["instagram"] })).toThrow("Unsupported");
+  expect(() => validatePost({ ...text, platforms: ["grain"] })).toThrow("Grain needs photos");
+  expect(() => validatePost({ ...text, platforms: ["instagram"] })).toThrow("Instagram needs media");
   expect(() => validatePost({ ...text, caption: "x".repeat(281) })).toThrow("280");
 });
-test("short videos are one video for video destinations", () => {
-  const short = { ...post(), kind: "short", platforms: ["tiktok", "youtube"] };
-  expect(validatePost(short).kind).toBe("short");
-  expect(() => validatePost({ ...short, media: [crypto.randomUUID(), crypto.randomUUID()] })).toThrow("one video");
-  expect(() => validatePost({ ...short, platforms: ["grain"] })).toThrow("Unsupported");
-  expect(() => validatePost({ ...short, title: "" })).toThrow("title");
+test("titles are required only by destinations that publish them", () => {
+  const photo = { ...post(), title: "", platforms: ["bluesky", "instagram"] };
+  expect(validatePost(photo).title).toBe("");
+  expect(() => validatePost({ ...photo, platforms: ["bluesky", "grain"] })).toThrow("title");
+  const video = { ...post(), kind: "video", title: "", platforms: ["tiktok", "twitter"] };
+  expect(validatePost(video).kind).toBe("video");
+  expect(() => validatePost({ ...video, platforms: ["youtube"] })).toThrow("title");
+  expect(() => validatePost({ ...video, media: [crypto.randomUUID(), crypto.randomUUID()] })).toThrow("one video");
 });
 test("photo posts take up to ten photos, four on X, with a description each", () => {
   const media = Array.from({ length: 10 }, () => crypto.randomUUID());
@@ -75,7 +77,7 @@ test("photo posts take up to ten photos, four on X, with a description each", ()
   expect(validatePost({ ...post(), media, alts, platforms: ["bluesky"] }).alts).toEqual(alts);
   expect(() => validatePost({ ...post(), media: [...media, crypto.randomUUID()] })).toThrow("1–10");
   expect(() => validatePost({ ...post(), media: media.slice(0, 5), platforms: ["twitter"] })).toThrow(
-    "X / Twitter supports up to 4 photos",
+    "X / Twitter takes up to 4 photos",
   );
   expect(() => validatePost({ ...post(), alts: ["one", "two"] })).toThrow("Describe each photo");
   expect(() => validatePost({ ...post(), kind: "video", platforms: ["youtube"], alts: [""] })).toThrow(
