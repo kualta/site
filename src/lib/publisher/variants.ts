@@ -19,14 +19,14 @@ export interface Variant {
   tags: string[];
 }
 
-/** How many tags each platform shows; X and Bluesky take them only while the text still fits. */
+/** How many tags each platform shows at the end of its text. X and Grain do nothing with them; Bluesky keeps its own hidden. */
 export const tagCounts: Record<Platform, number> = {
-  grain: 10,
+  grain: 0,
   instagram: 5,
   tiktok: 5,
   youtube: 3,
-  twitter: 1,
-  bluesky: 2,
+  twitter: 0,
+  bluesky: 0,
   xiaohongshu: 5,
 };
 const BLUESKY_HIDDEN_TAGS = 8;
@@ -92,14 +92,10 @@ export function renderVariant(platform: Platform, post: PostText): Variant {
     };
   const tags = post.tags ?? [];
   const brief = platform === "twitter" || platform === "bluesky";
-  const text = (brief && post.short?.trim()) || post.caption;
-  let shown = Math.min(tagCounts[platform], tags.length);
-  while (brief && shown > 0 && problem(platform, { title: "", text: withTags(text, tags.slice(0, shown)), tags: [] }))
-    shown--;
   return {
     title: platform === "grain" || platform === "youtube" ? post.title.trim() : "",
-    text: withTags(text, tags.slice(0, shown)),
-    tags: platform === "bluesky" ? tags.slice(shown, shown + BLUESKY_HIDDEN_TAGS) : [],
+    text: withTags((brief && post.short?.trim()) || post.caption, tags.slice(0, tagCounts[platform])),
+    tags: platform === "bluesky" ? tags.slice(0, BLUESKY_HIDDEN_TAGS) : [],
   };
 }
 
