@@ -116,8 +116,8 @@ test("each destination's version is rendered, checked and stored with the job", 
   expect(job.variants?.instagram?.text).toBe(
     "A long walk through Bogotá.\n\n#bogota #travel #colombia #streetphotography #walk",
   );
-  expect(job.variants?.twitter?.text).toBe("Bogotá walk\n\n#bogota");
-  expect(job.variants?.bluesky?.tags).toEqual(["colombia", "streetphotography", "walk", "sunday"]);
+  expect(job.variants?.twitter?.text).toBe("Bogotá walk");
+  expect(job.variants?.bluesky?.tags).toEqual(["bogota", "travel", "colombia", "streetphotography", "walk", "sunday"]);
   expect(job.variants?.xiaohongshu).toEqual({
     title: "波哥大散步",
     text: "周末在波哥大散步。",

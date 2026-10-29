@@ -595,8 +595,8 @@ export default function Publisher() {
                     placeholder="#travel #bogota"
                   />
                   <small className="publisher-note">
-                    Most important first. Instagram and TikTok take 5, YouTube 3, Bluesky 2 (and 8 hidden), X 1, Grain
-                    all.
+                    Most important first. Instagram and TikTok add 5 at the end, YouTube 3 to the description, Bluesky
+                    keeps 8 hidden. X and Grain get none.
                   </small>
                 </label>
                 {needsShort && (
