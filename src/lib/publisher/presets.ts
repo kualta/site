@@ -50,6 +50,17 @@ export function unsupported(platform: Platform, kind: PostKind, photos: number, 
     return `takes videos up to ${videoLimit / 60} minutes`;
   return null;
 }
+export interface VideoShape {
+  seconds: number;
+  width: number;
+  height: number;
+}
+/** What a video becomes where the platform names it: every Instagram video is a reel, and YouTube makes vertical or square ones up to 3 minutes Shorts. */
+export function videoFormat(platform: Platform, video?: VideoShape): string | null {
+  if (platform === "instagram") return "Reel";
+  if (platform === "youtube" && video && video.height >= video.width && video.seconds <= 180) return "Short";
+  return null;
+}
 /** Text posts have no title, so lists show their first line instead. */
 export function postLabel(post: { title: string; caption: string }): string {
   return post.title || post.caption.trim().split("\n")[0].slice(0, 80) || "Untitled";
@@ -91,7 +102,7 @@ export function defaultPreferences(): Preferences {
       preset("photo", "Photo", ["instagram", "grain"]),
       preset("video", "Long video", ["youtube"]),
       preset("text", "Text post", ["bluesky", "twitter"]),
-      preset("short", "Short-form video", ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"]),
+      preset("short", "Short-form video", ["instagram", "youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"]),
     ],
   };
 }

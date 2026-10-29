@@ -110,7 +110,7 @@ function findId(value, names) {
   }
   return null;
 }
-export async function publishBrowser(platform, profile, files, post) {
+export async function publishBrowser(platform, profile, files, post, infos = []) {
   const context = await openProfile(profile);
   try {
     const page = context.pages()[0] || (await context.newPage());
@@ -131,8 +131,10 @@ export async function publishBrowser(platform, profile, files, post) {
         is_draft: false,
       });
       const id = findId(response.data, ["videoId", "video_id", "encryptedVideoId"]);
+      // YouTube makes a vertical or square video up to 3 minutes a Short.
+      const short = infos[0] && infos[0].height >= infos[0].width && infos[0].duration <= 180;
       return response.success && id
-        ? { url: `https://youtu.be/${id}` }
+        ? { url: short ? `https://www.youtube.com/shorts/${id}` : `https://youtu.be/${id}` }
         : { uncertain: true, message: "YouTube did not confirm a video URL. Check Studio." };
     }
     let publishedUrl;

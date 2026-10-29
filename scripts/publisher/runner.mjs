@@ -80,7 +80,7 @@ export async function publish(
           uncertain: true,
           message: result.message || "Check the platform before retrying",
         };
-    } else result = await browser(target.platform, join(stateDir, target.platform), files, post);
+    } else result = await browser(target.platform, join(stateDir, target.platform), files, post, infos);
     return {
       state: result.url && !result.uncertain ? "succeeded" : "uncertain",
       url: result.url,

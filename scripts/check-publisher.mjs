@@ -251,11 +251,12 @@ try {
     await attach(video);
     await page.locator(".publisher-previews video").waitFor(); // the duration is read first
     assert.equal(await reason("Grain"), "needs photos");
-    assert.deepEqual(await checked(), ["Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
+    assert.equal(await reason("Instagram"), "Reel");
+    assert.deepEqual(await checked(), ["InstagramReel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
     await page.getByRole("textbox", { name: "Video description (Bluesky)" }).fill("A short clip");
     await title.fill("A clip");
     await presets.getByRole("button", { name: "Photo", exact: true }).click();
-    assert.deepEqual(await checked(), ["Instagram"]);
+    assert.deepEqual(await checked(), ["InstagramReel"]);
     await presets.getByRole("button", { name: "Long video", exact: true }).click();
     assert.deepEqual(await checked(), ["YouTube"]);
     assert.equal(await title.inputValue(), "A clip");
@@ -274,7 +275,7 @@ try {
     const clip = await queued(page);
     assert.equal(clip.kind, "video");
     assert.equal(clip.alt, "A short clip");
-    assert.deepEqual(clip.platforms.toSorted(), ["bluesky", "tiktok", "twitter", "xiaohongshu", "youtube"]);
+    assert.deepEqual(clip.platforms.toSorted(), ["bluesky", "instagram", "tiktok", "twitter", "xiaohongshu", "youtube"]);
     assert.deepEqual(clip.tags, ["bogota", "film"]);
     assert.deepEqual(clip.zh, { title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
 

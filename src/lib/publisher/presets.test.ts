@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { defaultPreferences, parsePreferences, postKind, postLabel, unsupported } from "./presets";
+import { defaultPreferences, parsePreferences, postKind, postLabel, unsupported, videoFormat } from "./presets";
 test("default presets are destination sets with the owner's choices", () => {
   const prefs = defaultPreferences();
   expect(prefs.active).toBe("text");
@@ -7,7 +7,7 @@ test("default presets are destination sets with the owner's choices", () => {
     "Text post": ["bluesky", "twitter"],
     Photo: ["instagram", "grain"],
     "Long video": ["youtube"],
-    "Short-form video": ["youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"],
+    "Short-form video": ["instagram", "youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"],
   });
   for (const p of prefs.presets) {
     expect(p.metadata.twitter).toBe("remove-all");
@@ -69,4 +69,13 @@ test("each destination says why it can't take a post", () => {
 test("text posts are listed by their first line", () => {
   expect(postLabel({ title: "", caption: "First line\nsecond" })).toBe("First line");
   expect(postLabel({ title: "A title", caption: "Body" })).toBe("A title");
+});
+test("videos are named reels on Instagram and Shorts on YouTube when vertical and up to 3 minutes", () => {
+  expect(videoFormat("instagram")).toBe("Reel");
+  expect(videoFormat("youtube", { seconds: 180, width: 1080, height: 1920 })).toBe("Short");
+  expect(videoFormat("youtube", { seconds: 30, width: 1080, height: 1080 })).toBe("Short");
+  expect(videoFormat("youtube", { seconds: 181, width: 1080, height: 1920 })).toBeNull();
+  expect(videoFormat("youtube", { seconds: 30, width: 1920, height: 1080 })).toBeNull();
+  expect(videoFormat("youtube")).toBeNull();
+  expect(videoFormat("tiktok", { seconds: 30, width: 1080, height: 1920 })).toBeNull();
 });

@@ -16,6 +16,8 @@ import {
   STORAGE_KEY,
   titled,
   unsupported,
+  videoFormat,
+  type VideoShape,
   type Preferences,
   type Preset,
   type Platform,
@@ -42,16 +44,17 @@ const unavailableFor: Record<PostKind, string> = {
   video: "this video",
 };
 /** Resolves undefined when this browser cannot read the file; the laptop checks it again. */
-function videoDuration(file: File): Promise<number | undefined> {
+function videoShape(file: File): Promise<VideoShape | undefined> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
     const url = URL.createObjectURL(file);
-    const done = (duration?: number) => {
+    const done = (shape?: VideoShape) => {
       URL.revokeObjectURL(url);
-      resolve(duration);
+      resolve(shape);
     };
     video.preload = "metadata";
-    video.onloadedmetadata = () => done(video.duration);
+    video.onloadedmetadata = () =>
+      done({ seconds: video.duration, width: video.videoWidth, height: video.videoHeight });
     video.onerror = () => done();
     video.src = url;
   });
@@ -102,7 +105,7 @@ export default function Publisher() {
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [ready, setReady] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [videoSeconds, setVideoSeconds] = useState<number>();
+  const [video, setVideo] = useState<VideoShape>();
   const [datesTaken, setDatesTaken] = useState<string[]>([]);
   const [readingDates, setReadingDates] = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -326,7 +329,7 @@ export default function Publisher() {
   }
   function clearMedia() {
     setFiles([]);
-    setVideoSeconds(undefined);
+    setVideo(undefined);
     submission.current = null;
   }
   async function chooseFiles(next: File[]) {
@@ -343,7 +346,7 @@ export default function Publisher() {
       setError(`Attach up to ${MAX_PHOTOS} photos (30 MB each) or one video (90 MB).`);
       return;
     }
-    setVideoSeconds(videos.length ? await videoDuration(videos[0]) : undefined);
+    setVideo(videos.length ? await videoShape(videos[0]) : undefined);
     setFiles(next);
     submission.current = null;
     setError("");
@@ -351,7 +354,7 @@ export default function Publisher() {
   // The attachments decide the kind; the preset's destinations that can't take it are skipped.
   const kind = postKind(files);
   const reasons = Object.fromEntries(
-    platforms.map((p) => [p, unsupported(p, kind, files.length, videoSeconds)]),
+    platforms.map((p) => [p, unsupported(p, kind, files.length, video?.seconds)]),
   ) as Record<Platform, string | null>;
   const destinations = preset.platforms.filter((p) => !reasons[p]);
   const titledNames = destinations
@@ -714,7 +717,11 @@ export default function Publisher() {
                     <label key={p} data-unavailable={Boolean(reasons[p])}>
                       <span>
                         {platformNames[p]}
-                        {reasons[p] && <small>{reasons[p]}</small>}
+                        {reasons[p] ? (
+                          <small>{reasons[p]}</small>
+                        ) : (
+                          kind === "video" && videoFormat(p, video) && <small>{videoFormat(p, video)}</small>
+                        )}
                       </span>
                       <input
                         type="checkbox"
