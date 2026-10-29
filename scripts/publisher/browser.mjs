@@ -26,6 +26,37 @@ export async function clickUploadTab(page, label) {
     if (await tab.evaluate((el) => Number(getComputedStyle(el).opacity) > 0.5)) return tab.click();
   throw new Error(`Xiaohongshu's ${label} tab is not showing`);
 }
+/**
+ * Typed "#name" stays plain text on Xiaohongshu: a topic links only when picked from the editor's topic list.
+ * Types each topic on a line after the text and picks its exact name; a topic the list doesn't offer is erased.
+ */
+export async function addTopics(page, editor, topics) {
+  await editor.evaluate((element) => {
+    element.focus();
+    const range = document.createRange();
+    range.selectNodeContents(element.lastElementChild ?? element);
+    range.collapse(false);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  });
+  if ((await editor.innerText()).trim()) await page.keyboard.press("Enter");
+  const linked = editor.locator("a[data-topic]");
+  for (const topic of topics) {
+    const before = await linked.count();
+    await page.keyboard.type(`#${topic}`, { delay: 120 });
+    const item = page
+      .locator("#creator-editor-topic-container .item")
+      .filter({ has: page.getByText(`#${topic}`, { exact: true }) });
+    try {
+      await item.first().click({ timeout: 10_000 });
+      // The link goes in once RedNote has looked the name up; typing sooner lands around it.
+      await linked.nth(before).waitFor({ timeout: 15_000 });
+    } catch {
+      for (let i = 0; i <= [...topic].length; i++) await page.keyboard.press("Backspace");
+    }
+  }
+  return linked.count();
+}
 /** xhs-publish-btn draws 暂存离开 and 发布 side by side in a closed shadow root, so its centre is the gap between them. */
 export async function clickShadowButton(page, host, label) {
   const cdp = await page.context().newCDPSession(page);
@@ -162,12 +193,14 @@ export async function publishBrowser(platform, profile, files, post) {
         }
       } else await page.locator('input[type="file"]').first().setInputFiles(files);
       await page.locator("div.d-input input").first().fill(post.title);
-      await page
-        .locator(
-          'div[role="textbox"][contenteditable="true"], div.tiptap[contenteditable="true"], div.ql-editor',
-        )
-        .first()
-        .fill(post.caption);
+      const editor = page
+        .locator('div[role="textbox"][contenteditable="true"], div.tiptap[contenteditable="true"], div.ql-editor')
+        .first();
+      await editor.fill(post.caption);
+      if (post.tags?.length) {
+        const linked = await addTopics(page, editor, post.tags);
+        if (linked < post.tags.length) console.error(`Xiaohongshu linked ${linked} of ${post.tags.length} topics`);
+      }
       // Publish turns on once uploads finish, which can take a while for video.
       const publish = page
         .locator(

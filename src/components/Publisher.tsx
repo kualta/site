@@ -380,6 +380,7 @@ export default function Publisher() {
     .map(({ platform, variant }) => ({ platform, ...usage(platform, variant).at(-1)! }))
     .sort((a, b) => b.used / b.limit - a.used / a.limit)[0];
   const issues = versions.filter(({ issue }) => issue);
+  const zhUsage = usage("xiaohongshu", renderVariant("xiaohongshu", text))[1];
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
@@ -653,8 +654,8 @@ export default function Publisher() {
                         }}
                         placeholder="正文"
                       />
-                      <small className="publisher-count" data-over={[...zhText].length > 1000}>
-                        {[...zhText].length} / 1000
+                      <small className="publisher-count" data-over={zhUsage.used > zhUsage.limit}>
+                        {zhUsage.used} / {zhUsage.limit}
                       </small>
                     </label>
                     <label>
