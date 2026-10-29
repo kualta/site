@@ -1,4 +1,13 @@
-export const platforms = ["grain", "instagram", "bluesky", "twitter", "xiaohongshu", "youtube", "tiktok"] as const;
+export const platforms = [
+  "grain",
+  "instagram",
+  "instagram_story",
+  "bluesky",
+  "twitter",
+  "xiaohongshu",
+  "youtube",
+  "tiktok",
+] as const;
 export type Platform = (typeof platforms)[number];
 /** What a post carries, decided by its attachments: none, photos, or one video. */
 export const kinds = ["text", "photo", "video"] as const;
@@ -7,6 +16,7 @@ export type MetadataPolicy = "remove-location" | "remove-all";
 export const platformNames: Record<Platform, string> = {
   grain: "Grain",
   instagram: "Instagram",
+  instagram_story: "Instagram Story",
   bluesky: "Bluesky",
   twitter: "X / Twitter",
   xiaohongshu: "Xiaohongshu",
@@ -17,6 +27,8 @@ export const kindNames: Record<PostKind, string> = { text: "Text", photo: "Photo
 export const support: Record<Platform, readonly PostKind[]> = {
   grain: ["photo"],
   instagram: ["photo", "video"],
+  // Each photo becomes its own story.
+  instagram_story: ["photo", "video"],
   bluesky: ["text", "photo", "video"],
   twitter: ["text", "photo", "video"],
   xiaohongshu: ["photo", "video"],
@@ -27,7 +39,7 @@ export const MAX_PHOTOS = 10;
 /** Destinations that take fewer photos per post than MAX_PHOTOS. */
 export const photoLimits: Partial<Record<Platform, number>> = { twitter: 4 };
 /** Longest video, in seconds, where a destination has a limit. */
-export const videoLimits: Partial<Record<Platform, number>> = { bluesky: 180 };
+export const videoLimits: Partial<Record<Platform, number>> = { bluesky: 180, instagram_story: 60 };
 /** Destinations that publish the post's title, so a post to them needs one; Xiaohongshu has its own Chinese title. */
 export const titled: readonly Platform[] = ["grain", "youtube"];
 export const MAX_PRESETS = 24;
@@ -47,7 +59,7 @@ export function unsupported(platform: Platform, kind: PostKind, photos: number, 
   if (kind === "photo" && photoLimit && photos > photoLimit) return `takes up to ${photoLimit} photos`;
   const videoLimit = videoLimits[platform];
   if (kind === "video" && videoLimit && seconds !== undefined && seconds > videoLimit)
-    return `takes videos up to ${videoLimit / 60} minutes`;
+    return `takes videos up to ${videoLimit < 120 ? `${videoLimit} seconds` : `${videoLimit / 60} minutes`}`;
   return null;
 }
 export interface VideoShape {
@@ -84,6 +96,7 @@ export function defaultMetadata(): Record<Platform, MetadataPolicy> {
   return {
     grain: "remove-location",
     instagram: "remove-location",
+    instagram_story: "remove-location",
     bluesky: "remove-location",
     twitter: "remove-all",
     xiaohongshu: "remove-all",

@@ -190,3 +190,48 @@ test("each platform publishes its own rendered version", async () => {
   expect(sent.caption).toBe("Bluesky text\n\n#a");
   expect(sent.tags).toEqual(["b", "c"]);
 });
+
+test("Instagram stories go through the API with story-sized video", async () => {
+  let options;
+  let published;
+  const result = await publish(
+    { platform: "instagram_story" },
+    { ...post, kind: "video", media: ["clip"], metadata: { instagram_story: "remove-location" } },
+    fixture({
+      config: { origin: "https://post.example", token: "helper" },
+      process: async (_input, output, opts) => {
+        options = opts;
+        await writeFile(output, "prepared");
+        return { kind: "video", width: 1080, height: 1920, duration: 12, bytes: 8, contentType: "video/mp4" };
+      },
+      story: async (files, infos, deps) => {
+        published = { files, infos, deps };
+        return { url: "https://www.instagram.com/stories/kualta/" };
+      },
+    }),
+  );
+  expect(result).toEqual({ state: "succeeded", url: "https://www.instagram.com/stories/kualta/", message: "" });
+  expect(options.story).toBe(true);
+  expect(published.files).toHaveLength(1);
+  expect(typeof published.deps.park).toBe("function");
+});
+test("Instagram stories refuse videos over a minute before publishing", async () => {
+  let called = false;
+  const result = await publish(
+    { platform: "instagram_story" },
+    { ...post, kind: "video", media: ["clip"], metadata: { instagram_story: "remove-location" } },
+    fixture({
+      config: {},
+      process: async (_input, output) => {
+        await writeFile(output, "prepared");
+        return { kind: "video", width: 1080, height: 1920, duration: 75, bytes: 8, contentType: "video/mp4" };
+      },
+      story: async () => {
+        called = true;
+      },
+    }),
+  );
+  expect(called).toBe(false);
+  expect(result.state).toBe("failed");
+  expect(result.message).toContain("3 to 60 seconds");
+});

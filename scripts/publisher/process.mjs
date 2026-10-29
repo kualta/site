@@ -15,7 +15,7 @@ const cameraTags = [
   "FocalLengthIn35mmFormat",
 ];
 
-export async function processMedia(input, output, { kind, policy, maxBytes = 900_000 }) {
+export async function processMedia(input, output, { kind, policy, maxBytes = 900_000, story = false }) {
   if (!["photo", "video"].includes(kind) || !["remove-location", "remove-all"].includes(policy))
     throw new Error("Invalid media policy");
   if (kind === "photo") {
@@ -90,12 +90,14 @@ export async function processMedia(input, output, { kind, policy, maxBytes = 900
       "20",
       "-pix_fmt",
       "yuv420p",
+      // Instagram stories take at most 1920 px wide, 60 fps and 128 kbps audio.
+      ...(story ? ["-fpsmax", "60"] : []),
       "-vf",
-      "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+      story ? "scale=w=trunc(min(1080\\,iw)/2)*2:h=-2" : "scale=trunc(iw/2)*2:trunc(ih/2)*2",
       "-c:a",
       "aac",
       "-b:a",
-      "192k",
+      story ? "128k" : "192k",
       "-bsf:v",
       "filter_units=remove_types=6",
       "-movflags",

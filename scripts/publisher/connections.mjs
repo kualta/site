@@ -2,6 +2,7 @@ import { manualLogin } from "./manual-login.mjs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { destination, destinations, openProfile } from "./browser.mjs";
+import { connectHelp, forgetAccount } from "./instagram-story.mjs";
 
 // Session cookies are checked only after the owner finishes the interactive login.
 export function hasSession(platform, cookies) {
@@ -22,6 +23,13 @@ export async function connectAccount(
   connection,
   { stateDir, config, oauth, api, save, open = openProfile, login = manualLogin },
 ) {
+  if (connection.platform === "instagram_story") {
+    if (connection.action !== "disconnect") return { state: "failed", message: connectHelp };
+    await forgetAccount(stateDir);
+    config.platforms = config.platforms.filter((p) => p !== "instagram_story");
+    await save();
+    return { state: "succeeded", message: "Disconnected" };
+  }
   const atproto = ["grain", "bluesky"].includes(connection.platform);
   if (
     (!atproto && !Object.hasOwn(destinations, connection.platform)) ||

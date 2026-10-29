@@ -12,6 +12,7 @@ import ffprobe from "ffprobe-static";
 import { deletePublication } from "./delete.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
+import { readAccount, refreshAccount, saveAccount } from "./instagram-story.mjs";
 import { createOAuth } from "./oauth.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
@@ -89,6 +90,14 @@ if (command === "connect") {
   } finally {
     prompt.close();
   }
+} else if (command === "instagram-token") {
+  // Read from a pipe so the token never lands in shell history: pbpaste | bun run publisher instagram-token
+  let token = "";
+  for await (const chunk of stdin) token += chunk;
+  const account = await saveAccount(stateDir, token.trim());
+  config.platforms = [...new Set([...config.platforms, "instagram_story"])];
+  await save();
+  console.log(`Instagram Stories connected as @${account.username}.`);
 } else if (command === "start") {
   if (!config.token) throw new Error("Connect the helper first");
   await exec("exiftool", ["-ver"]);
@@ -100,6 +109,14 @@ if (command === "connect") {
     config.platforms = config.platforms.filter((p) => !["grain", "bluesky"].includes(p));
     await save();
   }
+  if (!(await readAccount(stateDir)) && config.platforms.includes("instagram_story")) {
+    config.platforms = config.platforms.filter((p) => p !== "instagram_story");
+    await save();
+  }
+  const refreshStories = () =>
+    refreshAccount(stateDir).catch((error) => console.error(`Instagram token refresh failed: ${error.message}`));
+  void refreshStories();
+  setInterval(refreshStories, 12 * 60 * 60_000).unref();
   console.log("Publisher ready. Keep this terminal open. Ctrl+C stops the helper.");
   setInterval(() => api("heartbeat", {}).catch(() => {}), 30_000).unref();
   // Every Chrome launch copies the 1.4 GB app; copies left by interrupted launches would fill the disk.
@@ -179,4 +196,4 @@ if (command === "connect") {
 } else if (command === "uninstall") {
   await uninstall();
   console.log("Background helper removed.");
-} else console.log("Usage: bun run publisher connect | start | install | uninstall");
+} else console.log("Usage: bun run publisher connect | start | install | uninstall | instagram-token");
