@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { ChevronDownIcon, TrashIcon } from "@/components/icons";
-import { kindNames, platformNames, postLabel, type Platform, type PostKind } from "@/lib/publisher/presets";
+import {
+  kindNames,
+  platformNames,
+  platforms,
+  postLabel,
+  titled,
+  unsupported,
+  type Platform,
+  type PostKind,
+} from "@/lib/publisher/presets";
+import { parseTags } from "@/lib/publisher/variants";
+import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
 
 type Target = {
   id: string;
@@ -27,6 +38,8 @@ type Post = {
     datesTaken?: (string | null)[];
     alt: string;
     alts?: string[];
+    tags?: string[];
+    zh?: { title: string; text: string; topics: string[] };
   };
   targets: Target[];
 };
@@ -119,6 +132,109 @@ function Thumbnail({ post }: { post: Post["post"] }) {
     </div>
   );
 }
+/** Sends a post that already went out to destinations it hasn't reached yet. */
+function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onDone: () => Promise<void> }) {
+  const [chosen, setChosen] = useState<Platform[]>([]);
+  const [title, setTitle] = useState("");
+  const [zh, setZh] = useState<ChineseDraft>({ title: "", text: "", topics: "" });
+  const [translating, setTranslating] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { kind, media } = post.post;
+  const options = platforms.filter((p) => !post.targets.some((t) => t.platform === p));
+  // Asked only when the post went out without them.
+  const needsTitle = !post.post.title.trim() && chosen.some((p) => titled.includes(p));
+  const needsChinese = !post.post.zh && chosen.includes("xiaohongshu");
+  async function translate() {
+    setTranslating(true);
+    onError("");
+    try {
+      const draft = await request("translate", {
+        title: post.post.title,
+        text: post.post.caption,
+        tags: post.post.tags ?? [],
+      });
+      setZh({ title: draft.title, text: draft.text, topics: draft.topics.join(" ") });
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setTranslating(false);
+    }
+  }
+  async function send() {
+    setBusy(true);
+    onError("");
+    try {
+      await request("crosspost", {
+        job: post.id,
+        platforms: chosen,
+        ...(needsTitle ? { title } : {}),
+        ...(needsChinese ? { zh: { title: zh.title, text: zh.text, topics: parseTags(zh.topics) } } : {}),
+      });
+      setChosen([]);
+      await onDone();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!options.length) return null;
+  return (
+    <fieldset className="publisher-crosspost">
+      <legend>Crosspost to</legend>
+      <div className="publisher-crosspost-options">
+        {options.map((platform) => {
+          const reason = unsupported(platform, kind, media.length);
+          return (
+            <label key={platform} data-unavailable={Boolean(reason)}>
+              <span>
+                {platformNames[platform]}
+                {reason && <small>{reason}</small>}
+              </span>
+              <input
+                type="checkbox"
+                checked={chosen.includes(platform)}
+                disabled={busy || Boolean(reason)}
+                onChange={() =>
+                  setChosen((list) =>
+                    list.includes(platform) ? list.filter((p) => p !== platform) : [...list, platform],
+                  )
+                }
+              />
+            </label>
+          );
+        })}
+      </div>
+      {needsTitle && (
+        <label>
+          Title ·{" "}
+          {chosen
+            .filter((p) => titled.includes(p))
+            .map((p) => platformNames[p])
+            .join(", ")}
+          <input value={title} maxLength={100} disabled={busy} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+      )}
+      {needsChinese && (
+        <PublisherChinese
+          value={zh}
+          onChange={setZh}
+          onTranslate={() => void translate()}
+          translating={translating}
+          canTranslate={Boolean(post.post.title.trim() || post.post.caption.trim())}
+          disabled={busy}
+        />
+      )}
+      <button disabled={busy || !chosen.length} onClick={() => void send()}>
+        {busy
+          ? "Queueing…"
+          : chosen.length
+            ? `Crosspost to ${chosen.length} ${chosen.length === 1 ? "place" : "places"}`
+            : "Crosspost"}
+      </button>
+    </fieldset>
+  );
+}
 export default function PublisherHistory({ request, onError }: Props) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState<Page>({ posts: [], next: null });
@@ -198,7 +314,8 @@ export default function PublisherHistory({ request, onError }: Props) {
     const deleted = post.targets.every((t) => t.deletion_state === "deleted");
     const problems = post.targets.filter((t) => ["bad", "warn"].includes(status(t).tone));
     const dates = (post.post.datesTaken ?? []).flatMap((date, index) => (date ? [{ date, index }] : []));
-    const manageable = removable || problems.length > 0 || dates.length > 0;
+    const crosspostable = !deleted && platforms.some((p) => !post.targets.some((t) => t.platform === p));
+    const manageable = removable || problems.length > 0 || dates.length > 0 || crosspostable;
     const expanded = open === post.id;
     return (
       <li key={post.id} className="publisher-history-item" data-deleted={deleted}>
@@ -301,6 +418,7 @@ export default function PublisherHistory({ request, onError }: Props) {
                       Photo {index + 1} · taken {new Date(date).toLocaleString()}
                     </p>
                   ))}
+                  {crosspostable && <Crosspost post={post} request={request} onDone={refresh} onError={onError} />}
                   {removable && (
                     <button disabled={busy || pending} onClick={() => void remove(post)}>
                       Delete everywhere

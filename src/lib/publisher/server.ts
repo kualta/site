@@ -18,6 +18,7 @@ export interface MediaBucket {
     body: ReadableStream;
     httpMetadata?: { contentType?: string };
   } | null>;
+  head(key: string): Promise<unknown | null>;
   delete(keys: string | string[]): Promise<void>;
 }
 export interface Post {
@@ -50,18 +51,20 @@ export async function hashToken(token: string): Promise<string> {
     .map((n) => n.toString(16).padStart(2, "0"))
     .join("");
 }
+/** A post the owner needs to fix; its message is safe to show. */
+export class PostError extends Error {}
 export function validatePost(value: unknown): Post {
   const p = value as Post;
-  if (!p || !validId(p.id) || !kinds.includes(p.kind)) throw new Error("Invalid post");
+  if (!p || !validId(p.id) || !kinds.includes(p.kind)) throw new PostError("Invalid post");
   if (
     !Array.isArray(p.media) ||
     p.media.length > MAX_PHOTOS ||
     p.media.some((id) => !validId(id)) ||
     new Set(p.media).size !== p.media.length
   )
-    throw new Error(`Choose 1–${MAX_PHOTOS} photos or one video`);
-  if (p.kind === "text" && p.media.length) throw new Error("Text posts have no media");
-  if (p.kind !== "text" && !p.media.length) throw new Error(`Choose 1–${MAX_PHOTOS} photos or one video`);
+    throw new PostError(`Choose 1–${MAX_PHOTOS} photos or one video`);
+  if (p.kind === "text" && p.media.length) throw new PostError("Text posts have no media");
+  if (p.kind !== "text" && !p.media.length) throw new PostError(`Choose 1–${MAX_PHOTOS} photos or one video`);
   if (
     p.alts !== undefined &&
     (p.kind !== "photo" ||
@@ -69,7 +72,7 @@ export function validatePost(value: unknown): Post {
       p.alts.length !== p.media.length ||
       p.alts.some((alt) => typeof alt !== "string" || alt.length > 1000))
   )
-    throw new Error("Describe each photo in up to 1,000 characters");
+    throw new PostError("Describe each photo in up to 1,000 characters");
   if (
     p.datesTaken !== undefined &&
     (p.kind !== "photo" ||
@@ -84,8 +87,8 @@ export function validatePost(value: unknown): Post {
             new Date(date).toISOString() !== date),
       ))
   )
-    throw new Error("Choose a valid date taken for each photo");
-  if (p.kind === "video" && p.media.length !== 1) throw new Error("Choose one video");
+    throw new PostError("Choose a valid date taken for each photo");
+  if (p.kind === "video" && p.media.length !== 1) throw new PostError("Choose one video");
   if (
     p.kind === "mixed"
       ? !Array.isArray(p.mediaKinds) ||
@@ -95,34 +98,34 @@ export function validatePost(value: unknown): Post {
         !p.mediaKinds.includes("video")
       : p.mediaKinds !== undefined
   )
-    throw new Error("Mix photos with at least one video");
+    throw new PostError("Mix photos with at least one video");
   if (
     !Array.isArray(p.platforms) ||
     !p.platforms.length ||
     p.platforms.length > platforms.length ||
     new Set(p.platforms).size !== p.platforms.length
   )
-    throw new Error("Choose destinations");
+    throw new PostError("Choose destinations");
   for (const platform of p.platforms) {
-    if (!platforms.includes(platform)) throw new Error("Unsupported destination");
+    if (!platforms.includes(platform)) throw new PostError("Unsupported destination");
     const reason = unsupported(platform, p.kind, p.media.length);
-    if (reason) throw new Error(`${platformNames[platform]} ${reason}`);
+    if (reason) throw new PostError(`${platformNames[platform]} ${reason}`);
     if (!["remove-all", "remove-location"].includes(p.metadata?.[platform]))
-      throw new Error("Choose a metadata policy");
+      throw new PostError("Choose a metadata policy");
   }
   if (
     typeof p.title !== "string" ||
     p.title.length > 100 ||
     (p.platforms.some((platform) => titled.includes(platform)) && !p.title.trim())
   )
-    throw new Error("Add a title of up to 100 characters");
+    throw new PostError("Add a title of up to 100 characters");
   if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
-    throw new Error("Caption or alt text is too long");
-  if (p.kind === "text" && !p.caption.trim()) throw new Error("Write something to post");
+    throw new PostError("Caption or alt text is too long");
+  if (p.kind === "text" && !p.caption.trim()) throw new PostError("Write something to post");
   if (p.tags !== undefined && (!Array.isArray(p.tags) || p.tags.length > 30 || !p.tags.every(isTag)))
-    throw new Error("Tags are letters, digits and _, up to 30 of them");
+    throw new PostError("Tags are letters, digits and _, up to 30 of them");
   if (p.short !== undefined && (typeof p.short !== "string" || p.short.length > 1000))
-    throw new Error("The short version is too long");
+    throw new PostError("The short version is too long");
   if (
     p.zh !== undefined &&
     (typeof p.zh?.title !== "string" ||
@@ -133,15 +136,15 @@ export function validatePost(value: unknown): Post {
       p.zh.topics.length > 10 ||
       !p.zh.topics.every((topic) => isTag(topic) && [...topic].length <= 30))
   )
-    throw new Error("Check the Chinese title, text and topics");
-  if (p.platforms.includes("xiaohongshu") && !p.zh) throw new Error("Add the Chinese version for Xiaohongshu");
+    throw new PostError("Check the Chinese title, text and topics");
+  if (p.platforms.includes("xiaohongshu") && !p.zh) throw new PostError("Add the Chinese version for Xiaohongshu");
   const variants: Partial<Record<Platform, Variant>> = {};
   for (const platform of p.platforms) {
     variants[platform] = renderVariant(platform, p);
     const issue = problem(platform, variants[platform]);
-    if (issue) throw new Error(`${platformNames[platform]}: ${issue}`);
+    if (issue) throw new PostError(`${platformNames[platform]}: ${issue}`);
   }
-  if (!["PUBLIC", "UNLISTED", "PRIVATE"].includes(p.visibility)) throw new Error("Choose YouTube visibility");
+  if (!["PUBLIC", "UNLISTED", "PRIVATE"].includes(p.visibility)) throw new PostError("Choose YouTube visibility");
   return {
     id: p.id,
     kind: p.kind,
@@ -160,6 +163,43 @@ export function validatePost(value: unknown): Post {
     ...(p.zh ? { zh: { title: p.zh.title.trim(), text: p.zh.text, topics: p.zh.topics } } : {}),
     variants,
   };
+}
+/** Sends a post that already went out to more destinations, checked again as if it were new. */
+export async function addDestinations(
+  db: NewsletterDB,
+  bucket: Pick<MediaBucket, "head">,
+  input: { job?: unknown; platforms?: unknown; title?: unknown; zh?: unknown },
+): Promise<Platform[]> {
+  if (!validId(input.job)) throw new PostError("Invalid post");
+  const job = await db
+    .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
+    .bind(input.job)
+    .first<{ payload: string }>();
+  if (!job) throw new PostError("Invalid post");
+  const post = JSON.parse(job.payload) as Post;
+  const added = platforms.filter(
+    (p) => Array.isArray(input.platforms) && input.platforms.includes(p) && !post.platforms.includes(p),
+  );
+  if (!added.length) throw new PostError("Choose where to crosspost");
+  // The title and Chinese version can be filled in now when the post went out without them.
+  const next = validatePost({
+    ...post,
+    platforms: [...post.platforms, ...added],
+    title: !post.title.trim() && typeof input.title === "string" ? input.title : post.title,
+    zh: post.zh ?? input.zh,
+  });
+  for (const id of next.media)
+    if (!(await bucket.head(id)))
+      throw new PostError("This post's media has expired. Post it again from the composer.");
+  await db.batch([
+    db.prepare("UPDATE publisher_jobs SET payload = ? WHERE id = ?").bind(JSON.stringify(next), next.id),
+    ...added.map((platform) =>
+      db
+        .prepare("INSERT INTO publisher_targets (id, job_id, platform) VALUES (?, ?, ?)")
+        .bind(crypto.randomUUID(), next.id, platform),
+    ),
+  ]);
+  return added;
 }
 export async function authorizeHelper(request: Request, db: NewsletterDB): Promise<boolean> {
   const token = request.headers.get("Authorization")?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];

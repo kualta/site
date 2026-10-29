@@ -3,6 +3,8 @@ import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { publisherSession, publisherSameOrigin } from "@/lib/publisher/auth";
 import {
+  addDestinations,
+  PostError,
   authorizeHelper,
   claimTarget,
   claimConnection,
@@ -230,6 +232,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
         return json({ error: (error as Error).message }, 502);
       }
     }
+    if (path === "crosspost" && request.method === "POST")
+      return json({ platforms: await addDestinations(db, bucket, (await request.json()) as Record<string, unknown>) });
     if (path === "jobs" && request.method === "POST") {
       const post = validatePost(await request.json());
       const existing = await db
@@ -385,6 +389,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     // Validation errors are safe; storage/session exceptions must not expose internals.
     const message = error instanceof Error ? error.message : "";
     const safe =
+      error instanceof PostError ||
       /^(Invalid post|Choose |Add a title|Caption or alt|Unsupported destination|Grain supports|Bluesky captions|X captions|Instagram captions|Xiaohongshu supports)/.test(
         message,
       );

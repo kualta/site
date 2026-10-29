@@ -132,6 +132,20 @@ try {
     await art.getByRole("button", { name: "Delete from Grain" }).waitFor();
     await art.getByRole("button", { name: "Retry publishing" }).waitFor();
     await art.getByRole("button", { name: "Delete everywhere" }).waitFor();
+    // Crosspost reaches destinations the post hasn't; Xiaohongshu asks for its Chinese version first.
+    const crosspost = panel.getByRole("group", { name: "Crosspost to" });
+    assert.equal(await crosspost.locator("label", { hasText: "YouTube" }).locator("small").textContent(), "needs a video");
+    await crosspost.locator("label", { hasText: "X / Twitter" }).getByRole("checkbox").check();
+    await crosspost.locator("label", { hasText: "Xiaohongshu" }).getByRole("checkbox").check();
+    const crossChinese = crosspost.getByRole("group", { name: "Xiaohongshu · Chinese" });
+    await crossChinese.getByRole("button", { name: "Translate" }).click();
+    await crossChinese.getByRole("button", { name: "Translate again" }).waitFor();
+    await crosspost.getByRole("button", { name: "Crosspost to 2 places" }).click();
+    await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "crosspost"));
+    const crossposted = await page.evaluate(() => window.publisherRequests.find((r) => r.path === "crosspost").body);
+    assert.deepEqual(crossposted.platforms, ["twitter", "xiaohongshu"]);
+    assert.deepEqual(crossposted.zh, { title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
+    assert.equal(crossposted.title, undefined);
     await grainRow.getByRole("link").hover();
     await shot("history");
     await art.getByRole("button", { name: "Close" }).click();
