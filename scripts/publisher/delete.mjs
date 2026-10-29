@@ -35,7 +35,7 @@ export function deletionDestination(platform, value, post) {
         ? url.pathname.slice(1)
         : url.pathname === "/watch"
           ? url.searchParams.get("v")
-          : null;
+          : url.pathname.match(/^\/shorts\/([\w-]+)\/?$/)?.[1];
   if (!id || !/^[\w-]{5,80}$/.test(id)) throw new Error("Cannot identify the published post");
   return {
     id,

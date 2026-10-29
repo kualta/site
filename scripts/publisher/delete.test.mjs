@@ -224,6 +224,12 @@ test("RedNote note links are Xiaohongshu publications", () => {
     "Unexpected publication host",
   );
 });
+test("YouTube Shorts links identify their video", () => {
+  expect(deletionDestination("youtube", "https://www.youtube.com/shorts/abcdefghijk", { id: "fixture" })).toEqual({
+    id: "abcdefghijk",
+    url: "https://studio.youtube.com/video/abcdefghijk/edit",
+  });
+});
 
 function browserPage({ goneAfter = Number.POSITIVE_INFINITY, reply = true } = {}) {
   const clicks = [];
