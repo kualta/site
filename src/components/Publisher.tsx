@@ -100,9 +100,15 @@ function MediaButton({
     </>
   );
 }
-export default function Publisher() {
+type Access = "loading" | "owner" | "signin" | "denied";
+/** What the page already knows from rendering on the server; without it the composer asks from the browser. */
+interface Props {
+  initialAccess?: Access;
+  initialHelper?: { online: boolean; platforms: Platform[] };
+}
+export default function Publisher({ initialAccess = "loading", initialHelper }: Props) {
   const [tab, setTab] = useState<"compose" | "analytics">("compose");
-  const [access, setAccess] = useState<"loading" | "owner" | "signin" | "denied">("loading");
+  const [access, setAccess] = useState<Access>(initialAccess);
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [ready, setReady] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -126,8 +132,8 @@ export default function Publisher() {
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [token, setToken] = useState("");
-  const [helperOnline, setHelperOnline] = useState(false);
-  const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>([]);
+  const [helperOnline, setHelperOnline] = useState(initialHelper?.online ?? false);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>(initialHelper?.platforms ?? []);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [dragging, setDragging] = useState(false);
   const submission = useRef<{ id: string; media: string[]; payload?: unknown } | null>(null);
@@ -160,6 +166,7 @@ export default function Publisher() {
       // A draft is a convenience; start empty without it.
     }
     setReady(true);
+    if (initialAccess !== "loading") return;
     api("session")
       .then((data) => setAccess(data.allowed ? "owner" : data.signedIn ? "denied" : "signin"))
       .catch((e) => {
