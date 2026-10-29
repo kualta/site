@@ -23,7 +23,6 @@ export interface Variant {
 export const tagCounts: Record<Platform, number> = {
   grain: 0,
   instagram: 5,
-  instagram_story: 0,
   tiktok: 5,
   youtube: 3,
   twitter: 0,
@@ -85,8 +84,6 @@ function withTags(text: string, tags: string[]): string {
 }
 
 export function renderVariant(platform: Platform, post: PostText): Variant {
-  // The API posts stories without a caption.
-  if (platform === "instagram_story") return { title: "", text: "", tags: [] };
   if (platform === "xiaohongshu")
     return {
       title: post.zh?.title.trim() ?? "",
@@ -114,8 +111,6 @@ export function usage(platform: Platform, variant: Variant): Usage[] {
       return [{ label: "Text", used: xLength(variant.text), limit: 280 }];
     case "bluesky":
       return [{ label: "Text", used: graphemes(variant.text), limit: 300 }];
-    case "instagram_story":
-      return [];
     case "instagram":
     case "tiktok":
       return [{ label: "Caption", used: variant.text.length, limit: 2200 }];

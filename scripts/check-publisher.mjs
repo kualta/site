@@ -76,8 +76,8 @@ try {
         .locator(".publisher-destinations label")
         .filter({ has: page.locator("input:checked") })
         .allTextContents();
-    const reason = (platform) =>
-      page.locator(`.publisher-destinations label[data-platform="${platform}"] small`).textContent();
+    const reason = (name) =>
+      page.locator(".publisher-destinations label", { hasText: name }).locator("small").textContent();
     // Each toolbar button has its own picker; a lone video goes through the video one.
     const attach = (files) => {
       const video = !Array.isArray(files) && files.mimeType.startsWith("video/");
@@ -142,9 +142,9 @@ try {
     assert.equal(await title.count(), 0);
     await page.getByRole("textbox", { name: "Post" }).fill("Hello from the composer");
     assert.equal(await page.locator(".publisher-count").textContent(), "23 / 280 · X / Twitter");
-    assert.equal(await reason("grain"), "needs photos");
-    assert.equal(await reason("instagram"), "needs media");
-    assert.equal(await reason("youtube"), "needs a video");
+    assert.equal(await reason("Grain"), "needs photos");
+    assert.equal(await reason("Instagram"), "needs media");
+    assert.equal(await reason("YouTube"), "needs a video");
     await page.reload();
     await presets.getByRole("button", { name: "Text post", exact: true }).waitFor();
     assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Hello from the composer");
@@ -163,7 +163,7 @@ try {
     ]);
     assert.equal(chooser.isMultiple(), true);
     await chooser.setFiles(photos(5));
-    assert.equal(await reason("twitter"), "takes up to 4 photos");
+    assert.equal(await reason("X / Twitter"), "takes up to 4 photos");
     const descriptions = page.getByRole("textbox", { name: "Description (Grain / Bluesky)" });
     assert.equal(await descriptions.count(), 5);
     for (let i = 0; i < 5; i++) await descriptions.nth(i).fill(`Photo ${i + 1} described`);
@@ -250,8 +250,8 @@ try {
     await presets.getByRole("button", { name: "Short-form video" }).click();
     await attach(video);
     await page.locator(".publisher-previews video").waitFor(); // the duration is read first
-    assert.equal(await reason("grain"), "needs photos");
-    assert.equal(await reason("instagram"), "Reel");
+    assert.equal(await reason("Grain"), "needs photos");
+    assert.equal(await reason("Instagram"), "Reel");
     assert.deepEqual(await checked(), ["InstagramReel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
     await page.getByRole("textbox", { name: "Video description (Bluesky)" }).fill("A short clip");
     await title.fill("A clip");
@@ -290,7 +290,7 @@ try {
     assert.equal(await descriptions.nth(0).inputValue(), "Keep this if the next selection is invalid");
     await attach(photos(1));
     await page.getByRole("button", { name: "Remove media" }).click();
-    assert.equal(await reason("grain"), "needs photos");
+    assert.equal(await reason("Grain"), "needs photos");
 
     // Files dropped on the composer attach like the buttons do.
     const dropped = await page.evaluateHandle(() => {

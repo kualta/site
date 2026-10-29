@@ -380,11 +380,7 @@ export default function Publisher() {
   // The counter follows the destination whose limit the main text is closest to.
   const counted = versions
     .filter(({ platform }) => platform !== "xiaohongshu" && !(text.short && brief.includes(platform)))
-    .flatMap(({ platform, variant }) =>
-      usage(platform, variant)
-        .slice(-1)
-        .map((item) => ({ platform, ...item })),
-    )
+    .map(({ platform, variant }) => ({ platform, ...usage(platform, variant).at(-1)! }))
     .sort((a, b) => b.used / b.limit - a.used / a.limit)[0];
   const issues = versions.filter(({ issue }) => issue);
   const zhUsage = usage("xiaohongshu", renderVariant("xiaohongshu", text))[1];
@@ -718,7 +714,7 @@ export default function Publisher() {
                 </nav>
                 <div className="publisher-destinations">
                   {platforms.map((p) => (
-                    <label key={p} data-platform={p} data-unavailable={Boolean(reasons[p])}>
+                    <label key={p} data-unavailable={Boolean(reasons[p])}>
                       <span>
                         {platformNames[p]}
                         {reasons[p] ? (

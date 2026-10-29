@@ -13,25 +13,11 @@ import {
 import { isTag, problem, renderVariant, type Variant } from "./variants";
 
 export interface MediaBucket {
-  put(
-    key: string,
-    body: ArrayBuffer,
-    options?: { httpMetadata: { contentType: string }; customMetadata?: Record<string, string> },
-  ): Promise<unknown>;
-  get(
-    key: string,
-    options?: { range?: Headers },
-  ): Promise<{
+  put(key: string, body: ArrayBuffer, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
+  get(key: string): Promise<{
     body: ReadableStream;
-    size: number;
-    range?: unknown;
     httpMetadata?: { contentType?: string };
-    customMetadata?: Record<string, string>;
   } | null>;
-  list(options: {
-    prefix: string;
-    include?: "customMetadata"[];
-  }): Promise<{ objects: { key: string; customMetadata?: Record<string, string> }[] }>;
   delete(keys: string | string[]): Promise<void>;
 }
 export interface Post {
