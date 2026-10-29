@@ -753,7 +753,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
               </button>
             ))}
           </div>
-          <Scrollable>
+          <Scrollable fade>
             <ul className="queue flex w-full flex-col gap-1">
               {shown.map((track) => (
                 <li key={track.slug}>
