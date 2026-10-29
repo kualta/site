@@ -3,9 +3,34 @@ import CornersScope from "@/components/CornersScope.astro";
 import ThemeInit from "@/components/ThemeInit.astro";
 import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?url";
 import Publisher from "@/components/Publisher";
+import { env } from "cloudflare:workers";
+import { publisherSession } from "@/lib/publisher/auth";
+import { platforms, type Platform } from "@/lib/publisher/presets";
 import "@/styles/globals.css";
 export const prerender = false;
 Astro.response.headers.set("Cache-Control", "no-store");
+// Check access while rendering, so the page opens straight into the composer or the sign-in prompt.
+let access: "owner" | "signin" | "denied" | undefined;
+let helper: { online: boolean; platforms: Platform[] } | undefined;
+try {
+  const { session, allowed } = await publisherSession(Astro.request);
+  // A refresh rotates the session, so its cookies must reach the browser.
+  for (const cookie of session.setCookies) Astro.response.headers.append("Set-Cookie", cookie);
+  access = allowed ? "owner" : session.state ? "denied" : "signin";
+  if (allowed && env.NEWSLETTER_DB) {
+    const row = await env.NEWSLETTER_DB.prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1").first<{
+      last_seen: number | null;
+      platforms: string | null;
+    }>();
+    const connected: unknown = JSON.parse(row?.platforms || "[]");
+    helper = {
+      online: Boolean(row?.last_seen && Date.now() - row.last_seen < 90_000),
+      platforms: platforms.filter((p) => Array.isArray(connected) && connected.includes(p)),
+    };
+  }
+} catch {
+  // The composer asks again from the browser.
+}
 Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
 Astro.response.headers.set("Referrer-Policy", "same-origin");
 ---
@@ -22,7 +47,7 @@ Astro.response.headers.set("Referrer-Policy", "same-origin");
   </head>
   <body class="publisher-page bg-bg dark:bg-dark-bg text-text dark:text-dark-text min-h-screen relative">
     <div class="noise" aria-hidden="true"></div>
-    <Publisher client:load />
+    <Publisher client:load initialAccess={access} initialHelper={helper} />
     <div class="pointer-events-none" aria-hidden="true"><CornersScope /></div>
   </body>
 </html>
