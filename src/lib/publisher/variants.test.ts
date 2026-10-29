@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseTags, renderVariant, xiaohongshuTitleLength, xLength } from "./variants";
+import { parseTags, problem, renderVariant, usage, xiaohongshuTitleLength, xLength } from "./variants";
 
 test("tags are parsed from free text, without # and duplicates", () => {
   expect(parseTags("#Travel bogotá, 生活美学 #travel 2026 #a-b")).toEqual(["Travel", "bogotá", "生活美学"]);
@@ -32,4 +32,10 @@ test("X and Bluesky use the short version, and drop tags that don't fit", () => 
     renderVariant("twitter", { title: "", caption: "y".repeat(500), short: "Short one", tags: ["travel"] }).text,
   ).toBe("Short one\n\n#travel");
   expect(renderVariant("instagram", { title: "", caption: "Long", short: "Short" }).text).toBe("Long");
+});
+test("Xiaohongshu counts its topics toward the text limit", () => {
+  const post = { title: "", caption: "", zh: { title: "标题", text: "字".repeat(990), topics: ["旅行", "城市漫步"] } };
+  const variant = renderVariant("xiaohongshu", post);
+  expect(usage("xiaohongshu", variant)[1].used).toBe(990 + 1 + 4 + 6);
+  expect(problem("xiaohongshu", variant)).toBe("text is 1001/1000");
 });

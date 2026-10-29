@@ -37,7 +37,7 @@ test("keeps the draft inside Xiaohongshu's limits", async () => {
   );
   const result = await translateForXiaohongshu({ title: "", text: "x", tags: [] }, { apiKey: "key", fetcher });
   expect(result.title).toBe("界".repeat(20));
-  expect([...result.text]).toHaveLength(1000);
+  expect([...result.text]).toHaveLength(900);
   expect(result.topics).toHaveLength(5);
 });
 test("a reply that isn't JSON is an error, not an empty draft", async () => {

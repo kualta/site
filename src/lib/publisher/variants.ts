@@ -128,11 +128,14 @@ export function usage(platform: Platform, variant: Variant): Usage[] {
         { label: "Title (bytes)", used: bytes(variant.title), limit: 100 },
         { label: "Description (bytes)", used: bytes(variant.text), limit: 1000 },
       ];
-    case "xiaohongshu":
+    case "xiaohongshu": {
+      // Topics go on a line after the text as "#name ", and RedNote counts them toward its 1000.
+      const topics = variant.tags.reduce((sum, topic) => sum + [...topic].length + 2, variant.tags.length ? 1 : 0);
       return [
         { label: "Title", used: xiaohongshuTitleLength(variant.title), limit: 20 },
-        { label: "Text", used: [...variant.text].length, limit: 1000 },
+        { label: "Text", used: [...variant.text].length + topics, limit: 1000 },
       ];
+    }
   }
 }
 /** Why a platform would reject its version, or null. */

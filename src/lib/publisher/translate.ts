@@ -6,7 +6,7 @@ const instructions = `You adapt social media posts for Xiaohongshu (RedNote). Re
 
 - Write natural Simplified Chinese the way Xiaohongshu creators write. Adapt, don't translate word for word.
 - title: at most 20 Chinese characters (a Latin letter counts as half). Lead with the main keyword. At most one emoji.
-- text: at most 1000 characters. Keep the meaning and tone. Short paragraphs. Put the main keyword in the first sentence.
+- text: at most 900 characters, leaving room for the topics. Keep the meaning and tone. Short paragraphs. Put the main keyword in the first sentence.
 - Never include links, phone numbers, email addresses, @handles, QR codes, or the names of other platforms
   (Instagram, TikTok, YouTube, X, Twitter, Bluesky). Avoid superlatives such as 最, 第一, 顶级, 唯一.
 - topics: 3 to 5 short Chinese topic names people search on Xiaohongshu, without "#", most specific first.
@@ -65,7 +65,7 @@ export async function translateForXiaohongshu(
   const topics = Array.isArray(draft.topics) ? parseTags(draft.topics.join(" ")) : [];
   return {
     title: fitTitle(typeof draft.title === "string" ? draft.title.trim() : ""),
-    text: [...text].slice(0, 1000).join(""),
+    text: [...text].slice(0, 900).join(""),
     topics: topics.filter((topic) => [...topic].length <= 30).slice(0, 5),
   };
 }
