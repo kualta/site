@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Scrollable } from "@/components/Scrollable";
 import { activeLineIndex, parseLrc } from "@/lib/lyrics";
 import { langFor } from "@/lib/script";
@@ -16,30 +16,17 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
   const lines = useMemo(() => (track.lyrics ? parseLrc(track.lyrics) : []), [track.lyrics]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLElement>(null);
-  const [edges, setEdges] = useState({ top: false, bottom: false });
   const current = lines.length ? activeLineIndex(lines, time) : -1;
 
-  // only veil an edge that has words hidden behind it
-  const readEdges = useCallback(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const top = container.scrollTop > 4;
-    const bottom = container.scrollTop + container.clientHeight < container.scrollHeight - 4;
-    setEdges((previous) => (previous.top === top && previous.bottom === bottom ? previous : { top, bottom }));
-  }, []);
-
   // a new record starts its words from the top, wherever the last one ended up
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the slug is the trigger, not an input
   useEffect(() => {
     const container = scrollRef.current;
     if (container) container.scrollTop = 0;
-    readEdges();
-  }, [track.slug, readEdges]);
+  }, [track.slug]);
 
   useEffect(() => {
-    if (current < 0 || !focus) {
-      readEdges();
-      return;
-    }
+    if (current < 0 || !focus) return;
 
     // centre it by hand; measured against the panel itself, since offsetTop
     // answers to whichever ancestor happens to be positioned
@@ -54,12 +41,7 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
     const top = container.scrollTop + offset - container.clientHeight / 2 + line.offsetHeight / 2;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     container.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
-    readEdges();
-  }, [current, focus, readEdges]);
-
-  useEffect(() => {
-    readEdges();
-  }, [readEdges]);
+  }, [current, focus]);
 
   if (!track.lyrics) {
     return (
@@ -89,11 +71,7 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
   };
 
   return (
-    <Scrollable
-      ref={scrollRef}
-      onScroll={readEdges}
-      className={`lyrics-fade ${edges.top ? "fade-top" : ""} ${edges.bottom ? "fade-bottom" : ""}`}
-    >
+    <Scrollable ref={scrollRef} fade>
       {/* the words stop well short of the scrollbar rather than running into it */}
       <div className="flex flex-col items-start gap-2.5 pr-7 text-base leading-snug">
         {lines.map((line, index) => (

@@ -437,8 +437,8 @@ body[data-music-page] :is(.lyrics-rail, .rail) {
   }
 }
 
-/* an edge only dissolves while it actually hides words */
-.lyrics-fade {
+/* an edge only dissolves while it actually hides something */
+.scroll-fade {
   --fade-top: 0px;
   --fade-bottom: 0px;
   mask-image: linear-gradient(
@@ -457,11 +457,11 @@ body[data-music-page] :is(.lyrics-rail, .rail) {
   );
 }
 
-.lyrics-fade.fade-top {
+.scroll-fade.fade-top {
   --fade-top: 14%;
 }
 
-.lyrics-fade.fade-bottom {
+.scroll-fade.fade-bottom {
   --fade-bottom: 14%;
 }
 
