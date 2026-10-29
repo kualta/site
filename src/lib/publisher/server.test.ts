@@ -198,3 +198,15 @@ test("validates optional capture dates without accepting mismatched or invalid d
   for (const datesTaken of [[], ["2020-02-30T00:00:00.000Z"], ["yesterday"], ["2020-01-01"], [123]])
     expect(() => validatePost({ ...post(), datesTaken })).toThrow("date taken");
 });
+test("mixed posts say what each item is and include a video", () => {
+  const media = [crypto.randomUUID(), crypto.randomUUID()];
+  const mixed = { ...post(), kind: "mixed", media, platforms: ["instagram", "twitter"] };
+  expect(validatePost({ ...mixed, mediaKinds: ["photo", "video"] }).mediaKinds).toEqual(["photo", "video"]);
+  expect(() => validatePost(mixed)).toThrow("Mix photos with at least one video");
+  expect(() => validatePost({ ...mixed, mediaKinds: ["photo", "photo"] })).toThrow("at least one video");
+  expect(() => validatePost({ ...mixed, mediaKinds: ["video"] })).toThrow("at least one video");
+  expect(() => validatePost({ ...post(), mediaKinds: ["photo"] })).toThrow("at least one video");
+  expect(() => validatePost({ ...mixed, mediaKinds: ["photo", "video"], platforms: ["bluesky"] })).toThrow(
+    "Bluesky takes photos or one video",
+  );
+});

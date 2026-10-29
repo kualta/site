@@ -190,3 +190,29 @@ test("each platform publishes its own rendered version", async () => {
   expect(sent.caption).toBe("Bluesky text\n\n#a");
   expect(sent.tags).toEqual(["b", "c"]);
 });
+
+test("mixed posts process each item as what it is and publish them together", async () => {
+  const processed = [];
+  let args;
+  await publish(
+    { platform: "instagram" },
+    { ...post, kind: "mixed", mediaKinds: ["photo", "video"] },
+    fixture({
+      process: async (_input, output, options) => {
+        processed.push([options.kind, output.split(".").at(-1)]);
+        await writeFile(output, "prepared");
+        return { width: 64, height: 48, duration: 1, bytes: 8 };
+      },
+      python: async (_script, values) => {
+        args = values;
+        return { ok: true, url: "https://www.instagram.com/p/abc/" };
+      },
+    }),
+  );
+  expect(processed).toEqual([
+    ["photo", "jpg"],
+    ["video", "mp4"],
+  ]);
+  expect(args[args.indexOf("--kind") + 1]).toBe("mixed");
+  expect(JSON.parse(args[args.indexOf("--media") + 1])).toHaveLength(2);
+});

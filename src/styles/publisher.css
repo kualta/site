@@ -56,8 +56,12 @@
 .publisher .publisher-composer-tools button { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; font-size:13px; }
 .publisher-composer-tools .publisher-count { margin:0 0 0 auto; }
 .publisher-previews { display:flex; gap:8px; overflow:auto; margin:0 0 24px; }
-.publisher-previews img { width:calc(25% - 6px); min-width:90px; aspect-ratio:1; object-fit:cover; border-radius:12px; }
-.publisher-previews video { max-width:100%; max-height:360px; border-radius:12px; }
+.publisher-previews figure { position:relative; flex:0 0 auto; width:calc(25% - 6px); min-width:90px; margin:0; }
+.publisher-previews img, .publisher-previews video { display:block; width:100%; aspect-ratio:1; object-fit:cover; border-radius:12px; background:var(--publisher-surface); }
+.publisher-previews[data-single-video] figure { width:auto; min-width:0; max-width:100%; }
+.publisher-previews[data-single-video] video { width:auto; max-width:100%; max-height:360px; aspect-ratio:auto; }
+.publisher .publisher-previews figure > button { position:absolute; top:6px; right:6px; display:grid; place-items:center; width:28px; height:28px; padding:0; border:none; border-radius:50%; background:rgba(0,0,0,.6); color:#fff; }
+.publisher-previews figure > button svg { width:16px; height:16px; }
 .publisher-destinations { margin-bottom:24px; }
 .publisher-destinations label { display:flex; align-items:center; justify-content:space-between; color:inherit; padding:10px 0; margin:0; font-size:15px; }
 .publisher-destinations label small { display:block; font-size:12px; color:var(--secondary-text); }

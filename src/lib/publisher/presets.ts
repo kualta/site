@@ -1,7 +1,7 @@
 export const platforms = ["grain", "instagram", "bluesky", "twitter", "xiaohongshu", "youtube", "tiktok"] as const;
 export type Platform = (typeof platforms)[number];
-/** What a post carries, decided by its attachments: none, photos, or one video. */
-export const kinds = ["text", "photo", "video"] as const;
+/** What a post carries, decided by its attachments: none, photos, one video, or photos and videos together. */
+export const kinds = ["text", "photo", "video", "mixed"] as const;
 export type PostKind = (typeof kinds)[number];
 export type MetadataPolicy = "remove-location" | "remove-all";
 export const platformNames: Record<Platform, string> = {
@@ -13,18 +13,19 @@ export const platformNames: Record<Platform, string> = {
   youtube: "YouTube",
   tiktok: "TikTok",
 };
-export const kindNames: Record<PostKind, string> = { text: "Text", photo: "Photo", video: "Video" };
+export const kindNames: Record<PostKind, string> = { text: "Text", photo: "Photo", video: "Video", mixed: "Media" };
 export const support: Record<Platform, readonly PostKind[]> = {
   grain: ["photo"],
-  instagram: ["photo", "video"],
+  // Instagram carousels and X posts mix photos and videos; elsewhere a post is photos or one video.
+  instagram: ["photo", "video", "mixed"],
   bluesky: ["text", "photo", "video"],
-  twitter: ["text", "photo", "video"],
+  twitter: ["text", "photo", "video", "mixed"],
   xiaohongshu: ["photo", "video"],
   youtube: ["video"],
   tiktok: ["video"],
 };
 export const MAX_PHOTOS = 10;
-/** Destinations that take fewer photos per post than MAX_PHOTOS. */
+/** Destinations that take fewer photos or videos per post than MAX_PHOTOS. */
 export const photoLimits: Partial<Record<Platform, number>> = { twitter: 4 };
 /** Longest video, in seconds, where a destination has a limit. */
 export const videoLimits: Partial<Record<Platform, number>> = { bluesky: 180 };
@@ -34,17 +35,24 @@ export const MAX_PRESETS = 24;
 
 export function postKind(files: readonly { type: string }[]): PostKind {
   if (!files.length) return "text";
-  return files[0].type.startsWith("video/") ? "video" : "photo";
+  const videos = files.filter((file) => file.type.startsWith("video/")).length;
+  if (!videos) return "photo";
+  return files.length === 1 ? "video" : "mixed";
 }
 /** Why a destination can't take this post, or null when it can. `seconds` is unknown until read. */
 export function unsupported(platform: Platform, kind: PostKind, photos: number, seconds?: number): string | null {
   const takes = support[platform];
   if (!takes.includes(kind)) {
+    if (kind === "mixed") {
+      if (takes.includes("photo") && takes.includes("video")) return "takes photos or one video";
+      return takes.includes("photo") ? "takes only photos" : "takes one video";
+    }
     if (takes.includes("photo") && takes.includes("video")) return "needs media";
     return takes.includes("photo") ? "needs photos" : "needs a video";
   }
   const photoLimit = photoLimits[platform];
-  if (kind === "photo" && photoLimit && photos > photoLimit) return `takes up to ${photoLimit} photos`;
+  if (kind !== "video" && photoLimit && photos > photoLimit)
+    return `takes up to ${photoLimit} ${kind === "photo" ? "photos" : "photos and videos"}`;
   const videoLimit = videoLimits[platform];
   if (kind === "video" && videoLimit && seconds !== undefined && seconds > videoLimit)
     return `takes videos up to ${videoLimit / 60} minutes`;

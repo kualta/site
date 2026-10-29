@@ -8,6 +8,7 @@ is the whole point of the browser method. X changes its markup and A/B tests
 layouts, so each step tries several selectors and fails with a clear message.
 """
 import argparse
+import json
 import re
 import time
 from pathlib import Path
@@ -50,7 +51,7 @@ def wait_upload_complete(page, kind, timeout_ms):
     """After the preview appears, X keeps uploading in the background and disables
     Post until done. Wait for any progress indicator to clear so we never click
     Post mid-upload (which drops the media)."""
-    settle = max(timeout_ms, 300_000) if kind == "video" else 60_000
+    settle = max(timeout_ms, 300_000) if kind in ("video", "mixed") else 60_000
     waited = 0
     while waited < settle:
         try:
@@ -61,7 +62,7 @@ def wait_upload_complete(page, kind, timeout_ms):
             break
         page.wait_for_timeout(1000)
         waited += 1000
-    page.wait_for_timeout(3000 if kind == "video" else 1500)
+    page.wait_for_timeout(3000 if kind in ("video", "mixed") else 1500)
 
 
 def parse_args():
@@ -69,7 +70,7 @@ def parse_args():
     parser.add_argument("--user-data-dir", required=True)
     parser.add_argument("--text", default="")
     parser.add_argument("--media", default="")
-    parser.add_argument("--kind", choices=["image", "video", "none"], default="none")
+    parser.add_argument("--kind", choices=["image", "video", "mixed", "none"], default="none")
     parser.add_argument("--headless", choices=["true", "false"], default="true")
     parser.add_argument("--timeout-ms", type=int, default=180_000)
 
@@ -154,7 +155,7 @@ def attach_media(page, media_path, kind, timeout_ms):
 
     # 1) Wait for the REAL preview (blob image/video or Remove button) so we know the
     #    file actually loaded into the composer, not just an empty container.
-    wait_ms = max(timeout_ms, 300_000) if kind == "video" else 90_000
+    wait_ms = max(timeout_ms, 300_000) if kind in ("video", "mixed") else 90_000
     waited = 0
     while waited < wait_ms:
         if media_attached(page):
@@ -337,7 +338,7 @@ def run_publish(context, args):
     box = open_composer(page)
     type_text(page, box, args.text)
 
-    if args.kind in ("image", "video") and args.media:
+    if args.kind in ("image", "video", "mixed") and args.media:
         attach_media(page, args.media, args.kind, args.timeout_ms)
         # Final guard right before sending: if the preview vanished, do NOT post text-only.
         if not media_attached(page):
@@ -348,7 +349,7 @@ def run_publish(context, args):
 
     response_outcome = {}
     page.on("response", lambda response: track_publish_response(response, response_outcome))
-    click_post(page, 180_000 if args.kind == "video" else 30_000)
+    click_post(page, 180_000 if args.kind in ("video", "mixed") else 30_000)
 
     outcome = wait_for_sent(page, box, response_outcome, args.timeout_ms)
     if outcome.get("ok"):
@@ -370,7 +371,7 @@ def run_publish(context, args):
 def main():
     args = parse_args()
 
-    if args.kind in ("image", "video"):
+    if args.kind in ("image", "video", "mixed"):
         media_paths = json.loads(args.media) if args.media.startswith("[") else [args.media]
         args.media = media_paths
         if not args.media or not all(Path(path).expanduser().is_file() for path in media_paths):

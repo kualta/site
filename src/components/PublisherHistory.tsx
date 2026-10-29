@@ -23,6 +23,7 @@ type Post = {
     caption: string;
     kind: PostKind;
     media: string[];
+    mediaKinds?: ("photo" | "video")[];
     datesTaken?: (string | null)[];
     alt: string;
     alts?: string[];
@@ -108,7 +109,7 @@ function Thumbnail({ post }: { post: Post["post"] }) {
   let preview: React.ReactNode;
   // Uploads expire after seven days; the history stays.
   if (expired || !post.media.length) preview = <span>{kindNames[post.kind]}</span>;
-  else if (post.kind === "photo")
+  else if ((post.mediaKinds?.[0] ?? post.kind) === "photo")
     preview = <img src={src} alt={post.alts?.[0] || post.alt || ""} loading="lazy" onError={() => setExpired(true)} />;
   else preview = <video src={`${src}#t=0.1`} preload="metadata" muted onError={() => setExpired(true)} />;
   return (

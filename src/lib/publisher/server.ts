@@ -23,6 +23,8 @@ export interface MediaBucket {
 export interface Post {
   id: string;
   kind: PostKind;
+  /** For mixed posts, whether each media item is a photo or a video. */
+  mediaKinds?: ("photo" | "video")[];
   title: string;
   caption: string;
   alt: string;
@@ -85,6 +87,16 @@ export function validatePost(value: unknown): Post {
     throw new Error("Choose a valid date taken for each photo");
   if (p.kind === "video" && p.media.length !== 1) throw new Error("Choose one video");
   if (
+    p.kind === "mixed"
+      ? !Array.isArray(p.mediaKinds) ||
+        p.mediaKinds.length !== p.media.length ||
+        p.media.length < 2 ||
+        p.mediaKinds.some((kind) => kind !== "photo" && kind !== "video") ||
+        !p.mediaKinds.includes("video")
+      : p.mediaKinds !== undefined
+  )
+    throw new Error("Mix photos with at least one video");
+  if (
     !Array.isArray(p.platforms) ||
     !p.platforms.length ||
     p.platforms.length > platforms.length ||
@@ -133,6 +145,7 @@ export function validatePost(value: unknown): Post {
   return {
     id: p.id,
     kind: p.kind,
+    ...(p.kind === "mixed" ? { mediaKinds: p.mediaKinds } : {}),
     title: p.title.trim(),
     caption: p.caption,
     alt: p.alt,

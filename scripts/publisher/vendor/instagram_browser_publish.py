@@ -7,6 +7,7 @@ so each step tries several selectors and fails with a clear, actionable message
 rather than a raw Playwright error.
 """
 import argparse
+import json
 import os
 import re
 import time
@@ -73,7 +74,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Publish a local post to Instagram via the web UI.")
     parser.add_argument("--user-data-dir", required=True)
     parser.add_argument("--media", required=True)
-    parser.add_argument("--kind", choices=["image", "video"], required=True)
+    parser.add_argument("--kind", choices=["image", "video", "mixed"], required=True)
     parser.add_argument("--caption", default="")
     parser.add_argument("--headless", choices=["true", "false"], default="true")
     parser.add_argument("--timeout-ms", type=int, default=180_000)
@@ -479,7 +480,7 @@ def run_publish(context, args):
     # Instagram crops by media kind:
     #  - video -> we must EXPLICITLY select 9:16, or the reel is cropped (the crop
     #    screen defaults a 4:5 window over the 9:16 <video>).
-    #  - photo -> we post 1:1 (square). Instagram already defaults photos to 1:1,
+    #  - photo or a mixed carousel -> we post 1:1 (square). Instagram already defaults photos to 1:1,
     #    but we select it explicitly so a square source always posts full and never
     #    depends on the default landing right.
     if args.kind == "video":

@@ -79,3 +79,15 @@ test("videos are named reels on Instagram and Shorts on YouTube when vertical an
   expect(videoFormat("youtube")).toBeNull();
   expect(videoFormat("tiktok", { seconds: 30, width: 1080, height: 1920 })).toBeNull();
 });
+test("photos and videos together go only where they can be mixed", () => {
+  const file = (type: string) => ({ type });
+  expect(postKind([file("image/png"), file("video/mp4")])).toBe("mixed");
+  expect(postKind([file("video/mp4"), file("video/mp4")])).toBe("mixed");
+  expect(postKind([file("video/mp4")])).toBe("video");
+  expect(unsupported("instagram", "mixed", 10)).toBeNull();
+  expect(unsupported("twitter", "mixed", 4)).toBeNull();
+  expect(unsupported("twitter", "mixed", 5)).toBe("takes up to 4 photos and videos");
+  expect(unsupported("bluesky", "mixed", 2)).toBe("takes photos or one video");
+  expect(unsupported("grain", "mixed", 2)).toBe("takes only photos");
+  expect(unsupported("youtube", "mixed", 2)).toBe("takes one video");
+});
