@@ -28,15 +28,8 @@ export const MAX_PHOTOS = 10;
 export const photoLimits: Partial<Record<Platform, number>> = { twitter: 4 };
 /** Longest video, in seconds, where a destination has a limit. */
 export const videoLimits: Partial<Record<Platform, number>> = { bluesky: 180 };
-/** Text length per destination, in characters, for the composer's counter. */
-export const textLimits: Partial<Record<Platform, number>> = {
-  twitter: 280,
-  bluesky: 300,
-  xiaohongshu: 1000,
-  instagram: 2200,
-};
-/** Destinations that publish a title, so a post to them needs one. */
-export const titled: readonly Platform[] = ["grain", "youtube", "xiaohongshu"];
+/** Destinations that publish the post's title, so a post to them needs one; Xiaohongshu has its own Chinese title. */
+export const titled: readonly Platform[] = ["grain", "youtube"];
 export const MAX_PRESETS = 24;
 
 export function postKind(files: readonly { type: string }[]): PostKind {
@@ -131,9 +124,8 @@ export function parsePreferences(raw: string | null): Preferences {
           metadata[platform] = p.metadata[platform];
       // Presets saved with a content kind keep their destinations; the kind no longer limits them.
       // Rename only unchanged built-in labels, preserving custom names and settings.
-      const name = legacyNames[p.id] && p.name === legacyNames[p.id]
-        ? defaults.find((item) => item.id === p.id)?.name
-        : p.name;
+      const name =
+        legacyNames[p.id] && p.name === legacyNames[p.id] ? defaults.find((item) => item.id === p.id)?.name : p.name;
       presets.push({
         id: p.id,
         name: typeof name === "string" ? name.slice(0, 50) : "Preset",

@@ -10,6 +10,7 @@ import {
   type Platform,
   type PostKind,
 } from "./presets";
+import { isTag, problem, renderVariant, type Variant } from "./variants";
 
 export interface MediaBucket {
   put(key: string, body: ArrayBuffer, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
@@ -32,6 +33,14 @@ export interface Post {
   platforms: Platform[];
   metadata: Record<Platform, MetadataPolicy>;
   visibility: "PUBLIC" | "UNLISTED" | "PRIVATE";
+  /** Without "#", most important first. */
+  tags?: string[];
+  /** For X and Bluesky when the caption is longer than they allow. */
+  short?: string;
+  /** Xiaohongshu's Simplified Chinese version. */
+  zh?: { title: string; text: string; topics: string[] };
+  /** What each destination receives, rendered once here so the laptop publishes exactly what was checked. */
+  variants?: Partial<Record<Platform, Variant>>;
 }
 export const validId = (id: unknown): id is string => typeof id === "string" && /^[a-f0-9-]{36}$/.test(id);
 export async function hashToken(token: string): Promise<string> {
@@ -98,19 +107,28 @@ export function validatePost(value: unknown): Post {
   if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
     throw new Error("Caption or alt text is too long");
   if (p.kind === "text" && !p.caption.trim()) throw new Error("Write something to post");
-  if (p.platforms.includes("grain")) {
-    const encoder = new TextEncoder();
-    if (encoder.encode(p.title.trim()).length > 100 || encoder.encode(p.caption).length > 1000)
-      throw new Error("Grain supports 100 title and 1,000 caption UTF-8 bytes");
+  if (p.tags !== undefined && (!Array.isArray(p.tags) || p.tags.length > 30 || !p.tags.every(isTag)))
+    throw new Error("Tags are letters, digits and _, up to 30 of them");
+  if (p.short !== undefined && (typeof p.short !== "string" || p.short.length > 1000))
+    throw new Error("The short version is too long");
+  if (
+    p.zh !== undefined &&
+    (typeof p.zh?.title !== "string" ||
+      p.zh.title.length > 100 ||
+      typeof p.zh.text !== "string" ||
+      p.zh.text.length > 5000 ||
+      !Array.isArray(p.zh.topics) ||
+      p.zh.topics.length > 10 ||
+      !p.zh.topics.every((topic) => isTag(topic) && [...topic].length <= 30))
+  )
+    throw new Error("Check the Chinese title, text and topics");
+  if (p.platforms.includes("xiaohongshu") && !p.zh) throw new Error("Add the Chinese version for Xiaohongshu");
+  const variants: Partial<Record<Platform, Variant>> = {};
+  for (const platform of p.platforms) {
+    variants[platform] = renderVariant(platform, p);
+    const issue = problem(platform, variants[platform]);
+    if (issue) throw new Error(`${platformNames[platform]}: ${issue}`);
   }
-  if (p.platforms.includes("bluesky") && [...p.caption].length > 300)
-    throw new Error("Bluesky captions support up to 300 characters");
-  if (p.platforms.includes("twitter") && [...p.caption].length > 280)
-    throw new Error("X captions support up to 280 characters");
-  if (p.platforms.includes("instagram") && p.caption.length > 2200)
-    throw new Error("Instagram captions support up to 2,200 characters");
-  if (p.platforms.includes("xiaohongshu") && ([...p.title].length > 20 || [...p.caption].length > 1000))
-    throw new Error("Xiaohongshu supports 20 title and 1,000 caption characters");
   if (!["PUBLIC", "UNLISTED", "PRIVATE"].includes(p.visibility)) throw new Error("Choose YouTube visibility");
   return {
     id: p.id,
@@ -124,6 +142,10 @@ export function validatePost(value: unknown): Post {
     platforms: p.platforms,
     metadata: p.metadata,
     visibility: p.visibility,
+    ...(p.tags?.length ? { tags: p.tags } : {}),
+    ...(p.short?.trim() ? { short: p.short } : {}),
+    ...(p.zh ? { zh: { title: p.zh.title.trim(), text: p.zh.text, topics: p.zh.topics } } : {}),
+    variants,
   };
 }
 export async function authorizeHelper(request: Request, db: NewsletterDB): Promise<boolean> {

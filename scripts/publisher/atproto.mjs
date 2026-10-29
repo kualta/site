@@ -146,6 +146,8 @@ export async function publishAtproto(platform, authorization, files, infos, post
       $type: "app.bsky.feed.post",
       text: rich.text,
       facets: rich.facets,
+      // Tags beyond the ones written in the text: searchable, not shown.
+      ...(post.tags?.length ? { tags: post.tags } : {}),
       ...(embed ? { embed } : {}),
       createdAt,
     },
