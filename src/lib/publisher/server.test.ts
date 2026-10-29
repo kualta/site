@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
-import { claimTarget, claimConnection, hashToken, validatePost } from "./server";
+import { addDestinations, claimTarget, claimConnection, hashToken, validatePost } from "./server";
 import { defaultMetadata } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 const post = () => ({
@@ -35,6 +35,10 @@ function database() {
         },
       };
       return statement;
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      for (const statement of statements) await statement.run();
+      return [];
     },
   } as unknown as NewsletterDB;
   return { db, sqlite };
@@ -209,4 +213,41 @@ test("mixed posts say what each item is and include a video", () => {
   expect(() => validatePost({ ...mixed, mediaKinds: ["photo", "video"], platforms: ["bluesky"] })).toThrow(
     "Bluesky takes photos or one video",
   );
+});
+function published(job: ReturnType<typeof validatePost>) {
+  const { db, sqlite } = database();
+  sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)").run(job.id, JSON.stringify(job), 1);
+  for (const platform of job.platforms)
+    sqlite
+      .query("INSERT INTO publisher_targets (id, job_id, platform, state) VALUES (?, ?, ?, 'succeeded')")
+      .run(crypto.randomUUID(), job.id, platform);
+  const payload = () => JSON.parse((sqlite.query("SELECT payload FROM publisher_jobs").get() as { payload: string }).payload);
+  return { db, sqlite, payload };
+}
+test("a published post can go to more destinations, rendered and checked like a new one", async () => {
+  const job = validatePost({ ...post(), kind: "text", title: "", media: [], caption: "Hello", platforms: ["bluesky"] });
+  const { db, sqlite, payload } = published(job);
+  const bucket = { head: async () => ({}) };
+  expect(await addDestinations(db, bucket, { job: job.id, platforms: ["twitter", "bluesky"] })).toEqual(["twitter"]);
+  expect(payload().platforms).toEqual(["bluesky", "twitter"]);
+  expect(payload().variants.twitter.text).toBe("Hello");
+  expect(sqlite.query("SELECT state FROM publisher_targets WHERE platform = 'twitter'").get()).toEqual({ state: "queued" });
+  await expect(addDestinations(db, bucket, { job: job.id, platforms: ["twitter"] })).rejects.toThrow("Choose where");
+});
+test("crossposting asks for what new destinations need, and for media that still exists", async () => {
+  const job = validatePost({ ...post(), title: "", platforms: ["instagram"] });
+  const { db, payload } = published(job);
+  const kept = { head: async () => ({}) };
+  await expect(addDestinations(db, kept, { job: job.id, platforms: ["xiaohongshu"] })).rejects.toThrow(
+    "Add the Chinese version",
+  );
+  await expect(addDestinations(db, kept, { job: job.id, platforms: ["grain"] })).rejects.toThrow("Add a title");
+  await expect(
+    addDestinations(db, { head: async () => null }, { job: job.id, platforms: ["grain"], title: "Walk" }),
+  ).rejects.toThrow("media has expired");
+  expect(payload().platforms).toEqual(["instagram"]);
+  const zh = { title: "散步", text: "周末散步。", topics: ["旅行"] };
+  await addDestinations(db, kept, { job: job.id, platforms: ["grain", "xiaohongshu"], title: "Walk", zh });
+  expect(payload().title).toBe("Walk");
+  expect(payload().variants.xiaohongshu.title).toBe("散步");
 });

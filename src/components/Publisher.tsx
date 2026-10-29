@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
+import PublisherChinese from "./PublisherChinese";
 import {
   defaultPreferences,
   MAX_PHOTOS,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/publisher/presets";
 import "@/styles/publisher.css";
 import { validatePost } from "@/lib/publisher/server";
-import { parseTags, problem, renderVariant, usage, xiaohongshuTitleLength } from "@/lib/publisher/variants";
+import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 
 async function api(path: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
   const response = await fetch(`/api/publisher/${path}`, {
@@ -412,7 +413,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     .map(({ platform, variant }) => ({ platform, ...usage(platform, variant).at(-1)! }))
     .sort((a, b) => b.used / b.limit - a.used / a.limit)[0];
   const issues = versions.filter(({ issue }) => issue);
-  const zhUsage = usage("xiaohongshu", renderVariant("xiaohongshu", text))[1];
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
@@ -659,62 +659,19 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                   </label>
                 )}
                 {rednote && (
-                  <fieldset className="publisher-zh">
-                    <legend>Xiaohongshu · Chinese</legend>
-                    <button
-                      type="button"
-                      disabled={busy || submitted || translating || !(title.trim() || caption.trim())}
-                      onClick={() => void translate()}
-                    >
-                      {translating ? "Translating…" : zhTitle || zhText ? "Translate again" : "Translate"}
-                    </button>
-                    <label>
-                      Title
-                      <input
-                        value={zhTitle}
-                        maxLength={100}
-                        disabled={busy || submitted}
-                        onChange={(e) => {
-                          setZhTitle(e.target.value);
-                          submission.current = null;
-                        }}
-                        placeholder="标题"
-                      />
-                      <small className="publisher-count" data-over={xiaohongshuTitleLength(zhTitle) > 20}>
-                        {xiaohongshuTitleLength(zhTitle)} / 20
-                      </small>
-                    </label>
-                    <label>
-                      Text
-                      <textarea
-                        value={zhText}
-                        maxLength={5000}
-                        rows={5}
-                        disabled={busy || submitted}
-                        onChange={(e) => {
-                          setZhText(e.target.value);
-                          submission.current = null;
-                        }}
-                        placeholder="正文"
-                      />
-                      <small className="publisher-count" data-over={zhUsage.used > zhUsage.limit}>
-                        {zhUsage.used} / {zhUsage.limit}
-                      </small>
-                    </label>
-                    <label>
-                      Topics
-                      <input
-                        value={zhTopicsText}
-                        maxLength={500}
-                        disabled={busy || submitted}
-                        onChange={(e) => {
-                          setZhTopicsText(e.target.value);
-                          submission.current = null;
-                        }}
-                        placeholder="#生活美学 #旅行"
-                      />
-                    </label>
-                  </fieldset>
+                  <PublisherChinese
+                    value={{ title: zhTitle, text: zhText, topics: zhTopicsText }}
+                    onChange={(zh) => {
+                      setZhTitle(zh.title);
+                      setZhText(zh.text);
+                      setZhTopicsText(zh.topics);
+                      submission.current = null;
+                    }}
+                    onTranslate={() => void translate()}
+                    translating={translating}
+                    canTranslate={Boolean(title.trim() || caption.trim())}
+                    disabled={busy || submitted}
+                  />
                 )}
                 {!!versions.length && (
                   <details className="publisher-variants">
