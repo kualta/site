@@ -7,7 +7,7 @@ import { publishBrowser } from "./browser.mjs";
 
 export async function publish(
   target,
-  post,
+  job,
   {
     api,
     oauth,
@@ -18,6 +18,9 @@ export async function publish(
     browser = publishBrowser,
   },
 ) {
+  // Publish the version rendered and checked for this platform; jobs from before versions use the shared text.
+  const variant = job.variants?.[target.platform];
+  const post = variant ? { ...job, title: variant.title, caption: variant.text, tags: variant.tags } : job;
   const temp = await mkdtemp(join(tmpdir(), "kualta-post-"));
   // Text posts have no media.
   const kind = post.kind === "text" ? undefined : post.kind;

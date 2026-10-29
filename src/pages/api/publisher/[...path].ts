@@ -12,6 +12,8 @@ import {
 } from "@/lib/publisher/server";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
+import { translateForXiaohongshu } from "@/lib/publisher/translate";
+import { isTag } from "@/lib/publisher/variants";
 export const prerender = false;
 
 export const ALL: APIRoute = async ({ request, params }) => {
@@ -208,6 +210,25 @@ export const ALL: APIRoute = async ({ request, params }) => {
         throw error;
       }
       return json({ id });
+    }
+    if (path === "translate" && request.method === "POST") {
+      if (!env.OPENROUTER_API_KEY)
+        return json({ error: "Add OPENROUTER_API_KEY to the Worker's secrets to translate" }, 503);
+      const input = (await request.json()) as { title?: unknown; text?: unknown; tags?: unknown };
+      const title = typeof input.title === "string" ? input.title.slice(0, 100) : "";
+      const text = typeof input.text === "string" ? input.text.slice(0, 5000) : "";
+      if (!title.trim() && !text.trim()) return json({ error: "Write the post before translating it" }, 400);
+      const tags = Array.isArray(input.tags) ? input.tags.filter(isTag).slice(0, 30) : [];
+      try {
+        return json(
+          await translateForXiaohongshu(
+            { title, text, tags },
+            { apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL || undefined },
+          ),
+        );
+      } catch (error) {
+        return json({ error: (error as Error).message }, 502);
+      }
     }
     if (path === "jobs" && request.method === "POST") {
       const post = validatePost(await request.json());

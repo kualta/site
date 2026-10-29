@@ -86,7 +86,8 @@ try {
     const photos = (count) =>
       Array.from({ length: count }, (_, i) => ({ name: `photo-${i + 1}.png`, mimeType: "image/png", buffer: png }));
     const video = { name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not decodable") };
-    const title = page.getByRole("textbox", { name: /^Title/ });
+    // The post's own title; Xiaohongshu's Chinese title sits in its own section.
+    const title = page.getByRole("textbox", { name: /^Title ·/ });
     const shot = async (name) => {
       if (!shots) return;
       await page.waitForTimeout(300); // let chip transitions settle
@@ -260,12 +261,22 @@ try {
     assert.equal(await title.inputValue(), "A clip");
     assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky)" }).inputValue(), "A short clip");
     await presets.getByRole("button", { name: "Short-form video" }).click();
+    // Tags are rendered per platform, and Xiaohongshu gets its Chinese version from Translate.
+    await page.getByRole("textbox", { name: "Tags" }).fill("#bogota film");
+    const chinese = page.getByRole("group", { name: "Xiaohongshu · Chinese" });
+    await chinese.getByRole("button", { name: "Translate" }).click();
+    await chinese.getByRole("button", { name: "Translate again" }).waitFor();
+    assert.equal(await chinese.getByRole("textbox", { name: /^Title/ }).inputValue(), "波哥大短片");
+    assert.equal(await chinese.getByRole("textbox", { name: "Topics" }).inputValue(), "波哥大 旅行");
+    await page.getByText("What each platform gets").click();
     await shot("video");
     await page.getByRole("button", { name: "Queue post" }).click();
     const clip = await queued(page);
     assert.equal(clip.kind, "video");
     assert.equal(clip.alt, "A short clip");
     assert.deepEqual(clip.platforms.toSorted(), ["bluesky", "tiktok", "twitter", "xiaohongshu", "youtube"]);
+    assert.deepEqual(clip.tags, ["bogota", "film"]);
+    assert.deepEqual(clip.zh, { title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
 
     // Photos and a video together are refused; removing media returns to a text post.
     await attach(photos(1));

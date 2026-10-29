@@ -14,7 +14,6 @@ import {
   platformNames,
   postKind,
   STORAGE_KEY,
-  textLimits,
   titled,
   unsupported,
   type Preferences,
@@ -24,6 +23,7 @@ import {
 } from "@/lib/publisher/presets";
 import "@/styles/publisher.css";
 import { validatePost } from "@/lib/publisher/server";
+import { parseTags, problem, renderVariant, usage, xiaohongshuTitleLength } from "@/lib/publisher/variants";
 
 async function api(path: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
   const response = await fetch(`/api/publisher/${path}`, {
@@ -110,6 +110,12 @@ export default function Publisher() {
   const [caption, setCaption] = useState("");
   const [alt, setAlt] = useState("");
   const [alts, setAlts] = useState<string[]>([]);
+  const [tagsText, setTagsText] = useState("");
+  const [short, setShort] = useState("");
+  const [zhTitle, setZhTitle] = useState("");
+  const [zhText, setZhText] = useState("");
+  const [zhTopicsText, setZhTopicsText] = useState("");
+  const [translating, setTranslating] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -140,6 +146,11 @@ export default function Publisher() {
       const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null");
       if (typeof draft?.title === "string") setTitle(draft.title.slice(0, 100));
       if (typeof draft?.caption === "string" && draft.caption) setCaption(draft.caption.slice(0, 5000));
+      if (typeof draft?.tags === "string") setTagsText(draft.tags.slice(0, 1000));
+      if (typeof draft?.short === "string") setShort(draft.short.slice(0, 1000));
+      if (typeof draft?.zh?.title === "string") setZhTitle(draft.zh.title.slice(0, 100));
+      if (typeof draft?.zh?.text === "string") setZhText(draft.zh.text.slice(0, 5000));
+      if (typeof draft?.zh?.topics === "string") setZhTopicsText(draft.zh.topics.slice(0, 500));
     } catch {
       // A draft is a convenience; start empty without it.
     }
@@ -162,12 +173,14 @@ export default function Publisher() {
   useEffect(() => {
     if (!ready) return;
     try {
-      if (title || caption) sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ title, caption }));
+      const zh = { title: zhTitle, text: zhText, topics: zhTopicsText };
+      if (title || caption || tagsText || short || zhTitle || zhText || zhTopicsText)
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ title, caption, tags: tagsText, short, zh }));
       else sessionStorage.removeItem(DRAFT_KEY);
     } catch {
       // Keep the draft in memory.
     }
-  }, [title, caption, ready]);
+  }, [title, caption, tagsText, short, zhTitle, zhText, zhTopicsText, ready]);
   useEffect(() => {
     setAlts(files.map(() => ""));
   }, [files]);
@@ -245,8 +258,7 @@ export default function Publisher() {
         id,
         media,
         kind,
-        title: needsTitle ? title : "",
-        caption,
+        ...text,
         alt: kind === "video" ? alt : "",
         alts: photo ? alts : undefined,
         datesTaken: photo ? datesTaken.map((date) => (date ? new Date(date).toISOString() : null)) : undefined,
@@ -280,12 +292,32 @@ export default function Publisher() {
       setTitle("");
       setAlt("");
       setCaption(preset.caption);
+      setTagsText("");
+      setShort("");
+      setZhTitle("");
+      setZhText("");
+      setZhTopicsText("");
       setNotice("Queued. Your laptop will publish each destination once.");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not queue post");
     } finally {
       setBusy(false);
+    }
+  }
+  async function translate() {
+    setTranslating(true);
+    setError("");
+    try {
+      const draft = await api("translate", { title, text: caption, tags: parseTags(tagsText) });
+      setZhTitle(draft.title);
+      setZhText(draft.text);
+      setZhTopicsText(draft.topics.join(" "));
+      submission.current = null;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not translate");
+    } finally {
+      setTranslating(false);
     }
   }
   function selectPreset(id: string) {
@@ -327,11 +359,27 @@ export default function Publisher() {
     .map((p) => platformNames[p])
     .join(", ");
   const needsTitle = titledNames !== "";
-  const strictest = destinations
-    .filter((p) => textLimits[p])
-    .sort((a, b) => (textLimits[a] ?? 0) - (textLimits[b] ?? 0))[0];
-  const textLimit = strictest && textLimits[strictest];
-  const textLength = [...caption].length;
+  const rednote = destinations.includes("xiaohongshu");
+  // One text for everyone; X and Bluesky may take a short version, Xiaohongshu its Chinese one.
+  const text = {
+    title: needsTitle ? title : "",
+    caption,
+    tags: parseTags(tagsText),
+    short: short.trim() ? short : undefined,
+    zh: rednote ? { title: zhTitle, text: zhText, topics: parseTags(zhTopicsText) } : undefined,
+  };
+  const versions = destinations.map((platform) => {
+    const variant = renderVariant(platform, text);
+    return { platform, variant, issue: problem(platform, variant) };
+  });
+  const brief: Platform[] = destinations.filter((p) => p === "twitter" || p === "bluesky");
+  const needsShort = brief.some((p) => problem(p, renderVariant(p, { ...text, short: undefined }))) || !!short;
+  // The counter follows the destination whose limit the main text is closest to.
+  const counted = versions
+    .filter(({ platform }) => platform !== "xiaohongshu" && !(text.short && brief.includes(platform)))
+    .map(({ platform, variant }) => ({ platform, ...usage(platform, variant).at(-1)! }))
+    .sort((a, b) => b.used / b.limit - a.used / a.limit)[0];
+  const issues = versions.filter(({ issue }) => issue);
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
@@ -430,9 +478,9 @@ export default function Publisher() {
                       disabled={busy || submitted}
                       onFiles={(next) => void chooseFiles(next)}
                     />
-                    {strictest && textLimit && (
-                      <small className="publisher-count" data-over={textLength > textLimit}>
-                        {textLength} / {textLimit} · {platformNames[strictest]}
+                    {counted && (
+                      <small className="publisher-count" data-over={counted.used > counted.limit}>
+                        {counted.used} / {counted.limit} · {platformNames[counted.platform]}
                       </small>
                     )}
                   </div>
@@ -532,6 +580,118 @@ export default function Publisher() {
                       placeholder="A moment worth sharing"
                     />
                   </label>
+                )}
+                <label>
+                  Tags
+                  <input
+                    value={tagsText}
+                    maxLength={1000}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setTagsText(e.target.value);
+                      submission.current = null;
+                    }}
+                    placeholder="#travel #bogota"
+                  />
+                  <small className="publisher-note">
+                    Most important first. Instagram and TikTok take 5, YouTube 3, Bluesky 2 (and 8 hidden), X 1, Grain
+                    all.
+                  </small>
+                </label>
+                {needsShort && (
+                  <label>
+                    Short version · {brief.map((p) => platformNames[p]).join(", ")}
+                    <textarea
+                      value={short}
+                      maxLength={1000}
+                      rows={3}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setShort(e.target.value);
+                        submission.current = null;
+                      }}
+                      placeholder="The post is too long for them; write a shorter one"
+                    />
+                  </label>
+                )}
+                {rednote && (
+                  <fieldset className="publisher-zh">
+                    <legend>Xiaohongshu · Chinese</legend>
+                    <button
+                      type="button"
+                      disabled={busy || submitted || translating || !(title.trim() || caption.trim())}
+                      onClick={() => void translate()}
+                    >
+                      {translating ? "Translating…" : zhTitle || zhText ? "Translate again" : "Translate"}
+                    </button>
+                    <label>
+                      Title
+                      <input
+                        value={zhTitle}
+                        maxLength={100}
+                        disabled={busy || submitted}
+                        onChange={(e) => {
+                          setZhTitle(e.target.value);
+                          submission.current = null;
+                        }}
+                        placeholder="标题"
+                      />
+                      <small className="publisher-count" data-over={xiaohongshuTitleLength(zhTitle) > 20}>
+                        {xiaohongshuTitleLength(zhTitle)} / 20
+                      </small>
+                    </label>
+                    <label>
+                      Text
+                      <textarea
+                        value={zhText}
+                        maxLength={5000}
+                        rows={5}
+                        disabled={busy || submitted}
+                        onChange={(e) => {
+                          setZhText(e.target.value);
+                          submission.current = null;
+                        }}
+                        placeholder="正文"
+                      />
+                      <small className="publisher-count" data-over={[...zhText].length > 1000}>
+                        {[...zhText].length} / 1000
+                      </small>
+                    </label>
+                    <label>
+                      Topics
+                      <input
+                        value={zhTopicsText}
+                        maxLength={500}
+                        disabled={busy || submitted}
+                        onChange={(e) => {
+                          setZhTopicsText(e.target.value);
+                          submission.current = null;
+                        }}
+                        placeholder="#生活美学 #旅行"
+                      />
+                    </label>
+                  </fieldset>
+                )}
+                {!!versions.length && (
+                  <details className="publisher-variants">
+                    <summary>What each platform gets</summary>
+                    {versions.map(({ platform, variant, issue }) => (
+                      <section key={platform}>
+                        <h3>
+                          {platformNames[platform]}
+                          {issue && <small> · {issue}</small>}
+                        </h3>
+                        {variant.title && <strong>{variant.title}</strong>}
+                        <p>{variant.text || "—"}</p>
+                        {!!variant.tags.length && (
+                          <small>
+                            {platform === "bluesky" ? "Hidden tags" : "Topics"}:{" "}
+                            {variant.tags.map((tag) => `#${tag}`).join(" ")}
+                          </small>
+                        )}
+                      </section>
+                    ))}
+                  </details>
                 )}
               </section>
               <aside aria-labelledby="publisher-share-to">
@@ -656,6 +816,11 @@ export default function Publisher() {
                 {!destinations.length && (
                   <p className="publisher-note">None of the selected destinations take {unavailableFor[kind]}.</p>
                 )}
+                {issues.map(({ platform, issue }) => (
+                  <p key={platform} className="publisher-problem">
+                    {platformNames[platform]}: {issue}
+                  </p>
+                ))}
                 {!!files.length && (
                   <p className="publisher-note">
                     Media stays private in Cloudflare. Your laptop removes metadata before publishing.

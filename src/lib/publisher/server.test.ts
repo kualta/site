@@ -98,9 +98,46 @@ test("Grain text limits count UTF-8 bytes, including multibyte captions", () => 
       caption: "界".repeat(333),
     }).caption,
   ).toHaveLength(333);
-  expect(() => validatePost({ ...post(), title: "界".repeat(34) })).toThrow("Grain supports");
-  expect(() => validatePost({ ...post(), caption: "界".repeat(334) })).toThrow("Grain supports");
-  expect(() => validatePost({ ...post(), caption: "a".repeat(1001) })).toThrow("Grain supports");
+  expect(() => validatePost({ ...post(), title: "界".repeat(34) })).toThrow("Grain: title (bytes) is 102/100");
+  expect(() => validatePost({ ...post(), caption: "界".repeat(334) })).toThrow(
+    "Grain: description (bytes) is 1002/1000",
+  );
+  expect(() => validatePost({ ...post(), caption: "a".repeat(1001) })).toThrow("Grain: description (bytes)");
+});
+test("each destination's version is rendered, checked and stored with the job", () => {
+  const job = validatePost({
+    ...post(),
+    caption: "A long walk through Bogotá.",
+    tags: ["bogota", "travel", "colombia", "streetphotography", "walk", "sunday"],
+    short: "Bogotá walk",
+    platforms: ["grain", "instagram", "twitter", "bluesky", "xiaohongshu"],
+    zh: { title: "波哥大散步", text: "周末在波哥大散步。", topics: ["波哥大", "旅行"] },
+  });
+  expect(job.variants?.instagram?.text).toBe(
+    "A long walk through Bogotá.\n\n#bogota #travel #colombia #streetphotography #walk",
+  );
+  expect(job.variants?.twitter?.text).toBe("Bogotá walk\n\n#bogota");
+  expect(job.variants?.bluesky?.tags).toEqual(["colombia", "streetphotography", "walk", "sunday"]);
+  expect(job.variants?.xiaohongshu).toEqual({
+    title: "波哥大散步",
+    text: "周末在波哥大散步。",
+    tags: ["波哥大", "旅行"],
+  });
+});
+test("Xiaohongshu needs its Chinese version, and every version must fit its platform", () => {
+  const rednote = { ...post(), platforms: ["xiaohongshu"] };
+  expect(() => validatePost(rednote)).toThrow("Add the Chinese version");
+  expect(() => validatePost({ ...rednote, zh: { title: "", text: "你好", topics: [] } })).toThrow(
+    "Xiaohongshu: needs a Chinese title",
+  );
+  expect(() => validatePost({ ...rednote, zh: { title: "界".repeat(21), text: "", topics: [] } })).toThrow(
+    "Xiaohongshu: title is 21/20",
+  );
+  expect(validatePost({ ...rednote, zh: { title: "a".repeat(40), text: "", topics: [] } }).zh?.title).toHaveLength(40);
+  expect(() => validatePost({ ...post(), platforms: ["instagram"], caption: "#a #b #c #d #e #f" })).toThrow(
+    "Instagram: takes up to 5 hashtags",
+  );
+  expect(() => validatePost({ ...post(), tags: ["not a tag"] })).toThrow("Tags");
 });
 describe("queue", () => {
   test("claims each target once, only for configured platforms", async () => {

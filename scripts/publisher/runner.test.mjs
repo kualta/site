@@ -168,3 +168,25 @@ test("expired OAuth fails before publishing starts", async () => {
   expect(result.state).toBe("failed");
   expect(called).toBe(false);
 });
+
+test("each platform publishes its own rendered version", async () => {
+  let sent;
+  await publish(
+    { platform: "bluesky" },
+    {
+      ...post,
+      kind: "text",
+      media: [],
+      caption: "Shared text",
+      variants: { bluesky: { title: "", text: "Bluesky text\n\n#a", tags: ["b", "c"] } },
+    },
+    fixture({
+      atproto: async (_platform, _config, _files, _infos, published) => {
+        sent = published;
+        return { url: "https://example.invalid/post" };
+      },
+    }),
+  );
+  expect(sent.caption).toBe("Bluesky text\n\n#a");
+  expect(sent.tags).toEqual(["b", "c"]);
+});
