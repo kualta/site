@@ -2,7 +2,7 @@ import PublisherAnalytics from "./PublisherAnalytics";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
+import { CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import {
@@ -42,6 +42,7 @@ const unavailableFor: Record<PostKind, string> = {
   text: "text-only posts",
   photo: "these photos",
   video: "this video",
+  mixed: "photos and videos together",
 };
 /** Resolves undefined when this browser cannot read the file; the laptop checks it again. */
 function videoShape(file: File): Promise<VideoShape | undefined> {
@@ -108,6 +109,7 @@ export default function Publisher() {
   const [video, setVideo] = useState<VideoShape>();
   const [datesTaken, setDatesTaken] = useState<string[]>([]);
   const [readingDates, setReadingDates] = useState(false);
+  const datesRead = useRef(new WeakSet<File>());
   const [previews, setPreviews] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [caption, setCaption] = useState("");
@@ -185,32 +187,37 @@ export default function Publisher() {
     }
   }, [title, caption, tagsText, short, zhTitle, zhText, zhTopicsText, ready]);
   useEffect(() => {
-    setAlts(files.map(() => ""));
-  }, [files]);
-  useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
     setPreviews(urls);
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, [files]);
+  // Each photo's date is read once, so adding more media keeps dates already read or edited.
   useEffect(() => {
+    const unread = files.filter((file) => file.type.startsWith("image/") && !datesRead.current.has(file));
+    if (!unread.length) return;
     let active = true;
-    setDatesTaken(files.map(() => ""));
     setReadingDates(true);
     async function readDates() {
       try {
         const { parse } = await import("exifr");
-        const dates = await Promise.all(
-          files.map(async (file) => {
-            if (!file.type.startsWith("image/")) return "";
-            try {
-              const exif = await parse(file, { pick: ["DateTimeOriginal", "OffsetTimeOriginal"], reviveValues: false });
-              return exifDateTime(exif?.DateTimeOriginal, exif?.OffsetTimeOriginal);
-            } catch {
-              return "";
-            }
-          }),
+        const found = new Map(
+          await Promise.all(
+            unread.map(async (file) => {
+              try {
+                const exif = await parse(file, {
+                  pick: ["DateTimeOriginal", "OffsetTimeOriginal"],
+                  reviveValues: false,
+                });
+                return [file, exifDateTime(exif?.DateTimeOriginal, exif?.OffsetTimeOriginal)] as const;
+              } catch {
+                return [file, ""] as const;
+              }
+            }),
+          ),
         );
-        if (active) setDatesTaken(dates);
+        if (!active) return;
+        for (const file of unread) datesRead.current.add(file);
+        setDatesTaken((dates) => files.map((file, i) => dates[i] || found.get(file) || ""));
       } catch {
         // Reading EXIF is optional; manual capture dates remain available.
       } finally {
@@ -220,6 +227,7 @@ export default function Publisher() {
     void readDates();
     return () => {
       active = false;
+      setReadingDates(false);
     };
   }, [files]);
   async function refresh() {
@@ -257,10 +265,12 @@ export default function Publisher() {
       if (kind === "text" && !caption.trim()) throw new Error("Write something to post.");
       if (needsTitle && !title.trim()) throw new Error(`Add a title for ${titledNames}.`);
       const photo = kind === "photo";
+      const mediaKinds = files.map((file) => (file.type.startsWith("video/") ? "video" : "photo"));
       const payload = (id: string, media: string[]) => ({
         id,
         media,
         kind,
+        mediaKinds: kind === "mixed" ? mediaKinds : undefined,
         ...text,
         alt: kind === "video" ? alt : "",
         alts: photo ? alts : undefined,
@@ -330,26 +340,38 @@ export default function Publisher() {
   function clearMedia() {
     setFiles([]);
     setVideo(undefined);
+    setAlts([]);
+    setDatesTaken([]);
     submission.current = null;
   }
-  async function chooseFiles(next: File[]) {
-    if (!next.length) return;
-    const photos = next.filter((f) => f.type.startsWith("image/"));
-    const videos = next.filter((f) => f.type.startsWith("video/"));
-    if (
-      photos.length + videos.length !== next.length ||
-      (videos.length > 0 && next.length > 1) ||
-      photos.length > MAX_PHOTOS ||
-      photos.some((f) => f.size > 30e6) ||
-      videos.some((f) => f.size > 90e6)
-    ) {
-      setError(`Attach up to ${MAX_PHOTOS} photos (30 MB each) or one video (90 MB).`);
-      return;
-    }
-    setVideo(videos.length ? await videoShape(videos[0]) : undefined);
+  /** Media lists stay index-aligned with each photo's description and date. */
+  async function showMedia(next: File[], nextAlts: string[], nextDates: string[]) {
+    const first = next.find((file) => file.type.startsWith("video/"));
+    setVideo(first ? await videoShape(first) : undefined);
     setFiles(next);
+    setAlts(nextAlts);
+    setDatesTaken(nextDates);
     submission.current = null;
     setError("");
+  }
+  function removeFile(index: number) {
+    const keep = (_: unknown, i: number) => i !== index;
+    void showMedia(files.filter(keep), alts.filter(keep), datesTaken.filter(keep));
+  }
+  // Picked media adds to what's attached, so photos and videos can go out together.
+  async function chooseFiles(picked: File[]) {
+    if (!picked.length) return;
+    const next = [...files, ...picked];
+    if (
+      next.length > MAX_PHOTOS ||
+      next.some((f) => !f.type.startsWith("image/") && !f.type.startsWith("video/")) ||
+      next.some((f) => f.size > (f.type.startsWith("video/") ? 90e6 : 30e6))
+    ) {
+      setError(`Attach up to ${MAX_PHOTOS} photos and videos: photos up to 30 MB, videos up to 90 MB.`);
+      return;
+    }
+    const blank = picked.map(() => "");
+    await showMedia(next, [...alts, ...blank], [...datesTaken, ...blank]);
   }
   // The attachments decide the kind; the preset's destinations that can't take it are skipped.
   const kind = postKind(files);
@@ -476,8 +498,9 @@ export default function Publisher() {
                     />
                     <MediaButton
                       accept="video/*"
+                      multiple
                       label="Video"
-                      hint="One video, up to 90 MB"
+                      hint="Videos up to 90 MB each"
                       Icon={VideoIcon}
                       disabled={busy || submitted}
                       onFiles={(next) => void chooseFiles(next)}
@@ -490,14 +513,24 @@ export default function Publisher() {
                   </div>
                 </div>
                 {!!previews.length && (
-                  <div className="publisher-previews">
-                    {previews.map((url, i) =>
-                      kind === "photo" ? (
-                        <img key={url} src={url} alt={files[i]?.name || "Selected photo"} />
-                      ) : (
-                        <video key={url} src={url} controls />
-                      ),
-                    )}
+                  <div className="publisher-previews" data-single-video={kind === "video" || undefined}>
+                    {previews.map((url, i) => (
+                      <figure key={url}>
+                        {files[i]?.type.startsWith("video/") ? (
+                          <video src={url} controls={kind === "video"} muted={kind !== "video"} playsInline />
+                        ) : (
+                          <img src={url} alt={files[i]?.name || "Selected photo"} />
+                        )}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${files[i]?.name || "media"}`}
+                          disabled={busy || submitted}
+                          onClick={() => removeFile(i)}
+                        >
+                          <CloseIcon aria-hidden="true" />
+                        </button>
+                      </figure>
+                    ))}
                   </div>
                 )}
                 {!!files.length && (

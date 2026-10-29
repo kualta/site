@@ -240,12 +240,12 @@ export const ALL: APIRoute = async ({ request, params }) => {
         return existing.payload === JSON.stringify(post)
           ? json({ id: post.id })
           : json({ error: "Post identifier already used" }, 409);
-      for (const id of post.media) {
+      for (const [i, id] of post.media.entries()) {
         const media = await db
           .prepare("SELECT kind, job_id FROM publisher_media WHERE id = ?")
           .bind(id)
           .first<{ kind: string; job_id: string | null }>();
-        if (!media || media.kind !== post.kind || media.job_id)
+        if (!media || media.kind !== (post.mediaKinds?.[i] ?? post.kind) || media.job_id)
           return json({ error: "Media is missing or already queued" }, 400);
       }
       await db.batch([

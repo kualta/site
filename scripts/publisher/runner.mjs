@@ -29,14 +29,16 @@ export async function publish(
     const files = [],
       infos = [];
     for (let i = 0; i < post.media.length; i++) {
+      // Mixed posts say what each item is.
+      const itemKind = post.mediaKinds?.[i] ?? kind;
       const input = join(temp, `source-${i}`),
-        output = join(temp, `${i}.${kind === "photo" ? "jpg" : "mp4"}`);
+        output = join(temp, `${i}.${itemKind === "photo" ? "jpg" : "mp4"}`);
       await writeFile(
         input,
         new Uint8Array(await (await api(`media/${post.media[i]}`)).arrayBuffer()),
       );
       const info = await process(input, output, {
-        kind,
+        kind: itemKind,
         policy: post.metadata[target.platform],
         maxBytes: target.platform === "grain" ? 900_000 : 1_900_000,
       });

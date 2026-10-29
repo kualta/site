@@ -279,16 +279,35 @@ try {
     assert.deepEqual(clip.tags, ["bogota", "film"]);
     assert.deepEqual(clip.zh, { title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
 
-    // Photos and a video together are refused; removing media returns to a text post.
+    // Picked media adds up. Photos with a video make one post for Instagram and X; the rest sit out.
+    const attached = (count) =>
+      page.waitForFunction((n) => document.querySelectorAll(".publisher-previews figure").length === n, count);
     await attach(photos(1));
-    await descriptions.nth(0).fill("Keep this if the next selection is invalid");
+    await descriptions.nth(0).fill("Kept as more media is added");
+    await attach(photos(1));
+    await attached(2);
+    assert.equal(await descriptions.count(), 2);
+    assert.equal(await descriptions.nth(0).inputValue(), "Kept as more media is added");
+    await attach(video);
+    await attached(3);
+    assert.equal(await reason("Bluesky"), "takes photos or one video");
+    assert.equal(await reason("YouTube"), "takes one video");
+    assert.deepEqual(await checked(), ["Instagram", "X / Twitter"]);
+    await attach(photos(8));
+    await page.getByText("Attach up to 10 photos and videos: photos up to 30 MB, videos up to 90 MB.").waitFor();
+    await attached(3);
+    await shot("mixed");
+    await page.getByRole("button", { name: /^(Publish to 2 places|Queue post)$/ }).click();
+    const mix = await queued(page);
+    assert.equal(mix.kind, "mixed");
+    assert.deepEqual(mix.mediaKinds, ["photo", "photo", "video"]);
+    assert.deepEqual(mix.platforms.toSorted(), ["instagram", "twitter"]);
+
+    // One item can be removed on its own; Remove media returns to a text post.
     await attach([...photos(1), video]);
-    await page.getByText("Attach up to 10 photos (30 MB each) or one video (90 MB).").waitFor();
-    assert.equal(await descriptions.nth(0).inputValue(), "Keep this if the next selection is invalid");
-    assert.equal(await page.locator(".publisher-previews img").count(), 1);
-    await attach(photos(11));
-    assert.equal(await descriptions.nth(0).inputValue(), "Keep this if the next selection is invalid");
-    await attach(photos(1));
+    await page.getByRole("button", { name: "Remove clip.mp4" }).click();
+    await attached(1);
+    assert.equal(await descriptions.count(), 1);
     await page.getByRole("button", { name: "Remove media" }).click();
     assert.equal(await reason("Grain"), "needs photos");
 
