@@ -23,21 +23,6 @@ export const ALL: APIRoute = async ({ request, params }) => {
   try {
     const db = env.NEWSLETTER_DB;
     const bucket = env.PUBLISHER_MEDIA;
-    // Instagram fetches story media itself; the laptop parks each file here under an unguessable name for an hour.
-    if (path.startsWith("public/") && request.method === "GET") {
-      const id = path.slice("public/".length);
-      const object = bucket && validId(id) ? await bucket.get(`public/${id}`, { range: request.headers }) : null;
-      if (!object || !(Number(object.customMetadata?.expires) > Date.now()))
-        return new Response("Not found", { status: 404, headers });
-      headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
-      headers.set("Accept-Ranges", "bytes");
-      const range = object.range as { offset: number; length: number } | undefined;
-      if (request.headers.has("Range") && range?.length !== undefined) {
-        headers.set("Content-Range", `bytes ${range.offset}-${range.offset + range.length - 1}/${object.size}`);
-        return new Response(object.body, { status: 206, headers });
-      }
-      return new Response(object.body, { headers });
-    }
     const helper = path.startsWith("helper/");
     if (helper) {
       if (!db || !(await authorizeHelper(request, db))) return json({ error: "Helper authentication required" }, 401);
@@ -276,30 +261,6 @@ export const ALL: APIRoute = async ({ request, params }) => {
       ]);
       return json({ id: post.id }, 201);
     }
-    if (path === "helper/public-media" && request.method === "POST") {
-      const type = request.headers.get("Content-Type") || "";
-      if (!["image/jpeg", "video/mp4"].includes(type)) return json({ error: "Stories take JPEG or MP4" }, 400);
-      const length = Number(request.headers.get("Content-Length"));
-      if (!length || length > 100_000_000) return json({ error: "Story media can be up to 100 MB" }, 413);
-      const bytes = await request.arrayBuffer();
-      if (bytes.byteLength !== length) return json({ error: "Incomplete upload" }, 400);
-      // Clear anything an interrupted run left behind.
-      const { objects } = await bucket.list({ prefix: "public/", include: ["customMetadata"] });
-      const stale = objects.filter((o) => !(Number(o.customMetadata?.expires) > Date.now())).map((o) => o.key);
-      if (stale.length) await bucket.delete(stale);
-      const id = crypto.randomUUID();
-      await bucket.put(`public/${id}`, bytes, {
-        httpMetadata: { contentType: type },
-        customMetadata: { expires: String(Date.now() + 60 * 60_000) },
-      });
-      return json({ id, url: new URL(`/api/publisher/public/${id}`, request.url).href });
-    }
-    if (path.startsWith("helper/public-media/") && request.method === "DELETE") {
-      const id = path.slice("helper/public-media/".length);
-      if (!validId(id)) return json({ error: "Invalid media" }, 400);
-      await bucket.delete(`public/${id}`);
-      return json({ ok: true });
-    }
     if (path === "helper/heartbeat" && request.method === "POST") {
       await db.prepare("UPDATE publisher_helper SET last_seen = ? WHERE id = 1").bind(Date.now()).run();
       return json({ ok: true });
@@ -332,13 +293,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!target) {
         const metricClaim =
           input.analytics === true
-            ? await claimAnalytics(
-                db,
-                // Story insights last only a day, so stories aren't measured.
-                [...new Set([...supported, "grain", "bluesky"])].filter(
-                  (p) => p !== "instagram_story",
-                ) as (typeof platforms)[number][],
-              )
+            ? await claimAnalytics(db, [...new Set([...supported, "grain", "bluesky"])] as (typeof platforms)[number][])
             : null;
         if (!metricClaim) return json({ target: null });
         const publication = await db
