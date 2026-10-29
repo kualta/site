@@ -4,16 +4,19 @@ import { tmpdir } from "node:os";
 import { processMedia } from "./process.mjs";
 import { publishAtproto } from "./atproto.mjs";
 import { publishBrowser } from "./browser.mjs";
+import { parkOnSite, publishStory } from "./instagram-story.mjs";
 
 export async function publish(
   target,
   job,
   {
     api,
+    config,
     oauth,
     stateDir,
     python,
     process = processMedia,
+    story = publishStory,
     atproto = publishAtproto,
     browser = publishBrowser,
   },
@@ -39,6 +42,7 @@ export async function publish(
         kind,
         policy: post.metadata[target.platform],
         maxBytes: target.platform === "grain" ? 900_000 : 1_900_000,
+        story: target.platform === "instagram_story",
       });
       await rm(input);
       files.push(output);
@@ -50,6 +54,12 @@ export async function publish(
       (infos[0].duration > 180 || infos[0].bytes > 100_000_000)
     )
       throw new Error("Bluesky video must be at most 3 minutes and 100 MB");
+    if (
+      kind === "video" &&
+      target.platform === "instagram_story" &&
+      (infos[0].duration < 3 || infos[0].duration > 60 || infos[0].bytes > 100_000_000)
+    )
+      throw new Error("Instagram stories take videos from 3 to 60 seconds, up to 100 MB");
     const authorization = ["grain", "bluesky"].includes(target.platform)
       ? await oauth.agent()
       : null;
@@ -57,6 +67,8 @@ export async function publish(
     let result;
     if (["grain", "bluesky"].includes(target.platform))
       result = await atproto(target.platform, authorization, files, infos, post);
+    else if (target.platform === "instagram_story")
+      result = await story(files, infos, { stateDir, park: parkOnSite(config) });
     else if (["twitter", "instagram"].includes(target.platform)) {
       // Vendored adapters accept one path or an array for carousels; text posts send none.
       const media = files.length > 1 ? JSON.stringify(files) : (files[0] ?? "");

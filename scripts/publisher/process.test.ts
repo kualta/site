@@ -79,3 +79,55 @@ test.skipIf(!native)(
   },
   30_000,
 );
+test.skipIf(!native)(
+  "story video is at most 1080 wide, 60 fps and 128 kbps audio",
+  async () => {
+    const { default: ffmpeg } = await import("ffmpeg-static");
+    const { default: ffprobe } = await import("ffprobe-static");
+    process.env.FFMPEG_PATH = Bun.which("ffmpeg") || ffmpeg!;
+    process.env.FFPROBE_PATH = Bun.which("ffprobe") || ffprobe.path;
+    const dir = await mkdtemp(join(tmpdir(), "publisher-story-test-"));
+    try {
+      const input = join(dir, "input.mp4"),
+        output = join(dir, "output.mp4");
+      execFileSync(
+        process.env.FFMPEG_PATH!,
+        [
+          "-y",
+          "-f",
+          "lavfi",
+          "-i",
+          "color=c=blue:s=1441x2560:r=120:d=0.5",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=d=0.5",
+          "-c:v",
+          "libx264",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "256k",
+          input,
+        ],
+        { stdio: "ignore" },
+      );
+      const info = await processMedia(input, output, { kind: "video", policy: "remove-all", story: true });
+      expect(info.width).toBe(1080);
+      expect(info.height).toBe(1920);
+      const probe = JSON.parse(
+        execFileSync(process.env.FFPROBE_PATH!, ["-v", "error", "-show_streams", "-of", "json", output], {
+          encoding: "utf8",
+        }),
+      );
+      const video = probe.streams.find((s: { codec_type: string }) => s.codec_type === "video");
+      const audio = probe.streams.find((s: { codec_type: string }) => s.codec_type === "audio");
+      const [frames, seconds] = video.r_frame_rate.split("/").map(Number);
+      expect(frames / seconds).toBeLessThanOrEqual(60);
+      expect(Number(audio.bit_rate)).toBeLessThanOrEqual(130_000);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  60_000,
+);

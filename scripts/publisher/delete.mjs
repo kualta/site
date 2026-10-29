@@ -99,6 +99,11 @@ async function gone(page, platform) {
 }
 export async function deletePublication(deletion, { oauth, stateDir, open = openProfile }) {
   const { target, post } = deletion;
+  if (target.platform === "instagram_story")
+    return {
+      state: "failed",
+      message: "Instagram doesn't let apps delete stories. It disappears after 24 hours, or delete it in the app.",
+    };
   let submitted = false;
   let context;
   let confirmed = false;

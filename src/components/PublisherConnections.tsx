@@ -60,6 +60,7 @@ export default function PublisherConnections({ online, connected, connections, r
                 <span>{label}</span>
                 <span className="publisher-note">{status}</span>
                 <button
+                  hidden={platform === "instagram_story" && !ready}
                   disabled={!online || busy || !!active}
                   onClick={() => {
                     if (ready) {
@@ -96,6 +97,13 @@ export default function PublisherConnections({ online, connected, connections, r
                     Cancel
                   </button>
                 </div>
+              )}
+              {platform === "instagram_story" && !ready && (
+                <p className="publisher-note">
+                  Stories post through Instagram's API, which needs a Business account. In your Meta app, generate a
+                  token under Instagram API setup, copy it, then run{" "}
+                  <code>pbpaste | bun run publisher instagram-token</code> on your laptop.
+                </p>
               )}
               {!current && latest?.state === "failed" && (
                 <p role="status" className="publisher-note">
