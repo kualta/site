@@ -214,6 +214,28 @@ test("mixed posts say what each item is and include a video", () => {
     "Bluesky takes photos or one video",
   );
 });
+test("only a video going to YouTube can ask to be a Short, and a post that doesn't ask is unchanged", () => {
+  const video = { ...post(), kind: "video", platforms: ["youtube", "tiktok"] };
+  expect(validatePost({ ...video, youtubeShort: true }).youtubeShort).toBe(true);
+  expect(validatePost(video)).not.toHaveProperty("youtubeShort");
+  expect(validatePost({ ...video, youtubeShort: false })).not.toHaveProperty("youtubeShort");
+  for (const youtubeShort of [1, "true", null])
+    expect(() => validatePost({ ...video, youtubeShort })).toThrow("as a Short");
+  expect(() => validatePost({ ...video, platforms: ["tiktok"], youtubeShort: true })).toThrow("as a Short");
+  expect(() => validatePost({ ...post(), youtubeShort: true })).toThrow("as a Short");
+  expect(() => validatePost({ ...post(), youtubeShort: false })).toThrow("as a Short");
+  const media = [crypto.randomUUID(), crypto.randomUUID()];
+  expect(() =>
+    validatePost({
+      ...post(),
+      kind: "mixed",
+      media,
+      mediaKinds: ["photo", "video"],
+      platforms: ["instagram"],
+      youtubeShort: true,
+    }),
+  ).toThrow("as a Short");
+});
 function published(job: ReturnType<typeof validatePost>) {
   const { db, sqlite } = database();
   sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)").run(job.id, JSON.stringify(job), 1);
@@ -233,6 +255,18 @@ test("a published post can go to more destinations, rendered and checked like a 
   expect(payload().variants.twitter.text).toBe("Hello");
   expect(sqlite.query("SELECT state FROM publisher_targets WHERE platform = 'twitter'").get()).toEqual({ state: "queued" });
   await expect(addDestinations(db, bucket, { job: job.id, platforms: ["twitter"] })).rejects.toThrow("Choose where");
+});
+test("crossposting keeps a Short a Short, and doesn't make a regular video one", async () => {
+  const video = { ...post(), kind: "video" };
+  const kept = { head: async () => ({}) };
+  const short = validatePost({ ...video, platforms: ["youtube"], youtubeShort: true });
+  const first = published(short);
+  await addDestinations(first.db, kept, { job: short.id, platforms: ["tiktok"] });
+  expect(first.payload().youtubeShort).toBe(true);
+  const regular = validatePost({ ...video, platforms: ["tiktok"] });
+  const second = published(regular);
+  await addDestinations(second.db, kept, { job: regular.id, platforms: ["youtube"] });
+  expect(second.payload().youtubeShort).toBeUndefined();
 });
 test("crossposting asks for what new destinations need, and for media that still exists", async () => {
   const job = validatePost({ ...post(), title: "", platforms: ["instagram"] });

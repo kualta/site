@@ -115,6 +115,57 @@ test("Bluesky video limits are enforced before invoking the platform", async () 
   expect(calls).toBe(0);
 });
 
+const video = { ...post, kind: "video", media: ["one"], metadata: { ...post.metadata, youtube: "remove-all" } };
+const short = { ...video, youtubeShort: true };
+// Publishes through a stand-in platform, recording what the media was prepared with and what reached the platform.
+async function publishVideo(platform, job, { duration = 30 } = {}) {
+  const seen = { options: undefined, infos: undefined, published: 0 };
+  const result = await publish(
+    { platform },
+    job,
+    fixture({
+      process: async (_input, _output, options) => {
+        seen.options = options;
+        return options.vertical
+          ? { kind: "video", width: 1080, height: 1920, duration, bytes: 8 }
+          : { kind: "video", width: 1920, height: 1080, duration, bytes: 8 };
+      },
+      browser: async (_platform, _profile, _files, _post, infos) => {
+        seen.published++;
+        seen.infos = infos;
+        return { url: "https://example.invalid/video" };
+      },
+    }),
+  );
+  return { ...seen, result };
+}
+
+test("a post marked as a Short is reframed for YouTube and no other destination", async () => {
+  const youtube = await publishVideo("youtube", short);
+  expect(youtube.options.vertical).toBe(true);
+  expect(youtube.infos[0]).toMatchObject({ width: 1080, height: 1920 });
+  expect(youtube.result.state).toBe("succeeded");
+  const tiktok = await publishVideo("tiktok", short);
+  expect(tiktok.options.vertical).toBe(false);
+  expect(tiktok.infos[0]).toMatchObject({ width: 1920, height: 1080 });
+});
+
+test("a video not marked as a Short keeps its frame on YouTube, whatever its length", async () => {
+  const youtube = await publishVideo("youtube", video, { duration: 600 });
+  expect(youtube.options.vertical).toBe(false);
+  expect(youtube.result.state).toBe("succeeded");
+});
+
+test("a Short over 3 minutes fails before publishing, so retrying is safe", async () => {
+  const over = await publishVideo("youtube", short, { duration: 180.5 });
+  expect(over.result.state).toBe("failed");
+  expect(over.result.message).toContain("at most 3 minutes");
+  expect(over.published).toBe(0);
+  const limit = await publishVideo("youtube", short, { duration: 180 });
+  expect(limit.result.state).toBe("succeeded");
+  expect(limit.published).toBe(1);
+});
+
 test("text posts publish without fetching media and send X no attachment", async () => {
   let fetched = 0,
     args;

@@ -66,6 +66,7 @@
 .publisher-destinations label { display:flex; align-items:center; justify-content:space-between; color:inherit; padding:10px 0; margin:0; font-size:15px; }
 .publisher-destinations label small { display:block; font-size:12px; color:var(--secondary-text); }
 .publisher-destinations label[data-unavailable="true"] > span { color:var(--secondary-text); }
+.publisher label.publisher-option { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .publisher-media-actions { margin:0 0 24px; }
 .publisher input[type=checkbox] { width:17px; height:17px; accent-color:currentColor; }
 .publisher details { border-top:1px solid var(--publisher-line); padding:16px 0; margin-bottom:14px; }

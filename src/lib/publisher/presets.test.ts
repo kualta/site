@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { defaultPreferences, parsePreferences, postKind, postLabel, unsupported, videoFormat } from "./presets";
+import {
+  defaultPreferences,
+  parsePreferences,
+  postKind,
+  postLabel,
+  reframesToShort,
+  unsupported,
+  videoFormat,
+} from "./presets";
 test("default presets are destination sets with the owner's choices", () => {
   const prefs = defaultPreferences();
   expect(prefs.active).toBe("text");
@@ -78,6 +86,13 @@ test("videos are named reels on Instagram and Shorts on YouTube when vertical an
   expect(videoFormat("youtube", { seconds: 30, width: 1920, height: 1080 })).toBeNull();
   expect(videoFormat("youtube")).toBeNull();
   expect(videoFormat("tiktok", { seconds: 30, width: 1080, height: 1920 })).toBeNull();
+});
+test("only a horizontal video up to 3 minutes needs reframing to become a Short", () => {
+  expect(reframesToShort({ seconds: 180, width: 1920, height: 1080 })).toBe(true);
+  expect(reframesToShort({ seconds: 181, width: 1920, height: 1080 })).toBe(false);
+  expect(reframesToShort({ seconds: 30, width: 1080, height: 1080 })).toBe(false);
+  expect(reframesToShort({ seconds: 30, width: 1080, height: 1920 })).toBe(false);
+  expect(reframesToShort()).toBe(false);
 });
 test("photos and videos together go only where they can be mixed", () => {
   const file = (type: string) => ({ type });

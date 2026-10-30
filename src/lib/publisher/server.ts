@@ -44,6 +44,8 @@ export interface Post {
   zh?: { title: string; text: string; topics: string[] };
   /** What each destination receives, rendered once here so the laptop publishes exactly what was checked. */
   variants?: Partial<Record<Platform, Variant>>;
+  /** Reframe a horizontal video to vertical for YouTube, which then makes it a Short. */
+  youtubeShort?: boolean;
 }
 export const validId = (id: unknown): id is string => typeof id === "string" && /^[a-f0-9-]{36}$/.test(id);
 export async function hashToken(token: string): Promise<string> {
@@ -138,6 +140,11 @@ export function validatePost(value: unknown): Post {
   )
     throw new PostError("Check the Chinese title, text and topics");
   if (p.platforms.includes("xiaohongshu") && !p.zh) throw new PostError("Add the Chinese version for Xiaohongshu");
+  if (
+    p.youtubeShort !== undefined &&
+    (typeof p.youtubeShort !== "boolean" || p.kind !== "video" || !p.platforms.includes("youtube"))
+  )
+    throw new PostError("Only a video going to YouTube can be posted as a Short");
   const variants: Partial<Record<Platform, Variant>> = {};
   for (const platform of p.platforms) {
     variants[platform] = renderVariant(platform, p);
@@ -162,6 +169,7 @@ export function validatePost(value: unknown): Post {
     ...(p.short?.trim() ? { short: p.short } : {}),
     ...(p.zh ? { zh: { title: p.zh.title.trim(), text: p.zh.text, topics: p.zh.topics } } : {}),
     variants,
+    ...(p.youtubeShort ? { youtubeShort: true } : {}),
   };
 }
 /** Sends a post that already went out to more destinations, checked again as if it were new. */

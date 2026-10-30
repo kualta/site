@@ -69,6 +69,10 @@ export function videoFormat(platform: Platform, video?: VideoShape): string | nu
   if (platform === "youtube" && video && video.height >= video.width && video.seconds <= 180) return "Short";
   return null;
 }
+/** A horizontal video short enough for YouTube to make it a Short once it's reframed to vertical. */
+export function reframesToShort(video?: VideoShape): boolean {
+  return !!video && video.width > video.height && video.seconds <= 180;
+}
 /** Text posts have no title, so lists show their first line instead. */
 export function postLabel(post: { title: string; caption: string }): string {
   return post.title || post.caption.trim().split("\n")[0].slice(0, 80) || "Untitled";

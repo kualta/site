@@ -14,8 +14,16 @@ const cameraTags = [
   "FocalLength",
   "FocalLengthIn35mmFormat",
 ];
+// The whole picture centred on a 9:16 canvas, over a blurred copy of itself that fills the frame.
+// Pixels go square first: the fit ignores pixel shape, so an anamorphic source would come out stretched.
+const verticalFilter = [
+  "scale=iw*sar:ih,split[back][front]",
+  "[back]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=40[blurred]",
+  "[front]scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2[fitted]",
+  "[blurred][fitted]overlay=(W-w)/2:(H-h)/2,setsar=1",
+].join(";");
 
-export async function processMedia(input, output, { kind, policy, maxBytes = 900_000 }) {
+export async function processMedia(input, output, { kind, policy, maxBytes = 900_000, vertical = false }) {
   if (!["photo", "video"].includes(kind) || !["remove-location", "remove-all"].includes(policy))
     throw new Error("Invalid media policy");
   if (kind === "photo") {
@@ -91,7 +99,7 @@ export async function processMedia(input, output, { kind, policy, maxBytes = 900
       "-pix_fmt",
       "yuv420p",
       "-vf",
-      "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+      vertical ? verticalFilter : "scale=trunc(iw/2)*2:trunc(ih/2)*2",
       "-c:a",
       "aac",
       "-b:a",

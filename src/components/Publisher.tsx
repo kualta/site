@@ -14,6 +14,7 @@ import {
   platforms,
   platformNames,
   postKind,
+  reframesToShort,
   STORAGE_KEY,
   titled,
   unsupported,
@@ -55,8 +56,13 @@ function videoShape(file: File): Promise<VideoShape | undefined> {
       resolve(shape);
     };
     video.preload = "metadata";
+    // Chrome can read a file's container without its codec, or not know how long it is: that's no shape at all.
     video.onloadedmetadata = () =>
-      done({ seconds: video.duration, width: video.videoWidth, height: video.videoHeight });
+      done(
+        video.videoWidth && video.videoHeight && Number.isFinite(video.duration)
+          ? { seconds: video.duration, width: video.videoWidth, height: video.videoHeight }
+          : undefined,
+      );
     video.onerror = () => done();
     video.src = url;
   });
@@ -114,6 +120,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [ready, setReady] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [video, setVideo] = useState<VideoShape>();
+  // The owner's answer to "Post as a Short"; until they give one, the preset decides.
+  const [shortChoice, setShortChoice] = useState<boolean>();
   const [datesTaken, setDatesTaken] = useState<string[]>([]);
   const [readingDates, setReadingDates] = useState(false);
   const datesRead = useRef(new WeakSet<File>());
@@ -286,6 +294,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
         platforms: destinations,
         metadata: preset.metadata,
         visibility: preset.visibility,
+        youtubeShort: youtubeShort || undefined,
       });
       validatePost(
         payload(
@@ -343,11 +352,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   }
   function selectPreset(id: string) {
     setPreferences((p) => ({ ...p, active: id }));
+    setShortChoice(undefined);
     submission.current = null;
   }
   function clearMedia() {
     setFiles([]);
     setVideo(undefined);
+    setShortChoice(undefined);
     setAlts([]);
     setDatesTaken([]);
     submission.current = null;
@@ -356,6 +367,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   async function showMedia(next: File[], nextAlts: string[], nextDates: string[]) {
     const first = next.find((file) => file.type.startsWith("video/"));
     setVideo(first ? await videoShape(first) : undefined);
+    setShortChoice(undefined);
     setFiles(next);
     setAlts(nextAlts);
     setDatesTaken(nextDates);
@@ -393,6 +405,10 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     .join(", ");
   const needsTitle = titledNames !== "";
   const rednote = destinations.includes("xiaohongshu");
+  const toYouTube = kind === "video" && destinations.includes("youtube");
+  const canReframe = toYouTube && reframesToShort(video);
+  const youtubeShort = canReframe && (shortChoice ?? preset.id === "short");
+  const videoLabel = (p: Platform) => (p === "youtube" && youtubeShort ? "Short" : videoFormat(p, video));
   // One text for everyone; X and Bluesky may take a short version, Xiaohongshu its Chinese one.
   const text = {
     title: needsTitle ? title : "",
@@ -717,7 +733,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                         {reasons[p] ? (
                           <small>{reasons[p]}</small>
                         ) : (
-                          kind === "video" && videoFormat(p, video) && <small>{videoFormat(p, video)}</small>
+                          kind === "video" && videoLabel(p) && <small>{videoLabel(p)}</small>
                         )}
                       </span>
                       <input
@@ -749,6 +765,23 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                       <option value="PUBLIC">Public</option>
                     </select>
                   </label>
+                )}
+                {canReframe && (
+                  <label className="publisher-option">
+                    Post as a Short
+                    <input
+                      type="checkbox"
+                      checked={youtubeShort}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setShortChoice(e.target.checked);
+                        submission.current = null;
+                      }}
+                    />
+                  </label>
+                )}
+                {toYouTube && preset.id === "short" && !!video && video.seconds > 180 && (
+                  <p className="publisher-note">Over 3 minutes, so YouTube gets this as a regular video.</p>
                 )}
                 <details>
                   <summary>Preset settings</summary>
