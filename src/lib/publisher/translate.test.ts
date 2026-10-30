@@ -33,7 +33,9 @@ test("asks Claude for a Chinese title, text and topics", async () => {
   expect(result).toEqual({ title: "波哥大散步", text: "周末在波哥大。", topics: ["波哥大", "旅行"] });
   expect(calls).toHaveLength(1);
   expect(new URL(calls[0].url).pathname).toBe("/v1/messages");
-  expect(new Headers(calls[0].init.headers).get("authorization")).toBe("Bearer key");
+  const headers = new Headers(calls[0].init.headers);
+  expect(headers.get("x-api-key")).toBe("key");
+  expect(headers.get("anthropic-beta")).toBe("server-side-fallback-2026-07-01");
   const body = JSON.parse(String(calls[0].init.body));
   expect(body.model).toBe(DEFAULT_MODEL);
   expect(body.fallbacks).toBe("default");

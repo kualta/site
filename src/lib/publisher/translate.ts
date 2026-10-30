@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { parseTags, xiaohongshuTitleLength } from "./variants";
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
@@ -41,34 +40,49 @@ function fitTitle(title: string): string {
   return fitted;
 }
 
-/** Drafts the Chinese title, text and topics with Claude, paid for by the Max plan's monthly API credits. */
+/**
+ * Drafts the Chinese title, text and topics with Claude, paid for by the Max plan's monthly API credits.
+ * Plain fetch: importing the Anthropic SDK crashes the Worker while it loads (its Node-only code doesn't bundle).
+ */
 export async function translateForXiaohongshu(
   post: { title: string; text: string; tags: string[] },
-  { apiKey, model = DEFAULT_MODEL, fetcher }: { apiKey: string; model?: string; fetcher?: typeof fetch },
+  { apiKey, model = DEFAULT_MODEL, fetcher = fetch }: { apiKey: string; model?: string; fetcher?: typeof fetch },
 ): Promise<Chinese> {
-  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1, ...(fetcher ? { fetch: fetcher } : {}) });
-  let message: Anthropic.Beta.BetaMessage;
+  let response: Response;
   try {
-    message = await client.beta.messages.create({
-      model,
-      max_tokens: 16_000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      output_config: { effort: "low", format },
-      system: instructions,
-      messages: [{ role: "user", content: JSON.stringify(post) }],
+    response = await fetcher("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2026-10-21",
+        "anthropic-beta": "server-side-fallback-2026-07-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 16_000,
+        fallbacks: "default",
+        output_config: { effort: "low", format },
+        system: instructions,
+        messages: [{ role: "user", content: JSON.stringify(post) }],
+      }),
+      signal: AbortSignal.timeout(60_000),
     });
-  } catch (error) {
-    if (error instanceof Anthropic.APIConnectionError) throw new Error("Could not reach Anthropic. Try again.");
-    if (error instanceof Anthropic.APIError) {
-      // Only the owner sees this, and a spent monthly credit or a rejected key should say so.
-      const reason = (error.error as { error?: { message?: string } } | undefined)?.error?.message;
-      throw new Error(`Translation failed (${error.status})${reason ? `: ${reason}` : ""}`);
-    }
-    throw error;
+  } catch {
+    throw new Error("Could not reach Anthropic. Try again.");
   }
-  if (message.stop_reason === "refusal") throw new Error("Claude declined to translate this post.");
-  const reply = message.content.find((block) => block.type === "text")?.text;
+  const message = (await response.json().catch(() => null)) as {
+    error?: { message?: string };
+    stop_reason?: string;
+    content?: { type: string; text?: string }[];
+  } | null;
+  if (!response.ok) {
+    // Only the owner sees this, and a spent monthly credit or a rejected key should say so.
+    const reason = message?.error?.message;
+    throw new Error(`Translation failed (${response.status})${reason ? `: ${reason}` : ""}`);
+  }
+  if (message?.stop_reason === "refusal") throw new Error("Claude declined to translate this post.");
+  const reply = message?.content?.find((block) => block.type === "text")?.text;
   let draft: Chinese;
   try {
     draft = JSON.parse(reply ?? "");
