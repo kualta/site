@@ -6,4 +6,6 @@ Local changes: accept arrays of media paths for photo carousels. Instagram's
 Create button may open the upload dialog directly instead of a Post/Reel/Story
 menu; the create step accepts either layout. The caller
 requires a confirmed URL before recording success, regardless of upstream UI
-success signals. Keep the verification module with the publishing scripts.
+success signals. When Instagram confirms a share without its link, the adapter
+finds the post on the profile grid. Keep the verification module with the
+publishing scripts.

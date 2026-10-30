@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
-import { addDestinations, stopTarget, targetActive, claimTarget, claimConnection, hashToken, validatePost } from "./server";
+import { addDestinations, markPublished, stopTarget, targetActive, claimTarget, claimConnection, hashToken, validatePost } from "./server";
 import { defaultMetadata } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 const post = () => ({
@@ -317,4 +317,22 @@ test("stopping releases a target at once, and only a retry takes its claim away"
   expect(await stopTarget(db, job, "youtube")).toBe(false);
   expect(target("done").state).toBe("succeeded");
   expect(await stopTarget(db, job, "tiktok")).toBe(false);
+});
+test("only a destination waiting to be checked can be marked as published", async () => {
+  const { db, sqlite } = database();
+  sqlite.exec("ALTER TABLE publisher_targets ADD COLUMN finished_at INTEGER");
+  const job = crypto.randomUUID();
+  sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, '{}', 1)").run(job);
+  const add = sqlite.query("INSERT INTO publisher_targets (id, job_id, platform, state, message) VALUES (?, ?, ?, ?, 'Check it')");
+  add.run("checking", job, "instagram", "uncertain");
+  add.run("publishing", job, "tiktok", "working");
+  const url = "https://www.instagram.com/reel/abc/";
+  expect(await markPublished(db, job, "instagram", url)).toBe(true);
+  expect(sqlite.query("SELECT state, url, message FROM publisher_targets WHERE id = 'checking'").get()).toEqual({
+    state: "succeeded",
+    url,
+    message: null,
+  });
+  expect(await markPublished(db, job, "tiktok", url)).toBe(false);
+  expect(await markPublished(db, job, "instagram", url)).toBe(false);
 });

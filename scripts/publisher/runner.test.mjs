@@ -310,3 +310,31 @@ test("stopping before anything is published leaves nothing to check", async () =
   expect(await running).toEqual({ state: "failed", message: "Stopped" });
   expect(published).toBe(false);
 });
+
+test("a confirmed post without a link warns against retrying", async () => {
+  const result = await publish(
+    { platform: "instagram" },
+    post,
+    fixture({ python: async () => ({ ok: true, message: "Published with video." }) }),
+  );
+  expect(result.state).toBe("uncertain");
+  expect(result.message).toContain("Retrying would post it twice");
+});
+
+test("Instagram's new post is told from pinned and older ones by its shortcode", () => {
+  const script = `
+import json, sys
+sys.path.insert(0, "scripts/publisher/vendor")
+from browser_publish_verification import instagram_new_post_url as find, instagram_shortcode_time as at
+new = "DfIUlhdSMIW"
+started = at(new) - 60
+links = ["/kualtx/p/DdRkPTeEWmQ/", "/kualtx/reel/" + new + "/", "/someone/reel/" + new + "/", "/kualtx/"]
+print(json.dumps([round(at(new)), find(links, "kualtx", started), find(links, "kualtx", at(new) + 60), find(links, "other", started)]))
+`;
+  const run = Bun.spawnSync(["python3", "-c", script]);
+  const [created, found, tooOld, otherAccount] = JSON.parse(run.stdout.toString());
+  expect(new Date(created * 1000).toISOString().slice(0, 16)).toBe("2026-10-30T19:21");
+  expect(found).toBe("https://www.instagram.com/reel/DfIUlhdSMIW/");
+  expect(tooOld).toBeNull();
+  expect(otherAccount).toBeNull();
+});

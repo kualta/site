@@ -305,6 +305,20 @@ export default function PublisherHistory({ request, onError }: Props) {
       setBusy(false);
     }
   }
+  async function markPublished(post: Post, target: Target) {
+    const url = prompt(`Paste the link to this post on ${platformNames[target.platform]}.`)?.trim();
+    if (!url) return;
+    setBusy(true);
+    onError("");
+    try {
+      await request("mark-published", { job: post.id, platform: target.platform, url });
+      await refresh();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function retry(post: Post, target: Target) {
     if (!confirm(`Confirm this post is absent from ${platformNames[target.platform]} before publishing again.`)) return;
     setBusy(true);
@@ -425,6 +439,11 @@ export default function PublisherHistory({ request, onError }: Props) {
                             onClick={() => void stop(post, target)}
                           >
                             Stop
+                          </button>
+                        )}
+                        {target.state === "uncertain" && !target.deletion_state && (
+                          <button disabled={busy} onClick={() => void markPublished(post, target)}>
+                            Mark as published
                           </button>
                         )}
                         {["failed", "uncertain"].includes(target.state) && !target.deletion_state && (

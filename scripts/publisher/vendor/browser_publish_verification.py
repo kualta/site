@@ -5,6 +5,8 @@ observable. Their web clients still receive a definitive publish response, so
 the Playwright scripts use these helpers to classify that response without
 depending on transient toast text.
 """
+import re
+
 
 
 def _error_message(payload, fallback):
@@ -140,3 +142,29 @@ def classify_instagram_publish_response(url, method, status, payload, kind):
         outcome["url"] = f"https://www.instagram.com/{path}/{shortcode}/"
 
     return outcome
+
+
+_SHORTCODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+_INSTAGRAM_EPOCH_MS = 1314220021721
+
+
+def instagram_shortcode_time(code):
+    """When a post was created, in Unix seconds: its ID holds milliseconds since Instagram's epoch above 23 low bits."""
+    media_id = 0
+    for char in code:
+        media_id = media_id * 64 + _SHORTCODE_ALPHABET.index(char)
+    return ((media_id >> 23) + _INSTAGRAM_EPOCH_MS) / 1000
+
+
+def instagram_new_post_url(links, username, started_at):
+    """The first post on the profile's grid since started_at; pinned and older posts don't count."""
+    new_posts = []
+    for link in links:
+        match = re.match(rf"^/{re.escape(username)}/(reel|p)/([A-Za-z0-9_-]+)/", link)
+        # A little slack in case this laptop's clock runs ahead of Instagram's.
+        if match and instagram_shortcode_time(match[2]) >= started_at - 30:
+            new_posts.append((instagram_shortcode_time(match[2]), match[1], match[2]))
+    if not new_posts:
+        return None
+    _, path, code = min(new_posts)
+    return f"https://www.instagram.com/{path}/{code}/"
