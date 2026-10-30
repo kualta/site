@@ -125,6 +125,10 @@ contain original metadata until the helper prepares each destination's copy.
   once, so the next one can start and it can be retried. The helper checks every
   5 seconds and ends the running attempt; if the post did go out, its confirmed
   link is still recorded, otherwise check the destination before retrying.
+- When Instagram confirms a share without its link, the adapter finds the post on the
+  profile grid. Shortcodes encode when a post was created, so a pinned or older post
+  can't be mistaken for it. If it still can't be found, the destination stays on
+  **Check platform**; **Mark as published** records a link pasted by the owner.
 - YouTube makes any vertical or square upload of three minutes or less a Short.
   For a horizontal video in that range, **Post as a Short** (on by default under
   Short-form video) has the helper reframe YouTube's copy to 1080x1920: the whole

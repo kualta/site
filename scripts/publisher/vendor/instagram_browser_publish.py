@@ -15,6 +15,7 @@ from pathlib import Path
 
 from browser_publish_verification import (
     classify_instagram_publish_response,
+    instagram_new_post_url,
     is_instagram_publish_response,
 )
 from instagram_browser_lib import (
@@ -357,6 +358,36 @@ def wait_for_share_complete(page, share_dialog, response_outcome, timeout_ms):
     }
 
 
+def find_new_post(page, started_at):
+    """Instagram can confirm a share without the response that carries the link, so read it off the profile."""
+    try:
+        form = page.evaluate(
+            """async () => {
+              const response = await fetch('/api/v1/accounts/edit/web_form_data/', {
+                headers: { 'X-IG-App-ID': '936619743392459', 'X-Requested-With': 'XMLHttpRequest' },
+              });
+              return response.json();
+            }"""
+        )
+        username = (form.get("form_data") or {}).get("username")
+        if not username:
+            return None
+        # A new post can take a moment to reach the grid.
+        for _ in range(3):
+            page.goto(f"{HOME_URL}{username}/", wait_until="domcontentloaded")
+            page.wait_for_timeout(6000)
+            links = page.evaluate(
+                """() => [...document.querySelectorAll('main a[href*="/reel/"], main a[href*="/p/"]')]
+                  .map((link) => link.getAttribute('href'))"""
+            )
+            url = instagram_new_post_url(links, username, started_at)
+            if url:
+                return url
+    except Exception:
+        pass
+    return None
+
+
 def select_reel_aspect_916(page):
     """Force the 9:16 crop so a vertical video posts as a full-bleed reel.
 
@@ -440,6 +471,7 @@ def select_square_1x1(page):
 
 
 def run_publish(context, args):
+    started_at = time.time()
     page = first_page(context)
     page.set_default_timeout(STEP_TIMEOUT_MS)
 
@@ -515,8 +547,9 @@ def run_publish(context, args):
             "ok": True,
             "message": f"Published with {args.kind}.",
         }
-        if outcome.get("url"):
-            result["url"] = outcome["url"]
+        url = outcome.get("url") or find_new_post(page, started_at)
+        if url:
+            result["url"] = url
         return result
 
     return {

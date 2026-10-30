@@ -6,6 +6,7 @@ import {
   addDestinations,
   PostError,
   stopTarget,
+  markPublished,
   targetActive,
   authorizeHelper,
   claimTarget,
@@ -345,6 +346,14 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!validId(data.job) || !platforms.includes(data.platform as never))
         return json({ error: "Invalid post" }, 400);
       return json({ ok: await stopTarget(db, data.job, data.platform) });
+    }
+    if (path === "mark-published" && request.method === "POST") {
+      const data = (await request.json()) as { job: string; platform: string; url: unknown };
+      if (!validId(data.job) || !platforms.includes(data.platform as never))
+        return json({ error: "Invalid post" }, 400);
+      if (typeof data.url !== "string" || data.url.length > 2000 || !/^https:\/\/\S+$/.test(data.url))
+        return json({ error: "Paste the post's full link, starting with https://" }, 400);
+      return json({ ok: await markPublished(db, data.job, data.platform, data.url) });
     }
     if (path.startsWith("helper/targets/") && request.method === "GET") {
       const id = path.slice("helper/targets/".length);

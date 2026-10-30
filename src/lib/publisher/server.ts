@@ -253,6 +253,16 @@ export async function stopTarget(db: NewsletterDB, job: string, platform: string
     .run();
   return result.meta.changes > 0;
 }
+/** Records a post the owner found on the platform, when publishing couldn't confirm it. */
+export async function markPublished(db: NewsletterDB, job: string, platform: string, url: string): Promise<boolean> {
+  const result = await db
+    .prepare(
+      "UPDATE publisher_targets SET state = 'succeeded', url = ?, message = NULL, finished_at = ? WHERE job_id = ? AND platform = ? AND state = 'uncertain'",
+    )
+    .bind(url, Date.now(), job, platform)
+    .run();
+  return result.meta.changes > 0;
+}
 /** Whether the laptop should keep going with this attempt. */
 export async function targetActive(db: NewsletterDB, id: string, claim: string): Promise<boolean> {
   const row = await db

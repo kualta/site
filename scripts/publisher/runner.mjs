@@ -96,6 +96,11 @@ export async function publish(
           uncertain: true,
           message: result.message || "Check the platform before retrying",
         };
+      else if (!result.url)
+        result = {
+          uncertain: true,
+          message: `${target.platform === "twitter" ? "X" : "Instagram"} confirmed the post, but its link wasn't found. Find it there, then mark it as published. Retrying would post it twice.`,
+        };
     } else result = await until(browser(target.platform, join(stateDir, target.platform), files, post, infos, signal));
     return {
       state: result.url && !result.uncertain ? "succeeded" : "uncertain",

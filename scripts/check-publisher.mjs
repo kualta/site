@@ -167,6 +167,16 @@ try {
     await shot("history");
     await art.getByRole("button", { name: "Close" }).click();
     assert.equal(await panel.getAttribute("data-open"), "false");
+    // A post that went out without a confirmed link can be recorded from the link the owner finds.
+    const earlier = history.locator(".publisher-history-item", { hasText: "An earlier text post" });
+    await earlier.getByRole("button", { name: "Manage" }).click();
+    page.once("dialog", (dialog) => dialog.accept("https://x.com/kualta/status/123"));
+    await earlier.getByRole("button", { name: "Mark as published" }).click();
+    await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "mark-published"));
+    const marked = await page.evaluate(() => window.publisherRequests.find((r) => r.path === "mark-published").body);
+    assert.equal(marked.platform, "twitter");
+    assert.equal(marked.url, "https://x.com/kualta/status/123");
+    await earlier.getByRole("button", { name: "Close" }).click();
     // Stop releases a destination that's waiting or publishing, without waiting for it to time out.
     const clipRow = history.locator(".publisher-history-item", { hasText: "A clip" });
     await clipRow.getByRole("button", { name: "Manage" }).click();

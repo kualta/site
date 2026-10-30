@@ -86,7 +86,7 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "history") return json(history);
   if (path === "media") return json({ id: crypto.randomUUID() });
   if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
-  if (path === "stop") return json({ ok: true });
+  if (path === "stop" || path === "mark-published") return json({ ok: true });
   if (path === "crosspost") return json({ platforms: JSON.parse(String(init.body)).platforms });
   if (path === "translate") return json({ title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
   return json({ error: `Unexpected ${method} ${path}` }, 404);
