@@ -267,3 +267,46 @@ test("mixed posts process each item as what it is and publish them together", as
   expect(args[args.indexOf("--kind") + 1]).toBe("mixed");
   expect(JSON.parse(args[args.indexOf("--media") + 1])).toHaveLength(2);
 });
+
+test("stopping ends an attempt at once, even one that ignores the signal", async () => {
+  const stop = new AbortController();
+  let seen;
+  const running = publish(
+    { platform: "tiktok" },
+    { ...post, kind: "video", media: ["one"] },
+    fixture({
+      browser: (_platform, _profile, _files, _post, _infos, signal) => {
+        seen = signal;
+        return new Promise(() => {});
+      },
+      signal: stop.signal,
+    }),
+  );
+  while (!seen) await new Promise((resolve) => setTimeout(resolve, 1));
+  stop.abort();
+  const result = await running;
+  expect(seen).toBe(stop.signal);
+  expect(result).toEqual({ state: "uncertain", message: "Stopped" });
+});
+
+test("stopping before anything is published leaves nothing to check", async () => {
+  const stop = new AbortController();
+  let published = false;
+  const running = publish(
+    { platform: "tiktok" },
+    { ...post, kind: "video", media: ["one"] },
+    fixture({
+      process: (_input, _output, options) => {
+        expect(options.signal).toBe(stop.signal);
+        stop.abort();
+        return new Promise(() => {});
+      },
+      browser: async () => {
+        published = true;
+      },
+      signal: stop.signal,
+    }),
+  );
+  expect(await running).toEqual({ state: "failed", message: "Stopped" });
+  expect(published).toBe(false);
+});

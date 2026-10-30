@@ -167,6 +167,17 @@ try {
     await shot("history");
     await art.getByRole("button", { name: "Close" }).click();
     assert.equal(await panel.getAttribute("data-open"), "false");
+    // Stop releases a destination that's waiting or publishing, without waiting for it to time out.
+    const clipRow = history.locator(".publisher-history-item", { hasText: "A clip" });
+    await clipRow.getByRole("button", { name: "Manage" }).click();
+    await clipRow.getByRole("button", { name: "Stop publishing to YouTube" }).waitFor();
+    await clipRow.getByRole("button", { name: "Stop publishing to TikTok" }).click();
+    await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "stop"));
+    assert.deepEqual(await page.evaluate(() => window.publisherRequests.find((r) => r.path === "stop").body), {
+      job: "00000000-0000-4000-8000-000000000003",
+      platform: "tiktok",
+    });
+    await clipRow.getByRole("button", { name: "Close" }).click();
 
     // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.
     assert.deepEqual(await pressed(), ["Text post"]);

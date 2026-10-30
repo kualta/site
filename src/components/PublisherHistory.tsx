@@ -293,6 +293,18 @@ export default function PublisherHistory({ request, onError }: Props) {
       setBusy(false);
     }
   }
+  async function stop(post: Post, target: Target) {
+    setBusy(true);
+    onError("");
+    try {
+      await request("stop", { job: post.id, platform: target.platform });
+      await refresh();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function retry(post: Post, target: Target) {
     if (!confirm(`Confirm this post is absent from ${platformNames[target.platform]} before publishing again.`)) return;
     setBusy(true);
@@ -315,7 +327,8 @@ export default function PublisherHistory({ request, onError }: Props) {
     const problems = post.targets.filter((t) => ["bad", "warn"].includes(status(t).tone));
     const dates = (post.post.datesTaken ?? []).flatMap((date, index) => (date ? [{ date, index }] : []));
     const crosspostable = !deleted && platforms.some((p) => !post.targets.some((t) => t.platform === p));
-    const manageable = removable || problems.length > 0 || dates.length > 0 || crosspostable;
+    const stoppable = post.targets.some((t) => ["queued", "working"].includes(t.state));
+    const manageable = removable || problems.length > 0 || dates.length > 0 || crosspostable || stoppable;
     const expanded = open === post.id;
     return (
       <li key={post.id} className="publisher-history-item" data-deleted={deleted}>
@@ -405,6 +418,15 @@ export default function PublisherHistory({ request, onError }: Props) {
                               <TrashIcon size={16} />
                             </button>
                           )}
+                        {["queued", "working"].includes(target.state) && (
+                          <button
+                            disabled={busy}
+                            aria-label={`Stop publishing to ${name}`}
+                            onClick={() => void stop(post, target)}
+                          >
+                            Stop
+                          </button>
+                        )}
                         {["failed", "uncertain"].includes(target.state) && !target.deletion_state && (
                           <button disabled={busy} onClick={() => void retry(post, target)}>
                             Retry publishing

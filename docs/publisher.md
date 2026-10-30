@@ -121,6 +121,10 @@ contain original metadata until the helper prepares each destination's copy.
   tracks and H.264 SEI are removed for both policies. Required technical codec
   and container fields remain. Temporary local files are deleted after each
   destination. Bluesky video uses its official transcode service.
+- **Stop** in a post's Manage panel releases a queued or publishing destination at
+  once, so the next one can start and it can be retried. The helper checks every
+  5 seconds and ends the running attempt; if the post did go out, its confirmed
+  link is still recorded, otherwise check the destination before retrying.
 - YouTube makes any vertical or square upload of three minutes or less a Short.
   For a horizontal video in that range, **Post as a Short** (on by default under
   Short-form video) has the helper reframe YouTube's copy to 1080x1920: the whole
