@@ -16,8 +16,8 @@ declare namespace Cloudflare {
     NEWSLETTER_ORIGIN?: string;
     PARAGRAPH_API_KEY?: string;
     PARAGRAPH_PUBLICATION_SLUG?: string;
-    OPENROUTER_API_KEY?: string;
-    OPENROUTER_MODEL?: string;
+    ANTHROPIC_API_KEY?: string;
+    ANTHROPIC_MODEL?: string;
   }
 }
 

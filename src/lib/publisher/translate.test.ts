@@ -1,48 +1,69 @@
 import { expect, test } from "bun:test";
 import { DEFAULT_MODEL, translateForXiaohongshu } from "./translate";
 
-function openRouter(content: string) {
+/** Answers Messages API requests with this reply and records them. */
+function anthropic(reply: { text?: string; stop_reason?: string; status?: number; message?: string }) {
   const calls: { url: string; init: RequestInit }[] = [];
   const fetcher = (async (url: string, init: RequestInit) => {
-    calls.push({ url, init });
-    return Response.json({ choices: [{ message: { content } }] });
+    calls.push({ url: String(url), init });
+    if (reply.status)
+      return Response.json(
+        { type: "error", error: { type: "invalid_request_error", message: reply.message } },
+        { status: reply.status },
+      );
+    return Response.json({
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      model: DEFAULT_MODEL,
+      content: reply.text === undefined ? [] : [{ type: "text", text: reply.text }],
+      stop_reason: reply.stop_reason ?? "end_turn",
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
   }) as unknown as typeof fetch;
   return { calls, fetcher };
 }
+const post = { title: "Walk", text: "Sunday in Bogotá", tags: ["travel"] };
 
-test("asks OpenRouter for a Chinese title, text and topics", async () => {
-  const { calls, fetcher } = openRouter(
-    JSON.stringify({ title: "波哥大散步", text: "周末在波哥大。", topics: ["波哥大", "#旅行"] }),
-  );
-  const result = await translateForXiaohongshu(
-    { title: "Walk", text: "Sunday in Bogotá", tags: ["travel"] },
-    { apiKey: "key", fetcher },
-  );
+test("asks Claude for a Chinese title, text and topics", async () => {
+  const { calls, fetcher } = anthropic({
+    text: JSON.stringify({ title: "波哥大散步", text: "周末在波哥大。", topics: ["波哥大", "#旅行"] }),
+  });
+  const result = await translateForXiaohongshu(post, { apiKey: "key", fetcher });
   expect(result).toEqual({ title: "波哥大散步", text: "周末在波哥大。", topics: ["波哥大", "旅行"] });
-  expect(calls[0].url).toBe("https://openrouter.ai/api/v1/chat/completions");
-  expect(new Headers(calls[0].init.headers).get("Authorization")).toBe("Bearer key");
+  expect(calls).toHaveLength(1);
+  expect(new URL(calls[0].url).pathname).toBe("/v1/messages");
+  expect(new Headers(calls[0].init.headers).get("authorization")).toBe("Bearer key");
   const body = JSON.parse(String(calls[0].init.body));
   expect(body.model).toBe(DEFAULT_MODEL);
-  expect(JSON.parse(body.messages[1].content)).toEqual({ title: "Walk", text: "Sunday in Bogotá", tags: ["travel"] });
+  expect(body.fallbacks).toBe("default");
+  expect(body.output_config.format.type).toBe("json_schema");
+  expect(JSON.parse(body.messages[0].content)).toEqual(post);
 });
 test("keeps the draft inside Xiaohongshu's limits", async () => {
-  const { fetcher } = openRouter(
-    "```json\n" +
-      JSON.stringify({
-        title: "界".repeat(25),
-        text: "字".repeat(1200),
-        topics: ["a1", "b2", "c3", "d4", "e5", "f6"],
-      }) +
-      "\n```",
-  );
-  const result = await translateForXiaohongshu({ title: "", text: "x", tags: [] }, { apiKey: "key", fetcher });
+  const { fetcher } = anthropic({
+    text: JSON.stringify({
+      title: "界".repeat(25),
+      text: "字".repeat(1200),
+      topics: ["a1", "b2", "c3", "d4", "e5", "f6"],
+    }),
+  });
+  const result = await translateForXiaohongshu(post, { apiKey: "key", fetcher });
   expect(result.title).toBe("界".repeat(20));
   expect([...result.text]).toHaveLength(900);
   expect(result.topics).toHaveLength(5);
 });
 test("a reply that isn't JSON is an error, not an empty draft", async () => {
-  const { fetcher } = openRouter("Sorry, I can't help with that.");
-  await expect(translateForXiaohongshu({ title: "", text: "x", tags: [] }, { apiKey: "key", fetcher })).rejects.toThrow(
-    "unexpected format",
+  const { fetcher } = anthropic({ text: "Sorry, I can't help with that." });
+  await expect(translateForXiaohongshu(post, { apiKey: "key", fetcher })).rejects.toThrow("unexpected format");
+});
+test("a refusal says so instead of reading its empty content", async () => {
+  const { fetcher } = anthropic({ stop_reason: "refusal" });
+  await expect(translateForXiaohongshu(post, { apiKey: "key", fetcher })).rejects.toThrow("declined");
+});
+test("API errors keep Anthropic's reason, such as spent credits", async () => {
+  const { fetcher } = anthropic({ status: 400, message: "Your credit balance is too low" });
+  await expect(translateForXiaohongshu(post, { apiKey: "key", fetcher })).rejects.toThrow(
+    "Translation failed (400): Your credit balance is too low",
   );
 });

@@ -214,8 +214,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ id });
     }
     if (path === "translate" && request.method === "POST") {
-      if (!env.OPENROUTER_API_KEY)
-        return json({ error: "Add OPENROUTER_API_KEY to the Worker's secrets to translate" }, 503);
+      if (!env.ANTHROPIC_API_KEY)
+        return json({ error: "Add ANTHROPIC_API_KEY to the Worker's secrets to translate" }, 503);
       const input = (await request.json()) as { title?: unknown; text?: unknown; tags?: unknown };
       const title = typeof input.title === "string" ? input.title.slice(0, 100) : "";
       const text = typeof input.text === "string" ? input.text.slice(0, 5000) : "";
@@ -225,7 +225,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         return json(
           await translateForXiaohongshu(
             { title, text, tags },
-            { apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL || undefined },
+            { apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL || undefined },
           ),
         );
       } catch (error) {
