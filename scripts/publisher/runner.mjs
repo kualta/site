@@ -24,6 +24,8 @@ export async function publish(
   const temp = await mkdtemp(join(tmpdir(), "kualta-post-"));
   // Text posts have no media.
   const kind = post.kind === "text" ? undefined : post.kind;
+  // Every other destination keeps the original frame.
+  const vertical = target.platform === "youtube" && post.youtubeShort === true;
   let publishing = false;
   try {
     const files = [],
@@ -41,6 +43,7 @@ export async function publish(
         kind: itemKind,
         policy: post.metadata[target.platform],
         maxBytes: target.platform === "grain" ? 900_000 : 1_900_000,
+        vertical,
       });
       await rm(input);
       files.push(output);
@@ -52,6 +55,10 @@ export async function publish(
       (infos[0].duration > 180 || infos[0].bytes > 100_000_000)
     )
       throw new Error("Bluesky video must be at most 3 minutes and 100 MB");
+    if (vertical && infos[0].duration > 180)
+      throw new Error(
+        "A YouTube Short must be at most 3 minutes. Nothing was uploaded; post it again without Post as a Short.",
+      );
     const authorization = ["grain", "bluesky"].includes(target.platform)
       ? await oauth.agent()
       : null;

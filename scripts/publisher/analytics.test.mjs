@@ -106,6 +106,30 @@ test("YouTube collection uses the saved session, checks video identity, and clos
   expect(result).toEqual({ metrics: { views: 42, likes: 0 } });
   expect(closed).toBe(true);
 });
+test("YouTube collection reads a Short by its /shorts/ link", async () => {
+  let asked;
+  const result = await collectAnalytics(
+    { platform: "youtube", job_id: "fixture", url: "https://www.youtube.com/shorts/abcdefghijk" },
+    {
+      stateDir: "/unused",
+      open: async () => ({
+        pages: () => [{ setDefaultTimeout: () => {} }],
+        cookies: async () => [{ name: "SAPISID", value: "fixture" }],
+        close: async () => {},
+      }),
+      youtube: {
+        create: async () => ({
+          getInfo: async (id) => {
+            asked = id;
+            return { basic_info: { id, view_count: 42, like_count: 7 } };
+          },
+        }),
+      },
+    },
+  );
+  expect(asked).toBe("abcdefghijk");
+  expect(result).toEqual({ metrics: { views: 42, likes: 7 } });
+});
 test("browser collection reads embedded counts without clicking or publishing", async () => {
   let closed = false;
   const result = await collectAnalytics(

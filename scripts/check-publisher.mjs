@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import ffmpeg from "ffmpeg-static";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 
@@ -23,6 +27,19 @@ const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
   "base64",
 );
+// Real clips, so the composer reads their shape. WebM because Playwright's Chromium has no H.264 decoder,
+// and written to a file because the duration is only stored when ffmpeg can seek back.
+const clips = mkdtempSync(path.join(tmpdir(), "publisher-clips-"));
+const realClip = (name, source, codec = "libvpx") => {
+  const file = path.join(clips, `${name}.webm`);
+  execFileSync(ffmpeg, ["-y", "-f", "lavfi", "-i", source, "-c", codec, file], { stdio: "ignore" });
+  return { name: `${name}.webm`, mimeType: "video/webm", buffer: readFileSync(file) };
+};
+const wideClip = realClip("wide", "color=c=gray:s=320x180:r=1:d=2");
+const tallClip = realClip("tall", "color=c=gray:s=180x320:r=1:d=2");
+const longClip = realClip("long", "color=c=gray:s=320x180:r=1:d=181");
+// Loads fine but has no picture, so its width and height read as 0.
+const blankClip = realClip("blank", "anullsrc=d=2", "libopus");
 const queued = (page) =>
   page
     .waitForFunction(() => window.publisherRequests.some((r) => r.path === "jobs"))
@@ -264,6 +281,8 @@ try {
     await presets.getByRole("button", { name: "Short-form video" }).click();
     await attach(video);
     await page.locator(".publisher-previews video").waitFor(); // the duration is read first
+    const asShort = shareTo.getByRole("checkbox", { name: "Post as a Short" });
+    assert.equal(await asShort.count(), 0); // this browser can't read its shape
     assert.equal(await reason("Grain"), "needs photos");
     assert.equal(await reason("Instagram"), "Reel");
     assert.deepEqual(await checked(), ["InstagramReel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
@@ -292,6 +311,108 @@ try {
     assert.deepEqual(clip.platforms.toSorted(), ["bluesky", "instagram", "tiktok", "twitter", "xiaohongshu", "youtube"]);
     assert.deepEqual(clip.tags, ["bogota", "film"]);
     assert.deepEqual(clip.zh, { title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
+    assert.equal("youtubeShort" in clip, false);
+
+    // A horizontal clip under Short-form: ticked, named a Short under YouTube, and asked for in the job.
+    const youtubeRow = page.locator(".publisher-destinations label", { hasText: "YouTube" });
+    const youtubeFormat = () => youtubeRow.locator("small").allTextContents();
+    const shortForm = presets.getByRole("button", { name: "Short-form video" });
+    const longVideo = presets.getByRole("button", { name: "Long video", exact: true });
+    const tooLong = shareTo.getByText("Over 3 minutes, so YouTube gets this as a regular video.");
+    // Queueing clears the draft just after the request, and media attached before that would add to the old clip.
+    const queueClip = async () => {
+      await page.getByRole("button", { name: "Queue post" }).click();
+      const job = await queued(page);
+      await page.locator(".publisher-previews").waitFor({ state: "detached" });
+      return job;
+    };
+    await attach(wideClip);
+    await asShort.waitFor();
+    assert.equal(await asShort.isChecked(), true);
+    assert.deepEqual(await youtubeFormat(), ["Short"]);
+    await shot("short-checkbox");
+    // The owner's answer lasts until the preset changes, then the new preset's default applies.
+    await asShort.uncheck();
+    assert.deepEqual(await youtubeFormat(), []);
+    await longVideo.click();
+    assert.equal(await asShort.isChecked(), false);
+    assert.deepEqual(await youtubeFormat(), []);
+    await shortForm.click();
+    assert.equal(await asShort.isChecked(), true);
+    // No YouTube, no question.
+    await youtubeRow.getByRole("checkbox").uncheck();
+    assert.equal(await asShort.count(), 0);
+    assert.deepEqual(await youtubeFormat(), []);
+    await youtubeRow.getByRole("checkbox").check();
+    assert.equal(await asShort.isChecked(), true);
+    await title.fill("A wide clip");
+    await chinese.getByRole("button", { name: "Translate" }).click();
+    await chinese.getByRole("button", { name: "Translate again" }).waitFor();
+    const wideShort = await queueClip();
+    assert.equal(wideShort.youtubeShort, true);
+    assert.equal(wideShort.platforms.includes("tiktok"), true);
+
+    // Under Long video it starts unticked, and an unticked box asks for nothing.
+    await longVideo.click();
+    await attach(wideClip);
+    await asShort.waitFor();
+    assert.equal(await asShort.isChecked(), false);
+    await title.fill("A regular wide clip");
+    assert.equal("youtubeShort" in (await queueClip()), false);
+
+    // Ticked by hand it's a Short; an unconfirmed queue response freezes the box along with the rest of the draft.
+    await attach(wideClip);
+    await asShort.check();
+    assert.deepEqual(await youtubeFormat(), ["Short"]);
+    await title.fill("A chosen wide clip");
+    await page.evaluate(() => {
+      const fetch = window.fetch;
+      window.fetch = async (input, init) => {
+        if (!String(input).endsWith("/jobs")) return fetch(input, init);
+        window.fetch = fetch;
+        return Response.json({ error: "Test queue response failure" }, { status: 500 });
+      };
+    });
+    await page.getByRole("button", { name: "Queue post" }).click();
+    await page.getByRole("alert").getByText("Test queue response failure").waitFor();
+    assert.equal(await asShort.isDisabled(), true);
+    await page.getByRole("button", { name: "Retry queue request" }).click();
+    const chosen = await queued(page);
+    await page.locator(".publisher-previews").waitFor({ state: "detached" });
+    assert.equal(chosen.youtubeShort, true);
+    assert.deepEqual(chosen.platforms, ["youtube"]);
+
+    // A vertical clip is already a Short, so there's nothing to choose.
+    await attach(tallClip);
+    await page.locator(".publisher-previews video").waitFor();
+    assert.equal(await asShort.count(), 0);
+    assert.deepEqual(await youtubeFormat(), ["Short"]);
+    await title.fill("A tall clip");
+    assert.equal("youtubeShort" in (await queueClip()), false);
+
+    // Over 3 minutes can never be a Short: no box, and Short-form says what will happen instead.
+    await attach(longClip);
+    await page.locator(".publisher-previews video").waitFor();
+    assert.equal(await asShort.count(), 0);
+    assert.equal(await tooLong.count(), 0);
+    assert.deepEqual(await youtubeFormat(), []);
+    await shortForm.click();
+    await tooLong.waitFor();
+    assert.equal(await asShort.count(), 0);
+    assert.equal(await reason("Bluesky"), "takes videos up to 3 minutes");
+    await shot("short-too-long");
+    await youtubeRow.getByRole("checkbox").uncheck();
+    assert.equal(await tooLong.count(), 0);
+    await youtubeRow.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Remove media" }).click();
+    assert.equal(await tooLong.count(), 0);
+
+    // A file the browser opens without finding a picture has no shape either: not a Short, and nothing to choose.
+    await attach(blankClip);
+    await page.locator(".publisher-previews video").waitFor();
+    assert.equal(await asShort.count(), 0);
+    assert.deepEqual(await youtubeFormat(), []);
+    await page.getByRole("button", { name: "Remove media" }).click();
 
     // Picked media adds up. Photos with a video make one post for Instagram and X; the rest sit out.
     const attached = (count) =>
@@ -423,6 +544,7 @@ try {
   }
   console.log("Publisher composer passed on desktop and mobile.");
 } finally {
+  rmSync(clips, { recursive: true, force: true });
   await browser.close();
   await server.close();
 }

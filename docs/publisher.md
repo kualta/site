@@ -121,6 +121,11 @@ contain original metadata until the helper prepares each destination's copy.
   tracks and H.264 SEI are removed for both policies. Required technical codec
   and container fields remain. Temporary local files are deleted after each
   destination. Bluesky video uses its official transcode service.
+- YouTube makes any vertical or square upload of three minutes or less a Short.
+  For a horizontal video in that range, **Post as a Short** (on by default under
+  Short-form video) has the helper reframe YouTube's copy to 1080x1920: the whole
+  picture over a blurred copy of itself. Other destinations keep the original frame.
+  Crossposting from history doesn't offer this, so a horizontal video stays regular.
 - X and Instagram reuse the MIT Crossposter browser adapters (vendored source,
   pinned commit and local changes are recorded under `scripts/publisher/vendor`).
   YouTube uses youtubei.js with the isolated signed-in profile's cookies.
