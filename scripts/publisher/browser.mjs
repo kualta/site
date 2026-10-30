@@ -110,9 +110,12 @@ function findId(value, names) {
   }
   return null;
 }
-export async function publishBrowser(platform, profile, files, post, infos = []) {
+export async function publishBrowser(platform, profile, files, post, infos = [], signal) {
   const context = await openProfile(profile);
+  // Closing the browser fails whatever the flow is waiting on.
+  signal?.addEventListener("abort", () => void context.close().catch(() => {}), { once: true });
   try {
+    if (signal?.aborted) throw new Error("Stopped");
     const page = context.pages()[0] || (await context.newPage());
     page.setDefaultTimeout(60_000);
     if (platform === "youtube") {
@@ -123,7 +126,11 @@ export async function publishBrowser(platform, profile, files, post, infos = [])
         if (fallback) cookie += `; SAPISID=${fallback.value}`;
       }
       if (!cookie.includes("SAPISID=")) throw new Error("Log in to YouTube first");
-      const yt = await Innertube.create({ cookie, retrieve_player: false });
+      const yt = await Innertube.create({
+        cookie,
+        retrieve_player: false,
+        fetch: (input, init) => fetch(input, { ...init, signal }),
+      });
       const response = await yt.studio.upload(new Blob([await readFile(files[0])], { type: "video/mp4" }), {
         title: post.title,
         description: post.caption,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
-import { addDestinations, claimTarget, claimConnection, hashToken, validatePost } from "./server";
+import { addDestinations, stopTarget, targetActive, claimTarget, claimConnection, hashToken, validatePost } from "./server";
 import { defaultMetadata } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 const post = () => ({
@@ -284,4 +284,37 @@ test("crossposting asks for what new destinations need, and for media that still
   await addDestinations(db, kept, { job: job.id, platforms: ["grain", "xiaohongshu"], title: "Walk", zh });
   expect(payload().title).toBe("Walk");
   expect(payload().variants.xiaohongshu.title).toBe("散步");
+});
+test("stopping releases a target at once, and only a retry takes its claim away", async () => {
+  const { db, sqlite } = database();
+  sqlite.exec("ALTER TABLE publisher_targets ADD COLUMN finished_at INTEGER");
+  const job = crypto.randomUUID();
+  sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, '{}', 1)").run(job);
+  const claim = crypto.randomUUID();
+  const add = sqlite.query("INSERT INTO publisher_targets (id, job_id, platform, state, claim) VALUES (?, ?, ?, ?, ?)");
+  add.run("working", job, "tiktok", "working", claim);
+  add.run("waiting", job, "instagram", "queued", null);
+  add.run("done", job, "youtube", "succeeded", null);
+  const target = (id: string) =>
+    sqlite.query("SELECT state, claim, message FROM publisher_targets WHERE id = ?").get(id) as {
+      state: string;
+      claim: string | null;
+      message: string;
+    };
+  expect(await targetActive(db, "working", claim)).toBe(true);
+
+  expect(await stopTarget(db, job, "tiktok")).toBe(true);
+  expect(target("working").state).toBe("uncertain");
+  expect(target("working").message).toContain("Check the destination");
+  expect(target("working").claim).toBe(claim);
+  expect(await targetActive(db, "working", claim)).toBe(false);
+
+  expect(await stopTarget(db, job, "instagram")).toBe(true);
+  expect(target("waiting").state).toBe("failed");
+  expect(target("waiting").message).toBe("Stopped before publishing.");
+
+  // Finished or already stopped targets stay as they are.
+  expect(await stopTarget(db, job, "youtube")).toBe(false);
+  expect(target("done").state).toBe("succeeded");
+  expect(await stopTarget(db, job, "tiktok")).toBe(false);
 });

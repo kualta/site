@@ -16,6 +16,7 @@ export async function publish(
     process = processMedia,
     atproto = publishAtproto,
     browser = publishBrowser,
+    signal,
   },
 ) {
   // Publish the version rendered and checked for this platform; jobs from before versions use the shared text.
@@ -27,6 +28,12 @@ export async function publish(
   // Every other destination keeps the original frame.
   const vertical = target.platform === "youtube" && post.youtubeShort === true;
   let publishing = false;
+  // Stopping ends the attempt at once, even during a step that can't be interrupted.
+  const stopped = new Promise((_, reject) => {
+    signal?.addEventListener("abort", () => reject(new Error("Stopped")), { once: true });
+  });
+  stopped.catch(() => {});
+  const until = (work) => Promise.race([work, stopped]);
   try {
     const files = [],
       infos = [];
@@ -35,16 +42,15 @@ export async function publish(
       const itemKind = post.mediaKinds?.[i] ?? kind;
       const input = join(temp, `source-${i}`),
         output = join(temp, `${i}.${itemKind === "photo" ? "jpg" : "mp4"}`);
-      await writeFile(
-        input,
-        new Uint8Array(await (await api(`media/${post.media[i]}`)).arrayBuffer()),
-      );
-      const info = await process(input, output, {
+      const source = await until(api(`media/${post.media[i]}`).then((response) => response.arrayBuffer()));
+      await writeFile(input, new Uint8Array(source));
+      const info = await until(process(input, output, {
         kind: itemKind,
         policy: post.metadata[target.platform],
         maxBytes: target.platform === "grain" ? 900_000 : 1_900_000,
         vertical,
-      });
+        signal,
+      }));
       await rm(input);
       files.push(output);
       infos.push(info);
@@ -65,11 +71,11 @@ export async function publish(
     publishing = true;
     let result;
     if (["grain", "bluesky"].includes(target.platform))
-      result = await atproto(target.platform, authorization, files, infos, post);
+      result = await until(atproto(target.platform, authorization, files, infos, post));
     else if (["twitter", "instagram"].includes(target.platform)) {
       // Vendored adapters accept one path or an array for carousels; text posts send none.
       const media = files.length > 1 ? JSON.stringify(files) : (files[0] ?? "");
-      result = await python(
+      result = await until(python(
         `${target.platform === "twitter" ? "x" : "instagram"}_browser_publish.py`,
         [
           "--user-data-dir",
@@ -83,13 +89,14 @@ export async function publish(
           "--headless",
           "false",
         ],
-      );
+        signal,
+      ));
       if (!result.ok)
         result = {
           uncertain: true,
           message: result.message || "Check the platform before retrying",
         };
-    } else result = await browser(target.platform, join(stateDir, target.platform), files, post, infos);
+    } else result = await until(browser(target.platform, join(stateDir, target.platform), files, post, infos, signal));
     return {
       state: result.url && !result.uncertain ? "succeeded" : "uncertain",
       url: result.url,
@@ -98,6 +105,7 @@ export async function publish(
   } catch (e) {
     return { state: publishing ? "uncertain" : "failed", message: e.message };
   } finally {
-    await rm(temp, { recursive: true, force: true });
+    // A stopped step may still be writing here; the system clears its temp folder eventually.
+    await rm(temp, { recursive: true, force: true }).catch(() => {});
   }
 }

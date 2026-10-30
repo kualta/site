@@ -239,6 +239,28 @@ export async function claimTarget(db: NewsletterDB, supported: Platform[]) {
     .first<{ id: string; job_id: string; platform: Platform; claim: string }>();
 }
 
+/** Releases a target at once. Its claim stays, so a success the laptop confirms late still lands; a retry clears it. */
+export async function stopTarget(db: NewsletterDB, job: string, platform: string): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE publisher_targets SET
+        state = CASE state WHEN 'queued' THEN 'failed' ELSE 'uncertain' END,
+        message = CASE state WHEN 'queued' THEN 'Stopped before publishing.' ELSE 'Stopped while publishing. Check the destination before publishing again.' END,
+        finished_at = ?
+      WHERE job_id = ? AND platform = ? AND state IN ('queued','working')`,
+    )
+    .bind(Date.now(), job, platform)
+    .run();
+  return result.meta.changes > 0;
+}
+/** Whether the laptop should keep going with this attempt. */
+export async function targetActive(db: NewsletterDB, id: string, claim: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT id FROM publisher_targets WHERE id = ? AND claim = ? AND state = 'working'")
+    .bind(id, claim)
+    .first();
+  return Boolean(row);
+}
 export async function claimConnection(db: NewsletterDB) {
   await db
     .prepare(

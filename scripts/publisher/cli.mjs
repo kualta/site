@@ -46,12 +46,13 @@ async function api(path, data) {
   if (!response.ok) throw new Error(`Publisher request failed (${response.status})`);
   return response;
 }
-async function python(script, args) {
+async function python(script, args, signal) {
   let output;
   try {
     output = await exec(join(stateDir, "venv/bin/python"), [join(root, "scripts/publisher/vendor", script), ...args], {
       timeout: 20 * 60_000,
       maxBuffer: 2 * 1024 * 1024,
+      signal,
     });
   } catch (e) {
     output = e;
@@ -152,7 +153,26 @@ if (command === "connect") {
       }
       if (target) {
         console.log(`Publishing ${target.platform}…`);
-        const result = await publish(target, post, { api, config, oauth, stateDir, python });
+        // Stop in the composer releases the target; this ends the attempt once the laptop notices.
+        const stop = new AbortController();
+        const watch = setInterval(() => {
+          api(`targets/${target.id}?claim=${target.claim}`)
+            .then((response) => response.json())
+            .then(({ active }) => active === false && stop.abort())
+            .catch(() => {});
+        }, 5000);
+        const result = await publish(target, post, {
+          api,
+          config,
+          oauth,
+          stateDir,
+          python,
+          signal: stop.signal,
+        }).finally(() => clearInterval(watch));
+        if (stop.signal.aborted && result.state !== "succeeded") {
+          console.log(`${target.platform}: stopped`);
+          continue;
+        }
         // Only delivery acknowledgements retry. Never repeat a publishing action.
         let delivered = false;
         for (let i = 0; i < 5 && !delivered; i++) {

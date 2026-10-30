@@ -5,6 +5,8 @@ import { publisherSession, publisherSameOrigin } from "@/lib/publisher/auth";
 import {
   addDestinations,
   PostError,
+  stopTarget,
+  targetActive,
   authorizeHelper,
   claimTarget,
   claimConnection,
@@ -337,6 +339,18 @@ export const ALL: APIRoute = async ({ request, params }) => {
         .bind(data.state, String(data.message || "").slice(0, 500), url, Date.now(), data.id, data.claim)
         .run();
       return json({ ok: result.meta.changes > 0 });
+    }
+    if (path === "stop" && request.method === "POST") {
+      const data = (await request.json()) as { job: string; platform: string };
+      if (!validId(data.job) || !platforms.includes(data.platform as never))
+        return json({ error: "Invalid post" }, 400);
+      return json({ ok: await stopTarget(db, data.job, data.platform) });
+    }
+    if (path.startsWith("helper/targets/") && request.method === "GET") {
+      const id = path.slice("helper/targets/".length);
+      const claim = new URL(request.url).searchParams.get("claim");
+      if (!validId(id) || !validId(claim)) return json({ error: "Invalid target" }, 400);
+      return json({ active: await targetActive(db, id, claim) });
     }
     if (path === "retry" && request.method === "POST") {
       const data = (await request.json()) as {

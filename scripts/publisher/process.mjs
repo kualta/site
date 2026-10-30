@@ -23,7 +23,7 @@ const verticalFilter = [
   "[blurred][fitted]overlay=(W-w)/2:(H-h)/2,setsar=1",
 ].join(";");
 
-export async function processMedia(input, output, { kind, policy, maxBytes = 900_000, vertical = false }) {
+export async function processMedia(input, output, { kind, policy, maxBytes = 900_000, vertical = false, signal = undefined }) {
   if (!["photo", "video"].includes(kind) || !["remove-location", "remove-all"].includes(policy))
     throw new Error("Invalid media policy");
   if (kind === "photo") {
@@ -110,7 +110,7 @@ export async function processMedia(input, output, { kind, policy, maxBytes = 900
       "+faststart",
       output,
     ],
-    { timeout: 15 * 60 * 1000, maxBuffer: 2 * 1024 * 1024 },
+    { timeout: 15 * 60 * 1000, maxBuffer: 2 * 1024 * 1024, signal },
   );
   await exec("exiftool", ["-overwrite_original", "-all=", output]);
   const { stdout } = await exec(process.env.FFPROBE_PATH || "ffprobe", [
