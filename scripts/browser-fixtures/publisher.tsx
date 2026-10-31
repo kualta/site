@@ -73,10 +73,27 @@ const history = {
   ],
   next: null,
 };
+// A draft sent from the terminal; its video comes through the page's real fetch, so the check can serve a real clip.
+const draftVideo = "00000000-0000-4000-8000-00000000d1d0";
+const draft = {
+  id: "00000000-0000-4000-8000-00000000d1af",
+  video: draftVideo,
+  preset: "short",
+  title: "Rendered film",
+  caption: "A film about films",
+  alt: "Titles fade over a dark stage",
+  tags: ["film", "motion"],
+  short: "A film",
+  zh: { title: "短片", text: "一部关于电影的短片。", topics: ["短片", "动画"] },
+};
+const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const path = new URL(String(input), location.href).pathname.replace("/api/publisher/", "");
   const method = init.method || "GET";
   requests.push({ path, method, body: typeof init.body === "string" ? JSON.parse(init.body) : null });
+  if (path === `media/${draftVideo}`) return realFetch(input, init);
+  if (path === `drafts/${draft.id}`) return method === "DELETE" ? json({ ok: true }) : json(draft);
+  if (path.startsWith("drafts/")) return json({ error: "This draft has expired or was already posted" }, 404);
   if (path === "session") return json({ allowed: true, signedIn: true });
   if (path === "status")
     return json({

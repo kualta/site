@@ -26,6 +26,7 @@ import {
   type PostKind,
 } from "@/lib/publisher/presets";
 import "@/styles/publisher.css";
+import type { Draft } from "@/lib/publisher/drafts";
 import { validatePost } from "@/lib/publisher/server";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 
@@ -146,6 +147,10 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [connections, setConnections] = useState<Connection[]>([]);
   const [dragging, setDragging] = useState(false);
   const submission = useRef<{ id: string; media: string[]; payload?: unknown } | null>(null);
+  const [openingDraft, setOpeningDraft] = useState(false);
+  const draftId = useRef<string | null>(null);
+  // A draft's video is already in Cloudflare, so publishing it doesn't upload it again.
+  const storedMedia = useRef(new WeakMap<File, string>());
   const preset = preferences.presets.find((p) => p.id === preferences.active) || preferences.presets[0];
   function updatePreset(patch: Partial<Preset>) {
     if (busy || submitted) return;
@@ -258,11 +263,48 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     const timer = window.setInterval(() => refresh().catch(() => setHelperOnline(false)), 10_000);
     return () => clearInterval(timer);
   }, [access]);
+  // A draft sent from the terminal opens with its video and text in place, all at once: until the video
+  // arrives the composer stays locked, so it can't go out as a text post.
+  useEffect(() => {
+    if (access !== "owner") return;
+    const id = new URLSearchParams(location.search).get("draft");
+    if (!id) return;
+    async function openDraft(id: string) {
+      setBusy(true);
+      setOpeningDraft(true);
+      try {
+        const draft: Draft = await api(`drafts/${id}`);
+        const response = await fetch(`/api/publisher/media/${draft.video}`);
+        if (!response.ok) throw new Error("This draft's video has expired");
+        const blob = await response.blob();
+        const file = new File([blob], draft.title, { type: blob.type });
+        storedMedia.current.set(file, draft.video);
+        await showMedia([file], [""], [""]);
+        const active = draft.preset;
+        if (active) setPreferences((p) => (p.presets.some((item) => item.id === active) ? { ...p, active } : p));
+        setTitle(draft.title);
+        setCaption(draft.caption);
+        setAlt(draft.alt);
+        setTagsText(draft.tags?.join(" ") ?? "");
+        setShort(draft.short ?? "");
+        setZhTitle(draft.zh?.title ?? "");
+        setZhText(draft.zh?.text ?? "");
+        setZhTopicsText(draft.zh?.topics.join(" ") ?? "");
+        draftId.current = id;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not open this draft");
+      } finally {
+        setOpeningDraft(false);
+        setBusy(false);
+      }
+    }
+    void openDraft(id);
+  }, [access]);
   async function signIn() {
     setError("");
     try {
       const { createFlow } = await import("@flow-industries/id");
-      await createFlow().login({ returnTo: location.pathname });
+      await createFlow().login({ returnTo: location.pathname + location.search });
     } catch {
       setError(
         import.meta.env.DEV
@@ -304,6 +346,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       );
       const pending = (submission.current ||= { id: crypto.randomUUID(), media: [] });
       for (let i = pending.media.length; i < files.length; i++) {
+        const stored = storedMedia.current.get(files[i]);
+        if (stored) {
+          pending.media.push(stored);
+          continue;
+        }
         const response = await fetch("/api/publisher/media", {
           method: "POST",
           headers: { "Content-Type": files[i].type },
@@ -318,6 +365,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       setSubmitted(true);
       await api("jobs", pending.payload);
       setSubmitted(false);
+      if (draftId.current) {
+        // If this delete is lost, the server still refuses to queue the same video twice.
+        api(`drafts/${draftId.current}`, undefined, "DELETE").catch(() => {});
+        draftId.current = null;
+        window.history.replaceState(null, "", location.pathname);
+      }
       clearMedia();
       setTitle("");
       setAlt("");
@@ -433,7 +486,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
   if (submitted) publishLabel = "Retry queue request";
-  if (busy) publishLabel = "Uploading…";
+  if (busy) publishLabel = openingDraft ? "Loading video…" : "Uploading…";
   return (
     <main className="publisher">
       <header className="publisher-header">

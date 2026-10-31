@@ -15,6 +15,7 @@ import {
   validId,
   validatePost,
 } from "@/lib/publisher/server";
+import { checkDraftText, draftKey, readDraft, saveDraft } from "@/lib/publisher/drafts";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
@@ -194,7 +195,25 @@ export const ALL: APIRoute = async ({ request, params }) => {
         .run();
       return json({ ok: updated.meta.changes > 0 });
     }
-    if (path === "media" && request.method === "POST") {
+    if (path === "helper/drafts/check" && request.method === "POST") {
+      checkDraftText(await request.json());
+      return json({ ok: true });
+    }
+    if (path === "helper/drafts" && request.method === "POST")
+      return json({ id: await saveDraft(bucket, await request.json()) }, 201);
+    if (path.startsWith("drafts/")) {
+      const id = path.slice("drafts/".length);
+      if (!validId(id)) return json({ error: "Invalid draft" }, 400);
+      if (request.method === "GET") {
+        const draft = await readDraft(bucket, id);
+        return draft ? json(draft) : json({ error: "This draft has expired or was already posted" }, 404);
+      }
+      if (request.method === "DELETE") {
+        await bucket.delete(draftKey(id));
+        return json({ ok: true });
+      }
+    }
+    if ((path === "media" || path === "helper/media") && request.method === "POST") {
       const type = request.headers.get("Content-Type") || "";
       const kind = type.startsWith("image/") ? "photo" : type.startsWith("video/") ? "video" : null;
       if (!kind) return json({ error: "Choose a photo or video" }, 400);

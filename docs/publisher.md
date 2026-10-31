@@ -152,6 +152,28 @@ contain original metadata until the helper prepares each destination's copy.
   destinations cannot be retried. Stalled claims become uncertain after one hour.
   Removing history deletes stored media/queue state, not published platform posts.
 
+## Drafts from the terminal
+
+`bun run publisher draft <post.json>` sends a video and its text to the composer and
+prints a link to it. The JSON holds `video` (relative to the file), `title`, `caption`,
+`alt`, `tags`, `short`, `zh` and optionally `preset`. Opening the link fills in the
+composer: the video, every field, and the preset (up to three minutes Short-form video,
+otherwise Long video). Destinations and YouTube visibility stay whatever that preset has
+saved in the browser.
+
+A draft publishes nothing. It uses the laptop's pairing key to upload the video and store
+the draft, and only **Publish** in the composer queues it. The link needs the owner's
+sign-in like the rest of the composer. Queueing deletes the draft; if that delete is lost,
+the server still refuses to queue the same video twice.
+
+Text is checked before the upload as a post to every video destination, so a draft opens
+ready whichever ones are selected, and it therefore needs a title and a Chinese version.
+Videos over the 90 MB upload limit are re-encoded to fit. Drafts are small R2 objects
+beside the media, and the bucket's seven-day lifecycle rule expires them together.
+
+The `crosspost-video` skill in `.agents/skills` finds an OpenFilm film's final video and
+writes the JSON. Link it in once: `ln -s ~/Projects/site/.agents/skills/crosspost-video ~/.claude/skills/`.
+
 ## Validation
 
 `bun test`, `bun run check`, `bun run build`. Native metadata tests run when
