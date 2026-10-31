@@ -7,6 +7,8 @@ import { createDraft } from "./draft.mjs";
 
 const ffmpeg = process.env.FFMPEG_PATH || "ffmpeg";
 const ffprobe = process.env.FFPROBE_PATH || "ffprobe";
+// The deploy workflow doesn't install them; the pull request check does.
+const native = Bun.which(ffmpeg) && Bun.which(ffprobe);
 const text = { title: "A film", caption: "About films", alt: "", zh: { title: "短片", text: "短片。", topics: [] } };
 let dir;
 let clip;
@@ -38,12 +40,13 @@ const options = (fetcher, extra = {}) => ({ origin: "https://post.kualta.dev", t
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "publisher-draft-test-"));
+  if (!native) return;
   clip = makeClip("clip.mp4", ["-i", "color=c=gray:s=160x90:r=5:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p"]);
   long = makeClip("long.mp4", ["-i", "color=c=gray:s=160x90:r=1:d=181", "-c:v", "libx264", "-pix_fmt", "yuv420p"]);
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-describe("createDraft", () => {
+describe.skipIf(!native)("createDraft", () => {
   test("checks the text, uploads the video with the pairing key, and returns the page to publish from", async () => {
     const { calls, fetcher } = worker();
     const specFile = spec({ video: "clip.mp4", ...text });
@@ -107,10 +110,10 @@ describe("createDraft", () => {
     );
     expect(calls.map((call) => call.path)).toEqual(["drafts/check"]);
   });
+});
 
-  test("names what's wrong with the spec", async () => {
-    const { fetcher } = worker();
-    await expect(createDraft(spec({ ...text }), options(fetcher))).rejects.toThrow('needs a "video" path');
-    await expect(createDraft(spec({ video: "a.gif", ...text }), options(fetcher))).rejects.toThrow("MP4, MOV or WebM");
-  });
+test("createDraft names what's wrong with the spec", async () => {
+  const { fetcher } = worker();
+  await expect(createDraft(spec({ ...text }), options(fetcher))).rejects.toThrow('needs a "video" path');
+  await expect(createDraft(spec({ video: "a.gif", ...text }), options(fetcher))).rejects.toThrow("MP4, MOV or WebM");
 });
