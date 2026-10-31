@@ -13,7 +13,7 @@ import {
 import { isTag, problem, renderVariant, type Variant } from "./variants";
 
 export interface MediaBucket {
-  put(key: string, body: ArrayBuffer, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
+  put(key: string, body: ArrayBuffer | string, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
   get(key: string): Promise<{
     body: ReadableStream;
     httpMetadata?: { contentType?: string };

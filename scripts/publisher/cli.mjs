@@ -10,6 +10,7 @@ import { promisify } from "node:util";
 import ffmpeg from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
 import { deletePublication } from "./delete.mjs";
+import { createDraft } from "./draft.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { createOAuth } from "./oauth.mjs";
@@ -199,4 +200,16 @@ if (command === "connect") {
 } else if (command === "uninstall") {
   await uninstall();
   console.log("Background helper removed.");
-} else console.log("Usage: bun run publisher connect | start | install | uninstall");
+} else if (command === "draft") {
+  try {
+    if (!config.token) throw new Error("Connect the helper first");
+    const spec = process.argv[3];
+    if (!spec) throw new Error("Usage: bun run publisher draft <post.json>");
+    const { url, reencoded } = await createDraft(resolve(spec), { origin: config.origin, token: config.token });
+    if (reencoded) console.error("Re-encoded the video to fit the upload limit.");
+    console.log(url);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+} else console.log("Usage: bun run publisher connect | start | install | uninstall | draft <post.json>");

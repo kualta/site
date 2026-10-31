@@ -563,6 +563,64 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
+
+  // A draft from the terminal opens prefilled and locked until its video arrives, then publishes without re-uploading.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const draftUrl = "http://127.0.0.1:8797/publisher.html?draft=00000000-0000-4000-8000-00000000d1af";
+  const videoId = "00000000-0000-4000-8000-00000000d1d0";
+  let releaseVideo;
+  const videoHeld = new Promise((resolve) => (releaseVideo = resolve));
+  await page.route(`**/api/publisher/media/${videoId}`, async (route) => {
+    await videoHeld;
+    await route.fulfill({ contentType: tallClip.mimeType, body: tallClip.buffer });
+  });
+  await page.goto(draftUrl);
+  const publish = page.locator(".publish-button");
+  await page.getByRole("button", { name: "Loading video…" }).waitFor();
+  assert.equal(await publish.isDisabled(), true);
+  assert.equal(await page.getByRole("textbox", { name: "Post" }).isDisabled(), true);
+  releaseVideo();
+  await page.locator(".publisher-previews video").waitFor();
+  await page.getByRole("button", { name: "Queue post" }).waitFor();
+  assert.deepEqual(
+    await page.getByRole("navigation", { name: "Presets" }).locator('[aria-pressed="true"]').allTextContents(),
+    ["Short-form video"],
+  );
+  assert.equal(await page.getByRole("textbox", { name: /^Title ·/ }).inputValue(), "Rendered film");
+  assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "A film about films");
+  assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky)" }).inputValue(), "Titles fade over a dark stage");
+  assert.equal(await page.getByRole("textbox", { name: "Tags" }).inputValue(), "film motion");
+  assert.equal(await page.getByRole("textbox", { name: /^Short version/ }).inputValue(), "A film");
+  const chinese = page.getByRole("group", { name: "Xiaohongshu · Chinese" });
+  assert.equal(await chinese.getByRole("textbox", { name: "Title" }).inputValue(), "短片");
+  assert.equal(await chinese.getByRole("textbox", { name: "Topics" }).inputValue(), "短片 动画");
+  // Nothing has been queued by opening it; that takes the click.
+  assert.equal(await page.evaluate(() => window.publisherRequests.some((r) => r.path === "jobs")), false);
+  await publish.click();
+  const job = await queued(page);
+  assert.equal(job.kind, "video");
+  assert.deepEqual(job.media, [videoId]);
+  assert.deepEqual(job.platforms, ["instagram", "youtube", "xiaohongshu", "tiktok", "twitter", "bluesky"]);
+  assert.equal(job.title, "Rendered film");
+  assert.deepEqual(job.tags, ["film", "motion"]);
+  assert.equal(job.alt, "Titles fade over a dark stage");
+  assert.deepEqual(job.zh, { title: "短片", text: "一部关于电影的短片。", topics: ["短片", "动画"] });
+  await page.getByRole("status").getByText("Queued. Your laptop will publish each destination once.").waitFor();
+  assert.equal(new URL(page.url()).searchParams.has("draft"), false);
+  await page.waitForFunction(() =>
+    window.publisherRequests.some((r) => r.path.startsWith("drafts/") && r.method === "DELETE"),
+  );
+  assert.equal(await page.evaluate(() => window.publisherRequests.some((r) => r.path === "media")), false);
+  assert.equal(await page.locator(".publisher-previews video").count(), 0);
+  // A draft that's gone says so, and leaves the composer usable.
+  await page.goto("http://127.0.0.1:8797/publisher.html?draft=00000000-0000-4000-8000-000000000bad");
+  await page.getByRole("alert").getByText("This draft has expired or was already posted").waitFor();
+  assert.equal(await page.getByRole("textbox", { name: "Post" }).isDisabled(), false);
+  assert.deepEqual(errors, []);
+  await context.close();
   console.log("Publisher composer passed on desktop and mobile.");
 } finally {
   rmSync(clips, { recursive: true, force: true });
