@@ -94,6 +94,15 @@ export function cumulativeSeries(changes: DailyChange[]) {
   }
   return points;
 }
+const ago = new Intl.RelativeTimeFormat("en");
+/** "just now", "12 minutes ago", "9 hours ago", "3 days ago". */
+export function timeAgo(at: number, now: number) {
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return ago.format(-minutes, "minute");
+  if (minutes < 48 * 60) return ago.format(-Math.floor(minutes / 60), "hour");
+  return ago.format(-Math.floor(minutes / (24 * 60)), "day");
+}
 export type VideoMark = { id: string; at: number; label: string; thumbnail: string | null };
 /** Videos too close together to mark separately on an axis of this span share one mark. Marks arrive oldest first. */
 export function groupMarks(marks: VideoMark[], [start, end]: [number, number]) {

@@ -16,6 +16,7 @@ import {
   metricSeries,
   metricValue,
   stackOrder,
+  timeAgo,
   timeTicks,
   validMetrics,
   valueTicks,
@@ -218,6 +219,15 @@ test("the overview marks videos that are still up, when they went out, with YouT
     { id: short, at: 400, label: "Short", thumbnail: "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg" },
   ]);
   f.sql.close();
+});
+test("the last update reads in plain language at any age", () => {
+  const minute = 60_000;
+  const now = 1000 * 24 * 60 * minute;
+  expect(timeAgo(now - 30_000, now)).toBe("just now");
+  expect(timeAgo(now - minute, now)).toBe("1 minute ago");
+  expect(timeAgo(now - 59 * minute, now)).toBe("59 minutes ago");
+  expect(timeAgo(now - 9 * 60 * minute, now)).toBe("9 hours ago");
+  expect(timeAgo(now - 3 * 24 * 60 * minute, now)).toBe("3 days ago");
 });
 test("videos too close to mark separately share one mark", () => {
   const mark = (at: number) => ({ id: String(at), at, label: "", thumbnail: null });

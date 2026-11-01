@@ -6,6 +6,7 @@ import {
   metricValue,
   platformColor,
   reportingPlatforms,
+  timeAgo,
   type DailyChange,
   type Metric,
   type Metrics,
@@ -428,12 +429,15 @@ export default function PublisherAnalytics({ request, online }: Props) {
   let placeholder = <Loading />;
   if (page) placeholder = <p className="publisher-analytics-empty">Publish a post to start tracking performance.</p>;
   else if (error) placeholder = <button onClick={() => setAttempt((n) => n + 1)}>Try again</button>;
+  const observations = page?.posts.flatMap((p) => p.targets.map((t) => t.observed_at ?? 0)) ?? [];
+  const lastObserved = Math.max(0, ...observations);
+  const updated = lastObserved ? `Updated ${timeAgo(lastObserved, Date.now())}` : "No observations yet";
   return (
     <section className="publisher-analytics" aria-label="Post analytics">
       <div className="publisher-heading">
         <h1>Analytics</h1>
         <span className="publisher-note">
-          {online ? "Hourly while your helper runs" : "Helper offline · showing saved observations"}
+          {updated} · {online ? "hourly while your helper runs" : "helper offline"}
         </span>
       </div>
       <p className="publisher-note">
@@ -448,7 +452,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
       {!!page?.posts.length && (
         <Overview
           request={request}
-          observed={page.posts.flatMap((p) => p.targets.map((t) => t.observed_at ?? 0)).join()}
+          observed={observations.join()}
           canOpen={(id) => page.posts.some((p) => p.id === id)}
           onOpen={openPost}
         />
