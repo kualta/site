@@ -55,13 +55,15 @@ Put it in a temp folder, not in the film's folder, which Studio shows to the per
       "zh": { "title": "…", "text": "…", "topics": ["短片", "动画"] }
     }
 
-Use the person's own words wherever they gave them. Otherwise write plainly: say what the film is, with no hype, calls to action or "excited to share". Invent nothing: no credits, claims or release details you can't see.
+Write every field yourself, from what you saw and what the person said: `title`, `caption`, `alt`, `tags` and `zh`, plus `short` when the caption needs it. Leave none blank, use no placeholders, and don't ask the person to write or confirm them. They'll read them in the composer before they click Publish.
 
-- `title`: up to 100 characters. Goes to YouTube.
-- `caption`: goes to Instagram, TikTok and YouTube's description. No hashtags: `tags` adds them.
+Use the person's own words wherever they gave them. Otherwise match the film's own voice: a joke gets a line that lands like the joke, an explainer a sentence or two on what it shows. No hype, calls to action or "excited to share". Invent nothing: no credits, claims or release details you can't see.
+
+- `title`: up to 100 characters. Goes to YouTube. Specific to this film, the words someone would search for or click.
+- `caption`: goes to Instagram, TikTok and YouTube's description. Make the first line work alone, since feeds cut off the rest. No hashtags: `tags` adds them.
 - `short`: goes to X and Bluesky instead of the caption. Needed when the caption passes 280 on X (emoji and CJK count 2, links 23) or 300 on Bluesky. Otherwise leave it out.
-- `alt`: what's on screen, for screen readers on Bluesky. Up to 1,000 characters.
-- `tags`: without `#`, most important first; letters, digits and `_`. Instagram and TikTok show 5, YouTube 3, Bluesky hides 8, X none.
+- `alt`: what's on screen, for screen readers on Bluesky: the subject, what happens and any words shown. Up to 1,000 characters.
+- `tags`: without `#`, most important first; letters, digits and `_`. Pick what people search for, the film's specific subject before its general topic. Instagram and TikTok show 5, YouTube 3, Bluesky hides 8, X none.
 - No `<` or `>` in the title or caption: YouTube refuses them.
 - `preset` (optional): the tab to open on. Without it, films up to three minutes open on Short-form video (`short`) and longer ones on Long video (`video`).
 

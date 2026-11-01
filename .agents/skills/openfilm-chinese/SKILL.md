@@ -1,6 +1,6 @@
 ---
 name: openfilm-chinese
-description: Make the version of an OpenFilm film for Chinese audiences, with its on-screen text and subtitles or voice in Simplified Chinese, then send both versions to the crossposter so Xiaohongshu gets the Chinese one and every other platform the original. Use for /openfilm-chinese, or when asked for a Chinese version, translation or localisation of a film or video.
+description: Make the version of an OpenFilm film for Chinese audiences, with its on-screen text and subtitles or voice in Simplified Chinese, then send both versions to the crossposter so Xiaohongshu gets the Chinese one and every other platform the original. Use for /openfilm-chinese, when asked for a Chinese version, translation or localisation of a film or video, or as soon as the person approves a finished OpenFilm film: says it's good, approves it or LGTMs it.
 ---
 
 # A film's Chinese version
