@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { collectAnalytics, extractMetrics } from "./analytics.mjs";
+import { collectAnalytics, extractMetrics, reelsOwner } from "./analytics.mjs";
 import { recordKey } from "../lib/atproto-content.mjs";
 test("browser metrics match only the exact post and keep absent counts unknown", () => {
   expect(
@@ -10,6 +10,9 @@ test("browser metrics match only the exact post and keep absent counts unknown",
       ],
     }),
   ).toEqual({ views: 100, likes: 0, comments: 2 });
+  expect(extractMetrics("twitter", "1", { rest_id: "1", legacy: { retweet_count: 2, quote_count: 3 } })).toEqual({
+    shares: 5,
+  });
   expect(
     extractMetrics("instagram", "abcde", {
       shortcode: "abcde",
@@ -54,13 +57,17 @@ test("public AT metrics read the exact publication without opening a browser", a
         return Response.json(
           platform === "grain"
             ? { gallery: { uri, favCount: 4, commentCount: 0 } }
-            : { posts: [{ uri, likeCount: 4, replyCount: 0, repostCount: 1 }] },
+            : { posts: [{ uri, likeCount: 4, replyCount: 0, repostCount: 1, quoteCount: 2, bookmarkCount: 3 }] },
         );
       },
     });
     expect(result.metrics.likes).toBe(4);
     expect(result.metrics.views).toBeUndefined();
     expect(result.metrics.comments).toBe(0);
+    if (platform === "bluesky") {
+      expect(result.metrics.shares).toBe(3);
+      expect(result.metrics.saves).toBe(3);
+    }
   }
 });
 test("untrusted URLs never open a browser and upstream errors never become zero metrics", async () => {
@@ -78,7 +85,38 @@ test("untrusted URLs never open a browser and upstream errors never become zero 
   expect(result.metrics).toBeUndefined();
 });
 
-test("YouTube collection uses the saved session, checks video identity, and closes Chrome", async () => {
+const youtubeClient = (views, likes, comments) => ({
+  getInfo: async (id) => ({ basic_info: { id, view_count: views, like_count: likes } }),
+  getComments: async () => {
+    if (comments === undefined) throw new Error("Comments are turned off");
+    return { header: { count: { toString: () => comments } } };
+  },
+});
+test("YouTube counts come from a public read, without opening Chrome", async () => {
+  const result = await collectAnalytics(
+    { platform: "youtube", job_id: "fixture", url: "https://www.youtube.com/shorts/abcdefghijk" },
+    {
+      open: async () => {
+        throw new Error("must not open a browser");
+      },
+      youtube: {
+        create: async (options) => {
+          expect(options.cookie).toBeUndefined();
+          return youtubeClient(1234, 7, "1,024 Comments");
+        },
+      },
+    },
+  );
+  expect(result).toEqual({ metrics: { views: 1234, likes: 7, comments: 1024 } });
+});
+test("YouTube with comments turned off still reports its other counts", async () => {
+  const result = await collectAnalytics(
+    { platform: "youtube", job_id: "fixture", url: "https://youtu.be/abcdefghijk" },
+    { youtube: { create: async () => youtubeClient(42, 0) } },
+  );
+  expect(result).toEqual({ metrics: { views: 42, likes: 0 } });
+});
+test("a video hidden from public reads falls back to the saved session and closes Chrome", async () => {
   let closed = false;
   const result = await collectAnalytics(
     { platform: "youtube", job_id: "fixture", url: "https://youtu.be/abcdefghijk" },
@@ -88,7 +126,6 @@ test("YouTube collection uses the saved session, checks video identity, and clos
         expect(path).toBe("/unused/youtube");
         expect(headless).toBe(true);
         return {
-          pages: () => [{ setDefaultTimeout: () => {} }],
           cookies: async () => [{ name: "__Secure-3PAPISID", value: "fixture" }],
           close: async () => {
             closed = true;
@@ -96,39 +133,67 @@ test("YouTube collection uses the saved session, checks video identity, and clos
         };
       },
       youtube: {
-        create: async (options) => {
-          expect(options.cookie).toBe("__Secure-3PAPISID=fixture; SAPISID=fixture");
-          return { getInfo: async (id) => ({ basic_info: { id, view_count: 42, like_count: 0 } }) };
+        create: async ({ cookie }) => {
+          if (!cookie) return { getInfo: async () => ({ basic_info: {} }), getComments: async () => null };
+          expect(cookie).toBe("__Secure-3PAPISID=fixture; SAPISID=fixture");
+          return youtubeClient(42, undefined, "0 Comments");
         },
       },
     },
   );
-  expect(result).toEqual({ metrics: { views: 42, likes: 0 } });
+  expect(result).toEqual({ metrics: { views: 42, comments: 0 } });
   expect(closed).toBe(true);
 });
-test("YouTube collection reads a Short by its /shorts/ link", async () => {
-  let asked;
+test("Instagram plays come from the owner's Reels tab, answered as text/javascript", async () => {
+  const code = "DfLYVhISS4s";
+  const visited = [];
+  let listener;
+  const reply = (url, type, data) => ({
+    ok: () => true,
+    url: () => url,
+    headers: () => ({ "content-type": type }),
+    json: async () => data,
+  });
   const result = await collectAnalytics(
-    { platform: "youtube", job_id: "fixture", url: "https://www.youtube.com/shorts/abcdefghijk" },
+    { platform: "instagram", job_id: "fixture", url: `https://www.instagram.com/reel/${code}/` },
     {
       stateDir: "/unused",
       open: async () => ({
-        pages: () => [{ setDefaultTimeout: () => {} }],
-        cookies: async () => [{ name: "SAPISID", value: "fixture" }],
+        pages: () => [
+          {
+            setDefaultTimeout: () => {},
+            on: (_event, handler) => {
+              listener = handler;
+            },
+            goto: async (url) => {
+              visited.push(url);
+              if (!url.endsWith("/reels/")) return;
+              const media = { code, play_count: 93, view_count: null, like_count: 1 };
+              listener(reply("https://www.instagram.com/static/x.js", "text/javascript", { code, play_count: 9000 }));
+              listener(reply("https://www.instagram.com/api/graphql", "text/javascript; charset=utf-8", { media }));
+            },
+            evaluate: async () => [
+              { code, user: { username: "kualtx" }, media_type: 2, like_count: 1, comment_count: 0, view_count: null },
+            ],
+            waitForTimeout: async () => {},
+            mouse: { wheel: async () => {} },
+          },
+        ],
         close: async () => {},
       }),
-      youtube: {
-        create: async () => ({
-          getInfo: async (id) => {
-            asked = id;
-            return { basic_info: { id, view_count: 42, like_count: 7 } };
-          },
-        }),
-      },
     },
   );
-  expect(asked).toBe("abcdefghijk");
-  expect(result).toEqual({ metrics: { views: 42, likes: 7 } });
+  expect(visited).toEqual([`https://www.instagram.com/reel/${code}/`, "https://www.instagram.com/kualtx/reels/"]);
+  expect(result).toEqual({ metrics: { views: 93, likes: 1, comments: 0 } });
+});
+test("only a video's owner is looked up, and only with a real username", () => {
+  const video = { code: "abc", media_type: 2, user: { username: "kualtx" } };
+  expect(reelsOwner("abc", [video])).toBe("kualtx");
+  expect(reelsOwner("abc", [{ ...video, media_type: 1 }])).toBeNull();
+  expect(reelsOwner("abc", [{ ...video, media_type: 8 }])).toBeNull();
+  expect(reelsOwner("abc", [{ ...video, user: { username: "../evil" } }])).toBeNull();
+  expect(reelsOwner("other", [video])).toBeNull();
+  expect(reelsOwner("abc", undefined)).toBeNull();
 });
 test("browser collection reads embedded counts without clicking or publishing", async () => {
   let closed = false;

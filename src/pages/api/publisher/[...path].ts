@@ -1,4 +1,4 @@
-import { claimAnalytics, saveAnalytics, analyticsPage, analyticsSeries } from "@/lib/publisher/analytics";
+import { claimAnalytics, saveAnalytics, analyticsPage, analyticsSeries, requestRefresh } from "@/lib/publisher/analytics";
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { publisherSession, publisherSameOrigin } from "@/lib/publisher/auth";
@@ -66,13 +66,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (path === "analytics/refresh" && request.method === "POST") {
       const { job } = (await request.json()) as { job: string };
       if (!validId(job)) return json({ error: "Invalid post" }, 400);
-      await db
-        .prepare(
-          "UPDATE publisher_metric_checks SET next_at=0 WHERE claim IS NULL AND (checked_at IS NULL OR checked_at < ?) AND target_id IN (SELECT id FROM publisher_targets WHERE job_id=?)",
-        )
-        .bind(Date.now() - 5 * 60_000, job)
-        .run();
-      return json({ ok: true });
+      return json(await requestRefresh(db, job));
     }
     if (path === "helper/analytics-result" && request.method === "POST") {
       const data = (await request.json()) as { target_id: string; claim: string; metrics: unknown; error?: string };

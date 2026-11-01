@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react";
-import { combined, dailySeries, metricValue, type Metric, type Metrics, type Sample } from "@/lib/publisher/metrics";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { combined, metricSeries, metricValue, type Metric, type Metrics, type Sample } from "@/lib/publisher/metrics";
 import { platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
+
+// Only the Analytics tab downloads the chart library, and the Worker never loads it.
+const TrendChart = lazy(async () => {
+  if (import.meta.env.SSR) throw new Error("The chart renders in the browser");
+  return import("./PublisherTrendChart");
+});
 
 type Target = {
   id: string;
@@ -15,8 +21,13 @@ type Target = {
 };
 type Post = { id: string; created_at: number; post: { title: string; caption: string }; targets: Target[] };
 type Page = { posts: Post[]; next: string | null };
+type Refresh = { job: string; at: number; queued: string[] };
 type Props = { request: (path: string, body?: unknown) => Promise<any>; online: boolean };
+const IDLE_POLL = 60_000;
+const REFRESH_POLL = 5_000;
+const REFRESH_TIMEOUT = 3 * 60_000;
 const number = (value: number | null) => (value === null ? "—" : new Intl.NumberFormat().format(value));
+const dateTime = (at: number) => new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 const metricNames: Record<Metric, string> = {
   exposure: "Views / impressions",
   views: "Views",
@@ -27,137 +38,255 @@ const metricNames: Record<Metric, string> = {
   shares: "Shares / reposts",
   saves: "Saves",
 };
-function Trend({ samples, metric, days }: { samples: Sample[]; metric: Metric; days: number }) {
-  const all = dailySeries(samples, metric);
-  const cutoff = days ? new Date(Date.now() - days * 86400000).toISOString().slice(0, 10) : "";
-  const points = all.filter((point) => point.day >= cutoff);
-  if (!points.length)
-    return <div className="publisher-analytics-empty">No observations for this metric in this period.</div>;
-  const max = Math.max(1, ...points.map((p) => p.value));
-  const start = Date.parse(points[0].day),
-    end = Date.parse(points.at(-1)!.day);
-  const x = (day: string) => 40 + ((Date.parse(day) - start) / Math.max(86400000, end - start)) * 720;
-  const y = (value: number) => 200 - (value / max) * 160;
-  const path = points.map((p, i) => `${i ? "H" : "M"}${x(p.day)}${i ? " V" : ","}${y(p.value)}`).join(" ");
+
+function Spinner() {
+  return <span className="publisher-spinner" aria-hidden="true" />;
+}
+function Block({ height, width }: { height: number; width?: number | string }) {
+  return <div className="publisher-skeleton" style={{ height, width }} />;
+}
+function targetStatus(target: Target) {
+  if (target.deletion_state === "deleted") return "Deleted · history retained";
+  if (target.state !== "succeeded") return target.state;
+  return target.analytics_error || (target.observed_at ? "" : "Waiting for first sample");
+}
+function Loading() {
   return (
-    <figure className="publisher-analytics-trend">
-      <svg
-        viewBox="0 0 800 245"
-        role="img"
-        aria-label={`${metricNames[metric]} over time: ${number(points[0].value)} to ${number(points.at(-1)!.value)}`}
-      >
-        <line x1="40" x2="760" y1="200" y2="200" className="chart-grid" />
-        <line x1="40" x2="760" y1="40" y2="40" className="chart-grid" />
-        <text x="40" y="26">
-          {number(max)}
-        </text>
-        <text x="40" y="226">
-          {points[0].day}
-        </text>
-        <text x="760" y="226" textAnchor="end">
-          {points.at(-1)!.day}
-        </text>
-        <path d={path} fill="none" stroke="currentColor" strokeWidth="2.5" />
-        {points.map((p) => (
-          <circle key={p.day} cx={x(p.day)} cy={y(p.value)} r="3" fill="currentColor">
-            <title>
-              {p.day}: {number(p.value)} · {p.coverage} sources
-            </title>
-          </circle>
+    <div className="publisher-analytics-layout" role="status">
+      <span className="sr-only">Loading analytics…</span>
+      <div className="publisher-analytics-posts" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <Block key={i} height={104} />
         ))}
-      </svg>
+      </div>
+      <div className="publisher-analytics-detail publisher-analytics-loading" aria-hidden="true">
+        <Block height={22} width="40%" />
+        <Block height={64} width={380} />
+        <Block height={58} width={140} />
+        <Block height={260} />
+        <Block height={160} />
+      </div>
+    </div>
+  );
+}
+
+function Trend({
+  samples,
+  metric,
+  days,
+  loading,
+  failed,
+  onRetry,
+}: {
+  samples: Sample[];
+  metric: Metric;
+  days: number;
+  loading: boolean;
+  failed: boolean;
+  onRetry: () => void;
+}) {
+  const label = metricNames[metric];
+  const points = useMemo(() => {
+    const cutoff = days ? Date.now() - days * 86_400_000 : 0;
+    return metricSeries(samples, metric).filter((point) => point.at >= cutoff);
+  }, [samples, metric, days]);
+  let plot;
+  if (points.length)
+    plot = (
+      <Suspense fallback={<Block height={260} />}>
+        <TrendChart points={points} label={label} />
+      </Suspense>
+    );
+  else if (loading) plot = <Block height={260} />;
+  else if (failed)
+    plot = (
+      <div className="publisher-analytics-empty">
+        <p>The chart didn't load.</p>
+        <button onClick={onRetry}>Try again</button>
+      </div>
+    );
+  else
+    plot = (
+      <div className="publisher-analytics-empty">
+        {samples.length
+          ? "No observations for this metric in this period."
+          : "No observations yet. The first arrives when your helper reads this post."}
+      </div>
+    );
+  return (
+    <figure
+      className="publisher-analytics-trend"
+      aria-label={
+        points.length
+          ? `${label} over time: ${number(points[0].value)} to ${number(points.at(-1)!.value)}`
+          : `${label} over time`
+      }
+    >
+      <div className="publisher-analytics-chart" aria-busy={loading}>
+        {plot}
+      </div>
       <figcaption className="publisher-note">
-        Daily closing observations (UTC). Counts are cumulative; coverage can change as platforms report data.
+        Counts are cumulative. Hourly for the last three days, daily before that; coverage can change as platforms
+        report data.
       </figcaption>
-      <details>
-        <summary>View observations</summary>
-        <div className="publisher-analytics-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>{metricNames[metric]}</th>
-                <th>Sources</th>
-              </tr>
-            </thead>
-            <tbody>
-              {points.map((p) => (
-                <tr key={p.day}>
-                  <td>{p.day}</td>
-                  <td>{number(p.value)}</td>
-                  <td>{p.coverage}</td>
+      {!!points.length && (
+        <details>
+          <summary>View observations</summary>
+          <div className="publisher-analytics-table publisher-analytics-observations">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>{label}</th>
+                  <th>Sources</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+              </thead>
+              <tbody>
+                {points.map((p) => (
+                  <tr key={p.at}>
+                    <td>{dateTime(p.at)}</td>
+                    <td>{number(p.value)}</td>
+                    <td>{p.coverage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </figure>
   );
 }
+
 export default function PublisherAnalytics({ request, online }: Props) {
-  const [page, setPage] = useState<Page>({ posts: [], next: null });
+  const [loaded, setLoaded] = useState<{ cursor: string | null; page: Page } | null>(null);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [samples, setSamples] = useState<Sample[]>([]);
+  const [series, setSeries] = useState<{ post: string; samples: Sample[] } | null>(null);
+  const [seriesFailed, setSeriesFailed] = useState(false);
   const [platform, setPlatform] = useState("all");
   const [metric, setMetric] = useState<Metric>("exposure");
   const [days, setDays] = useState(30);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
-  const cursor = cursors.at(-1);
-  const post = page.posts.find((p) => p.id === selected) || page.posts[0];
+  const [attempt, setAttempt] = useState(0);
+  const [requesting, setRequesting] = useState(false);
+  const [refresh, setRefresh] = useState<Refresh | null>(null);
+  const cursor = cursors.at(-1) ?? null;
+  const page = loaded?.page;
+  const paging = Boolean(loaded) && loaded?.cursor !== cursor && !error;
+  const post = page?.posts.find((p) => p.id === selected) || page?.posts[0];
+  const postId = post?.id;
+  const refreshing = Boolean(refresh);
   useEffect(() => {
     let active = true;
-    setLoading(true);
     const load = async () => {
       try {
         const value = await request(`analytics${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`);
         if (active) {
-          setPage(value);
+          setLoaded({ cursor, page: value });
           setError("");
         }
       } catch (e) {
         if (active) setError((e as Error).message);
-      } finally {
-        if (active) setLoading(false);
       }
     };
     void load();
-    const timer = setInterval(load, 15000);
+    const timer = setInterval(
+      () => {
+        if (!document.hidden) void load();
+      },
+      refreshing ? REFRESH_POLL : IDLE_POLL,
+    );
     return () => {
       active = false;
       clearInterval(timer);
     };
-  }, [cursor, request]);
+  }, [cursor, request, refreshing, attempt]);
+  // The series only changes when a destination gets a new observation.
+  const observed = post?.targets.map((t) => t.observed_at ?? 0).join();
   useEffect(() => {
+    if (!postId) return;
     let active = true;
-    setSamples([]);
+    setSeriesFailed(false);
+    request(`analytics/${postId}`)
+      .then((data) => {
+        if (active) setSeries({ post: postId, samples: data.samples });
+      })
+      .catch(() => {
+        if (active) setSeriesFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [postId, observed, request, attempt]);
+  useEffect(() => {
     setPlatform("all");
     setNotice("");
-    if (!post) return;
-    const load = async () => {
-      try {
-        const data = await request(`analytics/${post.id}`);
-        if (active) setSamples(data.samples);
-      } catch (e) {
-        if (active) setError((e as Error).message);
-      }
-    };
-    void load();
-    const timer = setInterval(load, 15000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [post?.id, request]);
+  }, [postId]);
+  const refreshed = refresh && page?.posts.find((p) => p.id === refresh.job);
+  const checking = new Set(
+    refreshed
+      ? refresh.queued.filter((id) => (refreshed.targets.find((t) => t.id === id)?.checked_at ?? 0) < refresh.at)
+      : [],
+  );
+  useEffect(() => {
+    if (!refresh) return;
+    if (!checking.size) {
+      setRefresh(null);
+      setNotice(refreshed ? "Metrics are up to date." : "");
+      return;
+    }
+    const timer = setTimeout(() => {
+      setRefresh(null);
+      setNotice("Some destinations are still queued. They'll update when your helper reaches them.");
+    }, REFRESH_TIMEOUT);
+    return () => clearTimeout(timer);
+  }, [refresh, checking.size]);
+  async function startRefresh() {
+    if (!postId) return;
+    setRequesting(true);
+    setNotice("");
+    try {
+      const { at, queued } = await request("analytics/refresh", { job: postId });
+      if (queued.length) setRefresh({ job: postId, at, queued });
+      else setNotice("Every destination was read in the last five minutes.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRequesting(false);
+    }
+  }
   const targets = post?.targets.filter((t) => platform === "all" || t.platform === platform) || [];
+  const reported = (key: keyof Metrics) => Boolean(post?.targets.some((t) => t.metrics?.[key] !== undefined));
+  const metricOptions = (Object.keys(metricNames) as Metric[]).filter((key) => {
+    if (key === "views") return reported("views") && reported("impressions");
+    if (key === "impressions") return reported("impressions");
+    if (key === "reach") return platform !== "all" && reported("reach");
+    return true;
+  });
+  const activeMetric = metricOptions.includes(metric) ? metric : "exposure";
   const published = targets.filter((t) => t.state === "succeeded");
-  const values = published.map((t) => metricValue(t.metrics, metric));
+  const values = published.map((t) => metricValue(t.metrics, activeMetric));
   const total = combined(values);
-  const ids = new Set(targets.map((t) => t.id));
+  // While another post's series loads, its predecessor holds the frame, dimmed.
+  const seriesCurrent = series?.post === postId;
+  const samples = useMemo(() => {
+    if (!series) return [];
+    if (!seriesCurrent) return seriesFailed ? [] : series.samples;
+    const shown = new Set(targets.map((t) => t.id));
+    return series.samples.filter((sample) => shown.has(sample.target_id));
+  }, [series, seriesCurrent, seriesFailed, platform]);
+  const columns = (["exposure", "reach", "likes", "comments", "shares", "saves"] as Metric[]).filter(
+    (key) => key !== "reach" || reported("reach"),
+  );
+  const refreshBusy = requesting || refreshing;
+  let refreshLabel = "Refresh metrics";
+  if (refresh) refreshLabel = `Reading ${refresh.queued.length - checking.size} of ${refresh.queued.length}…`;
+  else if (requesting) refreshLabel = "Requesting…";
+  let placeholder = <Loading />;
+  if (page) placeholder = <p className="publisher-analytics-empty">Publish a post to start tracking performance.</p>;
+  else if (error) placeholder = <button onClick={() => setAttempt((n) => n + 1)}>Try again</button>;
   return (
     <section className="publisher-analytics" aria-label="Post analytics">
       <div className="publisher-heading">
@@ -175,14 +304,10 @@ export default function PublisherAnalytics({ request, online }: Props) {
           {error}
         </p>
       )}
-      {loading ? (
-        <p className="publisher-analytics-empty">Loading analytics…</p>
-      ) : !page.posts.length ? (
-        <p className="publisher-analytics-empty">Publish a post to start tracking performance.</p>
-      ) : (
+      {page?.posts.length ? (
         <div className="publisher-analytics-layout">
-          <aside aria-label="Choose a post">
-            <div className="publisher-analytics-posts">
+          <aside aria-label="Choose a post" aria-busy={paging}>
+            <div className="publisher-analytics-posts" data-busy={paging}>
               {page.posts.map((p) => (
                 <button key={p.id} aria-pressed={post?.id === p.id} onClick={() => setSelected(p.id)}>
                   <strong>{postLabel(p.post)}</strong>
@@ -194,10 +319,11 @@ export default function PublisherAnalytics({ request, online }: Props) {
               ))}
             </div>
             <div className="publisher-history-pagination">
-              <button disabled={cursors.length === 1} onClick={() => setCursors((v) => v.slice(0, -1))}>
+              {paging && <Spinner />}
+              <button disabled={cursors.length === 1 || paging} onClick={() => setCursors((v) => v.slice(0, -1))}>
                 Newer
               </button>
-              <button disabled={!page.next} onClick={() => setCursors((v) => [...v, page.next])}>
+              <button disabled={!page.next || paging} onClick={() => setCursors((v) => [...v, page.next])}>
                 Older
               </button>
             </div>
@@ -206,36 +332,15 @@ export default function PublisherAnalytics({ request, online }: Props) {
             <div className="publisher-analytics-detail">
               <div className="publisher-heading">
                 <h2>{postLabel(post.post)}</h2>
-                <button
-                  disabled={!online || refreshing}
-                  onClick={async () => {
-                    setRefreshing(true);
-                    setNotice("");
-                    try {
-                      await request("analytics/refresh", { job: post.id });
-                      setNotice(
-                        "Refresh requested. The helper checks each destination at most once every five minutes.",
-                      );
-                    } catch (e) {
-                      setError((e as Error).message);
-                    } finally {
-                      setRefreshing(false);
-                    }
-                  }}
-                >
-                  Refresh metrics
+                <button disabled={!online || refreshBusy} aria-busy={refreshBusy} onClick={startRefresh}>
+                  {refreshBusy && <Spinner />}
+                  {refreshLabel}
                 </button>
               </div>
               <div className="publisher-analytics-filters">
                 <label>
                   Platform
-                  <select
-                    value={platform}
-                    onChange={(e) => {
-                      setPlatform(e.target.value);
-                      if (e.target.value === "all" && metric === "reach") setMetric("exposure");
-                    }}
-                  >
+                  <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
                     <option value="all">All platforms</option>
                     {post.targets.map((t) => (
                       <option key={t.id} value={t.platform}>
@@ -246,14 +351,12 @@ export default function PublisherAnalytics({ request, online }: Props) {
                 </label>
                 <label>
                   Metric
-                  <select value={metric} onChange={(e) => setMetric(e.target.value as Metric)}>
-                    {Object.entries(metricNames)
-                      .filter(([key]) => key !== "reach" || platform !== "all")
-                      .map(([key, label]) => (
-                        <option key={key} value={key}>
-                          {label}
-                        </option>
-                      ))}
+                  <select value={activeMetric} onChange={(e) => setMetric(e.target.value as Metric)}>
+                    {metricOptions.map((key) => (
+                      <option key={key} value={key}>
+                        {metricNames[key]}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -269,7 +372,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
               <div className="publisher-analytics-total">
                 <span className="publisher-note">
                   Latest {platform === "all" ? "combined " : ""}
-                  {metricNames[metric].toLowerCase()}
+                  {metricNames[activeMetric].toLowerCase()}
                 </span>
                 <strong>{number(total)}</strong>
                 <span className="publisher-note">
@@ -281,14 +384,21 @@ export default function PublisherAnalytics({ request, online }: Props) {
                   {notice}
                 </p>
               )}
-              <Trend samples={samples.filter((s) => ids.has(s.target_id))} metric={metric} days={days} />
+              <Trend
+                samples={samples}
+                metric={activeMetric}
+                days={days}
+                loading={!seriesCurrent && !seriesFailed}
+                failed={seriesFailed}
+                onRetry={() => setAttempt((n) => n + 1)}
+              />
               <div className="publisher-analytics-table">
                 <table>
                   <thead>
                     <tr>
                       <th>Platform</th>
                       <th>Views / impressions</th>
-                      <th>Reach</th>
+                      {reported("reach") && <th>Reach</th>}
                       <th>Likes / favorites</th>
                       <th>Comments</th>
                       <th>Shares</th>
@@ -308,14 +418,17 @@ export default function PublisherAnalytics({ request, online }: Props) {
                             platformNames[t.platform]
                           )}
                           <small>
-                            {t.deletion_state === "deleted"
-                              ? "Deleted · history retained"
-                              : t.state !== "succeeded"
-                                ? t.state
-                                : t.analytics_error || (!t.observed_at ? "Waiting for first sample" : "")}
+                            {checking.has(t.id) ? (
+                              <>
+                                <Spinner />
+                                Reading…
+                              </>
+                            ) : (
+                              targetStatus(t)
+                            )}
                           </small>
                         </th>
-                        {(["exposure", "reach", "likes", "comments", "shares", "saves"] as Metric[]).map((key) => (
+                        {columns.map((key) => (
                           <td key={key}>
                             {number(metricValue(t.metrics, key))}
                             {key === "exposure" && metricValue(t.metrics, key) !== null && (
@@ -323,7 +436,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
                             )}
                           </td>
                         ))}
-                        <td>{t.observed_at ? new Date(t.observed_at).toLocaleString() : "—"}</td>
+                        <td>{t.observed_at ? dateTime(t.observed_at) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -332,6 +445,8 @@ export default function PublisherAnalytics({ request, online }: Props) {
             </div>
           )}
         </div>
+      ) : (
+        placeholder
       )}
     </section>
   );
