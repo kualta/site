@@ -59,15 +59,29 @@ export async function analyticsPage(db: NewsletterDB, cursor: string | null) {
     posts: page.posts.map((post) => ({ ...post, targets: post.targets.map((t) => ({ ...t, ...byId.get(t.id) })) })),
   };
 }
-export async function analyticsSeries(db: NewsletterDB, job: string) {
-  // Daily closing observations bound transfer size; raw hourly snapshots are retained.
+/** Makes a post's destinations due now, at most once each per five minutes, and says which ones will be read. */
+export async function requestRefresh(db: NewsletterDB, job: string) {
+  const at = Date.now();
+  const { results } = await db
+    .prepare(`UPDATE publisher_metric_checks SET next_at=0
+      WHERE claim IS NULL AND (checked_at IS NULL OR checked_at<?) AND target_id IN (
+        SELECT t.id FROM publisher_targets t WHERE t.job_id=? AND t.state='succeeded' AND t.url IS NOT NULL
+        AND NOT EXISTS(SELECT 1 FROM publisher_deletions d WHERE d.target_id=t.id AND d.state IN ('queued','working','deleted'))
+      ) RETURNING target_id`)
+    .bind(at - 5 * 60_000, job)
+    .all<{ target_id: string }>();
+  return { at, queued: results.map((row) => row.target_id) };
+}
+export async function analyticsSeries(db: NewsletterDB, job: string, now = Date.now()) {
+  // Hourly closes show how a young post moves; daily closes before that bound the transfer. Raw snapshots stay in D1.
   const { results } = await db
     .prepare(`SELECT s.target_id,s.observed_at,s.metrics FROM publisher_metric_snapshots s
       JOIN (SELECT target_id, MAX(observed_at) AS observed_at FROM publisher_metric_snapshots
       WHERE target_id IN (SELECT id FROM publisher_targets WHERE job_id=?)
-      GROUP BY target_id, CAST(observed_at/86400000 AS INTEGER)) daily
-      ON daily.target_id=s.target_id AND daily.observed_at=s.observed_at ORDER BY s.observed_at`)
-    .bind(job)
+      GROUP BY target_id, CASE WHEN observed_at>=? THEN CAST(observed_at/3600000 AS INTEGER)
+        ELSE CAST(observed_at/86400000 AS INTEGER)*24 END) closing
+      ON closing.target_id=s.target_id AND closing.observed_at=s.observed_at ORDER BY s.observed_at`)
+    .bind(job, now - 3 * 86_400_000)
     .all<{ target_id: string; observed_at: number; metrics: string }>();
   return results.map((row) => ({ ...row, metrics: JSON.parse(row.metrics) }));
 }

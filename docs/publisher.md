@@ -281,19 +281,20 @@ Chrome session checks, browser publishing, and deletion use the native OS creden
 
 ### Analytics
 
-The owner-only Analytics tab tracks publications made through this tool, including those published before analytics was enabled. It does not import unrelated platform posts or reconstruct counts from before the first observation. Select a post to compare platforms, inspect daily closing counts, and switch between 7/30/90-day or all-time charts. The underlying hourly observations remain in Cloudflare D1 after a publication is deleted.
+The owner-only Analytics tab tracks publications made through this tool, including those published before analytics was enabled. It does not import unrelated platform posts or reconstruct counts from before the first observation. Select a post to compare platforms, inspect its counts over time, and switch between 7/30/90-day or all-time charts. The chart shows hourly closing counts for the last three days and daily closing counts before that. The underlying hourly observations remain in Cloudflare D1 after a publication is deleted.
 
-Restart the updated laptop helper to enable collection. When no account connection, deletion, or publication is queued, it reads due metrics using public AT Protocol APIs or the saved browser sessions. Each destination is due about hourly; offline periods and busy helpers delay collection. Refresh metrics makes eligible destinations due immediately, limited to once every five minutes. Five-minute leases make interrupted reads retryable; claim-bound receipts are idempotent. Failed reads preserve the previous snapshot and show an error and its observation time. Deleted destinations stop refreshing.
+Restart the updated laptop helper to enable collection. When no account connection, deletion, or publication is queued, it reads due metrics using public AT Protocol APIs or the saved browser sessions. Each destination is due about hourly; offline periods and busy helpers delay collection. Refresh metrics makes eligible destinations due immediately, limited to once every five minutes, and shows each one being read until its result arrives. Five-minute leases make interrupted reads retryable; claim-bound receipts are idempotent. Failed reads preserve the previous snapshot and show an error and its observation time. Deleted destinations stop refreshing.
 
-The combined figure adds each destination's latest **impressions, or views when impressions are absent**, never both. It is not deduplicated audience reach. Coverage and timestamps identify partial or stale totals. Unsupported and hidden metrics remain unavailable, while a reported zero remains zero. The chart carries forward the most recent observed count for each reporting destination and uses UTC daily closing samples; platform coverage can change over time.
+The combined figure adds each destination's latest **impressions, or views when impressions are absent**, never both. It is not deduplicated audience reach. Coverage and timestamps identify partial or stale totals. Unsupported and hidden metrics remain unavailable, while a reported zero remains zero. The chart carries forward the most recent observed count for each reporting destination; platform coverage can change over time.
 
 Collector coverage:
-- Bluesky: likes, replies, reposts from the public post API; no views/reach field.
+- Bluesky: likes, replies, reposts plus quotes, and bookmarks from the public post API; no views/reach field.
 - Farcaster: likes, recasts and replies counted from a Snapchain node; no views/reach field.
 - Lens: reactions, comments, reposts plus quotes, and bookmarks from the public API; no views/reach field.
 - Grain: gallery favorites and comments from `social.grain.unspecced.getGallery`; no views/reach field.
-- YouTube: video views and likes through the existing YouTube client.
-- X/Twitter and TikTok: exact-post views and available engagement counters from the saved-session page's structured data.
-- Instagram and Xiaohongshu: exact-post available engagement and view counters; photo reach/owner-only insights may be unavailable.
+- YouTube: views, likes and comments from a public read through the existing YouTube client, without opening Chrome. Signed-in replies leave out the like count, so the saved session is only the fallback for a video the public can't read.
+- X/Twitter and TikTok: exact-post views and available engagement counters from the saved-session page's structured data. TikTok's numbers match TikTok Studio, including a real 0 views for a video it hasn't distributed.
+- Instagram: likes and comments from the post's page, and plays for videos from the owner's Reels tab, since the post's page leaves them out; photos have no view count.
+- Xiaohongshu: views and engagement from the creator center's note list.
 
 Browser metrics rely on provider response shapes and still need real-account acceptance testing. Hidden counts, expired sessions, changed response formats, and platform challenges yield unavailable/error states, not invented numbers. Unique reach is never inferred from views. No credentials or response bodies are persisted in analytics; only numeric counts, target IDs, timestamps, and generic error messages are stored. Apply `0006_publisher_analytics.sql` before deploying.

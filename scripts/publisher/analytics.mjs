@@ -14,14 +14,20 @@ function counts(values) {
     }),
   );
 }
-/** Only the exact post's object contributes counts, never recommendations or account totals. */
-export function extractMetrics(platform, id, payload) {
-  const result = {};
+function walk(payload, visit) {
   const stack = [payload];
   let visited = 0;
   while (stack.length && visited++ < 50_000) {
     const item = stack.pop();
     if (!item || typeof item !== "object") continue;
+    visit(item);
+    for (const value of Object.values(item)) if (value && typeof value === "object") stack.push(value);
+  }
+}
+/** Only the exact post's object contributes counts, never recommendations or account totals. */
+export function extractMetrics(platform, id, payload) {
+  const result = {};
+  walk(payload, (item) => {
     let values;
     if (platform === "twitter" && (item.rest_id === id || item.id_str === id)) {
       const post = item.legacy || item;
@@ -29,7 +35,7 @@ export function extractMetrics(platform, id, payload) {
         views: item.views?.count,
         likes: post.favorite_count,
         comments: post.reply_count,
-        shares: post.retweet_count,
+        shares: post.retweet_count + (post.quote_count ?? 0),
         saves: post.bookmark_count,
       };
     }
@@ -61,9 +67,20 @@ export function extractMetrics(platform, id, payload) {
       };
     }
     if (values) Object.assign(result, counts(values));
-    for (const value of Object.values(item)) if (value && typeof value === "object") stack.push(value);
-  }
+  });
   return result;
+}
+/** Whose Reels tab lists this post's plays, read from the post's own page. Photos and carousels have none. */
+export function reelsOwner(id, payload) {
+  let owner = null;
+  let still = false;
+  walk(payload, (item) => {
+    if (item.code !== id && item.shortcode !== id) return;
+    still ||= item.media_type === 1 || item.media_type === 8;
+    const username = item.user?.username ?? item.owner?.username;
+    if (/^[\w.]+$/.test(username ?? "")) owner = username;
+  });
+  return still ? null : owner;
 }
 export async function collectAnalytics(
   target,
@@ -77,6 +94,22 @@ export async function collectAnalytics(
       if (!response.ok) throw new Error("Metrics request failed");
       return response.json();
     };
+    /** Comments can be turned off, which leaves that count unknown rather than failing the read. */
+    const readYoutube = async (cookie) => {
+      const client = await youtube.create({
+        cookie,
+        retrieve_player: false,
+        fetch: (input, init) => fetcher(input, { ...init, signal: AbortSignal.timeout(20_000) }),
+      });
+      const info = await client.getInfo(id);
+      if (info.basic_info.id !== id) throw new Error("Video not found");
+      const comments = await client.getComments(id).catch(() => null);
+      return counts({
+        views: info.basic_info.view_count,
+        likes: info.basic_info.like_count,
+        comments: comments?.header?.count?.toString().replace(/\D/g, ""),
+      });
+    };
     let metrics;
     if (target.platform === "farcaster") metrics = counts(await castMetrics(id, { fetcher }));
     else if (target.platform === "lens") metrics = counts(await lensMetrics(id, { fetcher }));
@@ -88,7 +121,12 @@ export async function collectAnalytics(
           `https://public.api.bsky.app/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(uri)}`,
         );
         const post = data.posts?.find((post) => post.uri === uri);
-        metrics = counts({ likes: post?.likeCount, comments: post?.replyCount, shares: post?.repostCount });
+        metrics = counts({
+          likes: post?.likeCount,
+          comments: post?.replyCount,
+          shares: post && post.repostCount + (post.quoteCount ?? 0),
+          saves: post?.bookmarkCount,
+        });
       } else {
         const uri = `at://${actor}/social.grain.gallery/${id}`;
         const data = await request(
@@ -110,66 +148,84 @@ export async function collectAnalytics(
         saves: note.collected_count,
         shares: note.shared_count,
       });
-    } else {
-      context = await open(join(stateDir, target.platform), true);
-      const page = context.pages()[0] || (await context.newPage());
-      page.setDefaultTimeout(20_000);
-      if (target.platform === "youtube") {
+    } else if (target.platform === "youtube") {
+      // Signed in, YouTube's reply leaves out the like count, and a public read needs no Chrome.
+      metrics = await readYoutube().catch(() => ({}));
+      if (metrics.views === undefined) {
+        // A video only its owner can see, or YouTube turning an anonymous reader away.
+        context = await open(join(stateDir, target.platform), true);
         const cookies = await context.cookies("https://www.youtube.com");
         let cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
         if (!cookies.some((c) => c.name === "SAPISID")) {
           const fallback = cookies.find((c) => c.name === "__Secure-3PAPISID");
           if (fallback) cookie += `; SAPISID=${fallback.value}`;
         }
-        const client = await youtube.create({
-          cookie,
-          retrieve_player: false,
-          fetch: (input, init) => fetcher(input, { ...init, signal: AbortSignal.timeout(20_000) }),
-        });
-        const info = await client.getInfo(id);
-        if (info.basic_info.id !== id) throw new Error("Video not found");
-        metrics = counts({ views: info.basic_info.view_count, likes: info.basic_info.like_count });
-      } else {
-        metrics = {};
-        const pending = new Set();
-        const hosts = {
-          twitter: /^(?:[^.]+\.)?(?:x|twitter)\.com$/,
-          instagram: /(^|\.)instagram\.com$/,
-          tiktok: /(^|\.)tiktok\.com$/,
-          xiaohongshu: /(^|\.)(?:xiaohongshu|rednote)\.com$/,
-        };
-        page.on("response", (response) => {
-          if (
-            !response.ok() ||
-            !hosts[target.platform].test(new URL(response.url()).hostname) ||
-            !response.headers()["content-type"]?.includes("json")
-          )
-            return;
-          const task = response
-            .json()
-            .then((data) => Object.assign(metrics, extractMetrics(target.platform, id, data)))
-            .catch(() => {})
-            .finally(() => pending.delete(task));
-          pending.add(task);
-        });
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
-        const deadline = Date.now() + 15_000;
-        while (!Object.keys(metrics).length && Date.now() < deadline) {
-          const embedded = await page.evaluate(() => {
-            const data = [...document.querySelectorAll('script[type="application/json"]')].map((script) => {
-              try {
-                return JSON.parse(script.textContent || "null");
-              } catch {
-                return null;
-              }
-            });
-            if (window.__INITIAL_STATE__) data.push(window.__INITIAL_STATE__);
-            return data;
+        metrics = await readYoutube(cookie);
+      }
+    } else {
+      context = await open(join(stateDir, target.platform), true);
+      const page = context.pages()[0] || (await context.newPage());
+      page.setDefaultTimeout(20_000);
+      metrics = {};
+      const pending = new Set();
+      const hosts = {
+        twitter: /^(?:[^.]+\.)?(?:x|twitter)\.com$/,
+        instagram: /(^|\.)instagram\.com$/,
+        tiktok: /(^|\.)tiktok\.com$/,
+        xiaohongshu: /(^|\.)(?:xiaohongshu|rednote)\.com$/,
+      };
+      const structured = (response) => {
+        const type = response.headers()["content-type"] ?? "";
+        // Instagram's Reels tab answers with JSON labelled as text/javascript.
+        return (
+          type.includes("json") ||
+          (target.platform === "instagram" &&
+            type.includes("javascript") &&
+            new URL(response.url()).pathname.endsWith("/graphql"))
+        );
+      };
+      page.on("response", (response) => {
+        if (!response.ok() || !hosts[target.platform].test(new URL(response.url()).hostname) || !structured(response))
+          return;
+        const task = response
+          .json()
+          .then((data) => Object.assign(metrics, extractMetrics(target.platform, id, data)))
+          .catch(() => {})
+          .finally(() => pending.delete(task));
+        pending.add(task);
+      });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      const deadline = Date.now() + 15_000;
+      let embedded;
+      while (!Object.keys(metrics).length && Date.now() < deadline) {
+        embedded = await page.evaluate(() => {
+          const data = [...document.querySelectorAll('script[type="application/json"]')].map((script) => {
+            try {
+              return JSON.parse(script.textContent || "null");
+            } catch {
+              return null;
+            }
           });
-          Object.assign(metrics, extractMetrics(target.platform, id, embedded));
-          if (!Object.keys(metrics).length) await page.waitForTimeout(1000);
+          if (window.__INITIAL_STATE__) data.push(window.__INITIAL_STATE__);
+          return data;
+        });
+        Object.assign(metrics, extractMetrics(target.platform, id, embedded));
+        if (!Object.keys(metrics).length) await page.waitForTimeout(1000);
+      }
+      await Promise.race([Promise.allSettled([...pending]), page.waitForTimeout(2000)]);
+      // A post's own page leaves out plays; its owner's Reels tab lists them.
+      const owner = target.platform === "instagram" && metrics.views === undefined && reelsOwner(id, embedded);
+      if (owner) {
+        try {
+          await page.goto(`https://www.instagram.com/${owner}/reels/`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+          const scrolling = Date.now() + 12_000;
+          while (metrics.views === undefined && Date.now() < scrolling) {
+            await page.waitForTimeout(1000);
+            await page.mouse.wheel(0, 4000);
+          }
+        } catch {
+          // The post's own counts still stand.
         }
-        await Promise.race([Promise.allSettled([...pending]), page.waitForTimeout(2000)]);
       }
     }
     return Object.keys(metrics).length
