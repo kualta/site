@@ -10,11 +10,15 @@ import {
   saveAnalytics,
 } from "./analytics";
 import {
+  addUp,
   combined,
   cumulativeSeries,
+  dailySeries,
+  dayTicks,
   groupMarks,
   metricSeries,
   metricValue,
+  stackExtent,
   stackOrder,
   timeAgo,
   timeTicks,
@@ -219,6 +223,41 @@ test("the overview marks videos that are still up, when they went out, with YouT
     { id: short, at: 400, label: "Short", thumbnail: "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg" },
   ]);
   f.sql.close();
+});
+test("daily views are each day's change, at the middle of the reader's day, with no invented days", () => {
+  const day = 86_400_000;
+  const changes = [
+    { platform: "youtube", day: 100, at: 1, change: 10 },
+    { platform: "tiktok", day: 100, at: 2, change: 0 },
+    { platform: "youtube", day: 103, at: 3, change: -9 },
+    { platform: "instagram", day: 103, at: 4, change: 20 },
+  ] as const;
+  const series = dailySeries([...changes], -300);
+  expect(series).toEqual([
+    { at: 100.5 * day + 300 * 60_000, value: 10, coverage: 2, parts: { youtube: 10, tiktok: 0 } },
+    { at: 103.5 * day + 300 * 60_000, value: 11, coverage: 2, parts: { youtube: -9, instagram: 20 } },
+  ]);
+  expect(addUp(series)).toEqual({
+    at: series[1].at,
+    value: 21,
+    coverage: 3,
+    parts: { youtube: 1, tiktok: 0, instagram: 20 },
+  });
+  expect(addUp([])).toEqual({ at: 0, value: 0, coverage: 0, parts: {} });
+});
+test("a bar's stack can reach below zero when a platform corrects its count, and the axis follows", () => {
+  expect(stackExtent({ at: 0, value: 11, coverage: 2, parts: { youtube: -9, instagram: 20 } })).toEqual({
+    low: -9,
+    high: 20,
+  });
+  expect(valueTicks(20, -9)).toEqual([-10, 0, 10, 20]);
+  expect(valueTicks(0, -3)).toEqual([-3, -2, -1, 0, 1]);
+  expect(valueTicks(1000, -9)).toEqual([0, 500, 1000]);
+  const point = (at: number) => ({ at, value: 0, coverage: 0, parts: {} });
+  expect(dayTicks([point(1), point(2), point(3)])).toEqual([1, 2, 3]);
+  const many = dayTicks(Array.from({ length: 200 }, (_, i) => point(i)));
+  expect(many.length).toBeLessThanOrEqual(7);
+  expect(many[0]).toBe(0);
 });
 test("the last update reads in plain language at any age", () => {
   const minute = 60_000;
