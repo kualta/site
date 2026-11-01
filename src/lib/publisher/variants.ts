@@ -8,8 +8,8 @@ export interface PostText {
   short?: string;
   /** Without "#", most important first; each platform takes as many as it shows. */
   tags?: string[];
-  /** Xiaohongshu publishes its own Simplified Chinese title, text and topics. */
-  zh?: { title: string; text: string; topics: string[] };
+  /** Xiaohongshu publishes its own Simplified Chinese title, text and topics, and a video made for Chinese audiences if there is one. */
+  zh?: { title: string; text: string; topics: string[]; video?: string };
 }
 /** Exactly what one platform receives. */
 export interface Variant {
@@ -17,6 +17,8 @@ export interface Variant {
   text: string;
   /** Tags kept outside the text: Bluesky's hidden tags, Xiaohongshu's linked topics. */
   tags: string[];
+  /** The media id it gets in place of the post's video. */
+  video?: string;
 }
 
 /** How many tags each platform shows at the end of its text. X and Grain do nothing with them; Bluesky keeps its own hidden. */
@@ -89,6 +91,7 @@ export function renderVariant(platform: Platform, post: PostText): Variant {
       title: post.zh?.title.trim() ?? "",
       text: post.zh?.text ?? "",
       tags: (post.zh?.topics ?? []).slice(0, tagCounts.xiaohongshu),
+      ...(post.zh?.video ? { video: post.zh.video } : {}),
     };
   const tags = post.tags ?? [];
   const brief = platform === "twitter" || platform === "bluesky";

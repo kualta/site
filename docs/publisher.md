@@ -121,6 +121,12 @@ contain original metadata until the helper prepares each destination's copy.
   tracks and H.264 SEI are removed for both policies. Required technical codec
   and container fields remain. Temporary local files are deleted after each
   destination. Bluesky video uses its official transcode service.
+- **Chinese version**, in the Xiaohongshu section of a video post, attaches a second
+  video made for Chinese audiences. Xiaohongshu publishes it in place of the post's
+  video, and every other destination keeps the original. It has the same 90 MB limit, and
+  goes when the post has no video left. Crossposting from history keeps a Chinese version
+  the post already has, but can't add one. Restart the helper after updating, or
+  Xiaohongshu publishes the original.
 - **Stop** in a post's Manage panel releases a queued or publishing destination at
   once, so the next one can start and it can be retried. The helper checks every
   5 seconds and ends the running attempt; if the post did go out, its confirmed
@@ -156,10 +162,10 @@ contain original metadata until the helper prepares each destination's copy.
 
 `bun run publisher draft <post.json>` sends a video and its text to the composer and
 prints a link to it. The JSON holds `video` (relative to the file), `title`, `caption`,
-`alt`, `tags`, `short`, `zh` and optionally `preset`. Opening the link fills in the
-composer: the video, every field, and the preset (up to three minutes Short-form video,
-otherwise Long video). Destinations and YouTube visibility stay whatever that preset has
-saved in the browser.
+`alt`, `tags`, `short`, `zh` and optionally `preset`. `zh.video` is an optional Chinese
+version, relative to the file too. Opening the link fills in the composer: the videos,
+every field, and the preset (up to three minutes Short-form video, otherwise Long video).
+Destinations and YouTube visibility stay whatever that preset has saved in the browser.
 
 A draft publishes nothing. It uses the laptop's pairing key to upload the video and store
 the draft, and only **Publish** in the composer queues it. The link needs the owner's
@@ -172,7 +178,9 @@ Videos over the 90 MB upload limit are re-encoded to fit. Drafts are small R2 ob
 beside the media, and the bucket's seven-day lifecycle rule expires them together.
 
 The `crosspost-video` skill in `.agents/skills` finds an OpenFilm film's final video and
-writes the JSON. Link it in once: `ln -s ~/Projects/site/.agents/skills/crosspost-video ~/.claude/skills/`.
+writes the JSON. `openfilm-chinese` makes a film's Chinese version in a `<film>-zh` folder
+beside it, which `crosspost-video` then sends as `zh.video`. Link each in once:
+`ln -s ~/Projects/site/.agents/skills/<skill> ~/.claude/skills/`.
 
 ## Validation
 

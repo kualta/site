@@ -28,6 +28,14 @@ async function seconds(file) {
   return duration;
 }
 
+async function locate(specFile, video) {
+  if (typeof video !== "string") throw new Error(`${specFile} needs a "video" path`);
+  const input = resolve(dirname(specFile), video);
+  const contentType = contentTypes[extname(input).toLowerCase()];
+  if (!contentType) throw new Error(`Use an MP4, MOV or WebM video: ${input}`);
+  return { input, contentType, duration: await seconds(input) };
+}
+
 /** Re-encodes a video to fit the upload limit. The destinations each get their own encode of this copy later. */
 async function fit(input, output, duration, maxBytes) {
   let kbps = Math.floor((maxBytes * SIZE_MARGIN * 8) / duration / 1000) - AUDIO_KBPS;
@@ -71,15 +79,16 @@ async function fit(input, output, duration, maxBytes) {
 
 /**
  * Sends a video and its text to the composer as a draft, and returns the page to publish it from.
- * `specFile` is JSON: { video, title, caption, alt, tags, short, zh, preset }. `video` is relative to it.
+ * `specFile` is JSON: { video, title, caption, alt, tags, short, zh, preset }. `zh.video` is an optional version made
+ * for Chinese audiences, which Xiaohongshu gets in place of `video`. Both paths are relative to the spec.
  * A draft publishes nothing by itself: only the owner's click in the composer queues it.
  */
 export async function createDraft(specFile, { origin, token, fetcher = fetch, maxBytes = MAX_VIDEO_BYTES }) {
-  const { video, ...text } = JSON.parse(await readFile(specFile, "utf8"));
-  if (typeof video !== "string") throw new Error(`${specFile} needs a "video" path`);
-  const input = resolve(dirname(specFile), video);
-  const contentType = contentTypes[extname(input).toLowerCase()];
-  if (!contentType) throw new Error(`Use an MP4, MOV or WebM video: ${input}`);
+  const { video, zh, ...text } = JSON.parse(await readFile(specFile, "utf8"));
+  const { video: zhVideo, ...zhText } = zh ?? {};
+  // Both are read before anything goes up, so a bad path for the second can't strand the first.
+  const source = await locate(specFile, video);
+  const zhSource = zhVideo === undefined ? null : await locate(specFile, zhVideo);
   const call = async (path, init) => {
     const response = await fetcher(`${origin}/api/publisher/helper/${path}`, {
       ...init,
@@ -93,29 +102,39 @@ export async function createDraft(specFile, { origin, token, fetcher = fetch, ma
   const postJson = (path, data) =>
     call(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 
-  const duration = await seconds(input);
   // Bluesky stops at three minutes and the Short-form preset is built around that; longer films go to Long video.
-  const draft = { preset: duration <= 180 ? "short" : "video", ...text };
+  const draft = { preset: source.duration <= 180 ? "short" : "video", ...text, ...(zh ? { zh: zhText } : {}) };
   // Before the upload: a video this large shouldn't go up twice for a typo in the text.
   await postJson("drafts/check", draft);
 
-  const { size } = await stat(input);
-  const temp = size > maxBytes ? await mkdtemp(join(tmpdir(), "publisher-draft-")) : null;
-  try {
-    let file = input;
-    if (temp) {
-      file = join(temp, "video.mp4");
-      await fit(input, file, duration, maxBytes);
+  let reencoded = false;
+  const upload = async ({ input, contentType, duration }) => {
+    const { size } = await stat(input);
+    const temp = size > maxBytes ? await mkdtemp(join(tmpdir(), "publisher-draft-")) : null;
+    try {
+      let file = input;
+      if (temp) {
+        file = join(temp, "video.mp4");
+        await fit(input, file, duration, maxBytes);
+        reencoded = true;
+      }
+      const { id } = await call("media", {
+        method: "POST",
+        headers: { "Content-Type": temp ? "video/mp4" : contentType },
+        body: await readFile(file),
+      });
+      return id;
+    } finally {
+      if (temp) await rm(temp, { recursive: true, force: true });
     }
-    const { id: media } = await call("media", {
-      method: "POST",
-      headers: { "Content-Type": temp ? "video/mp4" : contentType },
-      body: await readFile(file),
-    });
-    const { id } = await postJson("drafts", { ...draft, video: media });
-    const page = origin === "https://post.kualta.dev" ? "/" : "/publish";
-    return { id, url: `${origin}${page}?draft=${id}`, reencoded: Boolean(temp) };
-  } finally {
-    if (temp) await rm(temp, { recursive: true, force: true });
-  }
+  };
+  const media = await upload(source);
+  const zhMedia = zhSource && (await upload(zhSource));
+  const { id } = await postJson("drafts", {
+    ...draft,
+    video: media,
+    ...(zhMedia ? { zh: { ...zhText, video: zhMedia } } : {}),
+  });
+  const page = origin === "https://post.kualta.dev" ? "/" : "/publish";
+  return { id, url: `${origin}${page}?draft=${id}`, reencoded };
 }

@@ -86,13 +86,21 @@ const draft = {
   short: "A film",
   zh: { title: "短片", text: "一部关于电影的短片。", topics: ["短片", "动画"] },
 };
+// The same film with a version made for Chinese audiences.
+const chineseVideo = "00000000-0000-4000-8000-00000000d1d1";
+const chineseDraft = {
+  ...draft,
+  id: "00000000-0000-4000-8000-00000000d1b0",
+  zh: { ...draft.zh, video: chineseVideo },
+};
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const path = new URL(String(input), location.href).pathname.replace("/api/publisher/", "");
   const method = init.method || "GET";
   requests.push({ path, method, body: typeof init.body === "string" ? JSON.parse(init.body) : null });
-  if (path === `media/${draftVideo}`) return realFetch(input, init);
+  if (path === `media/${draftVideo}` || path === `media/${chineseVideo}`) return realFetch(input, init);
   if (path === `drafts/${draft.id}`) return method === "DELETE" ? json({ ok: true }) : json(draft);
+  if (path === `drafts/${chineseDraft.id}`) return method === "DELETE" ? json({ ok: true }) : json(chineseDraft);
   if (path.startsWith("drafts/")) return json({ error: "This draft has expired or was already posted" }, 404);
   if (path === "session") return json({ allowed: true, signedIn: true });
   if (path === "status")

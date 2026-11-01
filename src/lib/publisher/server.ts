@@ -40,8 +40,8 @@ export interface Post {
   tags?: string[];
   /** For X and Bluesky when the caption is longer than they allow. */
   short?: string;
-  /** Xiaohongshu's Simplified Chinese version. */
-  zh?: { title: string; text: string; topics: string[] };
+  /** Xiaohongshu's Simplified Chinese version, with a video made for Chinese audiences if there is one. */
+  zh?: { title: string; text: string; topics: string[]; video?: string };
   /** What each destination receives, rendered once here so the laptop publishes exactly what was checked. */
   variants?: Partial<Record<Platform, Variant>>;
   /** Reframe a horizontal video to vertical for YouTube, which then makes it a Short. */
@@ -139,6 +139,8 @@ export function validatePost(value: unknown): Post {
       !p.zh.topics.every((topic) => isTag(topic) && [...topic].length <= 30))
   )
     throw new PostError("Check the Chinese title, text and topics");
+  if (p.zh?.video !== undefined && (p.kind !== "video" || !validId(p.zh.video) || p.zh.video === p.media[0]))
+    throw new PostError("The Chinese version is a second video for a video post");
   if (p.platforms.includes("xiaohongshu") && !p.zh) throw new PostError("Add the Chinese version for Xiaohongshu");
   if (
     p.youtubeShort !== undefined &&
@@ -167,10 +169,23 @@ export function validatePost(value: unknown): Post {
     visibility: p.visibility,
     ...(p.tags?.length ? { tags: p.tags } : {}),
     ...(p.short?.trim() ? { short: p.short } : {}),
-    ...(p.zh ? { zh: { title: p.zh.title.trim(), text: p.zh.text, topics: p.zh.topics } } : {}),
+    ...(p.zh
+      ? {
+          zh: {
+            title: p.zh.title.trim(),
+            text: p.zh.text,
+            topics: p.zh.topics,
+            ...(p.zh.video ? { video: p.zh.video } : {}),
+          },
+        }
+      : {}),
     variants,
     ...(p.youtubeShort ? { youtubeShort: true } : {}),
   };
+}
+/** Every upload a post uses: its own media, then its Chinese version. */
+export function postMedia(post: Pick<Post, "media" | "zh">): string[] {
+  return post.zh?.video ? [...post.media, post.zh.video] : post.media;
 }
 /** Sends a post that already went out to more destinations, checked again as if it were new. */
 export async function addDestinations(
@@ -196,7 +211,7 @@ export async function addDestinations(
     title: !post.title.trim() && typeof input.title === "string" ? input.title : post.title,
     zh: post.zh ?? input.zh,
   });
-  for (const id of next.media)
+  for (const id of postMedia(next))
     if (!(await bucket.head(id)))
       throw new PostError("This post's media has expired. Post it again from the composer.");
   await db.batch([
