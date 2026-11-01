@@ -7,6 +7,7 @@ import {
   PostError,
   stopTarget,
   markPublished,
+  postMedia,
   targetActive,
   authorizeHelper,
   claimTarget,
@@ -266,7 +267,9 @@ export const ALL: APIRoute = async ({ request, params }) => {
         return existing.payload === JSON.stringify(post)
           ? json({ id: post.id })
           : json({ error: "Post identifier already used" }, 409);
-      for (const [i, id] of post.media.entries()) {
+      // A Chinese version only comes with a video post, so post.kind describes it too.
+      const uploads = postMedia(post);
+      for (const [i, id] of uploads.entries()) {
         const media = await db
           .prepare("SELECT kind, job_id FROM publisher_media WHERE id = ?")
           .bind(id)
@@ -278,7 +281,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
         db
           .prepare("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)")
           .bind(post.id, JSON.stringify(post), Date.now()),
-        ...post.media.map((id) => db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ?").bind(post.id, id)),
+        ...uploads.map((id) => db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ?").bind(post.id, id)),
         ...post.platforms.map((platform) =>
           db
             .prepare("INSERT INTO publisher_targets (id, job_id, platform) VALUES (?, ?, ?)")

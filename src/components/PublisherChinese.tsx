@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { parseTags, renderVariant, usage, xiaohongshuTitleLength } from "@/lib/publisher/variants";
 
 export interface ChineseDraft {
@@ -13,9 +14,19 @@ interface Props {
   translating: boolean;
   canTranslate: boolean;
   disabled: boolean;
+  /** The composer's Chinese version of the video. */
+  children?: ReactNode;
 }
 /** Xiaohongshu publishes its own Simplified Chinese title, text and topics. */
-export default function PublisherChinese({ value, onChange, onTranslate, translating, canTranslate, disabled }: Props) {
+export default function PublisherChinese({
+  value,
+  onChange,
+  onTranslate,
+  translating,
+  canTranslate,
+  disabled,
+  children,
+}: Props) {
   const set = (patch: Partial<ChineseDraft>) => onChange({ ...value, ...patch });
   const titleLength = xiaohongshuTitleLength(value.title);
   // Topics count toward the text limit, so the counter includes them.
@@ -27,6 +38,7 @@ export default function PublisherChinese({ value, onChange, onTranslate, transla
       <button type="button" disabled={disabled || translating || !canTranslate} onClick={onTranslate}>
         {translating ? "Translating…" : value.title || value.text ? "Translate again" : "Translate"}
       </button>
+      {children}
       <label>
         Title
         <input

@@ -242,6 +242,41 @@ test("each platform publishes its own rendered version", async () => {
   expect(sent.tags).toEqual(["b", "c"]);
 });
 
+test("Xiaohongshu publishes the Chinese version and every other destination the original", async () => {
+  const video = {
+    ...post,
+    kind: "video",
+    media: ["original"],
+    metadata: { ...post.metadata, xiaohongshu: "remove-all" },
+    variants: {
+      xiaohongshu: { title: "短片", text: "正文", tags: [], video: "chinese" },
+      tiktok: { title: "", text: "Text", tags: [] },
+    },
+  };
+  for (const [platform, fetched] of [
+    ["xiaohongshu", "media/chinese"],
+    ["tiktok", "media/original"],
+  ]) {
+    const requests = [];
+    const result = await publish(
+      { platform },
+      video,
+      fixture({
+        api: async (path) => {
+          requests.push(path);
+          return new Response("source");
+        },
+        browser: async (_platform, _dir, files) => {
+          expect(files).toHaveLength(1);
+          return { url: "https://example.invalid/fixture" };
+        },
+      }),
+    );
+    expect(result.state).toBe("succeeded");
+    expect(requests).toEqual([fetched]);
+  }
+});
+
 test("mixed posts process each item as what it is and publish them together", async () => {
   const processed = [];
   let args;

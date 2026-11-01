@@ -21,7 +21,15 @@ export async function publish(
 ) {
   // Publish the version rendered and checked for this platform; jobs from before versions use the shared text.
   const variant = job.variants?.[target.platform];
-  const post = variant ? { ...job, title: variant.title, caption: variant.text, tags: variant.tags } : job;
+  const post = variant
+    ? {
+        ...job,
+        title: variant.title,
+        caption: variant.text,
+        tags: variant.tags,
+        media: variant.video ? [variant.video] : job.media,
+      }
+    : job;
   const temp = await mkdtemp(join(tmpdir(), "kualta-post-"));
   // Text posts have no media.
   const kind = post.kind === "text" ? undefined : post.kind;

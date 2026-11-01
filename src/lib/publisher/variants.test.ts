@@ -1,6 +1,16 @@
 import { expect, test } from "bun:test";
 import { parseTags, problem, renderVariant, usage, xiaohongshuTitleLength, xLength } from "./variants";
 
+test("only Xiaohongshu's version carries the Chinese video", () => {
+  const post = {
+    title: "A film",
+    caption: "About films",
+    zh: { title: "短片", text: "正文", topics: ["短片"], video: "chinese" },
+  };
+  expect(renderVariant("xiaohongshu", post).video).toBe("chinese");
+  expect(renderVariant("youtube", post)).not.toHaveProperty("video");
+  expect(renderVariant("xiaohongshu", { ...post, zh: { ...post.zh, video: undefined } })).not.toHaveProperty("video");
+});
 test("tags are parsed from free text, without # and duplicates", () => {
   expect(parseTags("#Travel bogotá, 生活美学 #travel 2026 #a-b")).toEqual(["Travel", "bogotá", "生活美学"]);
 });

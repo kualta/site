@@ -15,6 +15,8 @@ Take the first that applies:
 - The nearest folder above the working directory holding `film.html`.
 - `recent[0].path` in `~/.openfilm/studio.json`, the film last opened in Studio.
 
+A folder ending in `-zh` is a film's Chinese version: its original is the same path without the ending, and that's the film to post.
+
 ## 2. Find the final video
 
 Candidates, where `<name>` is the film's folder name:
@@ -28,6 +30,8 @@ A candidate is fresh when this prints nothing:
 Take the newest fresh candidate. If a fresh 9x16 export and a wider one both exist, take the 9x16 for a film up to three minutes.
 
 If none is fresh, run `npx -y openfilm@latest render` in the film's folder: being asked to post the film is being asked for the file. Say in your report that you rendered it.
+
+**A Chinese version.** If `<film>-zh` exists, made by the `openfilm-chinese` skill, find its video the same way: `<film>-zh/<name>-zh.mp4` or `~/Desktop/<name>-zh*`. If none is fresh, render it, adding `--subtitles` if it has any `*.zh.vtt` files. Xiaohongshu gets this video and every other destination the original. If `<film>/film.html` is newer than `<film>-zh/film.html`, the original may have changed since it was translated, so say so in your report. Without that folder Xiaohongshu gets the original; don't make a Chinese version unasked.
 
 ## 3. See what it is
 
@@ -61,7 +65,7 @@ Use the person's own words wherever they gave them. Otherwise write plainly: say
 - No `<` or `>` in the title or caption: YouTube refuses them.
 - `preset` (optional): the tab to open on. Without it, films up to three minutes open on Short-form video (`short`) and longer ones on Long video (`video`).
 
-`zh` is always required, for Xiaohongshu. Follow the same rules as the composer's Translate button:
+`zh` is always required, for Xiaohongshu. With a Chinese version, add its path as `"video"` inside `zh`, and write the text about that version. Follow the same rules as the composer's Translate button:
 - Natural Simplified Chinese the way Xiaohongshu creators write. Adapt, don't translate word for word.
 - `title`: at most 20 Chinese characters, a Latin letter counting half. Main keyword first, at most one emoji.
 - `text`: at most 900 characters in short paragraphs, the main keyword in the first sentence.
@@ -83,4 +87,4 @@ A video over the 90 MB upload limit is re-encoded to fit. One too long to stay w
 
 ## 6. Report
 
-Give the link, which video file you sent, whether you rendered or re-encoded it, and the title and caption as written. Mention that destinations and YouTube visibility come from the preset saved in the person's browser, and that the draft expires after seven days.
+Give the link, which video files you sent, whether you rendered or re-encoded them, and the title and caption as written. Mention that destinations and YouTube visibility come from the preset saved in the person's browser, and that the draft expires after seven days.

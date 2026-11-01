@@ -3,7 +3,7 @@ import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import PublisherChinese from "./PublisherChinese";
 import {
@@ -136,6 +136,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [zhTitle, setZhTitle] = useState("");
   const [zhText, setZhText] = useState("");
   const [zhTopicsText, setZhTopicsText] = useState("");
+  // A version of the video made for Chinese audiences, which Xiaohongshu gets in place of the original.
+  const [chineseVideo, setChineseVideo] = useState<File>();
+  const chinesePreview = useMemo(() => chineseVideo && URL.createObjectURL(chineseVideo), [chineseVideo]);
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -146,7 +149,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>(initialHelper?.platforms ?? []);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [dragging, setDragging] = useState(false);
-  const submission = useRef<{ id: string; media: string[]; payload?: unknown } | null>(null);
+  const submission = useRef<{ id: string; media: string[]; zhVideo?: string; payload?: unknown } | null>(null);
   const [openingDraft, setOpeningDraft] = useState(false);
   const draftId = useRef<string | null>(null);
   // A draft's video is already in Cloudflare, so publishing it doesn't upload it again.
@@ -212,6 +215,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     setPreviews(urls);
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, [files]);
+  useEffect(() => {
+    if (chinesePreview) return () => URL.revokeObjectURL(chinesePreview);
+  }, [chinesePreview]);
   // Each photo's date is read once, so adding more media keeps dates already read or edited.
   useEffect(() => {
     const unread = files.filter((file) => file.type.startsWith("image/") && !datesRead.current.has(file));
@@ -269,17 +275,23 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     if (access !== "owner") return;
     const id = new URLSearchParams(location.search).get("draft");
     if (!id) return;
+    async function storedFile(media: string, name: string) {
+      const response = await fetch(`/api/publisher/media/${media}`);
+      if (!response.ok) throw new Error("This draft's video has expired");
+      const blob = await response.blob();
+      const file = new File([blob], name, { type: blob.type });
+      storedMedia.current.set(file, media);
+      return file;
+    }
     async function openDraft(id: string) {
       setBusy(true);
       setOpeningDraft(true);
       try {
         const draft: Draft = await api(`drafts/${id}`);
-        const response = await fetch(`/api/publisher/media/${draft.video}`);
-        if (!response.ok) throw new Error("This draft's video has expired");
-        const blob = await response.blob();
-        const file = new File([blob], draft.title, { type: blob.type });
-        storedMedia.current.set(file, draft.video);
+        const file = await storedFile(draft.video, draft.title);
+        const chinese = draft.zh?.video ? await storedFile(draft.zh.video, `${draft.title} (Chinese)`) : undefined;
         await showMedia([file], [""], [""]);
+        setChineseVideo(chinese);
         const active = draft.preset;
         if (active) setPreferences((p) => (p.presets.some((item) => item.id === active) ? { ...p, active } : p));
         setTitle(draft.title);
@@ -324,12 +336,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       if (needsTitle && !title.trim()) throw new Error(`Add a title for ${titledNames}.`);
       const photo = kind === "photo";
       const mediaKinds = files.map((file) => (file.type.startsWith("video/") ? "video" : "photo"));
-      const payload = (id: string, media: string[]) => ({
+      const payload = (id: string, media: string[], zhVideo?: string) => ({
         id,
         media,
         kind,
         mediaKinds: kind === "mixed" ? mediaKinds : undefined,
         ...text,
+        zh: text.zh && zhVideo ? { ...text.zh, video: zhVideo } : text.zh,
         alt: kind === "video" ? alt : "",
         alts: photo ? alts : undefined,
         datesTaken: photo ? datesTaken.map((date) => (date ? new Date(date).toISOString() : null)) : undefined,
@@ -342,26 +355,26 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
         payload(
           crypto.randomUUID(),
           files.map(() => crypto.randomUUID()),
+          sentChineseVideo && crypto.randomUUID(),
         ),
       );
-      const pending = (submission.current ||= { id: crypto.randomUUID(), media: [] });
-      for (let i = pending.media.length; i < files.length; i++) {
-        const stored = storedMedia.current.get(files[i]);
-        if (stored) {
-          pending.media.push(stored);
-          continue;
-        }
+      const uploadMedia = async (file: File): Promise<string> => {
+        const stored = storedMedia.current.get(file);
+        if (stored) return stored;
         const response = await fetch("/api/publisher/media", {
           method: "POST",
-          headers: { "Content-Type": files[i].type },
-          body: files[i],
+          headers: { "Content-Type": file.type },
+          body: file,
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Upload failed");
-        pending.media.push(result.id);
-      }
+        return result.id;
+      };
+      const pending = (submission.current ||= { id: crypto.randomUUID(), media: [] });
+      for (let i = pending.media.length; i < files.length; i++) pending.media.push(await uploadMedia(files[i]));
+      if (sentChineseVideo) pending.zhVideo ||= await uploadMedia(sentChineseVideo);
       // Freeze the request after uploading. A lost response retries the same job.
-      pending.payload ||= payload(pending.id, pending.media);
+      pending.payload ||= payload(pending.id, pending.media, pending.zhVideo);
       setSubmitted(true);
       await api("jobs", pending.payload);
       setSubmitted(false);
@@ -410,6 +423,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   }
   function clearMedia() {
     setFiles([]);
+    setChineseVideo(undefined);
     setVideo(undefined);
     setShortChoice(undefined);
     setAlts([]);
@@ -419,6 +433,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   /** Media lists stay index-aligned with each photo's description and date. */
   async function showMedia(next: File[], nextAlts: string[], nextDates: string[]) {
     const first = next.find((file) => file.type.startsWith("video/"));
+    // A Chinese version belongs to the video it translates, so it goes when no video is left.
+    if (!first) setChineseVideo(undefined);
     setVideo(first ? await videoShape(first) : undefined);
     setShortChoice(undefined);
     setFiles(next);
@@ -446,6 +462,15 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     const blank = picked.map(() => "");
     await showMedia(next, [...alts, ...blank], [...datesTaken, ...blank]);
   }
+  function chooseChineseVideo(file: File) {
+    if (!file.type.startsWith("video/") || file.size > 90e6) {
+      setError("The Chinese version is one video, up to 90 MB.");
+      return;
+    }
+    setChineseVideo(file);
+    submission.current = null;
+    setError("");
+  }
   // The attachments decide the kind; the preset's destinations that can't take it are skipped.
   const kind = postKind(files);
   const reasons = Object.fromEntries(
@@ -458,6 +483,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     .join(", ");
   const needsTitle = titledNames !== "";
   const rednote = destinations.includes("xiaohongshu");
+  const sentChineseVideo = rednote && kind === "video" ? chineseVideo : undefined;
   const toYouTube = kind === "video" && destinations.includes("youtube");
   const canReframe = toYouTube && reframesToShort(video);
   const youtubeShort = canReframe && (shortChoice ?? preset.id === "short");
@@ -740,7 +766,44 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     translating={translating}
                     canTranslate={Boolean(title.trim() || caption.trim())}
                     disabled={busy || submitted}
-                  />
+                  >
+                    {kind === "video" && (
+                      <div className="publisher-zh-video">
+                        {chineseVideo ? (
+                          <div className="publisher-previews" data-single-video>
+                            <figure>
+                              <video src={chinesePreview} controls playsInline />
+                              <button
+                                type="button"
+                                aria-label="Remove the Chinese version"
+                                disabled={busy || submitted}
+                                onClick={() => {
+                                  setChineseVideo(undefined);
+                                  submission.current = null;
+                                }}
+                              >
+                                <CloseIcon aria-hidden="true" />
+                              </button>
+                            </figure>
+                          </div>
+                        ) : (
+                          <MediaButton
+                            accept="video/*"
+                            label="Chinese version"
+                            hint="The same video made for Chinese audiences, up to 90 MB"
+                            Icon={VideoIcon}
+                            disabled={busy || submitted}
+                            onFiles={([file]) => file && chooseChineseVideo(file)}
+                          />
+                        )}
+                        <small className="publisher-note">
+                          {chineseVideo
+                            ? "Xiaohongshu gets this video. Every other destination gets the one above."
+                            : "Have one made for Chinese audiences? Xiaohongshu gets it, and every other destination keeps the video above."}
+                        </small>
+                      </div>
+                    )}
+                  </PublisherChinese>
                 )}
                 {!!versions.length && (
                   <details className="publisher-variants">
@@ -753,6 +816,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                         </h3>
                         {variant.title && <strong>{variant.title}</strong>}
                         <p>{variant.text || "—"}</p>
+                        {platform === "xiaohongshu" && sentChineseVideo && <small>Video: the Chinese version</small>}
                         {!!variant.tags.length && (
                           <small>
                             {platform === "bluesky" ? "Hidden tags" : "Topics"}:{" "}

@@ -63,4 +63,13 @@ describe("drafts", () => {
   test("need their video to have been uploaded", async () => {
     await expect(saveDraft(bucket([]), { ...text(), video })).rejects.toThrow("video is missing");
   });
+
+  test("can carry a Chinese version, which must have been uploaded too", async () => {
+    const chinese = "00000000-0000-4000-8000-000000000002";
+    const draft = { ...text(), video, zh: { ...text().zh, video: chinese } };
+    await expect(saveDraft(bucket([video]), draft)).rejects.toThrow("video is missing");
+    const store = bucket([video, chinese]);
+    const id = await saveDraft(store, draft);
+    expect((await readDraft(store, id))?.zh?.video).toBe(chinese);
+  });
 });

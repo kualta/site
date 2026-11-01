@@ -40,6 +40,11 @@ const tallClip = realClip("tall", "color=c=gray:s=180x320:r=1:d=2");
 const longClip = realClip("long", "color=c=gray:s=320x180:r=1:d=181");
 // Loads fine but has no picture, so its width and height read as 0.
 const blankClip = realClip("blank", "anullsrc=d=2", "libopus");
+// Counted once the job has gone out and before queued() empties the log.
+const uploadsBeforeJob = async (page) => {
+  await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "jobs"));
+  return page.evaluate(() => window.publisherRequests.filter((r) => r.path === "media").length);
+};
 const queued = (page) =>
   page
     .waitForFunction(() => window.publisherRequests.some((r) => r.path === "jobs"))
@@ -600,6 +605,10 @@ try {
   // Nothing has been queued by opening it; that takes the click.
   assert.equal(await page.evaluate(() => window.publisherRequests.some((r) => r.path === "jobs")), false);
   await publish.click();
+  assert.equal(await uploadsBeforeJob(page), 0);
+  await page.waitForFunction(() =>
+    window.publisherRequests.some((r) => r.path.startsWith("drafts/") && r.method === "DELETE"),
+  );
   const job = await queued(page);
   assert.equal(job.kind, "video");
   assert.deepEqual(job.media, [videoId]);
@@ -610,10 +619,6 @@ try {
   assert.deepEqual(job.zh, { title: "短片", text: "一部关于电影的短片。", topics: ["短片", "动画"] });
   await page.getByRole("status").getByText("Queued. Your laptop will publish each destination once.").waitFor();
   assert.equal(new URL(page.url()).searchParams.has("draft"), false);
-  await page.waitForFunction(() =>
-    window.publisherRequests.some((r) => r.path.startsWith("drafts/") && r.method === "DELETE"),
-  );
-  assert.equal(await page.evaluate(() => window.publisherRequests.some((r) => r.path === "media")), false);
   assert.equal(await page.locator(".publisher-previews video").count(), 0);
   // A draft that's gone says so, and leaves the composer usable.
   await page.goto("http://127.0.0.1:8797/publisher.html?draft=00000000-0000-4000-8000-000000000bad");
@@ -621,6 +626,117 @@ try {
   assert.equal(await page.getByRole("textbox", { name: "Post" }).isDisabled(), false);
   assert.deepEqual(errors, []);
   await context.close();
+
+  // A Chinese version goes to Xiaohongshu in place of the video; every other destination keeps the original.
+  const chineseContext = await browser.newContext({ viewport: { width: 1280, height: 1400 } });
+  const zhPage = await chineseContext.newPage();
+  const zhErrors = [];
+  zhPage.on("pageerror", (error) => zhErrors.push(error.message));
+  const chineseVideoId = "00000000-0000-4000-8000-00000000d1d1";
+  await zhPage.route(`**/api/publisher/media/${videoId}`, (route) =>
+    route.fulfill({ contentType: tallClip.mimeType, body: tallClip.buffer }),
+  );
+  await zhPage.route(`**/api/publisher/media/${chineseVideoId}`, (route) =>
+    route.fulfill({ contentType: wideClip.mimeType, body: wideClip.buffer }),
+  );
+  const zhQueued = () => queued(zhPage);
+  const zhButton = zhPage.getByRole("button", { name: "Chinese version", exact: true });
+  await zhPage.goto("http://127.0.0.1:8797/publisher.html");
+  const zhPresets = zhPage.getByRole("navigation", { name: "Presets" });
+  await zhPresets.getByRole("button", { name: "Short-form video" }).click();
+  // Nothing to translate yet, so no button without a video.
+  await zhPage.locator('input[type="file"][accept="image/*"]').setInputFiles({
+    name: "photo.png",
+    mimeType: "image/png",
+    buffer: png,
+  });
+  await zhPage.getByRole("group", { name: "Xiaohongshu · Chinese" }).waitFor();
+  assert.equal(await zhButton.count(), 0);
+  await zhPage.getByRole("button", { name: "Remove media" }).click();
+  await zhPage.locator('input[type="file"][accept="video/*"]').first().setInputFiles(tallClip);
+  await zhPage.locator(".publisher-previews video").first().waitFor();
+  await zhPage.getByRole("textbox", { name: /^Title ·/ }).fill("Two versions");
+  await zhPage.getByRole("textbox", { name: "Post" }).fill("The original");
+  const zhFields = zhPage.getByRole("group", { name: "Xiaohongshu · Chinese" });
+  await zhFields.getByRole("textbox", { name: "Title" }).fill("两个版本");
+  await zhFields.getByRole("textbox", { name: "Text" }).fill("中文版。");
+  // Clicking it opens a video picker of its own.
+  const [zhChooser] = await Promise.all([zhPage.waitForEvent("filechooser"), zhButton.click()]);
+  assert.equal(zhChooser.isMultiple(), false);
+  await zhChooser.setFiles(wideClip);
+  const zhPreview = zhFields.locator(".publisher-previews video");
+  await zhPreview.waitFor();
+  assert.equal(await zhButton.count(), 0);
+  // Each version has its own preview.
+  assert.equal(await zhPage.locator(".publisher-previews video").count(), 2);
+  await zhFields.getByText("Xiaohongshu gets this video.").waitFor();
+  await zhPage.locator(".publisher-variants summary").click();
+  await zhPage.locator(".publisher-variants section", { hasText: "Xiaohongshu" }).getByText("Video: the Chinese version").waitFor();
+  assert.equal(await zhPage.locator(".publisher-variants section", { hasText: "TikTok" }).getByText("Video: the Chinese version").count(), 0);
+  if (shots) {
+    await zhPage.waitForTimeout(300);
+    await zhPage.screenshot({ path: path.join(shots, "chinese-version-desktop.png"), fullPage: true });
+  }
+  await zhPage.evaluate(() => (window.publisherRequests.length = 0));
+  await zhPage.getByRole("button", { name: "Queue post" }).click();
+  assert.equal(await uploadsBeforeJob(zhPage), 2);
+  const zhJob = await zhQueued();
+  assert.equal(zhJob.kind, "video");
+  assert.equal(zhJob.media.length, 1);
+  assert.equal(typeof zhJob.zh.video, "string");
+  assert.notEqual(zhJob.zh.video, zhJob.media[0]);
+  assert.equal(zhJob.zh.title, "两个版本");
+  await zhPage.getByRole("status").getByText("Queued. Your laptop will publish each destination once.").waitFor();
+  assert.equal(await zhPage.locator(".publisher-previews video").count(), 0);
+
+  // Removed, it isn't sent, and leaving Xiaohongshu out leaves it out of the post too.
+  await zhPage.locator('input[type="file"][accept="video/*"]').first().setInputFiles(tallClip);
+  await zhPage.locator(".publisher-previews video").first().waitFor();
+  await zhPage.getByRole("textbox", { name: /^Title ·/ }).fill("Two versions");
+  await zhFields.getByRole("textbox", { name: "Title" }).fill("两个版本");
+  await zhFields.getByRole("textbox", { name: "Text" }).fill("中文版。");
+  const [zhAgain] = await Promise.all([zhPage.waitForEvent("filechooser"), zhButton.click()]);
+  await zhAgain.setFiles(wideClip);
+  await zhPreview.waitFor();
+  await zhPage.getByRole("button", { name: "Remove the Chinese version" }).click();
+  await zhButton.waitFor();
+  await zhPage.getByRole("button", { name: "Queue post" }).click();
+  assert.equal((await zhQueued()).zh.video, undefined);
+  await zhPage.getByRole("status").getByText("Queued.", { exact: false }).waitFor();
+  await zhPage.locator('input[type="file"][accept="video/*"]').first().setInputFiles(tallClip);
+  await zhPage.locator(".publisher-previews video").first().waitFor();
+  await zhPage.getByRole("textbox", { name: /^Title ·/ }).fill("Two versions");
+  await zhFields.getByRole("textbox", { name: "Title" }).fill("两个版本");
+  await zhFields.getByRole("textbox", { name: "Text" }).fill("中文版。");
+  const [zhThird] = await Promise.all([zhPage.waitForEvent("filechooser"), zhButton.click()]);
+  await zhThird.setFiles(wideClip);
+  await zhPreview.waitFor();
+  await zhPage.locator(".publisher-destinations label", { hasText: "Xiaohongshu" }).getByRole("checkbox").uncheck();
+  await zhPage.evaluate(() => (window.publisherRequests.length = 0));
+  await zhPage.getByRole("button", { name: "Queue post" }).click();
+  assert.equal(await uploadsBeforeJob(zhPage), 1);
+  const withoutXhs = await zhQueued();
+  assert.equal(withoutXhs.zh, undefined);
+  assert.deepEqual(zhErrors, []);
+  await chineseContext.close();
+
+  // A draft from the terminal can carry both, and neither is uploaded again.
+  const draftContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const draftPage = await draftContext.newPage();
+  await draftPage.route(`**/api/publisher/media/${videoId}`, (route) =>
+    route.fulfill({ contentType: tallClip.mimeType, body: tallClip.buffer }),
+  );
+  await draftPage.route(`**/api/publisher/media/${chineseVideoId}`, (route) =>
+    route.fulfill({ contentType: wideClip.mimeType, body: wideClip.buffer }),
+  );
+  await draftPage.goto("http://127.0.0.1:8797/publisher.html?draft=00000000-0000-4000-8000-00000000d1b0");
+  await draftPage.locator(".publisher-zh-video video").waitFor();
+  await draftPage.getByRole("button", { name: "Queue post" }).click();
+  assert.equal(await uploadsBeforeJob(draftPage), 0);
+  const twoVersions = await queued(draftPage);
+  assert.deepEqual(twoVersions.media, [videoId]);
+  assert.equal(twoVersions.zh.video, chineseVideoId);
+  await draftContext.close();
   console.log("Publisher composer passed on desktop and mobile.");
 } finally {
   rmSync(clips, { recursive: true, force: true });

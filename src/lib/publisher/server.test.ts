@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
-import { addDestinations, markPublished, stopTarget, targetActive, claimTarget, claimConnection, hashToken, validatePost } from "./server";
+import { addDestinations, markPublished, postMedia, stopTarget, targetActive, claimTarget, claimConnection, hashToken, validatePost } from "./server";
 import { defaultMetadata } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 const post = () => ({
@@ -142,6 +142,28 @@ test("Xiaohongshu needs its Chinese version, and every version must fit its plat
     "Instagram: takes up to 5 hashtags",
   );
   expect(() => validatePost({ ...post(), tags: ["not a tag"] })).toThrow("Tags");
+});
+test("a video post's Chinese version goes to Xiaohongshu alone", () => {
+  const original = crypto.randomUUID();
+  const chinese = crypto.randomUUID();
+  const zh = { title: "短片", text: "正文", topics: ["短片"], video: chinese };
+  const video = {
+    ...post(),
+    kind: "video",
+    media: [original],
+    platforms: ["xiaohongshu", "youtube"],
+    zh,
+  };
+  const checked = validatePost(video);
+  expect(checked.zh?.video).toBe(chinese);
+  expect(checked.variants?.xiaohongshu?.video).toBe(chinese);
+  expect(checked.variants?.youtube).not.toHaveProperty("video");
+  expect(postMedia(checked)).toEqual([original, chinese]);
+  expect(postMedia(validatePost({ ...video, zh: { ...zh, video: undefined } }))).toEqual([original]);
+  const refused = "The Chinese version is a second video for a video post";
+  expect(() => validatePost({ ...video, zh: { ...zh, video: "../secret" } })).toThrow(refused);
+  expect(() => validatePost({ ...video, zh: { ...zh, video: original } })).toThrow(refused);
+  expect(() => validatePost({ ...post(), platforms: ["instagram"], zh })).toThrow(refused);
 });
 describe("queue", () => {
   test("claims each target once, only for configured platforms", async () => {

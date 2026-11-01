@@ -63,6 +63,28 @@ describe.skipIf(!native)("createDraft", () => {
     expect(draft).toEqual({ preset: "short", ...text, video: "media-id" });
   });
 
+  test("sends a Chinese version as a second upload, after checking the text without its path", async () => {
+    const { calls, fetcher } = worker();
+    const zh = { ...text.zh, video: "long.mp4" };
+    await createDraft(spec({ video: "clip.mp4", ...text, zh }), options(fetcher));
+    expect(calls.map((call) => call.path)).toEqual(["drafts/check", "media", "media", "drafts"]);
+    expect(JSON.parse(calls[0].init.body).zh).toEqual(text.zh);
+    expect(calls[1].init.body.length).toBe(statSync(clip).size);
+    expect(calls[2].init.body.length).toBe(statSync(long).size);
+    expect(JSON.parse(calls[3].init.body).zh).toEqual({ ...text.zh, video: "media-id" });
+  });
+
+  test("uploads nothing when the Chinese version's path is wrong", async () => {
+    const { calls, fetcher } = worker();
+    const zh = { ...text.zh, video: "missing.mp4" };
+    await expect(createDraft(spec({ video: "clip.mp4", ...text, zh }), options(fetcher))).rejects.toThrow();
+    const notVideo = { ...text.zh, video: "a.gif" };
+    await expect(createDraft(spec({ video: "clip.mp4", ...text, zh: notVideo }), options(fetcher))).rejects.toThrow(
+      "MP4, MOV or WebM",
+    );
+    expect(calls).toEqual([]);
+  });
+
   test("never touches anything that publishes", async () => {
     const { calls, fetcher } = worker();
     await createDraft(spec({ video: clip, ...text }), options(fetcher));
