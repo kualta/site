@@ -4,7 +4,7 @@ import type { Platform } from "./presets";
 export interface PostText {
   title: string;
   caption: string;
-  /** For X and Bluesky when the caption is longer than they allow. */
+  /** For X, Bluesky and Farcaster when the caption is longer than they allow. */
   short?: string;
   /** Without "#", most important first; each platform takes as many as it shows. */
   tags?: string[];
@@ -15,13 +15,13 @@ export interface PostText {
 export interface Variant {
   title: string;
   text: string;
-  /** Tags kept outside the text: Bluesky's hidden tags, Xiaohongshu's linked topics. */
+  /** Tags kept outside the text: Bluesky's and Lens's hidden tags, Xiaohongshu's linked topics. */
   tags: string[];
   /** The media id it gets in place of the post's video. */
   video?: string;
 }
 
-/** How many tags each platform shows at the end of its text. X and Grain do nothing with them; Bluesky keeps its own hidden. */
+/** How many tags each platform shows at the end of its text. X, Grain and Farcaster do nothing with them; Bluesky and Lens keep their own hidden. */
 export const tagCounts: Record<Platform, number> = {
   grain: 0,
   instagram: 5,
@@ -29,9 +29,11 @@ export const tagCounts: Record<Platform, number> = {
   youtube: 3,
   twitter: 0,
   bluesky: 0,
+  farcaster: 0,
+  lens: 0,
   xiaohongshu: 5,
 };
-const BLUESKY_HIDDEN_TAGS = 8;
+const HIDDEN_TAGS = 8;
 const tagPattern = /^(?=.*\p{L})[\p{L}\p{N}_]{1,64}$/u;
 
 /** Tags from free text such as "#travel bogotá, 生活美学": letters, digits and _, at least one letter. */
@@ -94,11 +96,11 @@ export function renderVariant(platform: Platform, post: PostText): Variant {
       ...(post.zh?.video ? { video: post.zh.video } : {}),
     };
   const tags = post.tags ?? [];
-  const brief = platform === "twitter" || platform === "bluesky";
+  const brief = platform === "twitter" || platform === "bluesky" || platform === "farcaster";
   return {
     title: platform === "grain" || platform === "youtube" ? post.title.trim() : "",
     text: withTags((brief && post.short?.trim()) || post.caption, tags.slice(0, tagCounts[platform])),
-    tags: platform === "bluesky" ? tags.slice(0, BLUESKY_HIDDEN_TAGS) : [],
+    tags: platform === "bluesky" || platform === "lens" ? tags.slice(0, HIDDEN_TAGS) : [],
   };
 }
 
@@ -114,6 +116,10 @@ export function usage(platform: Platform, variant: Variant): Usage[] {
       return [{ label: "Text", used: xLength(variant.text), limit: 280 }];
     case "bluesky":
       return [{ label: "Text", used: graphemes(variant.text), limit: 300 }];
+    case "farcaster":
+      return [{ label: "Text (bytes)", used: bytes(variant.text), limit: 1024 }];
+    case "lens":
+      return [{ label: "Text", used: variant.text.length, limit: 25_000 }];
     case "instagram":
     case "tiktok":
       return [{ label: "Caption", used: variant.text.length, limit: 2200 }];

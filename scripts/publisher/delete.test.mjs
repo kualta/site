@@ -341,3 +341,61 @@ test("a note missing from the fully loaded note manager is already removed", asy
   expect(result).toEqual({ state: "deleted", message: "Already removed from the platform" });
   expect(clicks).toEqual([]);
 });
+const FULL = "0xb379b21f150211f01be6796ad87879d3a9b74579";
+test("Farcaster and Lens links identify their posts, however they were written", () => {
+  for (const link of [
+    `https://farcaster.xyz/~/conversations/${FULL}`,
+    `https://farcaster.xyz/kualta.eth/${FULL}`,
+    `https://warpcast.com/kualta.eth/${FULL}`,
+  ])
+    expect(deletionDestination("farcaster", link, post).id).toBe(FULL);
+  expect(deletionDestination("farcaster", "https://farcaster.xyz/kualta.eth/0xb379b21f", post).id).toBe("0xb379b21f");
+  expect(deletionDestination("lens", "https://hey.xyz/posts/zhz5az596s29qzvqca", post).id).toBe("zhz5az596s29qzvqca");
+});
+test("anything else isn't taken for a post", () => {
+  expect(() => deletionDestination("farcaster", "https://evil.example/kualta.eth/0xb379b21f", post)).toThrow("host");
+  expect(() => deletionDestination("farcaster", "https://farcaster.xyz/kualta.eth", post)).toThrow("identify");
+  expect(() => deletionDestination("farcaster", "https://farcaster.xyz/kualta.eth/notahash", post)).toThrow("identify");
+  expect(() => deletionDestination("lens", "https://hey.xyz/u/kualta", post)).toThrow("identify");
+  expect(() => deletionDestination("lens", "https://evil.example/posts/abc123", post)).toThrow("host");
+});
+test.each([
+  ["farcaster", `https://farcaster.xyz/~/conversations/${FULL}`, FULL],
+  ["lens", "https://hey.xyz/posts/abc123", "abc123"],
+])("%s deletes through its adapter, without opening a browser", async (platform, url, id) => {
+  const calls = [];
+  const remove = async (...args) => {
+    calls.push(args);
+    return { state: "deleted", message: "Deleted" };
+  };
+  const result = await deletePublication(
+    { post, target: { platform, state: "succeeded", url } },
+    {
+      stateDir: "/state",
+      farcaster: remove,
+      lens: remove,
+      open: async () => {
+        throw new Error("must not open a browser");
+      },
+    },
+  );
+  expect(result).toEqual({ state: "deleted", message: "Deleted" });
+  expect(calls[0]).toEqual([id, { stateDir: "/state", publication: post.id }]);
+});
+test("a refused deletion says why; an unclear one asks to check", async () => {
+  const run = (error) =>
+    deletePublication(
+      { post, target: { platform: "lens", state: "succeeded", url: "https://hey.xyz/posts/abc123" } },
+      {
+        stateDir: "/state",
+        lens: async () => {
+          throw error;
+        },
+      },
+    );
+  expect(await run(Object.assign(new Error("Connect Lens again."), { rejected: true }))).toEqual({
+    state: "failed",
+    message: "Connect Lens again.",
+  });
+  expect((await run(new Error("socket hang up"))).state).toBe("uncertain");
+});

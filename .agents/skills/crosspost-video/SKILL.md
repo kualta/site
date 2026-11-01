@@ -61,9 +61,9 @@ Use the person's own words wherever they gave them. Otherwise match the film's o
 
 - `title`: up to 100 characters. Goes to YouTube. Specific to this film, the words someone would search for or click.
 - `caption`: goes to Instagram, TikTok and YouTube's description. Make the first line work alone, since feeds cut off the rest. No hashtags: `tags` adds them.
-- `short`: goes to X and Bluesky instead of the caption. Needed when the caption passes 280 on X (emoji and CJK count 2, links 23) or 300 on Bluesky. Otherwise leave it out.
-- `alt`: what's on screen, for screen readers on Bluesky: the subject, what happens and any words shown. Up to 1,000 characters.
-- `tags`: without `#`, most important first; letters, digits and `_`. Pick what people search for, the film's specific subject before its general topic. Instagram and TikTok show 5, YouTube 3, Bluesky hides 8, X none.
+- `short`: goes to X, Bluesky and Farcaster instead of the caption. Needed when the caption passes 280 on X (emoji and CJK count 2, links 23), 300 on Bluesky or 1,024 bytes on Farcaster. Otherwise leave it out.
+- `alt`: what's on screen, for screen readers on Bluesky and Lens: the subject, what happens and any words shown. Up to 1,000 characters.
+- `tags`: without `#`, most important first; letters, digits and `_`. Pick what people search for, the film's specific subject before its general topic. Instagram and TikTok show 5, YouTube 3, Bluesky and Lens hide 8, X and Farcaster none.
 - No `<` or `>` in the title or caption: YouTube refuses them.
 - `preset` (optional): the tab to open on. Without it, films up to three minutes open on Short-form video (`short`) and longer ones on Long video (`video`).
 

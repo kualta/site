@@ -2,6 +2,14 @@ import { manualLogin } from "./manual-login.mjs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { destination, destinations, openProfile } from "./browser.mjs";
+import { connectFarcaster, disconnectFarcaster } from "./farcaster.mjs";
+import { connectLens, disconnectLens } from "./lens.mjs";
+
+// Posted to directly with their own keys, so there's no browser session to keep.
+const keyed = {
+  farcaster: { connect: connectFarcaster, disconnect: disconnectFarcaster },
+  lens: { connect: connectLens, disconnect: disconnectLens },
+};
 
 // Session cookies are checked only after the owner finishes the interactive login.
 export function hasSession(platform, cookies) {
@@ -20,11 +28,12 @@ export function hasSession(platform, cookies) {
 }
 export async function connectAccount(
   connection,
-  { stateDir, config, oauth, api, save, open = openProfile, login = manualLogin },
+  { stateDir, config, oauth, api, save, open = openProfile, login = manualLogin, accounts = keyed },
 ) {
   const atproto = ["grain", "bluesky"].includes(connection.platform);
+  const account = Object.hasOwn(accounts, connection.platform) ? accounts[connection.platform] : null;
   if (
-    (!atproto && !Object.hasOwn(destinations, connection.platform)) ||
+    (!atproto && !account && !Object.hasOwn(destinations, connection.platform)) ||
     !["connect", "disconnect"].includes(connection.action)
   )
     return { state: "failed", message: "Unsupported account action" };
@@ -40,13 +49,19 @@ export async function connectAccount(
       if (atproto) {
         await oauth.disconnect();
         delete config.atproto;
-      } else await rm(join(stateDir, connection.platform), { recursive: true, force: true });
+      } else if (account) await account.disconnect({ stateDir });
+      else await rm(join(stateDir, connection.platform), { recursive: true, force: true });
       config.platforms = config.platforms.filter((p) => !affected.includes(p));
     } else if (atproto) {
       const did = await oauth.connect(active);
       await active();
       config.atproto = { did };
       config.platforms = [...new Set([...config.platforms, ...affected])];
+    } else if (account) {
+      const report = (message) => api("accounts/progress", { id: connection.id, claim: connection.claim, message });
+      await account.connect(active, { stateDir, report });
+      await active();
+      config.platforms = [...new Set([...config.platforms, connection.platform])];
     } else {
       const profile = join(stateDir, connection.platform);
       await login(profile, destinations[connection.platform], active);

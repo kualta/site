@@ -155,3 +155,47 @@ test("browser collection reads embedded counts without clicking or publishing", 
   expect(result).toEqual({ metrics: { views: 100, likes: 5 } });
   expect(closed).toBe(true);
 });
+test("Farcaster and Lens counts come from public reads, without opening a browser", async () => {
+  const hash = "0xb379b21f150211f01be6796ad87879d3a9b74579";
+  const open = async () => {
+    throw new Error("must not open a browser");
+  };
+  const cast = await collectAnalytics(
+    { platform: "farcaster", job_id: "job", url: `https://farcaster.xyz/~/conversations/${hash}` },
+    {
+      open,
+      fetcher: async (url) => {
+        const { pathname, searchParams } = new URL(url);
+        if (pathname === "/v1/reactionsByCast")
+          return Response.json({
+            messages: searchParams.get("reaction_type") === "Like" ? [{ hash: "a" }, { hash: "b" }] : [{ hash: "c" }],
+            nextPageToken: "",
+          });
+        expect(pathname).toBe("/v1/castsByParent");
+        return Response.json({ messages: [], nextPageToken: "" });
+      },
+    },
+  );
+  expect(cast).toEqual({ metrics: { likes: 2, shares: 1, comments: 0 } });
+  const lens = await collectAnalytics(
+    { platform: "lens", job_id: "job", url: "https://hey.xyz/posts/abc123" },
+    {
+      open,
+      fetcher: async () =>
+        Response.json({
+          data: { post: { isDeleted: false, stats: { comments: 1, reposts: 2, quotes: 0, reactions: 3, bookmarks: 4 } } },
+        }),
+    },
+  );
+  expect(lens).toEqual({ metrics: { likes: 3, comments: 1, shares: 2, saves: 4 } });
+});
+test("a Farcaster or Lens outage is an error, never zero", async () => {
+  const fetcher = async () => {
+    throw new Error("offline");
+  };
+  for (const target of [
+    { platform: "farcaster", job_id: "job", url: "https://farcaster.xyz/~/conversations/0xb379b21f150211f01be6796ad87879d3a9b74579" },
+    { platform: "lens", job_id: "job", url: "https://hey.xyz/posts/abc123" },
+  ])
+    expect((await collectAnalytics(target, { fetcher })).error).toBeString();
+});

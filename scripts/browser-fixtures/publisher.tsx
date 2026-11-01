@@ -6,6 +6,7 @@ import "../../src/styles/globals.css";
 const requests: { path: string; method: string; body: unknown }[] = [];
 Object.assign(window, { publisherRequests: requests });
 const json = (value: unknown, status = 200) => Response.json(value, { status });
+const connecting = new URLSearchParams(location.search).get("connecting");
 const minutes = (count: number) => Date.now() - count * 60_000;
 const target = (platform: string, state: string, extra: Record<string, unknown> = {}) => ({
   id: `${platform}-${state}-${Math.random()}`,
@@ -106,7 +107,21 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "status")
     return json({
       helper: { last_seen: Date.now(), platforms: JSON.stringify(["bluesky", "twitter", "grain", "instagram"]) },
-      connections: [],
+      connections: connecting
+        ? [
+            {
+              id: "00000000-0000-4000-8000-00000000c044",
+              platform: connecting,
+              action: "connect",
+              state: "working",
+              confirmed: 0,
+              message:
+                connecting === "lens"
+                  ? "Add 0x1111111111111111111111111111111111111111 as an account manager at https://hey.xyz/settings/manager with your wallet. It only needs to execute transactions, so leave token transfers off. Waiting for Lens to list it…"
+                  : null,
+            },
+          ]
+        : [],
     });
   if (path === "history") return json(history);
   if (path === "media") return json({ id: crypto.randomUUID() });

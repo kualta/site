@@ -307,6 +307,21 @@ test("crossposting asks for what new destinations need, and for media that still
   expect(payload().title).toBe("Walk");
   expect(payload().variants.xiaohongshu.title).toBe("散步");
 });
+test("a post from before Farcaster and Lens existed can still be crossposted to them", async () => {
+  const job = validatePost({ ...post(), kind: "text", title: "", media: [], platforms: ["bluesky"], caption: "Hi" });
+  const older = {
+    ...job,
+    metadata: Object.fromEntries(Object.entries(job.metadata).filter(([p]) => !["farcaster", "lens"].includes(p))),
+  } as typeof job;
+  const { db, payload } = published(older);
+  expect(await addDestinations(db, { head: async () => ({}) }, { job: job.id, platforms: ["farcaster", "lens"] })).toEqual([
+    "farcaster",
+    "lens",
+  ]);
+  expect(payload().variants.farcaster.text).toBe("Hi");
+  expect(payload().metadata.lens).toBe("remove-all");
+  expect(payload().metadata.bluesky).toBe(job.metadata.bluesky);
+});
 test("stopping releases a target at once, and only a retry takes its claim away", async () => {
   const { db, sqlite } = database();
   sqlite.exec("ALTER TABLE publisher_targets ADD COLUMN finished_at INTEGER");

@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { processMedia } from "./process.mjs";
 import { publishAtproto } from "./atproto.mjs";
 import { publishBrowser } from "./browser.mjs";
+import { publishFarcaster } from "./farcaster.mjs";
+import { publishLens } from "./lens.mjs";
 
 export async function publish(
   target,
@@ -16,6 +18,8 @@ export async function publish(
     process = processMedia,
     atproto = publishAtproto,
     browser = publishBrowser,
+    farcaster = publishFarcaster,
+    lens = publishLens,
     signal,
   },
 ) {
@@ -80,6 +84,8 @@ export async function publish(
     let result;
     if (["grain", "bluesky"].includes(target.platform))
       result = await until(atproto(target.platform, authorization, files, infos, post));
+    else if (target.platform === "farcaster") result = await until(farcaster(files, infos, post, { stateDir, signal }));
+    else if (target.platform === "lens") result = await until(lens(files, infos, post, { stateDir, signal }));
     else if (["twitter", "instagram"].includes(target.platform)) {
       // Vendored adapters accept one path or an array for carousels; text posts send none.
       const media = files.length > 1 ? JSON.stringify(files) : (files[0] ?? "");
@@ -116,7 +122,7 @@ export async function publish(
       message: result.message || "",
     };
   } catch (e) {
-    return { state: publishing ? "uncertain" : "failed", message: e.message };
+    return { state: publishing && !e.rejected ? "uncertain" : "failed", message: e.message };
   } finally {
     // A stopped step may still be writing here; the system clears its temp folder eventually.
     await rm(temp, { recursive: true, force: true }).catch(() => {});
