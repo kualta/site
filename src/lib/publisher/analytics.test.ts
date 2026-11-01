@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { claimAnalytics, saveAnalytics, analyticsPage, analyticsSeries, requestRefresh } from "./analytics";
-import { validMetrics, combined, metricSeries, metricValue, timeTicks, valueTicks } from "./metrics";
+import { validMetrics, combined, metricSeries, metricValue, stackOrder, timeTicks, valueTicks } from "./metrics";
+import { platforms } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 function fixture() {
   const sql = new Database(":memory:");
@@ -110,7 +111,9 @@ test("history keeps hourly closes for the last three days and daily closes befor
     [now - 4 * hour, 5],
   ])
     f.sql.query("INSERT INTO publisher_metric_snapshots VALUES(?,?,?)").run(id, at, JSON.stringify({ views }));
-  expect((await analyticsSeries(f.db, f.job, now)).map((s) => s.metrics.views)).toEqual([2, 4, 5]);
+  const series = await analyticsSeries(f.db, f.job, now);
+  expect(series.map((s) => s.metrics.views)).toEqual([2, 4, 5]);
+  expect(series[0].platform).toBe("twitter");
   f.sql.close();
 });
 test("a refresh queues only readable destinations not checked in the last five minutes", async () => {
@@ -139,19 +142,31 @@ test("metrics preserve unavailable versus zero and never double count views plus
   expect(combined([null, 0])).toBe(0);
   for (const input of [{ views: -1 }, { views: 1.5 }, { views: "10" }, { views: Infinity }, { bad: 2 }, {}])
     expect(() => validMetrics(input)).toThrow();
-  expect(
-    metricSeries(
-      [
-        { target_id: "a", observed_at: 86400000, metrics: { views: 10 } },
-        { target_id: "b", observed_at: 86400001, metrics: { views: 20 } },
-        { target_id: "a", observed_at: 172800000, metrics: { views: 15 } },
-      ],
-      "exposure",
-    ).map((p) => [p.value, p.coverage]),
-  ).toEqual([
+  const series = metricSeries(
+    [
+      { target_id: "a", platform: "youtube", observed_at: 86400000, metrics: { views: 10 } },
+      { target_id: "b", platform: "tiktok", observed_at: 86400001, metrics: { views: 20 } },
+      { target_id: "a", platform: "youtube", observed_at: 172800000, metrics: { views: 15 } },
+    ],
+    "exposure",
+  );
+  expect(series.map((p) => [p.value, p.coverage])).toEqual([
     [30, 2],
     [35, 2],
   ]);
+  expect(series.at(-1)?.parts).toEqual({ youtube: 15, tiktok: 20 });
+});
+test("a platform's band only starts once it reports, and every platform has a place in the stack", () => {
+  const series = metricSeries(
+    [
+      { target_id: "a", platform: "youtube", observed_at: 0, metrics: { views: 10 } },
+      { target_id: "b", platform: "bluesky", observed_at: 3_600_000, metrics: { likes: 1 } },
+      { target_id: "c", platform: "instagram", observed_at: 7_200_000, metrics: { views: 5 } },
+    ],
+    "exposure",
+  );
+  expect(series.map((p) => p.parts)).toEqual([{ youtube: 10 }, { youtube: 10, instagram: 5 }]);
+  expect([...stackOrder].sort()).toEqual([...platforms].sort());
 });
 test("chart axes use whole numbers from zero and evenly spaced dates", () => {
   expect(valueTicks(0)).toEqual([0, 1]);

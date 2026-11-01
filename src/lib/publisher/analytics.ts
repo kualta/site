@@ -75,13 +75,14 @@ export async function requestRefresh(db: NewsletterDB, job: string) {
 export async function analyticsSeries(db: NewsletterDB, job: string, now = Date.now()) {
   // Hourly closes show how a young post moves; daily closes before that bound the transfer. Raw snapshots stay in D1.
   const { results } = await db
-    .prepare(`SELECT s.target_id,s.observed_at,s.metrics FROM publisher_metric_snapshots s
+    .prepare(`SELECT s.target_id,t.platform,s.observed_at,s.metrics FROM publisher_metric_snapshots s
+      JOIN publisher_targets t ON t.id=s.target_id
       JOIN (SELECT target_id, MAX(observed_at) AS observed_at FROM publisher_metric_snapshots
       WHERE target_id IN (SELECT id FROM publisher_targets WHERE job_id=?)
       GROUP BY target_id, CASE WHEN observed_at>=? THEN CAST(observed_at/3600000 AS INTEGER)
         ELSE CAST(observed_at/86400000 AS INTEGER)*24 END) closing
       ON closing.target_id=s.target_id AND closing.observed_at=s.observed_at ORDER BY s.observed_at`)
     .bind(job, now - 3 * 86_400_000)
-    .all<{ target_id: string; observed_at: number; metrics: string }>();
+    .all<{ target_id: string; platform: Platform; observed_at: number; metrics: string }>();
   return results.map((row) => ({ ...row, metrics: JSON.parse(row.metrics) }));
 }

@@ -1,3 +1,5 @@
+import type { Platform } from "./presets";
+
 export const metricKeys = ["views", "impressions", "reach", "likes", "comments", "shares", "saves"] as const;
 export type Metrics = Partial<Record<(typeof metricKeys)[number], number>>;
 export type Metric = keyof Metrics | "exposure";
@@ -25,21 +27,41 @@ export function validMetrics(value: unknown): Metrics {
   if (!Object.keys(result).length) throw new SyntaxError("No metrics available");
   return result;
 }
-export type Sample = { target_id: string; observed_at: number; metrics: Metrics };
-export type SeriesPoint = { at: number; value: number; coverage: number };
+export type Sample = { target_id: string; platform: Platform; observed_at: number; metrics: Metrics };
+export type SeriesPoint = { at: number; value: number; coverage: number; parts: Partial<Record<Platform, number>> };
+/** Bottom of the chart first. Fixed, so a platform's place never depends on its rank, and look-alike colors don't touch. */
+export const stackOrder: readonly Platform[] = [
+  "youtube",
+  "bluesky",
+  "tiktok",
+  "lens",
+  "farcaster",
+  "xiaohongshu",
+  "twitter",
+  "grain",
+  "instagram",
+];
+export function platformColor(platform: Platform) {
+  return `var(--platform-${platform})`;
+}
+/** The platforms with a count at this point, top of the stack first to match what's on screen. */
+export function reportingPlatforms(point: SeriesPoint) {
+  return [...stackOrder].reverse().filter((platform) => point.parts[platform] !== undefined);
+}
 const HOUR = 3_600_000;
 /** One point per hour. Carry forward each destination's latest observation; never fill missing counts with zero. */
 export function metricSeries(samples: Sample[], metric: Metric) {
-  const latest = new Map<string, number>();
+  const latest = new Map<Platform, number>();
   const hours = new Map<number, SeriesPoint>();
   for (const sample of [...samples].sort((a, b) => a.observed_at - b.observed_at)) {
     const value = metricValue(sample.metrics, metric);
     if (value === null) continue;
-    latest.set(sample.target_id, value);
+    latest.set(sample.platform, value);
     hours.set(Math.floor(sample.observed_at / HOUR), {
       at: sample.observed_at,
       value: combined([...latest.values()])!,
       coverage: latest.size,
+      parts: Object.fromEntries(latest),
     });
   }
   return [...hours.values()];

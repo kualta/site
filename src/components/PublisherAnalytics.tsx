@@ -1,5 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { combined, metricSeries, metricValue, type Metric, type Metrics, type Sample } from "@/lib/publisher/metrics";
+import {
+  combined,
+  metricSeries,
+  metricValue,
+  platformColor,
+  reportingPlatforms,
+  type Metric,
+  type Metrics,
+  type Sample,
+  type SeriesPoint,
+} from "@/lib/publisher/metrics";
 import { platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
 
 // Only the Analytics tab downloads the chart library, and the Worker never loads it.
@@ -70,6 +80,28 @@ function Loading() {
   );
 }
 
+function share(value: number, total: number) {
+  const percent = (value / total) * 100;
+  return percent > 0 && percent < 1 ? "<1%" : `${Math.round(percent)}%`;
+}
+/** What each platform adds up to at the latest point. One platform needs no key. */
+function Contributions({ point, busy }: { point: SeriesPoint; busy: boolean }) {
+  const reporting = reportingPlatforms(point);
+  if (reporting.length < 2) return null;
+  return (
+    <ul className="publisher-analytics-legend" data-busy={busy}>
+      {reporting.map((platform) => (
+        <li key={platform}>
+          <i className="publisher-analytics-swatch" style={{ background: platformColor(platform) }} />
+          {platformNames[platform]}
+          <strong>{number(point.parts[platform]!)}</strong>
+          {point.value > 0 && <small>{share(point.parts[platform]!, point.value)}</small>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Trend({
   samples,
   metric,
@@ -125,9 +157,10 @@ function Trend({
       <div className="publisher-analytics-chart" aria-busy={loading}>
         {plot}
       </div>
+      {!!points.length && <Contributions point={points.at(-1)!} busy={loading} />}
       <figcaption className="publisher-note">
-        Counts are cumulative. Hourly for the last three days, daily before that; coverage can change as platforms
-        report data.
+        Counts are cumulative, stacked by platform. Hourly for the last three days, daily before that; a platform's band
+        starts when it first reports.
       </figcaption>
       {!!points.length && (
         <details>
@@ -274,8 +307,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
   const samples = useMemo(() => {
     if (!series) return [];
     if (!seriesCurrent) return seriesFailed ? [] : series.samples;
-    const shown = new Set(targets.map((t) => t.id));
-    return series.samples.filter((sample) => shown.has(sample.target_id));
+    return series.samples.filter((sample) => platform === "all" || sample.platform === platform);
   }, [series, seriesCurrent, seriesFailed, platform]);
   const columns = (["exposure", "reach", "likes", "comments", "shares", "saves"] as Metric[]).filter(
     (key) => key !== "reach" || reported("reach"),
@@ -410,6 +442,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
                     {targets.map((t) => (
                       <tr key={t.id}>
                         <th>
+                          <i className="publisher-analytics-swatch" style={{ background: platformColor(t.platform) }} />
                           {t.url && t.deletion_state !== "deleted" ? (
                             <a href={t.url} target="_blank" rel="noreferrer">
                               {platformNames[t.platform]}
