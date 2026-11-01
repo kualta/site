@@ -105,7 +105,8 @@
 .publisher-account-row > span:first-child { flex: 1; }
 .publisher-account-row .publisher-note { margin: 0; }
 .publisher-account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: .65rem; }
-.publisher-account-actions p { flex-basis: 100%; margin: 0; }
+.publisher-account-actions p { flex-basis: 100%; margin: 0; overflow-wrap: anywhere; }
+.publisher-account-actions a { text-decoration: underline; }
 @media (max-width: 520px) { .publisher-account-row { flex-wrap: wrap; gap: .5rem; } .publisher-account-row .publisher-note { font-size: .7rem; } }
 
 .publisher-header-tools { display:flex; align-items:center; gap:20px; }

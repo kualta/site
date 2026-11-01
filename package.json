@@ -76,6 +76,9 @@
   "devDependencies": {
     "@atproto/oauth-client-node": "^0.5.7",
     "@biomejs/biome": "1.4.1",
+    "@farcaster/core": "0.21.0",
+    "@lens-chain/storage-client": "1.0.6",
+    "@lens-protocol/metadata": "2.1.0",
     "@tailwindcss/typography": "^0.5.9",
     "@types/bun": "^1.4.0",
     "autoprefixer": "^10.4.13",

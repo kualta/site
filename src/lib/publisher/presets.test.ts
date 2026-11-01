@@ -106,3 +106,25 @@ test("photos and videos together go only where they can be mixed", () => {
   expect(unsupported("grain", "mixed", 2)).toBe("takes only photos");
   expect(unsupported("youtube", "mixed", 2)).toBe("takes one video");
 });
+test("Farcaster and Lens take text, a few photos or one video, and neither mixes them", () => {
+  expect(unsupported("farcaster", "text", 0)).toBeNull();
+  expect(unsupported("farcaster", "photo", 2)).toBeNull();
+  expect(unsupported("farcaster", "photo", 3)).toBe("takes up to 2 photos");
+  expect(unsupported("lens", "photo", 4)).toBeNull();
+  expect(unsupported("lens", "photo", 5)).toBe("takes up to 4 photos");
+  expect(unsupported("farcaster", "video", 1, 600)).toBeNull();
+  expect(unsupported("lens", "video", 1, 600)).toBeNull();
+  expect(unsupported("farcaster", "mixed", 2)).toBe("takes photos or one video");
+  expect(unsupported("lens", "mixed", 2)).toBe("takes photos or one video");
+});
+test("saved presets keep their destinations when new ones appear, and get a metadata policy for them", () => {
+  const raw = JSON.stringify({
+    version: 1,
+    active: "text",
+    presets: [{ id: "text", name: "Text post", platforms: ["bluesky"], metadata: { bluesky: "remove-all" }, caption: "" }],
+  });
+  const [preset] = parsePreferences(raw).presets;
+  expect(preset.platforms).toEqual(["bluesky"]);
+  expect(preset.metadata.farcaster).toBe("remove-all");
+  expect(preset.metadata.lens).toBe("remove-all");
+});

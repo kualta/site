@@ -17,6 +17,22 @@ interface Props {
   refresh: () => Promise<void>;
   onError: (message: string) => void;
 }
+/** What the laptop is asking the owner to do, with its address copyable and its link clickable. */
+function HelperMessage({ text }: { text: string }) {
+  return (
+    <p className="publisher-note">
+      {text.split(/(https:\/\/\S+)/).map((part, i) =>
+        part.startsWith("https://") ? (
+          <a key={i} href={part} target="_blank" rel="noreferrer">
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </p>
+  );
+}
 export default function PublisherConnections({ online, connected, connections, request, refresh, onError }: Props) {
   const [busy, setBusy] = useState(false);
   const active = connections.find((c) => c.state === "queued" || c.state === "working");
@@ -54,6 +70,7 @@ export default function PublisherConnections({ online, connected, connections, r
             if (active.state === "queued") status = "Waiting for laptop…";
             else if (active.action === "disconnect") status = "Disconnecting…";
           }
+          const connecting = current && active.state === "working" && active.action === "connect";
           return (
             <div className="publisher-account" key={platform}>
               <div className="publisher-account-row">
@@ -75,10 +92,17 @@ export default function PublisherConnections({ online, connected, connections, r
               </div>
               {current && (
                 <div className="publisher-account-actions">
-                  {active.state === "working" && active.action === "connect" && platform === "grain" && (
+                  {connecting && platform === "grain" && (
                     <p className="publisher-note">Authorize Grain and Bluesky in the browser window on your laptop.</p>
                   )}
-                  {active.state === "working" && active.action === "connect" && platform !== "grain" && (
+                  {connecting && platform === "farcaster" && (
+                    <p className="publisher-note">
+                      Approve the posting key in the Chrome window on your laptop. It needs your Farcaster recovery phrase
+                      once, stays on the laptop and isn't stored.
+                    </p>
+                  )}
+                  {connecting && platform === "lens" && active.message && <HelperMessage text={active.message} />}
+                  {connecting && !["grain", "farcaster", "lens"].includes(platform) && (
                     <>
                       <p className="publisher-note">
                         Sign in in the Chrome window on your laptop, then finish here. Finishing gives Chrome about 30

@@ -48,3 +48,19 @@ test("Xiaohongshu counts its topics toward the text limit", () => {
   expect(usage("xiaohongshu", variant)[1].used).toBe(990 + 1 + 4 + 6);
   expect(problem("xiaohongshu", variant)).toBe("text is 1001/1000");
 });
+test("Farcaster counts bytes up to 1,024, takes the short version and shows no tags", () => {
+  const post = { title: "Walk", caption: "Sunday walk", tags: ["a1", "b2"] };
+  expect(renderVariant("farcaster", post)).toEqual({ title: "", text: "Sunday walk", tags: [] });
+  expect(renderVariant("farcaster", { ...post, short: "Walked" }).text).toBe("Walked");
+  expect(usage("farcaster", renderVariant("farcaster", { title: "", caption: "空空" }))[0].used).toBe(6);
+  expect(problem("farcaster", renderVariant("farcaster", { title: "", caption: "x".repeat(1024) }))).toBeNull();
+  expect(problem("farcaster", renderVariant("farcaster", { title: "", caption: "空".repeat(342) }))).toBe(
+    "text (bytes) is 1026/1024",
+  );
+});
+test("Lens keeps the whole caption and hides up to 8 tags", () => {
+  const tags = ["a1", "b2", "c3", "d4", "e5", "f6", "g7", "h8", "i9"];
+  const variant = renderVariant("lens", { title: "Walk", caption: "Sunday walk", short: "Walked", tags });
+  expect(variant).toEqual({ title: "", text: "Sunday walk", tags: tags.slice(0, 8) });
+  expect(problem("lens", renderVariant("lens", { title: "", caption: "x".repeat(5000) }))).toBeNull();
+});

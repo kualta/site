@@ -2,6 +2,8 @@ import { join } from "node:path";
 import { Innertube } from "youtubei.js";
 import { openProfile } from "./browser.mjs";
 import { deletionDestination } from "./delete.mjs";
+import { castMetrics } from "./farcaster.mjs";
+import { lensMetrics } from "./lens.mjs";
 import { creatorOrigin, findNote } from "./rednote.mjs";
 
 function counts(values) {
@@ -76,7 +78,9 @@ export async function collectAnalytics(
       return response.json();
     };
     let metrics;
-    if (target.platform === "bluesky" || target.platform === "grain") {
+    if (target.platform === "farcaster") metrics = counts(await castMetrics(id, { fetcher }));
+    else if (target.platform === "lens") metrics = counts(await lensMetrics(id, { fetcher }));
+    else if (target.platform === "bluesky" || target.platform === "grain") {
       const actor = new URL(target.url).pathname.split("/")[2];
       if (target.platform === "bluesky") {
         const uri = `at://${actor}/app.bsky.feed.post/${id}`;

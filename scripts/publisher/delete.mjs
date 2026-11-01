@@ -1,6 +1,8 @@
 import { join } from "node:path";
 import { recordKey } from "../lib/atproto-content.mjs";
 import { openProfile } from "./browser.mjs";
+import { deleteCast } from "./farcaster.mjs";
+import { deleteLensPost } from "./lens.mjs";
 import { creatorOrigin, findNote } from "./rednote.mjs";
 const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 
@@ -22,6 +24,8 @@ export function deletionDestination(platform, value, post) {
     youtube: ["youtu.be", "www.youtube.com", "youtube.com"],
     tiktok: ["www.tiktok.com", "tiktok.com"],
     xiaohongshu: ["www.xiaohongshu.com", "xiaohongshu.com", "www.rednote.com", "rednote.com"],
+    farcaster: ["farcaster.xyz", "www.farcaster.xyz", "warpcast.com", "www.warpcast.com"],
+    lens: ["hey.xyz", "www.hey.xyz"],
   };
   if (!hosts[platform]?.includes(url.hostname)) throw new Error("Unexpected publication host");
   let id;
@@ -29,6 +33,9 @@ export function deletionDestination(platform, value, post) {
   if (platform === "instagram") id = url.pathname.match(/^\/(?:p|reel)\/([\w-]+)\/?$/)?.[1];
   if (platform === "tiktok") id = url.pathname.match(/^\/@[\w.-]+\/video\/(\d+)\/?$/)?.[1];
   if (platform === "xiaohongshu") id = url.pathname.match(/^\/explore\/([a-f\d]+)\/?$/)?.[1];
+  // Publishing links with the full hash; one pasted from the app may have the short one.
+  if (platform === "farcaster") id = url.pathname.match(/^\/[~\w.-]+(?:\/conversations)?\/(0x[a-f\d]{8,40})\/?$/)?.[1];
+  if (platform === "lens") id = url.pathname.match(/^\/posts\/(\w+)\/?$/)?.[1];
   if (platform === "youtube")
     id =
       url.hostname === "youtu.be"
@@ -97,7 +104,10 @@ async function gone(page, platform) {
     return false;
   }
 }
-export async function deletePublication(deletion, { oauth, stateDir, open = openProfile }) {
+export async function deletePublication(
+  deletion,
+  { oauth, stateDir, open = openProfile, farcaster = deleteCast, lens = deleteLensPost },
+) {
   const { target, post } = deletion;
   let submitted = false;
   let context;
@@ -137,6 +147,11 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
         await agent.com.atproto.repo.applyWrites({ repo: owner, writes });
       }
       return { state: "deleted", message: "Deleted from the platform" };
+    }
+    if (target.platform === "farcaster" || target.platform === "lens") {
+      submitted = true;
+      const remove = target.platform === "farcaster" ? farcaster : lens;
+      return await remove(destination.id, { stateDir, publication: post.id });
     }
     if (target.platform === "xiaohongshu") {
       context = await open(join(stateDir, target.platform));
@@ -277,9 +292,10 @@ export async function deletePublication(deletion, { oauth, stateDir, open = open
       throw new Error("Deletion was not confirmed");
     }
     return { state: "deleted", message: "Platform confirmed deletion" };
-  } catch {
+  } catch (error) {
     await Promise.allSettled([...responses]);
     if (confirmed) return { state: "deleted", message: "Platform confirmed deletion" };
+    if (error.rejected) return { state: "failed", message: error.message };
     return {
       state: submitted ? "uncertain" : "failed",
       message: submitted

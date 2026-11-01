@@ -373,3 +373,56 @@ print(json.dumps([round(at(new)), find(links, "kualtx", started), find(links, "k
   expect(tooOld).toBeNull();
   expect(otherAccount).toBeNull();
 });
+const fetchesNothing = () => {
+  throw new Error("must not run");
+};
+test.each(["farcaster", "lens"])("%s publishes with the prepared files and exactly its own version", async (platform) => {
+  const calls = [];
+  const adapter = async (files, infos, sent, options) => {
+    calls.push({ files, infos, sent, options });
+    return { url: `https://example.com/${platform}` };
+  };
+  const result = await publish(
+    { platform },
+    {
+      ...post,
+      variants: { [platform]: { title: "", text: "Their version", tags: ["film"] } },
+      metadata: { [platform]: "remove-all" },
+    },
+    fixture({
+      stateDir: "/state",
+      farcaster: platform === "farcaster" ? adapter : fetchesNothing,
+      lens: platform === "lens" ? adapter : fetchesNothing,
+      atproto: fetchesNothing,
+      browser: fetchesNothing,
+      python: fetchesNothing,
+    }),
+  );
+  expect(result).toEqual({ state: "succeeded", url: `https://example.com/${platform}`, message: "" });
+  expect(calls[0].sent.caption).toBe("Their version");
+  expect(calls[0].sent.tags).toEqual(["film"]);
+  expect(calls[0].files).toHaveLength(2);
+  expect(calls[0].options.stateDir).toBe("/state");
+});
+test("a refusal is a failure that can be retried; anything else during publishing stays unknown", async () => {
+  const run = (error) =>
+    publish(
+      { platform: "farcaster" },
+      { ...post, metadata: { farcaster: "remove-all" } },
+      fixture({
+        farcaster: async () => {
+          throw error;
+        },
+      }),
+    );
+  expect(await run(Object.assign(new Error("Refused"), { rejected: true }))).toEqual({ state: "failed", message: "Refused" });
+  expect(await run(new Error("socket hang up"))).toEqual({ state: "uncertain", message: "socket hang up" });
+});
+test("a cast the network hasn't shown yet is uncertain and keeps its link", async () => {
+  const result = await publish(
+    { platform: "farcaster" },
+    { ...post, metadata: { farcaster: "remove-all" } },
+    fixture({ farcaster: async () => ({ uncertain: true, url: "https://farcaster.xyz/x", message: "Check it" }) }),
+  );
+  expect(result).toEqual({ state: "uncertain", url: "https://farcaster.xyz/x", message: "Check it" });
+});

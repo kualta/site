@@ -488,7 +488,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const canReframe = toYouTube && reframesToShort(video);
   const youtubeShort = canReframe && (shortChoice ?? preset.id === "short");
   const videoLabel = (p: Platform) => (p === "youtube" && youtubeShort ? "Short" : videoFormat(p, video));
-  // One text for everyone; X and Bluesky may take a short version, Xiaohongshu its Chinese one.
+  // One text for everyone; X, Bluesky and Farcaster may take a short version, Xiaohongshu its Chinese one.
   const text = {
     title: needsTitle ? title : "",
     caption,
@@ -500,7 +500,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     const variant = renderVariant(platform, text);
     return { platform, variant, issue: problem(platform, variant) };
   });
-  const brief: Platform[] = destinations.filter((p) => p === "twitter" || p === "bluesky");
+  const brief: Platform[] = destinations.filter((p) => p === "twitter" || p === "bluesky" || p === "farcaster");
   const needsShort = brief.some((p) => problem(p, renderVariant(p, { ...text, short: undefined }))) || !!short;
   // The counter follows the destination whose limit the main text is closest to.
   const counted = versions
@@ -656,7 +656,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                           Photo {index + 1} · {file.name}
                         </legend>
                         <label>
-                          Description (Grain / Bluesky)
+                          Description (Grain / Bluesky / Lens)
                           <input
                             value={alts[index] || ""}
                             maxLength={1000}
@@ -692,7 +692,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                 )}
                 {kind === "video" && (
                   <label>
-                    Video description (Bluesky)
+                    Video description (Bluesky / Lens)
                     <input
                       value={alt}
                       maxLength={1000}
@@ -734,7 +734,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                   />
                   <small className="publisher-note">
                     Most important first. Instagram and TikTok add 5 at the end, YouTube 3 to the description, Bluesky
-                    keeps 8 hidden. X and Grain get none.
+                    and Lens keep 8 hidden. X, Grain and Farcaster get none.
                   </small>
                 </label>
                 {needsShort && (
@@ -819,7 +819,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                         {platform === "xiaohongshu" && sentChineseVideo && <small>Video: the Chinese version</small>}
                         {!!variant.tags.length && (
                           <small>
-                            {platform === "bluesky" ? "Hidden tags" : "Topics"}:{" "}
+                            {platform === "bluesky" || platform === "lens" ? "Hidden tags" : "Topics"}:{" "}
                             {variant.tags.map((tag) => `#${tag}`).join(" ")}
                           </small>
                         )}

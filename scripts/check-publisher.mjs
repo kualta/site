@@ -221,7 +221,7 @@ try {
     assert.equal(chooser.isMultiple(), true);
     await chooser.setFiles(photos(5));
     assert.equal(await reason("X / Twitter"), "takes up to 4 photos");
-    const descriptions = page.getByRole("textbox", { name: "Description (Grain / Bluesky)" });
+    const descriptions = page.getByRole("textbox", { name: "Description (Grain / Bluesky / Lens)" });
     assert.equal(await descriptions.count(), 5);
     for (let i = 0; i < 5; i++) await descriptions.nth(i).fill(`Photo ${i + 1} described`);
     assert.equal(await title.count(), 0);
@@ -312,14 +312,14 @@ try {
     assert.equal(await reason("Grain"), "needs photos");
     assert.equal(await reason("Instagram"), "Reel");
     assert.deepEqual(await checked(), ["InstagramReel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
-    await page.getByRole("textbox", { name: "Video description (Bluesky)" }).fill("A short clip");
+    await page.getByRole("textbox", { name: "Video description (Bluesky / Lens)" }).fill("A short clip");
     await title.fill("A clip");
     await presets.getByRole("button", { name: "Photo", exact: true }).click();
     assert.deepEqual(await checked(), ["InstagramReel"]);
     await presets.getByRole("button", { name: "Long video", exact: true }).click();
     assert.deepEqual(await checked(), ["YouTube"]);
     assert.equal(await title.inputValue(), "A clip");
-    assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky)" }).inputValue(), "A short clip");
+    assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky / Lens)" }).inputValue(), "A short clip");
     await presets.getByRole("button", { name: "Short-form video" }).click();
     // Tags are rendered per platform, and Xiaohongshu gets its Chinese version from Translate.
     await page.getByRole("textbox", { name: "Tags" }).fill("#bogota film");
@@ -479,7 +479,7 @@ try {
       return transfer;
     });
     await page.locator(".publisher-composer").dispatchEvent("drop", { dataTransfer: dropped });
-    await page.getByRole("textbox", { name: "Description (Grain / Bluesky)" }).waitFor();
+    await page.getByRole("textbox", { name: "Description (Grain / Bluesky / Lens)" }).waitFor();
     await page.getByRole("button", { name: "Remove media" }).click();
     // Custom presets remain editable and survive a reload, alongside the active draft.
     await presets.getByRole("button", { name: "Text post", exact: true }).click();
@@ -596,7 +596,7 @@ try {
   );
   assert.equal(await page.getByRole("textbox", { name: /^Title ·/ }).inputValue(), "Rendered film");
   assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "A film about films");
-  assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky)" }).inputValue(), "Titles fade over a dark stage");
+  assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky / Lens)" }).inputValue(), "Titles fade over a dark stage");
   assert.equal(await page.getByRole("textbox", { name: "Tags" }).inputValue(), "film motion");
   assert.equal(await page.getByRole("textbox", { name: /^Short version/ }).inputValue(), "A film");
   const chinese = page.getByRole("group", { name: "Xiaohongshu · Chinese" });
@@ -624,6 +624,48 @@ try {
   await page.goto("http://127.0.0.1:8797/publisher.html?draft=00000000-0000-4000-8000-000000000bad");
   await page.getByRole("alert").getByText("This draft has expired or was already posted").waitFor();
   assert.equal(await page.getByRole("textbox", { name: "Post" }).isDisabled(), false);
+  assert.deepEqual(errors, []);
+
+  // Farcaster and Lens can be chosen, say when they can't take a post, and wait for their accounts like the rest.
+  await page.goto("http://127.0.0.1:8797/publisher.html?connecting=lens");
+  const accounts = page.getByRole("region", { name: "Publishing accounts" });
+  const lensAccount = accounts.locator(".publisher-account", { hasText: "Lens" });
+  await lensAccount.getByText("Connecting…").waitFor();
+  assert.equal(
+    await lensAccount.getByRole("link", { name: "https://hey.xyz/settings/manager" }).getAttribute("href"),
+    "https://hey.xyz/settings/manager",
+  );
+  await lensAccount.getByText("0x1111111111111111111111111111111111111111", { exact: false }).waitFor();
+  await lensAccount.getByRole("button", { name: "Cancel" }).waitFor();
+  assert.equal(await lensAccount.getByRole("button", { name: "Finish sign-in" }).count(), 0);
+  if (shots) await page.screenshot({ path: path.join(shots, "lens-connecting.png"), fullPage: true });
+  await page.goto("http://127.0.0.1:8797/publisher.html?connecting=farcaster");
+  const farcasterAccount = accounts.locator(".publisher-account", { hasText: "Farcaster" });
+  await farcasterAccount.getByText("Approve the posting key in the Chrome window").waitFor();
+  assert.equal(await farcasterAccount.getByRole("button", { name: "Finish sign-in" }).count(), 0);
+
+  await page.goto("http://127.0.0.1:8797/publisher.html");
+  const destination = (name) => page.locator(".publisher-destinations label", { hasText: name });
+  await page.getByRole("navigation", { name: "Presets" }).getByRole("button", { name: "Text post", exact: true }).click();
+  await destination("Farcaster").locator("input").check();
+  await destination("Lens").locator("input").check();
+  await page.getByRole("textbox", { name: "Post" }).fill("Hello from the protocols");
+  await page.getByRole("textbox", { name: "Tags" }).fill("#film");
+  await page.getByText("Waiting for Farcaster, Lens sign-in.").waitFor();
+  const threePhotos = Array.from({ length: 3 }, (_, i) => ({ name: `p${i}.png`, mimeType: "image/png", buffer: png }));
+  await page.locator('input[type="file"][accept="image/*"]').setInputFiles(threePhotos);
+  assert.equal(await destination("Farcaster").locator("small").textContent(), "takes up to 2 photos");
+  assert.equal(await destination("Lens").locator("input").isChecked(), true);
+  await page.getByRole("button", { name: "Remove media" }).click();
+  assert.equal(await destination("Farcaster").locator("input").isChecked(), true);
+  await page.getByText("What each platform gets").click();
+  const lensVersion = page.locator(".publisher-variants section", { hasText: "Lens" });
+  assert.equal(await lensVersion.locator("small").textContent(), "Hidden tags: #film");
+  assert.equal(await page.locator(".publisher-variants section", { hasText: "Farcaster" }).locator("small").count(), 0);
+  await page.getByRole("button", { name: "Queue post" }).click();
+  const protocols = await queued(page);
+  assert.deepEqual(protocols.platforms, ["bluesky", "twitter", "farcaster", "lens"]);
+  assert.equal(protocols.metadata.farcaster, "remove-all");
   assert.deepEqual(errors, []);
   await context.close();
 

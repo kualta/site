@@ -1,4 +1,14 @@
-export const platforms = ["grain", "instagram", "bluesky", "twitter", "xiaohongshu", "youtube", "tiktok"] as const;
+export const platforms = [
+  "grain",
+  "instagram",
+  "bluesky",
+  "twitter",
+  "farcaster",
+  "lens",
+  "xiaohongshu",
+  "youtube",
+  "tiktok",
+] as const;
 export type Platform = (typeof platforms)[number];
 /** What a post carries, decided by its attachments: none, photos, one video, or photos and videos together. */
 export const kinds = ["text", "photo", "video", "mixed"] as const;
@@ -9,6 +19,8 @@ export const platformNames: Record<Platform, string> = {
   instagram: "Instagram",
   bluesky: "Bluesky",
   twitter: "X / Twitter",
+  farcaster: "Farcaster",
+  lens: "Lens",
   xiaohongshu: "Xiaohongshu",
   youtube: "YouTube",
   tiktok: "TikTok",
@@ -20,13 +32,15 @@ export const support: Record<Platform, readonly PostKind[]> = {
   instagram: ["photo", "video", "mixed"],
   bluesky: ["text", "photo", "video"],
   twitter: ["text", "photo", "video", "mixed"],
+  farcaster: ["text", "photo", "video"],
+  lens: ["text", "photo", "video"],
   xiaohongshu: ["photo", "video"],
   youtube: ["video"],
   tiktok: ["video"],
 };
 export const MAX_PHOTOS = 10;
 /** Destinations that take fewer photos or videos per post than MAX_PHOTOS. */
-export const photoLimits: Partial<Record<Platform, number>> = { twitter: 4 };
+export const photoLimits: Partial<Record<Platform, number>> = { twitter: 4, farcaster: 2, lens: 4 };
 /** Longest video, in seconds, where a destination has a limit. */
 export const videoLimits: Partial<Record<Platform, number>> = { bluesky: 180 };
 /** Destinations that publish the post's title, so a post to them needs one; Xiaohongshu has its own Chinese title. */
@@ -98,6 +112,8 @@ export function defaultMetadata(): Record<Platform, MetadataPolicy> {
     instagram: "remove-location",
     bluesky: "remove-location",
     twitter: "remove-all",
+    farcaster: "remove-all",
+    lens: "remove-all",
     xiaohongshu: "remove-all",
     youtube: "remove-location",
     tiktok: "remove-location",

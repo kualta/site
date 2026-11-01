@@ -66,6 +66,23 @@ checks kualta's DID and requests only creation of Bluesky posts and Grain galler
 photo and gallery-item records (creation and deletion), JPEG/MP4 uploads, and the uploadBlob service
 authorization used for Bluesky video. No app password is requested.
 
+**Farcaster** adds a posting key to the account without a transaction or ETH: a
+gasless `KEY_ADD`, which only the custody wallet can sign. The helper opens an isolated
+Chrome window with no extensions and asks for that wallet's recovery phrase (Farcaster
+app, Settings, Advanced), checks it opens the account's custody address, signs once and
+closes. The phrase goes straight to the helper process and is never stored or sent. The
+key can only add and remove casts, and lapses after 90 days without a post; the composer
+then says to connect again. **Disconnect** has the key revoke itself, which needs no phrase.
+
+**Lens** posts as an account manager with its own key rather than the account's wallet.
+Connecting creates the key and shows its address in the composer. Add it at
+https://hey.xyz/settings/manager with the owner's wallet; only executing transactions is
+needed, so leave token transfers off. The helper connects once Lens lets the key log in.
+If Lens doesn't sponsor a post, the key pays its gas, about 0.002 GHO a post, and the
+post fails saying so until the key holds some GHO on Lens Chain. **Disconnect** forgets
+the key here; only the owner's wallet can remove it from the account's managers, so do
+that on the same Hey page too.
+
 OAuth tokens and signing keys stay in private laptop files. **Disconnect** revokes
 the OAuth session and deletes the local tokens; other platforms remove their
 local browser profiles. Connections expire after fifteen minutes; interactive
@@ -81,7 +98,8 @@ composer shows which selected destinations still need sign-in and labels the
 action **Queue post** while those destinations or the laptop are unavailable.
 
 `.publisher/` is gitignored and private (directory 0700, config 0600). It holds
-the pairing key, OAuth tokens and platform sessions. It is the necessary local
+the pairing key, OAuth tokens, platform sessions and the Farcaster, Lens and Grove
+keys (`*.key`). It is the necessary local
 exception to Cloudflare persistence for browser login. Presets, platform choices,
 caption defaults, metadata policies and YouTube visibility live in this browser's
 localStorage. Media and job history live in Cloudflare R2/D1. Neither Flow tokens
@@ -99,13 +117,16 @@ contain original metadata until the helper prepares each destination's copy.
   a fresh draft or after queueing. Custom presets and saved settings are retained. Each
   destination shows whether it can take the current post and why not: Grain needs
   photos, YouTube and TikTok need a video, Instagram and Xiaohongshu need media, X
-  takes up to four photos, Bluesky takes videos up to three minutes. Selected
+  and Lens take up to four photos, Farcaster two, Bluesky takes videos up to three
+  minutes. Selected
   destinations that can't take the post are skipped and return when the content
   changes.
 - A title is asked for only when Grain, YouTube or Xiaohongshu is a destination.
   Links, mentions and hashtags become Bluesky facets. The counter follows the
   strictest text limit among the destinations (X 280, Bluesky 300, Xiaohongshu
-  1,000, Instagram 2,200).
+  1,000, Farcaster 1,024 bytes, Instagram 2,200). The short version goes to X, Bluesky
+  and Farcaster. Mentions are published as plain text on Farcaster and Lens: a handle on
+  one network can belong to someone else on another.
 - Each photo has its own description for Grain and Bluesky; Bluesky shows more than
   four as a gallery. Duplicate a preset to create another; settings save
   immediately, and the title and text draft survives a reload. Uploads are bounded
@@ -152,6 +173,17 @@ contain original metadata until the helper prepares each destination's copy.
   permissions can change; these adapters need acceptance with the owner's real
   accounts. TikTok's browser privacy setting remains the account's uploader
   setting; YouTube visibility is an explicit saved preset, initially Private.
+- Farcaster and Lens are posted to directly, with no browser. Casts go to public
+  Snapchain nodes (`haatz.quilibrium.com`, then `snap.farcaster.xyz`; Neynar's need a key)
+  and count only once read back. Lens goes through its GraphQL API, handling whichever of
+  sponsored, signless or self-funded it answers. Posts are public and hard to take back:
+  Lens records each on chain, and every Farcaster node keeps casts until told to remove them.
+- Farcaster has no media uploads, and Lens stores media by address, so both use copies on
+  Grove, Lens's public storage (125 MB per file). A cast embeds a `kualta.dev/m/<key>.jpg`
+  or `.m3u8` link, which redirects to Grove, because clients go by what a URL looks like.
+  Video reaches Farcaster as HLS, cut from the prepared MP4 without re-encoding, because the
+  Farcaster app is reported not to play MP4 in a cast; Lens gets the MP4 and a poster frame.
+  That report and this playback are unconfirmed in the app itself until the first real post.
 - A destination is marked succeeded only with a confirmed post URL. Unclear
   results become `uncertain`; the helper never automatically repeats them.
   Verify on the destination before using **Retry this destination**. Successful
@@ -189,13 +221,18 @@ ExifTool is installed; `scripts/publisher/process.test.ts` creates synthetic
 GPS/comment-bearing photo/video fixtures. CI installs ExifTool for these tests.
 Queue tests cover claim exclusivity, unsupported destinations and interrupted
 work. Tests do not publish externally. Authenticated account acceptance remains
-necessary before relying on the browser upload adapters.
+necessary before relying on the browser upload adapters, and on Farcaster and Lens.
 
 ## History and deleting publications
 
 History shows posts sent through this app, with saved title/caption, photo/video previews,
 links and outcomes for each destination. Older pages remain available after upload expiry;
 previews become unavailable after the seven-day media retention window.
+
+Deleting from Farcaster or Lens removes the post but not its media: Grove answers "could
+not find resource" when asked to delete recent uploads, so photos and videos stay at their
+public addresses and the result says so. Each file is owned by this laptop's `grove.key` and
+listed in `.publisher/grove/`, so they can be removed if Grove starts allowing it.
 
 Delete removes one confirmed publication. Delete everywhere queues removal from every
 confirmed destination on that history entry after publishing finishes. Both actions ask
@@ -252,6 +289,8 @@ The combined figure adds each destination's latest **impressions, or views when 
 
 Collector coverage:
 - Bluesky: likes, replies, reposts from the public post API; no views/reach field.
+- Farcaster: likes, recasts and replies counted from a Snapchain node; no views/reach field.
+- Lens: reactions, comments, reposts plus quotes, and bookmarks from the public API; no views/reach field.
 - Grain: gallery favorites and comments from `social.grain.unspecced.getGallery`; no views/reach field.
 - YouTube: video views and likes through the existing YouTube client.
 - X/Twitter and TikTok: exact-post views and available engagement counters from the saved-session page's structured data.

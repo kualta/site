@@ -150,3 +150,67 @@ test("a RedNote account connects Xiaohongshu with its rednote.com session", asyn
   expect(visited).toEqual(["https://creator.rednote.com/publish/publish"]);
   expect(fixture.config.platforms).toEqual(["xiaohongshu"]);
 });
+function keyedFixture(account) {
+  const config = { platforms: ["bluesky"] };
+  const calls = [];
+  return {
+    config,
+    calls,
+    deps: {
+      config,
+      stateDir: "/state",
+      save: async () => {},
+      api: async (path, data) => {
+        if (data) calls.push({ path, data });
+        return Response.json({ state: "working" });
+      },
+      open: async () => {
+        throw new Error("must not open a browser session");
+      },
+      login: async () => {
+        throw new Error("must not ask to sign in");
+      },
+      accounts: { lens: account },
+    },
+  };
+}
+test("connecting a keyed account passes its progress on, and adds only that destination", async () => {
+  const fixture = keyedFixture({
+    connect: async (_active, { stateDir, report }) => {
+      expect(stateDir).toBe("/state");
+      await report("Add 0xabc as a manager");
+    },
+  });
+  const result = await connectAccount(
+    { id: "fixture", platform: "lens", action: "connect", claim: "claim" },
+    fixture.deps,
+  );
+  expect(result).toEqual({ state: "succeeded", message: "Connected" });
+  expect(fixture.calls).toEqual([
+    { path: "accounts/progress", data: { id: "fixture", claim: "claim", message: "Add 0xabc as a manager" } },
+  ]);
+  expect(fixture.config.platforms).toEqual(["bluesky", "lens"]);
+});
+test("a keyed account that fails to connect stays off the list", async () => {
+  const fixture = keyedFixture({
+    connect: async () => {
+      throw new Error("Lens didn't accept the key");
+    },
+  });
+  const result = await connectAccount({ id: "fixture", platform: "lens", action: "connect" }, fixture.deps);
+  expect(result).toEqual({ state: "failed", message: "Lens didn't accept the key" });
+  expect(fixture.config.platforms).toEqual(["bluesky"]);
+});
+test("disconnecting a keyed account leaves other destinations connected", async () => {
+  let disconnected = false;
+  const fixture = keyedFixture({
+    disconnect: async () => {
+      disconnected = true;
+    },
+  });
+  fixture.config.platforms.push("lens");
+  const result = await connectAccount({ id: "fixture", platform: "lens", action: "disconnect" }, fixture.deps);
+  expect(result.state).toBe("succeeded");
+  expect(disconnected).toBe(true);
+  expect(fixture.config.platforms).toEqual(["bluesky"]);
+});

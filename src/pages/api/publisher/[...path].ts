@@ -179,6 +179,16 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!validId(id)) return json({ error: "Invalid connection" }, 400);
       return json(await db.prepare("SELECT state, confirmed FROM publisher_connections WHERE id=?").bind(id).first());
     }
+    if (path === "helper/accounts/progress" && request.method === "POST") {
+      const data = (await request.json()) as { id: string; claim: string; message: string };
+      if (!validId(data.id) || !validId(data.claim) || typeof data.message !== "string")
+        return json({ error: "Invalid connection progress" }, 400);
+      const updated = await db
+        .prepare("UPDATE publisher_connections SET message=? WHERE id=? AND claim=? AND state='working'")
+        .bind(data.message.slice(0, 500), data.id, data.claim)
+        .run();
+      return json({ ok: updated.meta.changes > 0 });
+    }
     if (path === "helper/accounts/result" && request.method === "POST") {
       const data = (await request.json()) as {
         id: string;
@@ -322,7 +332,9 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!target) {
         const metricClaim =
           input.analytics === true
-            ? await claimAnalytics(db, [...new Set([...supported, "grain", "bluesky"])] as (typeof platforms)[number][])
+            ? await claimAnalytics(db, [
+                ...new Set([...supported, "grain", "bluesky", "farcaster", "lens"]),
+              ] as (typeof platforms)[number][])
             : null;
         if (!metricClaim) return json({ target: null });
         const publication = await db

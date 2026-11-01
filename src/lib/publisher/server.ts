@@ -1,5 +1,6 @@
 import type { NewsletterDB } from "@/lib/newsletter/types";
 import {
+  defaultMetadata,
   kinds,
   MAX_PHOTOS,
   platformNames,
@@ -38,7 +39,7 @@ export interface Post {
   visibility: "PUBLIC" | "UNLISTED" | "PRIVATE";
   /** Without "#", most important first. */
   tags?: string[];
-  /** For X and Bluesky when the caption is longer than they allow. */
+  /** For X, Bluesky and Farcaster when the caption is longer than they allow. */
   short?: string;
   /** Xiaohongshu's Simplified Chinese version, with a video made for Chinese audiences if there is one. */
   zh?: { title: string; text: string; topics: string[]; video?: string };
@@ -208,6 +209,8 @@ export async function addDestinations(
   const next = validatePost({
     ...post,
     platforms: [...post.platforms, ...added],
+    // A post from before a destination existed has no policy saved for it.
+    metadata: { ...defaultMetadata(), ...post.metadata },
     title: !post.title.trim() && typeof input.title === "string" ? input.title : post.title,
     zh: post.zh ?? input.zh,
   });
