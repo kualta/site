@@ -1,4 +1,11 @@
-import { claimAnalytics, saveAnalytics, analyticsPage, analyticsSeries, requestRefresh } from "@/lib/publisher/analytics";
+import {
+  analyticsOverview,
+  analyticsPage,
+  analyticsSeries,
+  claimAnalytics,
+  requestRefresh,
+  saveAnalytics,
+} from "@/lib/publisher/analytics";
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { publisherSession, publisherSameOrigin } from "@/lib/publisher/auth";
@@ -58,6 +65,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "analytics" && request.method === "GET")
       return json(await analyticsPage(db, new URL(request.url).searchParams.get("before")));
+    if (path === "analytics/overview" && request.method === "GET") {
+      const utcOffset = Number(new URL(request.url).searchParams.get("utcOffset") ?? 0);
+      if (!Number.isInteger(utcOffset) || Math.abs(utcOffset) > 14 * 60) return json({ error: "Invalid offset" }, 400);
+      return json(await analyticsOverview(db, utcOffset));
+    }
     if (path.startsWith("analytics/") && request.method === "GET") {
       const id = path.slice("analytics/".length);
       if (!validId(id)) return json({ error: "Invalid post" }, 400);

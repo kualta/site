@@ -1,14 +1,17 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   combined,
+  cumulativeSeries,
   metricSeries,
   metricValue,
   platformColor,
   reportingPlatforms,
+  type DailyChange,
   type Metric,
   type Metrics,
   type Sample,
   type SeriesPoint,
+  type VideoMark,
 } from "@/lib/publisher/metrics";
 import { platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
 
@@ -32,7 +35,8 @@ type Target = {
 type Post = { id: string; created_at: number; post: { title: string; caption: string }; targets: Target[] };
 type Page = { posts: Post[]; next: string | null };
 type Refresh = { job: string; at: number; queued: string[] };
-type Props = { request: (path: string, body?: unknown) => Promise<any>; online: boolean };
+type Request = (path: string, body?: unknown) => Promise<any>;
+type Props = { request: Request; online: boolean };
 const IDLE_POLL = 60_000;
 const REFRESH_POLL = 5_000;
 const REFRESH_TIMEOUT = 3 * 60_000;
@@ -62,21 +66,26 @@ function targetStatus(target: Target) {
 }
 function Loading() {
   return (
-    <div className="publisher-analytics-layout" role="status">
-      <span className="sr-only">Loading analytics…</span>
-      <div className="publisher-analytics-posts" aria-hidden="true">
-        {[0, 1, 2].map((i) => (
-          <Block key={i} height={104} />
-        ))}
+    <>
+      <div className="publisher-analytics-overview" aria-hidden="true">
+        <Block height={600} />
       </div>
-      <div className="publisher-analytics-detail publisher-analytics-loading" aria-hidden="true">
-        <Block height={22} width="40%" />
-        <Block height={64} width={380} />
-        <Block height={58} width={140} />
-        <Block height={260} />
-        <Block height={160} />
+      <div className="publisher-analytics-layout" role="status">
+        <span className="sr-only">Loading analytics…</span>
+        <div className="publisher-analytics-posts" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <Block key={i} height={104} />
+          ))}
+        </div>
+        <div className="publisher-analytics-detail publisher-analytics-loading" aria-hidden="true">
+          <Block height={22} width="40%" />
+          <Block height={64} width={380} />
+          <Block height={58} width={140} />
+          <Block height={260} />
+          <Block height={160} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -99,6 +108,131 @@ function Contributions({ point, busy }: { point: SeriesPoint; busy: boolean }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function PeriodOptions() {
+  return (
+    <>
+      <option value={7}>7 days</option>
+      <option value={30}>30 days</option>
+      <option value={90}>90 days</option>
+      <option value={0}>All time</option>
+    </>
+  );
+}
+function Observations({ points, label }: { points: SeriesPoint[]; label: string }) {
+  return (
+    <details>
+      <summary>View observations</summary>
+      <div className="publisher-analytics-table publisher-analytics-observations">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>{label}</th>
+              <th>Sources</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.at}>
+                <td>{dateTime(p.at)}</td>
+                <td>{number(p.value)}</td>
+                <td>{p.coverage}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+function Failed({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="publisher-analytics-empty">
+      <p>The chart didn't load.</p>
+      <button onClick={onRetry}>Try again</button>
+    </div>
+  );
+}
+
+/** Every post's views added up by day, with the moments videos went out marked along the axis. */
+function Overview({
+  request,
+  observed,
+  canOpen,
+  onOpen,
+}: {
+  request: Request;
+  observed?: string;
+  canOpen: (id: string) => boolean;
+  onOpen: (id: string) => void;
+}) {
+  const [data, setData] = useState<{ changes: DailyChange[]; videos: VideoMark[] } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [days, setDays] = useState(30);
+  useEffect(() => {
+    let active = true;
+    setFailed(false);
+    request(`analytics/overview?utcOffset=${-new Date().getTimezoneOffset()}`)
+      .then((value) => {
+        if (active) setData(value);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [request, observed, attempt]);
+  const label = metricNames.exposure;
+  const cutoff = days ? Date.now() - days * 86_400_000 : 0;
+  const points = useMemo(
+    () => cumulativeSeries(data?.changes ?? []).filter((point) => point.at >= cutoff),
+    [data, days],
+  );
+  const marks = useMemo(() => (data?.videos ?? []).filter((video) => video.at >= cutoff), [data, days]);
+  let plot;
+  if (points.length)
+    plot = (
+      <Suspense fallback={<Block height={310} />}>
+        <TrendChart points={points} label={label} marks={marks} canOpen={canOpen} onOpen={onOpen} />
+      </Suspense>
+    );
+  else if (!data && !failed) plot = <Block height={310} />;
+  else if (failed) plot = <Failed onRetry={() => setAttempt((n) => n + 1)} />;
+  else plot = <div className="publisher-analytics-empty">No views observed in this period.</div>;
+  return (
+    <section className="publisher-analytics-overview" aria-label="Cumulative views">
+      <div className="publisher-heading">
+        <h2>Cumulative views</h2>
+        <select aria-label="Period" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+          <PeriodOptions />
+        </select>
+      </div>
+      <div className="publisher-analytics-total">
+        <strong>{number(points.at(-1)?.value ?? null)}</strong>
+        <span className="publisher-note">{label} across every post</span>
+      </div>
+      <figure
+        className="publisher-analytics-trend"
+        aria-label={
+          points.length
+            ? `Cumulative views by day: ${number(points[0].value)} to ${number(points.at(-1)!.value)}`
+            : "Cumulative views by day"
+        }
+      >
+        <div className="publisher-analytics-chart">{plot}</div>
+        {!!points.length && <Contributions point={points.at(-1)!} busy={false} />}
+        <figcaption className="publisher-note">
+          Each day's closing total, stacked by platform, with marks on the axis when videos went out. A platform's first
+          report counts everything it had so far, and views of deleted posts stay in.
+        </figcaption>
+        {!!points.length && <Observations points={points} label={label} />}
+      </figure>
+    </section>
   );
 }
 
@@ -130,13 +264,7 @@ function Trend({
       </Suspense>
     );
   else if (loading) plot = <Block height={260} />;
-  else if (failed)
-    plot = (
-      <div className="publisher-analytics-empty">
-        <p>The chart didn't load.</p>
-        <button onClick={onRetry}>Try again</button>
-      </div>
-    );
+  else if (failed) plot = <Failed onRetry={onRetry} />;
   else
     plot = (
       <div className="publisher-analytics-empty">
@@ -162,31 +290,7 @@ function Trend({
         Counts are cumulative, stacked by platform. Hourly for the last three days, daily before that; a platform's band
         starts when it first reports.
       </figcaption>
-      {!!points.length && (
-        <details>
-          <summary>View observations</summary>
-          <div className="publisher-analytics-table publisher-analytics-observations">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>{label}</th>
-                  <th>Sources</th>
-                </tr>
-              </thead>
-              <tbody>
-                {points.map((p) => (
-                  <tr key={p.at}>
-                    <td>{dateTime(p.at)}</td>
-                    <td>{number(p.value)}</td>
-                    <td>{p.coverage}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
+      {!!points.length && <Observations points={points} label={label} />}
     </figure>
   );
 }
@@ -205,6 +309,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
   const [attempt, setAttempt] = useState(0);
   const [requesting, setRequesting] = useState(false);
   const [refresh, setRefresh] = useState<Refresh | null>(null);
+  const layout = useRef<HTMLDivElement>(null);
   const cursor = cursors.at(-1) ?? null;
   const page = loaded?.page;
   const paging = Boolean(loaded) && loaded?.cursor !== cursor && !error;
@@ -290,6 +395,10 @@ export default function PublisherAnalytics({ request, online }: Props) {
       setRequesting(false);
     }
   }
+  function openPost(id: string) {
+    setSelected(id);
+    layout.current?.scrollIntoView({ block: "start" });
+  }
   const targets = post?.targets.filter((t) => platform === "all" || t.platform === platform) || [];
   const reported = (key: keyof Metrics) => Boolean(post?.targets.some((t) => t.metrics?.[key] !== undefined));
   const metricOptions = (Object.keys(metricNames) as Metric[]).filter((key) => {
@@ -336,8 +445,16 @@ export default function PublisherAnalytics({ request, online }: Props) {
           {error}
         </p>
       )}
+      {!!page?.posts.length && (
+        <Overview
+          request={request}
+          observed={page.posts.flatMap((p) => p.targets.map((t) => t.observed_at ?? 0)).join()}
+          canOpen={(id) => page.posts.some((p) => p.id === id)}
+          onOpen={openPost}
+        />
+      )}
       {page?.posts.length ? (
-        <div className="publisher-analytics-layout">
+        <div className="publisher-analytics-layout" ref={layout}>
           <aside aria-label="Choose a post" aria-busy={paging}>
             <div className="publisher-analytics-posts" data-busy={paging}>
               {page.posts.map((p) => (
@@ -394,10 +511,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
                 <label>
                   Chart period
                   <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-                    <option value={7}>7 days</option>
-                    <option value={30}>30 days</option>
-                    <option value={90}>90 days</option>
-                    <option value={0}>All time</option>
+                    <PeriodOptions />
                   </select>
                 </label>
               </div>

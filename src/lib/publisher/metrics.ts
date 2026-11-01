@@ -66,6 +66,46 @@ export function metricSeries(samples: Sample[], metric: Metric) {
   }
   return [...hours.values()];
 }
+export type DailyChange = { platform: Platform; day: number; at: number; change: number };
+/** Running totals by day, from each platform's change that day; a day with no change carries the total. Rows arrive oldest first. */
+export function cumulativeSeries(changes: DailyChange[]) {
+  const totals = new Map<Platform, number>();
+  const days = new Map<number, SeriesPoint>();
+  for (const { platform, day, at, change } of changes) {
+    totals.set(platform, (totals.get(platform) ?? 0) + change);
+    days.set(day, {
+      at: Math.max(at, days.get(day)?.at ?? 0),
+      value: combined([...totals.values()])!,
+      coverage: totals.size,
+      parts: Object.fromEntries(totals),
+    });
+  }
+  const points: SeriesPoint[] = [];
+  let previousDay = 0;
+  for (const [day, point] of days) {
+    const previous = points.at(-1);
+    if (previous) {
+      for (let gap = 1; gap < day - previousDay; gap++) {
+        points.push({ ...previous, at: previous.at + gap * 24 * HOUR });
+      }
+    }
+    points.push(point);
+    previousDay = day;
+  }
+  return points;
+}
+export type VideoMark = { id: string; at: number; label: string; thumbnail: string | null };
+/** Videos too close together to mark separately on an axis of this span share one mark. Marks arrive oldest first. */
+export function groupMarks(marks: VideoMark[], [start, end]: [number, number]) {
+  const reach = (end - start) * 0.04;
+  const groups: VideoMark[][] = [];
+  for (const mark of marks) {
+    const group = groups.at(-1);
+    if (group && mark.at - group[0].at <= reach) group.push(mark);
+    else groups.push([mark]);
+  }
+  return groups;
+}
 /** Whole-number axis marks from zero, at a round step, reaching at least `max`. */
 export function valueTicks(max: number) {
   const scale = 10 ** Math.floor(Math.log10(Math.max(1, max / 3)));

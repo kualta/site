@@ -1,13 +1,35 @@
 import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
-import { claimAnalytics, saveAnalytics, analyticsPage, analyticsSeries, requestRefresh } from "./analytics";
-import { validMetrics, combined, metricSeries, metricValue, stackOrder, timeTicks, valueTicks } from "./metrics";
+import {
+  analyticsOverview,
+  analyticsPage,
+  analyticsSeries,
+  claimAnalytics,
+  requestRefresh,
+  saveAnalytics,
+} from "./analytics";
+import {
+  combined,
+  cumulativeSeries,
+  groupMarks,
+  metricSeries,
+  metricValue,
+  stackOrder,
+  timeTicks,
+  validMetrics,
+  valueTicks,
+} from "./metrics";
 import { platforms } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 function fixture() {
   const sql = new Database(":memory:");
-  for (const file of ["0002_publisher.sql", "0005_publisher_deletions.sql", "0006_publisher_analytics.sql"])
+  for (const file of [
+    "0002_publisher.sql",
+    "0005_publisher_deletions.sql",
+    "0006_publisher_analytics.sql",
+    "0008_publisher_target_finished.sql",
+  ])
     sql.exec(readFileSync(`migrations/${file}`, "utf8"));
   const db = {
     prepare(query: string) {
@@ -134,6 +156,73 @@ test("a refresh queues only readable destinations not checked in the last five m
   };
   expect(row.next_at).toBe(0);
   f.sql.close();
+});
+test("the overview adds up each destination's closing views by day", async () => {
+  const f = fixture();
+  const day = 86_400_000;
+  const start = 20_000 * day;
+  const youtube = f.target("youtube");
+  const tiktok = f.target("tiktok");
+  const bluesky = f.target("bluesky");
+  for (const [id, at, metrics] of [
+    [youtube, start + 1_000, { views: 10 }],
+    [youtube, start + 2_000, { views: 15 }],
+    [tiktok, start + 3_000, { impressions: 7, views: 99 }],
+    [bluesky, start + 4_000, { likes: 40 }],
+    [youtube, start + day, { views: 12 }],
+    [tiktok, start + 3 * day, { impressions: 20 }],
+  ] as const)
+    f.sql.query("INSERT INTO publisher_metric_snapshots VALUES(?,?,?)").run(id, at, JSON.stringify(metrics));
+  const { changes } = await analyticsOverview(f.db, 0);
+  expect(cumulativeSeries(changes).map((point) => [point.at, point.value, point.parts])).toEqual([
+    [start + 3_000, 22, { youtube: 15, tiktok: 7 }],
+    [start + day, 19, { youtube: 12, tiktok: 7 }],
+    [start + 2 * day, 19, { youtube: 12, tiktok: 7 }],
+    [start + 3 * day, 32, { youtube: 12, tiktok: 20 }],
+  ]);
+  // Five hours behind UTC, the first readings belong to the day before.
+  const local = await analyticsOverview(f.db, -300);
+  expect(local.changes.map((row) => row.day)).toEqual([19_999, 19_999, 20_000, 20_002]);
+  f.sql.close();
+});
+test("the overview marks videos that are still up, when they went out, with YouTube's thumbnail", async () => {
+  const f = fixture();
+  const job = (kind: string, title: string) => {
+    const id = crypto.randomUUID();
+    f.sql
+      .query("INSERT INTO publisher_jobs VALUES (?,?,?)")
+      .run(id, JSON.stringify({ title, caption: "", kind, media: [] }), 100);
+    return id;
+  };
+  const target = (jobId: string, platform: string, url: string, finished: number | null, state = "succeeded") => {
+    const id = crypto.randomUUID();
+    f.sql
+      .query("INSERT INTO publisher_targets(id,job_id,platform,state,url,finished_at) VALUES(?,?,?,?,?,?)")
+      .run(id, jobId, platform, state, url, finished);
+    return id;
+  };
+  const short = job("video", "Short");
+  target(short, "tiktok", "https://www.tiktok.com/@_/video/1", 500);
+  target(short, "youtube", "https://www.youtube.com/shorts/abcdefghijk", 400);
+  target(short, "instagram", "https://www.instagram.com/p/x/", 300, "failed");
+  const elsewhere = job("mixed", "Elsewhere");
+  target(elsewhere, "xiaohongshu", "https://www.rednote.com/explore/1", null);
+  const gone = job("video", "Gone");
+  const deleted = target(gone, "youtube", "https://youtu.be/abcdefghijk", 50);
+  f.sql.query("INSERT INTO publisher_deletions(target_id,state,requested_at) VALUES(?,'deleted',0)").run(deleted);
+  target(job("video", "Never out"), "youtube", "https://youtu.be/abcdefghijk", 60, "failed");
+  target(job("photo", "Photo"), "instagram", "https://www.instagram.com/p/y/", 70);
+  const { videos } = await analyticsOverview(f.db, 0);
+  expect(videos).toEqual([
+    { id: elsewhere, at: 100, label: "Elsewhere", thumbnail: null },
+    { id: short, at: 400, label: "Short", thumbnail: "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg" },
+  ]);
+  f.sql.close();
+});
+test("videos too close to mark separately share one mark", () => {
+  const mark = (at: number) => ({ id: String(at), at, label: "", thumbnail: null });
+  const groups = groupMarks([mark(0), mark(3), mark(5), mark(50)], [0, 100]);
+  expect(groups.map((group) => group.map((m) => m.at))).toEqual([[0, 3], [5], [50]]);
 });
 test("metrics preserve unavailable versus zero and never double count views plus impressions", () => {
   expect(metricValue({ views: 10, impressions: 20 }, "exposure")).toBe(20);
