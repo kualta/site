@@ -94,6 +94,49 @@ export function cumulativeSeries(changes: DailyChange[]) {
   }
   return points;
 }
+/**
+ * Each day's change by platform, placed at the middle of the reader's day. A day nothing was read has no point: its
+ * views land on the next day that was, instead of showing as a day with none. `utcOffset` is in minutes.
+ */
+export function dailySeries(changes: DailyChange[], utcOffset: number) {
+  const days = new Map<number, SeriesPoint>();
+  for (const { platform, day, change } of changes) {
+    const point = days.get(day) ?? {
+      at: (day + 0.5) * 24 * HOUR - utcOffset * 60_000,
+      value: 0,
+      coverage: 0,
+      parts: {},
+    };
+    point.parts[platform] = change;
+    point.value += change;
+    point.coverage += 1;
+    days.set(day, point);
+  }
+  return [...days.values()];
+}
+/** A period's days added into one, for what each platform brought in across all of them. */
+export function addUp(points: SeriesPoint[]): SeriesPoint {
+  const total: SeriesPoint = { at: points.at(-1)?.at ?? 0, value: 0, coverage: 0, parts: {} };
+  for (const point of points) {
+    total.value += point.value;
+    for (const platform of stackOrder) {
+      const part = point.parts[platform];
+      if (part !== undefined) total.parts[platform] = (total.parts[platform] ?? 0) + part;
+    }
+  }
+  total.coverage = Object.keys(total.parts).length;
+  return total;
+}
+/** How far a stack reaches below and above zero. Only a platform correcting its count can go below. */
+export function stackExtent(point: SeriesPoint) {
+  let low = 0;
+  let high = 0;
+  for (const part of Object.values(point.parts)) {
+    if (part < 0) low += part;
+    else high += part;
+  }
+  return { low, high };
+}
 const ago = new Intl.RelativeTimeFormat("en");
 /** "just now", "12 minutes ago", "9 hours ago", "3 days ago". */
 export function timeAgo(at: number, now: number) {
@@ -116,12 +159,20 @@ export function groupMarks(marks: VideoMark[], [start, end]: [number, number]) {
   return groups;
 }
 /** Whole-number axis marks from zero, at a round step, reaching at least `max`. */
-export function valueTicks(max: number) {
-  const scale = 10 ** Math.floor(Math.log10(Math.max(1, max / 3)));
-  const step = [1, 2, 5, 10].map((n) => n * scale).find((n) => n >= max / 3)!;
+export function valueTicks(max: number, min = 0) {
+  const third = Math.max(max, -min) / 3;
+  const scale = 10 ** Math.floor(Math.log10(Math.max(1, third)));
+  const step = [1, 2, 5, 10].map((n) => n * scale).find((n) => n >= third)!;
   const ticks = [0];
   while (ticks.at(-1)! < max || ticks.length < 2) ticks.push(ticks.at(-1)! + step);
+  // A small correction isn't worth a whole step of axis below zero.
+  while (ticks[0] - step / 2 >= min) ticks.unshift(ticks[0] - step);
   return ticks;
+}
+/** Up to seven days to label, picked from the ones that have a bar so each label sits under one. */
+export function dayTicks(points: SeriesPoint[]) {
+  const stride = Math.ceil(points.length / 7);
+  return points.filter((_, index) => index % stride === 0).map((point) => point.at);
 }
 /** Up to five date marks on local hour or midnight boundaries. */
 export function timeTicks(min: number, max: number) {

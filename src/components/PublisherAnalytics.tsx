@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
+  addUp,
   combined,
   cumulativeSeries,
+  dailySeries,
   metricSeries,
   metricValue,
   platformColor,
@@ -122,7 +124,7 @@ function PeriodOptions() {
     </>
   );
 }
-function Observations({ points, label }: { points: SeriesPoint[]; label: string }) {
+function Observations({ points, label, byDay = false }: { points: SeriesPoint[]; label: string; byDay?: boolean }) {
   return (
     <details>
       <summary>View observations</summary>
@@ -130,7 +132,7 @@ function Observations({ points, label }: { points: SeriesPoint[]; label: string 
         <table>
           <thead>
             <tr>
-              <th>Time</th>
+              <th>{byDay ? "Date" : "Time"}</th>
               <th>{label}</th>
               <th>Sources</th>
             </tr>
@@ -138,7 +140,9 @@ function Observations({ points, label }: { points: SeriesPoint[]; label: string 
           <tbody>
             {points.map((p) => (
               <tr key={p.at}>
-                <td>{dateTime(p.at)}</td>
+                <td>
+                  {byDay ? new Date(p.at).toLocaleDateString(undefined, { dateStyle: "medium" }) : dateTime(p.at)}
+                </td>
                 <td>{number(p.value)}</td>
                 <td>{p.coverage}</td>
               </tr>
@@ -158,7 +162,7 @@ function Failed({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-/** Every post's views added up by day, with the moments videos went out marked along the axis. */
+/** Every post's views, as a running total or day by day, with the moments videos went out marked along the axis. */
 function Overview({
   request,
   observed,
@@ -174,10 +178,12 @@ function Overview({
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [days, setDays] = useState(30);
+  const [daily, setDaily] = useState(false);
+  const utcOffset = -new Date().getTimezoneOffset();
   useEffect(() => {
     let active = true;
     setFailed(false);
-    request(`analytics/overview?utcOffset=${-new Date().getTimezoneOffset()}`)
+    request(`analytics/overview?utcOffset=${utcOffset}`)
       .then((value) => {
         if (active) setData(value);
       })
@@ -190,48 +196,63 @@ function Overview({
   }, [request, observed, attempt]);
   const label = metricNames.exposure;
   const cutoff = days ? Date.now() - days * 86_400_000 : 0;
-  const points = useMemo(
-    () => cumulativeSeries(data?.changes ?? []).filter((point) => point.at >= cutoff),
-    [data, days],
-  );
+  const points = useMemo(() => {
+    const changes = data?.changes ?? [];
+    const series = daily ? dailySeries(changes, utcOffset) : cumulativeSeries(changes);
+    return series.filter((point) => point.at >= cutoff);
+  }, [data, days, daily]);
   const marks = useMemo(() => (data?.videos ?? []).filter((video) => video.at >= cutoff), [data, days]);
+  // The running total's last day already holds everything; separate days have to be added up.
+  let summary: SeriesPoint | null = null;
+  if (points.length) summary = daily ? addUp(points) : points.at(-1)!;
+  const period = days ? `in the last ${days} days` : "so far";
+  const title = daily ? "Daily views" : "Cumulative views";
   let plot;
   if (points.length)
     plot = (
       <Suspense fallback={<Block height={310} />}>
-        <TrendChart points={points} label={label} marks={marks} canOpen={canOpen} onOpen={onOpen} />
+        <TrendChart points={points} label={label} marks={marks} bars={daily} canOpen={canOpen} onOpen={onOpen} />
       </Suspense>
     );
   else if (!data && !failed) plot = <Block height={310} />;
   else if (failed) plot = <Failed onRetry={() => setAttempt((n) => n + 1)} />;
   else plot = <div className="publisher-analytics-empty">No views observed in this period.</div>;
   return (
-    <section className="publisher-analytics-overview" aria-label="Cumulative views">
+    <section className="publisher-analytics-overview" aria-label="Views">
       <div className="publisher-heading">
-        <h2>Cumulative views</h2>
-        <select aria-label="Period" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-          <PeriodOptions />
-        </select>
+        <h2>Views</h2>
+        <div className="publisher-analytics-controls">
+          <div className="publisher-analytics-view" role="group" aria-label="Chart view">
+            <button type="button" aria-pressed={!daily} onClick={() => setDaily(false)}>
+              Cumulative
+            </button>
+            <button type="button" aria-pressed={daily} onClick={() => setDaily(true)}>
+              Daily
+            </button>
+          </div>
+          <select aria-label="Period" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            <PeriodOptions />
+          </select>
+        </div>
       </div>
       <div className="publisher-analytics-total">
-        <strong>{number(points.at(-1)?.value ?? null)}</strong>
-        <span className="publisher-note">{label} across every post</span>
+        <strong>{number(summary?.value ?? null)}</strong>
+        <span className="publisher-note">
+          {label} {daily ? `${period}, ` : ""}across every post
+        </span>
       </div>
       <figure
         className="publisher-analytics-trend"
-        aria-label={
-          points.length
-            ? `Cumulative views by day: ${number(points[0].value)} to ${number(points.at(-1)!.value)}`
-            : "Cumulative views by day"
-        }
+        aria-label={points.length ? `${title}: ${number(points[0].value)} to ${number(points.at(-1)!.value)}` : title}
       >
         <div className="publisher-analytics-chart">{plot}</div>
-        {!!points.length && <Contributions point={points.at(-1)!} busy={false} />}
+        {summary && <Contributions point={summary} busy={false} />}
         <figcaption className="publisher-note">
-          Each day's closing total, stacked by platform, with marks on the axis when videos went out. A platform's first
-          report counts everything it had so far, and views of deleted posts stay in.
+          {daily
+            ? "Views gained each day, stacked by platform, with marks on the axis when videos went out. Today's bar is still filling. A platform's first report counts everything it had so far, and a day nothing was read rolls into the next."
+            : "Each day's closing total, stacked by platform, with marks on the axis when videos went out. A platform's first report counts everything it had so far, and views of deleted posts stay in."}
         </figcaption>
-        {!!points.length && <Observations points={points} label={label} />}
+        {!!points.length && <Observations points={points} label={label} byDay={daily} />}
       </figure>
     </section>
   );
