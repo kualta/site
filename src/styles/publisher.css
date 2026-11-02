@@ -39,6 +39,15 @@
 .publisher-zh-video .publisher-previews { margin:0; }
 .publisher-zh-video .publisher-previews[data-single-video] video { max-height:220px; }
 .publisher-zh-video small { display:block; margin-top:8px; color:var(--secondary-text); }
+.publisher-cover { border:1px solid var(--publisher-line); border-radius:16px; padding:12px 16px 14px; margin:0 0 20px; min-width:0; }
+.publisher-cover legend { font-size:12px; color:var(--secondary-text); padding:0 6px; }
+.publisher-cover video { display:block; max-width:100%; max-height:300px; margin:4px 0 10px; border-radius:12px; background:var(--publisher-surface); }
+.publisher-cover input[type=range] { width:100%; margin:0 0 12px; accent-color:currentColor; }
+.publisher-cover .publisher-actions { flex-wrap:wrap; margin-bottom:10px; }
+.publisher-cover-chosen { display:flex; align-items:center; gap:14px; margin:4px 0 10px; }
+.publisher-cover-chosen img { width:90px; aspect-ratio:9/16; object-fit:cover; border-radius:10px; background:var(--publisher-surface); }
+.publisher-cover-chosen p { margin:0 0 8px; font-size:14px; }
+.publisher-cover small { display:block; }
 .publisher-variants { border:1px solid var(--publisher-line); border-radius:16px; padding:12px 16px; margin:0 0 20px; }
 .publisher-variants[open] summary { margin-bottom:8px; }
 .publisher-variants section { padding:10px 0; border-top:1px solid var(--publisher-line); font-size:13px; }

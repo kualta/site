@@ -133,7 +133,7 @@ async function loadManager(stateDir) {
   return privateKeyToAccount(key);
 }
 /** Lens's post formats want the first picture on its own, then the rest, with no empty descriptions. */
-async function buildMetadata(files, infos, post, grove, { signal, poster }) {
+async function buildMetadata(files, infos, post, grove, { signal, poster, coverFile }) {
   const shared = {
     ...(post.caption.trim() ? { content: post.caption } : {}),
     ...(post.tags?.length ? { tags: post.tags.filter((tag) => tag.length <= 50) } : {}),
@@ -151,7 +151,9 @@ async function buildMetadata(files, infos, post, grove, { signal, poster }) {
   if (post.kind === "video") {
     if (infos[0].bytes > MAX_UPLOAD_BYTES) throw rejected("Grove takes files up to 125 MB.");
     const { uri } = await grove.upload(files[0], "video/mp4");
-    const frame = await poster(files[0], join(dirname(files[0]), "poster.jpg"), infos[0].duration, { signal });
+    // The post's chosen cover, else a frame of the video.
+    const frame =
+      coverFile ?? (await poster(files[0], join(dirname(files[0]), "poster.jpg"), infos[0].duration, { signal }));
     const cover = await grove.upload(frame, "image/jpeg");
     return video({
       ...shared,
@@ -178,13 +180,14 @@ export async function publishLens(
     send = sendRequest,
     poster = posterFrame,
     grove = createGrove(stateDir, `lens-${post.id}`),
+    cover,
   },
 ) {
   const manager = await loadManager(stateDir);
   const token = await login(manager, fetcher);
   let contentUri;
   try {
-    const metadata = await buildMetadata(files, infos, post, grove, { signal, poster });
+    const metadata = await buildMetadata(files, infos, post, grove, { signal, poster, coverFile: cover });
     ({ uri: contentUri } = await grove.uploadJson(metadata));
   } catch (error) {
     await grove.remove().catch(() => {});

@@ -132,6 +132,17 @@ test("a video carries its length, description and a poster frame", async () => {
     altTag: "A scene",
   });
 });
+test("a video's chosen cover takes the place of the poster frame", async () => {
+  const grove = fakeGrove();
+  await publishLens(
+    ["/tmp/x/0.mp4"],
+    [{ duration: 12.6, bytes: 10 }],
+    { ...textPost, kind: "video", alt: "" },
+    await options(api(), grove, { cover: "/tmp/x/cover.jpg", poster: async () => "/never.jpg" }),
+  );
+  expect(grove.uploads[1]).toEqual({ path: "/tmp/x/cover.jpg", type: "image/jpeg" });
+  expect(grove.uploads.at(-1).json.lens.video.cover).toBe("lens://1");
+});
 test("a tag longer than Lens takes is left out instead of failing the post", async () => {
   const grove = fakeGrove();
   await publishLens([], [], { ...textPost, tags: ["film", "x".repeat(51)] }, await options(api(), grove));

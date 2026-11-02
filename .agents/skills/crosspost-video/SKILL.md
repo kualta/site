@@ -52,7 +52,9 @@ Put it in a temp folder, not in the film's folder, which Studio shows to the per
       "short": "…",
       "alt": "…",
       "tags": ["film", "motion"],
-      "zh": { "title": "…", "text": "…", "topics": ["短片", "动画"] }
+      "coverAt": 4.2,
+      "location": "Bogotá, Colombia",
+      "zh": { "title": "…", "text": "…", "topics": ["短片", "动画"], "location": "波哥大" }
     }
 
 Write every field yourself, from what you saw and what the person said: `title`, `caption`, `alt`, `tags` and `zh`, plus `short` when the caption needs it. Leave none blank, use no placeholders, and don't ask the person to write or confirm them. They'll read them in the composer before they click Publish.
@@ -66,6 +68,8 @@ Use the person's own words wherever they gave them. Otherwise match the film's o
 - `tags`: without `#`, most important first; letters, digits and `_`. Pick what people search for, the film's specific subject before its general topic. Instagram and TikTok show 5, YouTube 3, Bluesky and Lens hide 8, X and Farcaster none.
 - No `<` or `>` in the title or caption: YouTube refuses them.
 - `preset` (optional): the tab to open on. Without it, films up to three minutes open on Short-form video (`short`) and longer ones on Long video (`video`).
+- `coverAt` or `cover` (optional): the video's cover on YouTube, TikTok, Instagram, Xiaohongshu and Lens; Bluesky, X and Farcaster pick their own frame. `coverAt` is a second of the film whose frame makes the cover, taken from the Chinese version too at the same moment, so Xiaohongshu's shows its own subtitles. `cover` is a path to a JPEG or PNG instead. Give one when the person names a moment or an image, or when the film's first frame is black, a title card or mid-motion; pick a clear, characteristic frame by looking at the contact sheet.
+- `location` (optional): a place to tag on Instagram and Xiaohongshu, by name (`"Bogotá, Colombia"`). Each platform tags its own closest match, or none. Only a place the film or the person names.
 
 `zh` is always required, for Xiaohongshu. With a Chinese version, add its path as `"video"` inside `zh`, and write the text about that version. Follow the same rules as the composer's Translate button:
 - Natural Simplified Chinese the way Xiaohongshu creators write. Adapt, don't translate word for word.
@@ -73,6 +77,7 @@ Use the person's own words wherever they gave them. Otherwise match the film's o
 - `text`: at most 900 characters in short paragraphs, the main keyword in the first sentence.
 - No links, phone numbers, email addresses, @handles, QR codes, or names of other platforms. No superlatives such as 最, 第一, 顶级, 唯一.
 - `topics`: 3 to 5 short Chinese topics people search on Xiaohongshu, without `#`, most specific first.
+- `location` (with a `location` above): the place's Chinese name, as Xiaohongshu lists it (`"波哥大"`). Xiaohongshu finds places by their Chinese names; without one it searches the Latin name and often tags nothing.
 - Keep names of people, places and brands recognisable.
 
 ## 5. Send it
@@ -89,4 +94,4 @@ A video over the 90 MB upload limit is re-encoded to fit. One too long to stay w
 
 ## 6. Report
 
-Give the link, which video files you sent, whether you rendered or re-encoded them, and the title and caption as written. Mention that destinations and YouTube visibility come from the preset saved in the person's browser, and that the draft expires after seven days.
+Give the link, which video files you sent, whether you rendered or re-encoded them, the title and caption as written, and the cover and place you chose, if any. Mention that destinations and YouTube visibility come from the preset saved in the person's browser, and that the draft expires after seven days.

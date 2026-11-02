@@ -81,6 +81,111 @@ export async function clickShadowButton(page, host, label) {
     await cdp.detach();
   }
 }
+/** A place name, compared without case or accents: "Bogotá, Colombia" matches "Bogota". */
+const plain = (text) =>
+  text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+/**
+ * The offered place that best matches the one asked for. Each offer is its name, then the line under it: an address,
+ * or its name in another language. Best is a name that is exactly the place, then one whose second line is (波哥大 /
+ * Bogota), then a name starting with it, then the shortest name containing it: "Bogotá" picks the city over a hostel
+ * in Bogotá. An address that merely contains the city doesn't count, and -1 means none is that place: a nearby café
+ * is worse than no place at all.
+ */
+export function closestPlace(offered, place, { named = false } = {}) {
+  const full = plain(place);
+  const name = plain(place.split(",")[0]);
+  const rank = (text, under = "") => {
+    const option = plain(text);
+    if (option === full || option === name) return 0;
+    if ([full, name].includes(plain(under))) return 0.5;
+    if (option.startsWith(name)) return 1 + option.length / 1e4;
+    if (option.includes(name)) return 2 + option.length / 1e4;
+    return 3;
+  };
+  const ranks = offered.map(([text, under]) => rank(text ?? "", under ?? ""));
+  const best = Math.min(...ranks, 3);
+  // `named`: only a place called that (or listed under that name), not one named after it: "Bogota Bar".
+  return best < (named ? 1 : 3) ? ranks.indexOf(best) : -1;
+}
+/** TikTok's Edit cover dialog: upload the image, then Save. The cover box shows once the video has uploaded. */
+export async function setTikTokCover(page, cover) {
+  await page
+    .locator('[data-e2e="cover_container"]')
+    .getByText("Edit cover", { exact: true })
+    .click({ timeout: 10 * 60_000 });
+  // TikTok only takes an image chosen through its picker: one set straight on its input never uploads.
+  const [chooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    page.getByRole("button", { name: "Upload cover image" }).click(),
+  ]);
+  await chooser.setFiles(cover);
+  // The image replaces the upload tile once TikTok has it.
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll('[class*="ImageUpload"]')].some(
+        (el) => el.querySelector("img") || getComputedStyle(el).backgroundImage !== "none",
+      ),
+    null,
+    { timeout: 60_000 },
+  );
+  await page.waitForTimeout(1500);
+  const save = page.getByRole("button", { name: "Save", exact: true });
+  await save.click();
+  await save.waitFor({ state: "hidden", timeout: 30_000 });
+}
+/** Xiaohongshu's cover editor: the default cover opens 设置封面, whose 上传封面 tab takes the image; 确定 keeps it. */
+export async function setXiaohongshuCover(page, cover) {
+  // The default cover appears once the video has uploaded.
+  await page.locator(".cover-plugin-preview .cover .default").first().click({ timeout: 10 * 60_000 });
+  const modal = page.locator(".d-modal").filter({ hasText: "上传封面" }).last();
+  // Clicking it opens the editor, or first shows 编辑封面 over it.
+  const opened = await modal
+    .waitFor({ state: "visible", timeout: 4000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!opened) await page.locator(".cover-edit-entry").first().click();
+  await modal.getByText("上传封面", { exact: true }).click();
+  await modal.locator('input[type="file"][accept*="image"]').setInputFiles(cover);
+  await page.waitForTimeout(3000);
+  await modal.getByText("确定", { exact: true }).click();
+  await modal.waitFor({ state: "hidden", timeout: 30_000 });
+}
+/** Xiaohongshu's 添加地点: searches the place and picks the closest of its own places, or none if none is that place. */
+export async function setXiaohongshuLocation(page, place) {
+  await page.getByText("添加地点", { exact: true }).first().click();
+  await page.waitForTimeout(1000);
+  const options = page.locator(".option-name");
+  // Its search finds places by name ("Bogotá, Colombia" finds nothing, "Bogotá" finds the city), and may want it
+  // without accents.
+  const name = place.split(",")[0].trim();
+  let typed = "";
+  for (const query of new Set([name, name.normalize("NFD").replace(/\p{Diacritic}/gu, "")])) {
+    for (let i = 0; i < [...typed].length; i++) await page.keyboard.press("Backspace");
+    await page.keyboard.type(query, { delay: 80 });
+    typed = query;
+    // The list opens on nearby places; the search's results come after, a few at a time: choose once it settles.
+    let previous = "";
+    for (let second = 0; second < 12; second++) {
+      await page.waitForTimeout(1000);
+      // Each offer is a name with an address or its name in another language under it: 波哥大 / Bogota.
+      const offered = await options.evaluateAll((names) =>
+        names.map((el) => [el.innerText, el.parentElement?.querySelector(".option-subname")?.innerText ?? ""]),
+      );
+      const listed = JSON.stringify(offered);
+      const settled = listed === previous;
+      previous = listed;
+      const index = closestPlace(offered, place, { named: true });
+      if (index < 0 || !settled) continue;
+      await options.nth(index).click();
+      return offered[index][0].trim();
+    }
+  }
+  throw new Error(`it offered no place named ${name}`);
+}
 export async function openProfile(path, headless = false) {
   return chromium.launchPersistentContext(path, {
     channel: "chrome",
@@ -110,7 +215,7 @@ function findId(value, names) {
   }
   return null;
 }
-export async function publishBrowser(platform, profile, files, post, infos = [], signal) {
+export async function publishBrowser(platform, profile, files, post, infos = [], signal, { cover } = {}) {
   const context = await openProfile(profile);
   // Closing the browser fails whatever the flow is waiting on.
   signal?.addEventListener("abort", () => void context.close().catch(() => {}), { once: true });
@@ -140,12 +245,21 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
       const id = findId(response.data, ["videoId", "video_id", "encryptedVideoId"]);
       // YouTube makes a vertical or square video up to 3 minutes a Short.
       const short = infos[0] && infos[0].height >= infos[0].width && infos[0].duration <= 180;
-      return response.success && id
-        ? { url: short ? `https://www.youtube.com/shorts/${id}` : `https://youtu.be/${id}` }
-        : { uncertain: true, message: "YouTube did not confirm a video URL. Check Studio." };
+      if (!response.success || !id) return { uncertain: true, message: "YouTube did not confirm a video URL. Check Studio." };
+      let message = "";
+      // The video is already up: a cover YouTube refuses (unverified accounts can't set one) doesn't undo it.
+      if (cover)
+        await yt.studio
+          .updateVideoMetadata(id, { thumbnail: new Uint8Array(await readFile(cover)) })
+          .catch((error) => {
+            message = `Posted with YouTube's own thumbnail: setting the cover failed (${error.message.slice(0, 120)}).`;
+          });
+      return { url: short ? `https://www.youtube.com/shorts/${id}` : `https://youtu.be/${id}`, message };
     }
     let publishedUrl;
     let submitting = false;
+    // What a best-effort step couldn't do, said with the result.
+    const notes = [];
     let reply;
     const responses = new Set();
     // What the page sent after Publish, minus telemetry: evidence when no post is confirmed.
@@ -210,6 +324,18 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
         const linked = await addTopics(page, editor, post.tags);
         if (linked < post.tags.length) console.error(`Xiaohongshu linked ${linked} of ${post.tags.length} topics`);
       }
+      if (cover && post.kind === "video")
+        await setXiaohongshuCover(page, cover).catch((error) => {
+          notes.push(`Kept Xiaohongshu's own cover: ${error.message.split("\n")[0].slice(0, 100)}.`);
+          return page.keyboard.press("Escape");
+        });
+      if (post.location)
+        await setXiaohongshuLocation(page, post.location)
+          .then((chosen) => console.error(`Xiaohongshu tagged ${chosen}`))
+          .catch((error) => {
+            notes.push(`Posted without a location: ${error.message.split("\n")[0].slice(0, 100)}.`);
+            return page.keyboard.press("Escape");
+          });
       // Publish turns on once uploads finish, which can take a while for video.
       const publish = page
         .locator(
@@ -232,13 +358,27 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
     } else {
       await page.locator('input[type="file"]').first().setInputFiles(files);
       await page.locator('[contenteditable="true"]').first().fill(post.caption);
+      if (cover && platform === "tiktok")
+        await setTikTokCover(page, cover).catch(async (error) => {
+          notes.push(`Kept TikTok's own cover: ${error.message.split("\n")[0].slice(0, 100)}.`);
+          await page
+            .getByRole("button", { name: "Cancel", exact: true })
+            .click({ timeout: 3000 })
+            .catch(() => page.keyboard.press("Escape"));
+        });
       submitting = true;
       await page.getByRole("button", { name: "Post", exact: true }).click({ timeout: 10 * 60_000 });
     }
     const deadline = Date.now() + 120_000;
-    while (!publishedUrl && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 1000));
+    // TikTok asks "Continue to post?" while its content check is still running: Post now goes ahead.
+    const postNow = page.getByRole("button", { name: "Post now", exact: true });
+    while (!publishedUrl && Date.now() < deadline) {
+      if (platform === "tiktok" && (await postNow.isVisible().catch(() => false)))
+        await postNow.click({ timeout: 5000 }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
     await Promise.allSettled([...responses]);
-    if (publishedUrl) return { url: publishedUrl };
+    if (publishedUrl) return { url: publishedUrl, message: notes.join(" ") };
     await page.screenshot({ path: join(profile, "last-error.png") }).catch(() => {});
     const shown = await page
       .locator('[role="dialog"]:visible, .d-modal:visible, [class*="toast"]:visible')
@@ -249,6 +389,7 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
       uncertain: true,
       message: [
         "No confirmed post URL. Check the destination before posting again.",
+        ...notes,
         shown && `Page shows: ${shown.replace(/\s+/g, " ").slice(0, 120)}.`,
         reply && `Publish reply: ${reply}.`,
         "Screenshot: last-error.png in this destination's profile.",

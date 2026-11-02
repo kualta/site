@@ -426,3 +426,80 @@ test("a cast the network hasn't shown yet is uncertain and keeps its link", asyn
   );
   expect(result).toEqual({ state: "uncertain", url: "https://farcaster.xyz/x", message: "Check it" });
 });
+
+test("a chosen cover goes, prepared as a photo, only where a cover can be chosen, with Xiaohongshu's own", async () => {
+  const video = {
+    ...post,
+    kind: "video",
+    media: ["original"],
+    cover: "cover",
+    location: "Bogotá",
+    metadata: { ...post.metadata, xiaohongshu: "remove-all" },
+    variants: {
+      xiaohongshu: { title: "短片", text: "正文", tags: [], video: "chinese", cover: "zh-cover", location: "波哥大" },
+      tiktok: { title: "", text: "Text", tags: [] },
+    },
+  };
+  for (const [platform, fetched, location] of [
+    ["tiktok", ["media/original", "media/cover"], "Bogotá"],
+    ["xiaohongshu", ["media/chinese", "media/zh-cover"], "波哥大"],
+  ]) {
+    const requests = [];
+    const kinds = [];
+    const result = await publish(
+      { platform },
+      video,
+      fixture({
+        api: async (path) => {
+          requests.push(path);
+          return new Response("source");
+        },
+        process: async (_input, output, options) => {
+          kinds.push(options.kind);
+          await writeFile(output, "prepared");
+          return { width: 64, height: 48, duration: 1, bytes: 8 };
+        },
+        browser: async (_platform, _dir, files, sent, _infos, _signal, { cover }) => {
+          expect(files).toHaveLength(1);
+          expect(cover).toEndWith("cover.jpg");
+          expect(sent.location).toBe(location);
+          return { url: "https://example.invalid/fixture" };
+        },
+      }),
+    );
+    expect(result.state).toBe("succeeded");
+    expect(requests).toEqual(fetched);
+    expect(kinds).toEqual(["video", "photo"]);
+  }
+  // Bluesky picks its own frame, so the cover isn't fetched for it.
+  const requests = [];
+  await publish(
+    { platform: "bluesky" },
+    video,
+    fixture({
+      api: async (path) => {
+        requests.push(path);
+        return new Response("source");
+      },
+      atproto: async () => ({ url: "https://example.invalid/bluesky" }),
+    }),
+  );
+  expect(requests).toEqual(["media/original"]);
+});
+
+test("Instagram's adapter gets the cover and the place", async () => {
+  let args;
+  const result = await publish(
+    { platform: "instagram" },
+    { ...post, kind: "video", media: ["original"], cover: "cover", location: "Bogotá" },
+    fixture({
+      python: async (_script, values) => {
+        args = values;
+        return { ok: true, url: "https://example.invalid/reel" };
+      },
+    }),
+  );
+  expect(result.state).toBe("succeeded");
+  expect(args[args.indexOf("--cover") + 1]).toEndWith("cover.jpg");
+  expect(args[args.indexOf("--location") + 1]).toBe("Bogotá");
+});

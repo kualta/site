@@ -1,5 +1,5 @@
 import { defaultMetadata, platforms, support } from "./presets";
-import { PostError, postMedia, validatePost, type MediaBucket } from "./server";
+import { PostError, postUploads, validatePost, type MediaBucket } from "./server";
 
 /** A video post prepared from the terminal, waiting in the composer for the owner to publish it. */
 export interface Draft {
@@ -13,7 +13,10 @@ export interface Draft {
   alt: string;
   tags?: string[];
   short?: string;
-  zh?: { title: string; text: string; topics: string[]; video?: string };
+  zh?: { title: string; text: string; topics: string[]; video?: string; cover?: string; location?: string };
+  /** The cover image's media id, with the Chinese video's own frame in `zh.cover`. */
+  cover?: string;
+  location?: string;
 }
 
 const videoDestinations = platforms.filter((platform) => support[platform].includes("video"));
@@ -44,6 +47,8 @@ export function validateDraft(value: unknown): Omit<Draft, "id"> {
     ...(post.tags ? { tags: post.tags } : {}),
     ...(post.short ? { short: post.short } : {}),
     ...(post.zh ? { zh: post.zh } : {}),
+    ...(post.cover ? { cover: post.cover } : {}),
+    ...(post.location ? { location: post.location } : {}),
   };
 }
 
@@ -54,8 +59,9 @@ export function checkDraftText(value: unknown): void {
 
 export async function saveDraft(bucket: Pick<MediaBucket, "head" | "put">, value: unknown): Promise<string> {
   const draft = validateDraft(value);
-  for (const media of postMedia({ media: [draft.video], zh: draft.zh }))
-    if (!(await bucket.head(media))) throw new PostError("The draft's video is missing");
+  for (const { id, kind } of postUploads({ kind: "video", media: [draft.video], zh: draft.zh, cover: draft.cover }))
+    if (!(await bucket.head(id)))
+      throw new PostError(kind === "photo" ? "The draft's cover is missing" : "The draft's video is missing");
   const id = crypto.randomUUID();
   await bucket.put(draftKey(id), JSON.stringify({ id, ...draft }), {
     httpMetadata: { contentType: "application/json" },

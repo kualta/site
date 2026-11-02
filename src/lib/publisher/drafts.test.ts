@@ -72,4 +72,14 @@ describe("drafts", () => {
     const id = await saveDraft(store, draft);
     expect((await readDraft(store, id))?.zh?.video).toBe(chinese);
   });
+
+  test("can carry a cover, which must have been uploaded too, and a location", async () => {
+    const cover = "00000000-0000-4000-8000-000000000003";
+    const draft = { ...text(), video, cover, location: "Bogotá" };
+    await expect(saveDraft(bucket([video]), draft)).rejects.toThrow("cover is missing");
+    const store = bucket([video, cover]);
+    const saved = await readDraft(store, await saveDraft(store, draft));
+    expect(saved?.cover).toBe(cover);
+    expect(saved?.location).toBe("Bogotá");
+  });
 });

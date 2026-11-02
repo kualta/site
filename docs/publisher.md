@@ -148,6 +148,19 @@ contain original metadata until the helper prepares each destination's copy.
   goes when the post has no video left. Crossposting from history keeps a Chinese version
   the post already has, but can't add one. Restart the helper after updating, or
   Xiaohongshu publishes the original.
+- **Cover**, under a video, picks the frame at a moment of the video or an uploaded JPEG
+  or PNG. YouTube (as the thumbnail; accounts YouTube hasn't verified can't set one),
+  TikTok, Instagram, Xiaohongshu and Lens use it; Bluesky, X and Farcaster pick their own
+  frame. Xiaohongshu with a Chinese version gets that video's frame at the same moment.
+  Each cover step is best effort: if a platform's page refuses it, the post still goes
+  out with the platform's own cover and the result says so.
+- **Location**, for Instagram and Xiaohongshu (TikTok's web uploader has none), names a
+  place; each platform searches its own places and tags one only when it is called that,
+  never a café nearby. Xiaohongshu lists places by their Chinese names, so its section
+  takes its own (**地点**, e.g. 波哥大); without one it searches the location above.
+  Recent places are offered in the field.
+- TikTok asks **Continue to post?** while its content check is still running; the helper
+  answers **Post now**.
 - **Stop** in a post's Manage panel releases a queued or publishing destination at
   once, so the next one can start and it can be retried. The helper checks every
   5 seconds and ends the running attempt; if the post did go out, its confirmed
@@ -194,8 +207,10 @@ contain original metadata until the helper prepares each destination's copy.
 
 `bun run publisher draft <post.json>` sends a video and its text to the composer and
 prints a link to it. The JSON holds `video` (relative to the file), `title`, `caption`,
-`alt`, `tags`, `short`, `zh` and optionally `preset`. `zh.video` is an optional Chinese
-version, relative to the file too. Opening the link fills in the composer: the videos,
+`alt`, `tags`, `short`, `zh` and optionally `preset`, `location` and a cover: `coverAt` (a
+second of the video, taken from the Chinese version too) or `cover` (an image path).
+`zh.video` is an optional Chinese version, relative to the file too, and `zh.location`
+the place's Chinese name for Xiaohongshu. Opening the link fills in the composer: the videos,
 every field, and the preset (up to three minutes Short-form video, otherwise Long video).
 Destinations and YouTube visibility stay whatever that preset has saved in the browser.
 

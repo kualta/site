@@ -42,13 +42,26 @@ export interface Post {
   tags?: string[];
   /** For X, Bluesky and Farcaster when the caption is longer than they allow. */
   short?: string;
-  /** Xiaohongshu's Simplified Chinese version, with a video made for Chinese audiences if there is one. */
-  zh?: { title: string; text: string; topics: string[]; video?: string };
+  /**
+   * Xiaohongshu's Simplified Chinese version, with a video made for Chinese audiences if there is one, and that
+   * video's own cover.
+   */
+  zh?: { title: string; text: string; topics: string[]; video?: string; cover?: string; location?: string };
   /** What each destination receives, rendered once here so the laptop publishes exactly what was checked. */
   variants?: Partial<Record<Platform, Variant>>;
   /** Reframe a horizontal video to vertical for YouTube, which then makes it a Short. */
   youtubeShort?: boolean;
+  /** An image for a video's cover, where the platform lets a post choose one (see `coverPlatforms`). */
+  cover?: string;
+  /** A place to tag, by name: each platform picks its closest match (see `locationPlatforms`). */
+  location?: string;
 }
+/** Where a video post can choose its cover; the rest pick their own frame. */
+export const coverPlatforms: Platform[] = ["youtube", "tiktok", "instagram", "xiaohongshu", "lens"];
+/** Where a post can be tagged with a place. */
+// TikTok's web uploader has no location setting.
+export const locationPlatforms: Platform[] = ["instagram", "xiaohongshu"];
+export const MAX_LOCATION = 100;
 export const validId = (id: unknown): id is string => typeof id === "string" && /^[a-f0-9-]{36}$/.test(id);
 export async function hashToken(token: string): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)))]
@@ -149,6 +162,20 @@ export function validatePost(value: unknown): Post {
     (typeof p.youtubeShort !== "boolean" || p.kind !== "video" || !p.platforms.includes("youtube"))
   )
     throw new PostError("Only a video going to YouTube can be posted as a Short");
+  const videos = [p.media[0], p.zh?.video];
+  if (p.cover !== undefined && (p.kind !== "video" || !validId(p.cover) || videos.includes(p.cover)))
+    throw new PostError("A cover is one image for a video post");
+  if (
+    p.zh?.cover !== undefined &&
+    (!p.cover || !p.zh.video || !validId(p.zh.cover) || [...videos, p.cover].includes(p.zh.cover))
+  )
+    throw new PostError("The Chinese cover is a frame of the Chinese video, beside the post's cover");
+  if (
+    [p.location, p.zh?.location].some(
+      (place) => place !== undefined && (typeof place !== "string" || place.length > MAX_LOCATION),
+    )
+  )
+    throw new PostError(`Name the location in up to ${MAX_LOCATION} characters`);
   const variants: Partial<Record<Platform, Variant>> = {};
   for (const platform of p.platforms) {
     variants[platform] = renderVariant(platform, p);
@@ -178,16 +205,33 @@ export function validatePost(value: unknown): Post {
             text: p.zh.text,
             topics: p.zh.topics,
             ...(p.zh.video ? { video: p.zh.video } : {}),
+            ...(p.zh.cover ? { cover: p.zh.cover } : {}),
+            ...(p.zh.location?.trim() ? { location: p.zh.location.trim() } : {}),
           },
         }
       : {}),
     variants,
     ...(p.youtubeShort ? { youtubeShort: true } : {}),
+    ...(p.cover ? { cover: p.cover } : {}),
+    ...(p.location?.trim() ? { location: p.location.trim() } : {}),
   };
 }
-/** Every upload a post uses: its own media, then its Chinese version. */
-export function postMedia(post: Pick<Post, "media" | "zh">): string[] {
-  return post.zh?.video ? [...post.media, post.zh.video] : post.media;
+/** Every upload a post uses, with the kind it was uploaded as: its own media, its Chinese version, then the covers. */
+export function postUploads(
+  post: Pick<Post, "kind" | "mediaKinds" | "media" | "zh" | "cover">,
+): { id: string; kind: "photo" | "video" }[] {
+  // A Chinese version only comes with a video post, so post.kind describes it too.
+  const kindOf = (i: number) => post.mediaKinds?.[i] ?? (post.kind === "photo" ? "photo" : "video");
+  return [
+    ...post.media.map((id, i) => ({ id, kind: kindOf(i) })),
+    ...(post.zh?.video ? [{ id: post.zh.video, kind: "video" as const }] : []),
+    ...(post.cover ? [{ id: post.cover, kind: "photo" as const }] : []),
+    ...(post.zh?.cover ? [{ id: post.zh.cover, kind: "photo" as const }] : []),
+  ];
+}
+/** Every upload a post uses. */
+export function postMedia(post: Pick<Post, "kind" | "mediaKinds" | "media" | "zh" | "cover">): string[] {
+  return postUploads(post).map((upload) => upload.id);
 }
 /** Sends a post that already went out to more destinations, checked again as if it were new. */
 export async function addDestinations(

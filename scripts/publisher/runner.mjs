@@ -7,6 +7,9 @@ import { publishBrowser } from "./browser.mjs";
 import { publishFarcaster } from "./farcaster.mjs";
 import { publishLens } from "./lens.mjs";
 
+// The platforms a video's chosen cover goes to: coverPlatforms in src/lib/publisher/server.ts.
+const takesCover = ["youtube", "tiktok", "instagram", "xiaohongshu", "lens"];
+
 export async function publish(
   target,
   job,
@@ -32,6 +35,7 @@ export async function publish(
         caption: variant.text,
         tags: variant.tags,
         media: variant.video ? [variant.video] : job.media,
+        ...(variant.location ? { location: variant.location } : {}),
       }
     : job;
   const temp = await mkdtemp(join(tmpdir(), "kualta-post-"));
@@ -67,6 +71,20 @@ export async function publish(
       files.push(output);
       infos.push(info);
     }
+    // Xiaohongshu's version carries the Chinese video's own frame.
+    const coverId = variant?.cover ?? job.cover;
+    let cover;
+    if (kind === "video" && coverId && takesCover.includes(target.platform)) {
+      const input = join(temp, "cover-source"),
+        output = join(temp, "cover.jpg");
+      const source = await until(api(`media/${coverId}`).then((response) => response.arrayBuffer()));
+      await writeFile(input, new Uint8Array(source));
+      await until(
+        process(input, output, { kind: "photo", policy: post.metadata[target.platform], maxBytes: 1_900_000, signal }),
+      );
+      await rm(input);
+      cover = output;
+    }
     if (
       kind === "video" &&
       target.platform === "bluesky" &&
@@ -85,7 +103,7 @@ export async function publish(
     if (["grain", "bluesky"].includes(target.platform))
       result = await until(atproto(target.platform, authorization, files, infos, post));
     else if (target.platform === "farcaster") result = await until(farcaster(files, infos, post, { stateDir, signal }));
-    else if (target.platform === "lens") result = await until(lens(files, infos, post, { stateDir, signal }));
+    else if (target.platform === "lens") result = await until(lens(files, infos, post, { stateDir, signal, cover }));
     else if (["twitter", "instagram"].includes(target.platform)) {
       // Vendored adapters accept one path or an array for carousels; text posts send none.
       const media = files.length > 1 ? JSON.stringify(files) : (files[0] ?? "");
@@ -100,6 +118,8 @@ export async function publish(
           kind === "photo" ? "image" : (kind ?? "none"),
           target.platform === "twitter" ? "--text" : "--caption",
           post.caption,
+          ...(target.platform === "instagram" && cover ? ["--cover", cover] : []),
+          ...(target.platform === "instagram" && post.location ? ["--location", post.location] : []),
           "--headless",
           "false",
         ],
@@ -115,7 +135,10 @@ export async function publish(
           uncertain: true,
           message: `${target.platform === "twitter" ? "X" : "Instagram"} confirmed the post, but its link wasn't found. Find it there, then mark it as published. Retrying would post it twice.`,
         };
-    } else result = await until(browser(target.platform, join(stateDir, target.platform), files, post, infos, signal));
+    } else
+      result = await until(
+        browser(target.platform, join(stateDir, target.platform), files, post, infos, signal, { cover }),
+      );
     return {
       state: result.url && !result.uncertain ? "succeeded" : "uncertain",
       url: result.url,
