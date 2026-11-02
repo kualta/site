@@ -28,6 +28,34 @@ async function seconds(file) {
   return duration;
 }
 
+const imageTypes = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png" };
+async function locateImage(specFile, image) {
+  if (typeof image !== "string") throw new Error(`${specFile}'s "cover" is a path to an image`);
+  const input = resolve(dirname(specFile), image);
+  const contentType = imageTypes[extname(input).toLowerCase()];
+  if (!contentType) throw new Error(`Use a JPEG or PNG cover: ${input}`);
+  if ((await stat(input)).size > 30e6) throw new Error(`The cover is over 30 MB: ${input}`);
+  return { input, contentType };
+}
+
+/** The frame at `at` seconds, as a JPEG at `output`. */
+async function frameAt(input, at, output) {
+  await exec(process.env.FFMPEG_PATH || "ffmpeg", [
+    "-nostdin",
+    "-y",
+    "-ss",
+    String(at),
+    "-i",
+    input,
+    "-frames:v",
+    "1",
+    "-q:v",
+    "2",
+    output,
+  ]);
+  return { input: output, contentType: "image/jpeg" };
+}
+
 async function locate(specFile, video) {
   if (typeof video !== "string") throw new Error(`${specFile} needs a "video" path`);
   const input = resolve(dirname(specFile), video);
@@ -79,16 +107,21 @@ async function fit(input, output, duration, maxBytes) {
 
 /**
  * Sends a video and its text to the composer as a draft, and returns the page to publish it from.
- * `specFile` is JSON: { video, title, caption, alt, tags, short, zh, preset }. `zh.video` is an optional version made
- * for Chinese audiences, which Xiaohongshu gets in place of `video`. Both paths are relative to the spec.
- * A draft publishes nothing by itself: only the owner's click in the composer queues it.
+ * `specFile` is JSON: { video, title, caption, alt, tags, short, zh, preset, cover, coverAt, location }. `zh.video` is
+ * an optional version made for Chinese audiences, which Xiaohongshu gets in place of `video`. The cover is either an
+ * image (`cover`) or the frame at `coverAt` seconds, taken from each video so Xiaohongshu's shows its own frame. Paths
+ * are relative to the spec. A draft publishes nothing by itself: only the owner's click in the composer queues it.
  */
 export async function createDraft(specFile, { origin, token, fetcher = fetch, maxBytes = MAX_VIDEO_BYTES }) {
-  const { video, zh, ...text } = JSON.parse(await readFile(specFile, "utf8"));
+  const { video, zh, cover, coverAt, ...text } = JSON.parse(await readFile(specFile, "utf8"));
   const { video: zhVideo, ...zhText } = zh ?? {};
-  // Both are read before anything goes up, so a bad path for the second can't strand the first.
+  // Everything is read before anything goes up, so a bad path for a later file can't strand the first.
   const source = await locate(specFile, video);
   const zhSource = zhVideo === undefined ? null : await locate(specFile, zhVideo);
+  if (cover !== undefined && coverAt !== undefined) throw new Error('Give a "cover" image or a "coverAt" second, not both');
+  const coverImage = cover === undefined ? null : await locateImage(specFile, cover);
+  if (coverAt !== undefined && !(typeof coverAt === "number" && coverAt >= 0 && coverAt < source.duration))
+    throw new Error(`"coverAt" is a second within the video, from 0 to ${source.duration.toFixed(1)}`);
   const call = async (path, init) => {
     const response = await fetcher(`${origin}/api/publisher/helper/${path}`, {
       ...init,
@@ -128,12 +161,30 @@ export async function createDraft(specFile, { origin, token, fetcher = fetch, ma
       if (temp) await rm(temp, { recursive: true, force: true });
     }
   };
+  const uploadImage = async ({ input, contentType }) =>
+    (await call("media", { method: "POST", headers: { "Content-Type": contentType }, body: await readFile(input) })).id;
   const media = await upload(source);
   const zhMedia = zhSource && (await upload(zhSource));
+  let coverMedia = coverImage && (await uploadImage(coverImage));
+  let zhCoverMedia = null;
+  if (coverAt !== undefined) {
+    const temp = await mkdtemp(join(tmpdir(), "publisher-cover-"));
+    try {
+      coverMedia = await uploadImage(await frameAt(source.input, coverAt, join(temp, "cover.jpg")));
+      // The Chinese version may run a little longer or shorter: its frame is taken at the same second, within it.
+      if (zhSource)
+        zhCoverMedia = await uploadImage(
+          await frameAt(zhSource.input, Math.min(coverAt, zhSource.duration - 0.1), join(temp, "zh-cover.jpg")),
+        );
+    } finally {
+      await rm(temp, { recursive: true, force: true });
+    }
+  }
   const { id } = await postJson("drafts", {
     ...draft,
     video: media,
-    ...(zhMedia ? { zh: { ...zhText, video: zhMedia } } : {}),
+    ...(zhMedia ? { zh: { ...zhText, video: zhMedia, ...(zhCoverMedia ? { cover: zhCoverMedia } : {}) } } : {}),
+    ...(coverMedia ? { cover: coverMedia } : {}),
   });
   const page = origin === "https://post.kualta.dev" ? "/" : "/publish";
   return { id, url: `${origin}${page}?draft=${id}`, reencoded };

@@ -85,6 +85,35 @@ describe.skipIf(!native)("createDraft", () => {
     expect(calls).toEqual([]);
   });
 
+  test("sends a cover image after the video, and a cover frame from each video", async () => {
+    const image = makeClip("cover.jpg", ["-i", "color=c=red:s=90x160:d=1", "-frames:v", "1"]);
+    const { calls, fetcher } = worker();
+    await createDraft(spec({ video: "clip.mp4", ...text, cover: "cover.jpg", location: "Bogotá" }), options(fetcher));
+    expect(calls.map((call) => call.path)).toEqual(["drafts/check", "media", "media", "drafts"]);
+    expect(JSON.parse(calls[0].init.body)).not.toHaveProperty("cover");
+    expect(calls[2].init.headers["Content-Type"]).toBe("image/jpeg");
+    expect(calls[2].init.body.length).toBe(statSync(image).size);
+    expect(JSON.parse(calls[3].init.body)).toMatchObject({ cover: "media-id", location: "Bogotá" });
+
+    const frames = worker();
+    const zh = { ...text.zh, video: "long.mp4" };
+    await createDraft(spec({ video: "clip.mp4", ...text, zh, coverAt: 0.5 }), options(frames.fetcher));
+    expect(frames.calls.map((call) => call.path)).toEqual(["drafts/check", "media", "media", "media", "media", "drafts"]);
+    expect(frames.calls.slice(3, 5).map((call) => call.init.headers["Content-Type"])).toEqual(["image/jpeg", "image/jpeg"]);
+    const draft = JSON.parse(frames.calls[5].init.body);
+    expect(draft.cover).toBe("media-id");
+    expect(draft.zh.cover).toBe("media-id");
+  });
+
+  test("refuses a cover it can't use before uploading anything", async () => {
+    const { calls, fetcher } = worker();
+    const run = (fields) => createDraft(spec({ video: "clip.mp4", ...text, ...fields }), options(fetcher));
+    await expect(run({ cover: "cover.gif" })).rejects.toThrow("JPEG or PNG");
+    await expect(run({ coverAt: 5 })).rejects.toThrow("coverAt");
+    await expect(run({ cover: "cover.jpg", coverAt: 0 })).rejects.toThrow("not both");
+    expect(calls).toEqual([]);
+  });
+
   test("never touches anything that publishes", async () => {
     const { calls, fetcher } = worker();
     await createDraft(spec({ video: clip, ...text }), options(fetcher));

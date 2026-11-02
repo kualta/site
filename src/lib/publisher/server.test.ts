@@ -1,7 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
-import { addDestinations, markPublished, postMedia, stopTarget, targetActive, claimTarget, claimConnection, hashToken, validatePost } from "./server";
+import {
+  addDestinations,
+  markPublished,
+  postMedia,
+  postUploads,
+  stopTarget,
+  targetActive,
+  claimTarget,
+  claimConnection,
+  hashToken,
+  validatePost,
+} from "./server";
 import { defaultMetadata } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
 const post = () => ({
@@ -165,6 +176,43 @@ test("a video post's Chinese version goes to Xiaohongshu alone", () => {
   expect(() => validatePost({ ...video, zh: { ...zh, video: original } })).toThrow(refused);
   expect(() => validatePost({ ...post(), platforms: ["instagram"], zh })).toThrow(refused);
 });
+test("a video post can choose its cover, with the Chinese video's own frame for Xiaohongshu", () => {
+  const [original, chinese, cover, zhCover] = [1, 2, 3, 4].map(() => crypto.randomUUID());
+  const zh = { title: "短片", text: "正文", topics: ["短片"], video: chinese, cover: zhCover };
+  const video = { ...post(), kind: "video", media: [original], platforms: ["xiaohongshu", "youtube"], zh, cover };
+  const checked = validatePost(video);
+  expect(checked.cover).toBe(cover);
+  expect(checked.variants?.xiaohongshu?.cover).toBe(zhCover);
+  expect(checked.variants?.youtube).not.toHaveProperty("cover");
+  expect(postUploads(checked)).toEqual([
+    { id: original, kind: "video" },
+    { id: chinese, kind: "video" },
+    { id: cover, kind: "photo" },
+    { id: zhCover, kind: "photo" },
+  ]);
+  const refused = "A cover is one image for a video post";
+  expect(() => validatePost({ ...post(), cover })).toThrow(refused);
+  expect(() => validatePost({ ...video, cover: original })).toThrow(refused);
+  expect(() => validatePost({ ...video, cover: "../secret" })).toThrow(refused);
+  const chineseRefused = "The Chinese cover is a frame of the Chinese video";
+  expect(() => validatePost({ ...video, cover: undefined })).toThrow(chineseRefused);
+  expect(() => validatePost({ ...video, zh: { ...zh, cover } })).toThrow(chineseRefused);
+  expect(() => validatePost({ ...video, zh: { ...zh, video: undefined } })).toThrow(chineseRefused);
+});
+test("a post can name a place, trimmed and kept short", () => {
+  expect(validatePost({ ...post(), location: "  Bogotá, Colombia " }).location).toBe("Bogotá, Colombia");
+  expect(validatePost({ ...post(), location: "  " })).not.toHaveProperty("location");
+  expect(() => validatePost({ ...post(), location: "a".repeat(101) })).toThrow("location");
+  expect(() => validatePost({ ...post(), location: 5 })).toThrow("location");
+  const zh = { title: "短片", text: "正文", topics: [], location: " 波哥大 " };
+  const rednote = validatePost({ ...post(), platforms: ["xiaohongshu", "instagram"], location: "Bogotá", zh });
+  expect(rednote.zh?.location).toBe("波哥大");
+  expect(rednote.variants?.xiaohongshu?.location).toBe("波哥大");
+  expect(rednote.variants?.instagram).not.toHaveProperty("location");
+  expect(() =>
+    validatePost({ ...post(), platforms: ["xiaohongshu"], zh: { ...zh, location: "a".repeat(101) } }),
+  ).toThrow("location");
+});
 describe("queue", () => {
   test("claims each target once, only for configured platforms", async () => {
     const { db, sqlite } = database();
@@ -260,12 +308,15 @@ test("only a video going to YouTube can ask to be a Short, and a post that doesn
 });
 function published(job: ReturnType<typeof validatePost>) {
   const { db, sqlite } = database();
-  sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)").run(job.id, JSON.stringify(job), 1);
+  sqlite
+    .query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)")
+    .run(job.id, JSON.stringify(job), 1);
   for (const platform of job.platforms)
     sqlite
       .query("INSERT INTO publisher_targets (id, job_id, platform, state) VALUES (?, ?, ?, 'succeeded')")
       .run(crypto.randomUUID(), job.id, platform);
-  const payload = () => JSON.parse((sqlite.query("SELECT payload FROM publisher_jobs").get() as { payload: string }).payload);
+  const payload = () =>
+    JSON.parse((sqlite.query("SELECT payload FROM publisher_jobs").get() as { payload: string }).payload);
   return { db, sqlite, payload };
 }
 test("a published post can go to more destinations, rendered and checked like a new one", async () => {
@@ -275,7 +326,9 @@ test("a published post can go to more destinations, rendered and checked like a 
   expect(await addDestinations(db, bucket, { job: job.id, platforms: ["twitter", "bluesky"] })).toEqual(["twitter"]);
   expect(payload().platforms).toEqual(["bluesky", "twitter"]);
   expect(payload().variants.twitter.text).toBe("Hello");
-  expect(sqlite.query("SELECT state FROM publisher_targets WHERE platform = 'twitter'").get()).toEqual({ state: "queued" });
+  expect(sqlite.query("SELECT state FROM publisher_targets WHERE platform = 'twitter'").get()).toEqual({
+    state: "queued",
+  });
   await expect(addDestinations(db, bucket, { job: job.id, platforms: ["twitter"] })).rejects.toThrow("Choose where");
 });
 test("crossposting keeps a Short a Short, and doesn't make a regular video one", async () => {
@@ -314,10 +367,9 @@ test("a post from before Farcaster and Lens existed can still be crossposted to 
     metadata: Object.fromEntries(Object.entries(job.metadata).filter(([p]) => !["farcaster", "lens"].includes(p))),
   } as typeof job;
   const { db, payload } = published(older);
-  expect(await addDestinations(db, { head: async () => ({}) }, { job: job.id, platforms: ["farcaster", "lens"] })).toEqual([
-    "farcaster",
-    "lens",
-  ]);
+  expect(
+    await addDestinations(db, { head: async () => ({}) }, { job: job.id, platforms: ["farcaster", "lens"] }),
+  ).toEqual(["farcaster", "lens"]);
   expect(payload().variants.farcaster.text).toBe("Hi");
   expect(payload().metadata.lens).toBe("remove-all");
   expect(payload().metadata.bluesky).toBe(job.metadata.bluesky);
@@ -360,7 +412,9 @@ test("only a destination waiting to be checked can be marked as published", asyn
   sqlite.exec("ALTER TABLE publisher_targets ADD COLUMN finished_at INTEGER");
   const job = crypto.randomUUID();
   sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, '{}', 1)").run(job);
-  const add = sqlite.query("INSERT INTO publisher_targets (id, job_id, platform, state, message) VALUES (?, ?, ?, ?, 'Check it')");
+  const add = sqlite.query(
+    "INSERT INTO publisher_targets (id, job_id, platform, state, message) VALUES (?, ?, ?, ?, 'Check it')",
+  );
   add.run("checking", job, "instagram", "uncertain");
   add.run("publishing", job, "tiktok", "working");
   const url = "https://www.instagram.com/reel/abc/";

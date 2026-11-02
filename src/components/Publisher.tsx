@@ -6,6 +6,7 @@ import { CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/component
 import { useEffect, useMemo, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import PublisherChinese from "./PublisherChinese";
+import PublisherCover, { type Cover } from "./PublisherCover";
 import {
   defaultPreferences,
   MAX_PHOTOS,
@@ -28,7 +29,8 @@ import {
 import "@/styles/publisher.css";
 import type { Draft } from "@/lib/publisher/drafts";
 import { describeProgress, readWithProgress } from "@/lib/publisher/download";
-import { validatePost } from "@/lib/publisher/server";
+import { frameAt } from "@/lib/publisher/frame";
+import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost } from "@/lib/publisher/server";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 
 async function api(path: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
@@ -42,6 +44,8 @@ async function api(path: string, body?: unknown, method = body === undefined ? "
   return data;
 }
 const DRAFT_KEY = "publisher.draft";
+// Places tagged before, offered first in the location field.
+const PLACES_KEY = "publisher.places";
 const unavailableFor: Record<PostKind, string> = {
   text: "text-only posts",
   photo: "these photos",
@@ -139,6 +143,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [zhTopicsText, setZhTopicsText] = useState("");
   // A version of the video made for Chinese audiences, which Xiaohongshu gets in place of the original.
   const [chineseVideo, setChineseVideo] = useState<File>();
+  const [cover, setCover] = useState<Cover>();
+  const [place, setPlace] = useState("");
+  // Xiaohongshu's own name for the place, in Chinese.
+  const [zhPlace, setZhPlace] = useState("");
+  const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
   const chinesePreview = useMemo(() => chineseVideo && URL.createObjectURL(chineseVideo), [chineseVideo]);
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState("");
@@ -150,7 +159,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>(initialHelper?.platforms ?? []);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [dragging, setDragging] = useState(false);
-  const submission = useRef<{ id: string; media: string[]; zhVideo?: string; payload?: unknown } | null>(null);
+  const submission = useRef<{
+    id: string;
+    media: string[];
+    zhVideo?: string;
+    cover?: string;
+    zhCover?: string;
+    payload?: unknown;
+  } | null>(null);
   const [openingDraft, setOpeningDraft] = useState(false);
   // How far a draft's videos have come down, so a large one doesn't look like an empty page.
   const [draftLoad, setDraftLoad] = useState<{ video: number; videos: number; loaded: number; total?: number }>();
@@ -182,8 +198,15 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       if (typeof draft?.zh?.title === "string") setZhTitle(draft.zh.title.slice(0, 100));
       if (typeof draft?.zh?.text === "string") setZhText(draft.zh.text.slice(0, 5000));
       if (typeof draft?.zh?.topics === "string") setZhTopicsText(draft.zh.topics.slice(0, 500));
+      if (typeof draft?.location === "string") setPlace(draft.location.slice(0, MAX_LOCATION));
     } catch {
       // A draft is a convenience; start empty without it.
+    }
+    try {
+      const saved = JSON.parse(localStorage.getItem(PLACES_KEY) ?? "[]");
+      if (Array.isArray(saved)) setRecentPlaces(saved.filter((place) => typeof place === "string").slice(0, 8));
+    } catch {
+      // Recent places are a convenience too.
     }
     setReady(true);
     if (initialAccess !== "loading") return;
@@ -206,13 +229,16 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     if (!ready) return;
     try {
       const zh = { title: zhTitle, text: zhText, topics: zhTopicsText };
-      if (title || caption || tagsText || short || zhTitle || zhText || zhTopicsText)
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ title, caption, tags: tagsText, short, zh }));
+      if (title || caption || tagsText || short || zhTitle || zhText || zhTopicsText || place)
+        sessionStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ title, caption, tags: tagsText, short, zh, location: place }),
+        );
       else sessionStorage.removeItem(DRAFT_KEY);
     } catch {
       // Keep the draft in memory.
     }
-  }, [title, caption, tagsText, short, zhTitle, zhText, zhTopicsText, ready]);
+  }, [title, caption, tagsText, short, zhTitle, zhText, zhTopicsText, place, ready]);
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
     setPreviews(urls);
@@ -278,18 +304,21 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     if (access !== "owner") return;
     const id = new URLSearchParams(location.search).get("draft");
     if (!id) return;
-    async function storedFile(media: string, name: string, video: number, videos: number) {
-      setDraftLoad({ video, videos, loaded: 0 });
+    /** A draft's upload as a file. Videos show their progress; covers are small and come down without. */
+    async function storedFile(media: string, name: string, progress?: { video: number; videos: number }) {
+      if (progress) setDraftLoad({ ...progress, loaded: 0 });
       const response = await fetch(`/api/publisher/media/${media}`);
-      if (!response.ok) throw new Error("This draft's video has expired");
+      if (!response.ok) throw new Error(`This draft's ${progress ? "video" : "cover"} has expired`);
       // A render per percent (or per megabyte without a total), not per network chunk.
       let shown = -1;
-      const blob = await readWithProgress(response, (loaded, total) => {
-        const step = total ? Math.floor((loaded / total) * 100) : Math.floor(loaded / 1e6);
-        if (step === shown) return;
-        shown = step;
-        setDraftLoad({ video, videos, loaded, total });
-      });
+      const blob = progress
+        ? await readWithProgress(response, (loaded, total) => {
+            const step = total ? Math.floor((loaded / total) * 100) : Math.floor(loaded / 1e6);
+            if (step === shown) return;
+            shown = step;
+            setDraftLoad({ ...progress, loaded, total });
+          })
+        : await response.blob();
       const file = new File([blob], name, { type: blob.type });
       storedMedia.current.set(file, media);
       return file;
@@ -300,12 +329,17 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       try {
         const draft: Draft = await api(`drafts/${id}`);
         const videos = draft.zh?.video ? 2 : 1;
-        const file = await storedFile(draft.video, draft.title, 1, videos);
+        const file = await storedFile(draft.video, draft.title, { video: 1, videos });
         const chinese = draft.zh?.video
-          ? await storedFile(draft.zh.video, `${draft.title} (Chinese)`, 2, videos)
+          ? await storedFile(draft.zh.video, `${draft.title} (Chinese)`, { video: 2, videos })
           : undefined;
+        const coverFile = draft.cover ? await storedFile(draft.cover, "cover.jpg") : undefined;
+        const zhCoverFile = draft.zh?.cover ? await storedFile(draft.zh.cover, "cover-zh.jpg") : undefined;
         await showMedia([file], [""], [""]);
         setChineseVideo(chinese);
+        setCover(coverFile && { file: coverFile, zh: zhCoverFile });
+        setPlace(draft.location ?? "");
+        setZhPlace(draft.zh?.location ?? "");
         const active = draft.preset;
         if (active) setPreferences((p) => (p.presets.some((item) => item.id === active) ? { ...p, active } : p));
         setTitle(draft.title);
@@ -351,13 +385,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       if (needsTitle && !title.trim()) throw new Error(`Add a title for ${titledNames}.`);
       const photo = kind === "photo";
       const mediaKinds = files.map((file) => (file.type.startsWith("video/") ? "video" : "photo"));
-      const payload = (id: string, media: string[], zhVideo?: string) => ({
+      const payload = (id: string, media: string[], zhVideo?: string, coverId?: string, zhCoverId?: string) => ({
         id,
         media,
         kind,
         mediaKinds: kind === "mixed" ? mediaKinds : undefined,
         ...text,
-        zh: text.zh && zhVideo ? { ...text.zh, video: zhVideo } : text.zh,
+        zh: text.zh && zhVideo ? { ...text.zh, video: zhVideo, ...(zhCoverId ? { cover: zhCoverId } : {}) } : text.zh,
         alt: kind === "video" ? alt : "",
         alts: photo ? alts : undefined,
         datesTaken: photo ? datesTaken.map((date) => (date ? new Date(date).toISOString() : null)) : undefined,
@@ -365,12 +399,16 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
         metadata: preset.metadata,
         visibility: preset.visibility,
         youtubeShort: youtubeShort || undefined,
+        cover: coverId,
+        location: sentLocation || undefined,
       });
       validatePost(
         payload(
           crypto.randomUUID(),
           files.map(() => crypto.randomUUID()),
           sentChineseVideo && crypto.randomUUID(),
+          sentCover && crypto.randomUUID(),
+          sendsZhCover ? crypto.randomUUID() : undefined,
         ),
       );
       const uploadMedia = async (file: File): Promise<string> => {
@@ -388,8 +426,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       const pending = (submission.current ||= { id: crypto.randomUUID(), media: [] });
       for (let i = pending.media.length; i < files.length; i++) pending.media.push(await uploadMedia(files[i]));
       if (sentChineseVideo) pending.zhVideo ||= await uploadMedia(sentChineseVideo);
+      if (sentCover) pending.cover ||= await uploadMedia(sentCover.file);
+      // Xiaohongshu's Chinese version shows its own frame from the same moment.
+      if (sendsZhCover && sentCover && sentChineseVideo && !pending.zhCover)
+        pending.zhCover = await uploadMedia(
+          sentCover.zh ?? (await frameAt(sentChineseVideo, sentCover.at ?? 0, "cover-zh.jpg")),
+        );
       // Freeze the request after uploading. A lost response retries the same job.
-      pending.payload ||= payload(pending.id, pending.media, pending.zhVideo);
+      pending.payload ||= payload(pending.id, pending.media, pending.zhVideo, pending.cover, pending.zhCover);
       setSubmitted(true);
       await api("jobs", pending.payload);
       setSubmitted(false);
@@ -400,6 +444,17 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
         window.history.replaceState(null, "", location.pathname);
       }
       clearMedia();
+      if (sentLocation) {
+        const next = [sentLocation, ...recentPlaces.filter((recent) => recent !== sentLocation)].slice(0, 8);
+        setRecentPlaces(next);
+        try {
+          localStorage.setItem(PLACES_KEY, JSON.stringify(next));
+        } catch {
+          // The place is still offered for this visit.
+        }
+      }
+      setPlace("");
+      setZhPlace("");
       setTitle("");
       setAlt("");
       setCaption(preset.caption);
@@ -439,6 +494,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   function clearMedia() {
     setFiles([]);
     setChineseVideo(undefined);
+    setCover(undefined);
     setVideo(undefined);
     setShortChoice(undefined);
     setAlts([]);
@@ -448,6 +504,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   /** Media lists stay index-aligned with each photo's description and date. */
   async function showMedia(next: File[], nextAlts: string[], nextDates: string[]) {
     const first = next.find((file) => file.type.startsWith("video/"));
+    // A cover belongs to the video it was taken from.
+    if (first !== files.find((file) => file.type.startsWith("video/"))) setCover(undefined);
     // A Chinese version belongs to the video it translates, so it goes when no video is left.
     if (!first) setChineseVideo(undefined);
     setVideo(first ? await videoShape(first) : undefined);
@@ -499,6 +557,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const needsTitle = titledNames !== "";
   const rednote = destinations.includes("xiaohongshu");
   const sentChineseVideo = rednote && kind === "video" ? chineseVideo : undefined;
+  const namesOf = (list: Platform[]) => list.map((p) => platformNames[p]).join(", ");
+  const coverTargets = kind === "video" ? destinations.filter((p) => coverPlatforms.includes(p)) : [];
+  const sentCover = coverTargets.length ? cover : undefined;
+  const locationTargets = destinations.filter((p) => locationPlatforms.includes(p));
+  const sentLocation = locationTargets.length ? place.trim() : "";
+  // Xiaohongshu's Chinese version gets its own cover: the draft's, or its frame at the chosen moment.
+  const sendsZhCover = Boolean(sentCover && sentChineseVideo && (sentCover.zh || sentCover.at !== undefined));
   const toYouTube = kind === "video" && destinations.includes("youtube");
   const canReframe = toYouTube && reframesToShort(video);
   const youtubeShort = canReframe && (shortChoice ?? preset.id === "short");
@@ -509,7 +574,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     caption,
     tags: parseTags(tagsText),
     short: short.trim() ? short : undefined,
-    zh: rednote ? { title: zhTitle, text: zhText, topics: parseTags(zhTopicsText) } : undefined,
+    zh: rednote
+      ? {
+          title: zhTitle,
+          text: zhText,
+          topics: parseTags(zhTopicsText),
+          ...(zhPlace.trim() ? { location: zhPlace.trim() } : {}),
+        }
+      : undefined,
   };
   const versions = destinations.map((platform) => {
     const variant = renderVariant(platform, text);
@@ -746,6 +818,20 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     />
                   </label>
                 )}
+                {kind === "video" && files[0] && !!coverTargets.length && (
+                  <PublisherCover
+                    video={files[0]}
+                    value={cover}
+                    onChange={(next) => {
+                      setCover(next);
+                      submission.current = null;
+                    }}
+                    platforms={namesOf(coverTargets)}
+                    others={namesOf(destinations.filter((p) => !coverPlatforms.includes(p)))}
+                    disabled={busy || submitted}
+                    onError={setError}
+                  />
+                )}
                 {needsTitle && (
                   <label>
                     Title · {titledNames}
@@ -778,6 +864,30 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     and Lens keep 8 hidden. X, Grain and Farcaster get none.
                   </small>
                 </label>
+                {!!locationTargets.length && (
+                  <label>
+                    Location · {namesOf(locationTargets)}
+                    <input
+                      value={place}
+                      maxLength={MAX_LOCATION}
+                      list="publisher-places"
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setPlace(e.target.value);
+                        submission.current = null;
+                      }}
+                      placeholder="Bogotá, Colombia"
+                    />
+                    <datalist id="publisher-places">
+                      {recentPlaces.map((recent) => (
+                        <option key={recent} value={recent} />
+                      ))}
+                    </datalist>
+                    <small className="publisher-note">
+                      Each platform tags its closest match from its own list of places.
+                    </small>
+                  </label>
+                )}
                 {needsShort && (
                   <label>
                     Short version · {brief.map((p) => platformNames[p]).join(", ")}
@@ -808,6 +918,24 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     canTranslate={Boolean(title.trim() || caption.trim())}
                     disabled={busy || submitted}
                   >
+                    {locationTargets.includes("xiaohongshu") && (
+                      <label>
+                        地点 · Xiaohongshu
+                        <input
+                          value={zhPlace}
+                          maxLength={MAX_LOCATION}
+                          disabled={busy || submitted}
+                          onChange={(e) => {
+                            setZhPlace(e.target.value);
+                            submission.current = null;
+                          }}
+                          placeholder="波哥大"
+                        />
+                        <small className="publisher-note">
+                          Xiaohongshu lists places by their Chinese names. Without one, it searches the location above.
+                        </small>
+                      </label>
+                    )}
                     {kind === "video" && (
                       <div className="publisher-zh-video">
                         {chineseVideo ? (
@@ -858,6 +986,15 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                         {variant.title && <strong>{variant.title}</strong>}
                         <p>{variant.text || "—"}</p>
                         {platform === "xiaohongshu" && sentChineseVideo && <small>Video: the Chinese version</small>}
+                        {sentCover && coverTargets.includes(platform) && (
+                          <small>
+                            Cover:{" "}
+                            {platform === "xiaohongshu" && sendsZhCover
+                              ? "the same moment of the Chinese version"
+                              : "the one chosen above"}
+                          </small>
+                        )}
+                        {sentLocation && locationTargets.includes(platform) && <small>Location: {sentLocation}</small>}
                         {!!variant.tags.length && (
                           <small>
                             {platform === "bluesky" || platform === "lens" ? "Hidden tags" : "Topics"}:{" "}

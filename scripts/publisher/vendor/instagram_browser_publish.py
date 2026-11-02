@@ -77,6 +77,8 @@ def parse_args():
     parser.add_argument("--media", required=True)
     parser.add_argument("--kind", choices=["image", "video", "mixed"], required=True)
     parser.add_argument("--caption", default="")
+    parser.add_argument("--cover", default="", help="A JPEG or PNG for a reel's cover")
+    parser.add_argument("--location", default="", help="A place to tag, by name")
     parser.add_argument("--headless", choices=["true", "false"], default="true")
     parser.add_argument("--timeout-ms", type=int, default=180_000)
 
@@ -195,14 +197,17 @@ def is_visible(locator, timeout=1500):
         return False
 
 
-def advance_to_share(page):
+def advance_to_share(page, on_screen=None):
     """Clicks 'Next' through the crop/edit screens until the Share step appears.
 
     Instagram varies the number of intermediate screens, so this advances until
-    the Share control is visible rather than assuming a fixed count.
+    the Share control is visible rather than assuming a fixed count. `on_screen`
+    runs on each screen before it is left.
     """
     for _ in range(6):
         dismiss_optional_dialog(page)
+        if on_screen:
+            on_screen(page)
 
         if is_visible(share_button(page), timeout=1200):
             return True
@@ -239,6 +244,85 @@ def fill_caption(page, caption):
         except Exception:
             continue
     # Caption is optional for Instagram; continue without failing the publish.
+
+
+def cover_step(cover_path, notes):
+    """On the reel's Edit screen, the image for Cover photo > Select from computer. Best effort: notes say if it failed."""
+    done = []
+
+    def on_screen(page):
+        if done or not cover_path:
+            return
+        if not is_visible(page.get_by_text("Cover photo", exact=True).first, timeout=800):
+            return
+        done.append(True)
+        try:
+            image = page.locator('[role="dialog"] input[type="file"][accept*="image"]').last
+            image.wait_for(state="attached", timeout=10_000)
+            image.set_input_files(cover_path)
+            page.wait_for_timeout(2500)
+            _dbg(page, "cover-set")
+        except Exception as exc:
+            notes.append(f"Kept Instagram's own cover: {str(exc).splitlines()[0][:100]}.")
+
+    return on_screen
+
+
+# Finds the offered place under the location field that best matches the name, ranked as closestPlace in
+# browser.mjs ranks them (accents and case aside): exactly the place or its name, then one starting with the name,
+# then the shortest containing it; none if no offer is that place. Marks it for a real click and returns its text: a click
+# from the page's own script doesn't reach Instagram's handlers.
+PICK_PLACE = r"""([place]) => {
+  const plain = (t) => t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+  const field = document.querySelector('input[placeholder="Add location"]');
+  if (!field) return null;
+  const top = field.getBoundingClientRect().bottom;
+  const full = plain(place);
+  const name = plain(place.split(",")[0]);
+  const offered = [...document.querySelectorAll('[role="dialog"] span')].filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width && r.top >= top - 2 && r.top < top + 400 && el.children.length === 0 && el.innerText.trim()
+      && !el.closest('[contenteditable="true"]');
+  });
+  if (!offered.length) return null;
+  const rank = (el) => {
+    const option = plain(el.innerText);
+    if (option === full || option === name) return 0;
+    if (option.startsWith(name)) return 1 + option.length / 1e4;
+    if (option.includes(name)) return 2 + option.length / 1e4;
+    return 3;
+  };
+  const pick = offered.reduce((best, el) => (rank(el) < rank(best) ? el : best), offered[0]);
+  // A nearby place is worse than none.
+  if (rank(pick) >= 3) return null;
+  document.querySelectorAll("[data-publish-place]").forEach((el) => el.removeAttribute("data-publish-place"));
+  pick.setAttribute("data-publish-place", "1");
+  return pick.innerText.trim();
+}"""
+
+
+def set_location(page, place, notes):
+    """On the caption screen: types the place into Add location and picks the closest of Instagram's places."""
+    try:
+        field = page.get_by_placeholder("Add location", exact=True).first
+        field.wait_for(state="visible", timeout=10_000)
+        field.click()
+        # Instagram searches by name: the part before a comma.
+        page.keyboard.type(place.split(",")[0].strip(), delay=60)
+        page.wait_for_timeout(3500)
+        chosen = page.evaluate(PICK_PLACE, [place])
+        if not chosen:
+            raise RuntimeError(f"it offered no place named {place.split(',')[0].strip()}")
+        page.locator('[data-publish-place="1"]').first.click()
+        page.wait_for_timeout(1500)
+        return chosen
+    except Exception as exc:
+        notes.append(f"Posted without a location: {str(exc).splitlines()[0][:100]}.")
+        try:
+            page.keyboard.press("Escape")
+        except Exception:
+            pass
+        return None
 
 
 def share_post(page):
@@ -521,14 +605,17 @@ def run_publish(context, args):
         select_square_1x1(page)
     _dbg(page, "pre-advance")
 
-    if not advance_to_share(page):
+    notes = []
+    if not advance_to_share(page, cover_step(args.cover if args.kind == "video" else "", notes)):
         raise RuntimeError(
             "Could not reach the Instagram caption/share screen after attaching media."
         )
+    if args.location:
+        set_location(page, args.location, notes)
     _dbg(page, "share-screen")
 
     if _DEBUG_NO_SHARE:
-        return {"ok": True, "message": "DEBUG: stopped before Share (no post made)."}
+        return {"ok": True, "message": " ".join(["DEBUG: stopped before Share (no post made).", *notes])}
 
     fill_caption(page, args.caption)
     share_dialog = page.locator('[role="dialog"]:visible').last
@@ -545,7 +632,7 @@ def run_publish(context, args):
     if outcome.get("ok"):
         result = {
             "ok": True,
-            "message": f"Published with {args.kind}.",
+            "message": " ".join([f"Published with {args.kind}.", *notes]),
         }
         url = outcome.get("url") or find_new_post(page, started_at)
         if url:
