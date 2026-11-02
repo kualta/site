@@ -361,6 +361,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const object = await bucket.get(id);
       if (!object) return json({ error: "Media expired" }, 404);
       headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
+      // The composer shows how much of a draft's video has arrived.
+      if (object.size) headers.set("Content-Length", String(object.size));
       return new Response(object.body, { headers });
     }
     if (path === "helper/result" && request.method === "POST") {
