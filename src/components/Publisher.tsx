@@ -27,6 +27,7 @@ import {
 } from "@/lib/publisher/presets";
 import "@/styles/publisher.css";
 import type { Draft } from "@/lib/publisher/drafts";
+import { describeProgress, readWithProgress } from "@/lib/publisher/download";
 import { validatePost } from "@/lib/publisher/server";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 
@@ -151,6 +152,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [dragging, setDragging] = useState(false);
   const submission = useRef<{ id: string; media: string[]; zhVideo?: string; payload?: unknown } | null>(null);
   const [openingDraft, setOpeningDraft] = useState(false);
+  // How far a draft's videos have come down, so a large one doesn't look like an empty page.
+  const [draftLoad, setDraftLoad] = useState<{ video: number; videos: number; loaded: number; total?: number }>();
   const draftId = useRef<string | null>(null);
   // A draft's video is already in Cloudflare, so publishing it doesn't upload it again.
   const storedMedia = useRef(new WeakMap<File, string>());
@@ -275,10 +278,18 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     if (access !== "owner") return;
     const id = new URLSearchParams(location.search).get("draft");
     if (!id) return;
-    async function storedFile(media: string, name: string) {
+    async function storedFile(media: string, name: string, video: number, videos: number) {
+      setDraftLoad({ video, videos, loaded: 0 });
       const response = await fetch(`/api/publisher/media/${media}`);
       if (!response.ok) throw new Error("This draft's video has expired");
-      const blob = await response.blob();
+      // A render per percent (or per megabyte without a total), not per network chunk.
+      let shown = -1;
+      const blob = await readWithProgress(response, (loaded, total) => {
+        const step = total ? Math.floor((loaded / total) * 100) : Math.floor(loaded / 1e6);
+        if (step === shown) return;
+        shown = step;
+        setDraftLoad({ video, videos, loaded, total });
+      });
       const file = new File([blob], name, { type: blob.type });
       storedMedia.current.set(file, media);
       return file;
@@ -288,8 +299,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       setOpeningDraft(true);
       try {
         const draft: Draft = await api(`drafts/${id}`);
-        const file = await storedFile(draft.video, draft.title);
-        const chinese = draft.zh?.video ? await storedFile(draft.zh.video, `${draft.title} (Chinese)`) : undefined;
+        const videos = draft.zh?.video ? 2 : 1;
+        const file = await storedFile(draft.video, draft.title, 1, videos);
+        const chinese = draft.zh?.video
+          ? await storedFile(draft.zh.video, `${draft.title} (Chinese)`, 2, videos)
+          : undefined;
         await showMedia([file], [""], [""]);
         setChineseVideo(chinese);
         const active = draft.preset;
@@ -307,6 +321,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
         setError(e instanceof Error ? e.message : "Could not open this draft");
       } finally {
         setOpeningDraft(false);
+        setDraftLoad(undefined);
         setBusy(false);
       }
     }
@@ -512,7 +527,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
   if (submitted) publishLabel = "Retry queue request";
-  if (busy) publishLabel = openingDraft ? "Loading video…" : "Uploading…";
+  if (busy && !openingDraft) publishLabel = "Uploading…";
+  if (busy && openingDraft) {
+    const which = draftLoad && draftLoad.videos > 1 ? `video ${draftLoad.video} of ${draftLoad.videos}` : "video";
+    const percent = draftLoad?.total ? ` ${Math.floor((draftLoad.loaded / draftLoad.total) * 100)}%` : "";
+    publishLabel = `Loading ${which}…${percent}`;
+  }
   return (
     <main className="publisher">
       <header className="publisher-header">
@@ -585,7 +605,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                       setCaption(e.target.value);
                       submission.current = null;
                     }}
-                    placeholder="What's happening?"
+                    placeholder={openingDraft ? "Opening draft…" : "What's happening?"}
                     rows={5}
                   />
                   <div className="publisher-composer-tools">
@@ -614,6 +634,27 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     )}
                   </div>
                 </div>
+                {openingDraft && (
+                  <div className="publisher-draft-loading" role="status" aria-live="polite">
+                    <p>
+                      Opening draft
+                      {draftLoad && draftLoad.videos > 1 && (
+                        <span>
+                          {" "}
+                          · Video {draftLoad.video} of {draftLoad.videos}
+                        </span>
+                      )}
+                    </p>
+                    <progress
+                      value={draftLoad?.total ? draftLoad.loaded : undefined}
+                      max={draftLoad?.total}
+                      aria-label="Draft video downloaded"
+                    />
+                    <small>
+                      {draftLoad ? describeProgress(draftLoad.loaded, draftLoad.total) : "Reading the draft…"}
+                    </small>
+                  </div>
+                )}
                 {!!previews.length && (
                   <div className="publisher-previews" data-single-video={kind === "video" || undefined}>
                     {previews.map((url, i) => (

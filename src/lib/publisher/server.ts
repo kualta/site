@@ -18,6 +18,7 @@ export interface MediaBucket {
   get(key: string): Promise<{
     body: ReadableStream;
     httpMetadata?: { contentType?: string };
+    size?: number;
   } | null>;
   head(key: string): Promise<unknown | null>;
   delete(keys: string | string[]): Promise<void>;
