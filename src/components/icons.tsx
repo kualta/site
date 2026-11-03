@@ -51,6 +51,13 @@ export const ArrowUpRightIcon = icon("ArrowUpRightIcon", <path d="M7 17L17 7M8.5
 /* actions */
 
 export const CloseIcon = icon("CloseIcon", <path d="M6 6l12 12M18 6L6 18" />);
+export const AlertIcon = icon(
+  "AlertIcon",
+  <>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7.5v5M12 16.5h.01" />
+  </>,
+);
 export const CheckIcon = icon("CheckIcon", <path d="M5 12.5l4.5 4.5L19 7.5" />);
 export const PlusIcon = icon("PlusIcon", <path d="M12 5v14M5 12h14" />);
 export const MinusIcon = icon("MinusIcon", <path d="M5 12h14" />);

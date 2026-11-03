@@ -65,8 +65,10 @@ export default function PublisherConnections({ online, connected, connections, r
           const current =
             active && (active.platform === platform || (platform === "grain" && active.platform === "bluesky"));
           let status = ready ? "Connected" : "Not connected";
+          let tone: "ok" | "busy" | undefined = ready ? "ok" : undefined;
           if (current) {
             status = "Connecting…";
+            tone = "busy";
             if (active.state === "queued") status = "Waiting for laptop…";
             else if (active.action === "disconnect") status = "Disconnecting…";
           }
@@ -75,7 +77,9 @@ export default function PublisherConnections({ online, connected, connections, r
             <div className="publisher-account" key={platform}>
               <div className="publisher-account-row">
                 <span>{label}</span>
-                <span className="publisher-note">{status}</span>
+                <span className="publisher-note publisher-account-status" data-tone={tone}>
+                  {status}
+                </span>
                 <button
                   disabled={!online || busy || !!active}
                   onClick={() => {
@@ -122,7 +126,7 @@ export default function PublisherConnections({ online, connected, connections, r
                 </div>
               )}
               {!current && latest?.state === "failed" && (
-                <p role="status" className="publisher-note">
+                <p role="status" className="publisher-problem">
                   {latest.message}
                 </p>
               )}

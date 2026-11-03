@@ -56,8 +56,10 @@ export default function PublisherCover({ video, value, onChange, platforms, othe
   }
 
   return (
-    <fieldset className="publisher-cover">
-      <legend>Cover · {platforms}</legend>
+    <fieldset className="publisher-cover publisher-group">
+      <legend>
+        Cover<span className="publisher-for"> · {platforms}</span>
+      </legend>
       {value ? (
         <div className="publisher-cover-chosen">
           <img src={coverUrl} alt="The chosen cover" />
