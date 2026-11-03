@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { closestPlace } from "./browser.mjs";
+import { closestPlace, publicationUrl } from "./browser.mjs";
+
+test("TikTok links photo posts apart from videos; a YouTube post links to the post", () => {
+  expect(publicationUrl("tiktok", "video", "7")).toBe("https://www.tiktok.com/@_/video/7");
+  expect(publicationUrl("tiktok", "photo", "7")).toBe("https://www.tiktok.com/@_/photo/7");
+  expect(publicationUrl("youtube", "photo", "Ugkx1")).toBe("https://www.youtube.com/post/Ugkx1");
+  expect(publicationUrl("xiaohongshu", "photo", "abc", "https://www.rednote.com/explore")).toBe(
+    "https://www.rednote.com/explore/abc",
+  );
+});
 
 test("picks the place itself over places in it, ignoring accents and case", () => {
   const offered = [

@@ -31,12 +31,15 @@ export function deletionDestination(platform, value, post) {
   let id;
   if (platform === "twitter") id = url.pathname.match(/^\/[\w]+\/status\/(\d+)\/?$/)?.[1];
   if (platform === "instagram") id = url.pathname.match(/^\/(?:p|reel)\/([\w-]+)\/?$/)?.[1];
-  if (platform === "tiktok") id = url.pathname.match(/^\/@[\w.-]+\/video\/(\d+)\/?$/)?.[1];
+  if (platform === "tiktok") id = url.pathname.match(/^\/@[\w.-]+\/(?:video|photo)\/(\d+)\/?$/)?.[1];
   if (platform === "xiaohongshu") id = url.pathname.match(/^\/explore\/([a-f\d]+)\/?$/)?.[1];
   // Publishing links with the full hash; one pasted from the app may have the short one.
   if (platform === "farcaster") id = url.pathname.match(/^\/[~\w.-]+(?:\/conversations)?\/(0x[a-f\d]{8,40})\/?$/)?.[1];
   if (platform === "lens") id = url.pathname.match(/^\/posts\/(\w+)\/?$/)?.[1];
-  if (platform === "youtube")
+  // A post on the channel's Posts tab, rather than a video.
+  const youtubePost = platform === "youtube" && url.hostname !== "youtu.be" && url.pathname.startsWith("/post/");
+  if (youtubePost) id = url.pathname.match(/^\/post\/([\w-]+)\/?$/)?.[1];
+  else if (platform === "youtube")
     id =
       url.hostname === "youtu.be"
         ? url.pathname.slice(1)
@@ -44,6 +47,7 @@ export function deletionDestination(platform, value, post) {
           ? url.searchParams.get("v")
           : url.pathname.match(/^\/shorts\/([\w-]+)\/?$/)?.[1];
   if (!id || !/^[\w-]{5,80}$/.test(id)) throw new Error("Cannot identify the published post");
+  if (youtubePost) return { id, url: `https://www.youtube.com/post/${id}`, post: true };
   return {
     id,
     url: platform === "youtube" ? `https://studio.youtube.com/video/${id}/edit` : url.origin + url.pathname,
@@ -93,10 +97,12 @@ export function deletionResponse(platform, responseUrl, method, body, requestBod
 const goneText = {
   twitter: /this page doesn.t exist|this post was deleted|this post is unavailable/i,
   instagram: /this page isn.t available/i,
-  tiktok: /video currently unavailable|couldn.t find this video/i,
+  tiktok: /(?:video|post) currently unavailable|couldn.t find this (?:video|post)/i,
+  youtube: /this post (?:isn.t|is not|is no longer) available|this post (?:was|has been) (?:deleted|removed)/i,
 };
-async function gone(page, platform) {
-  if (!goneText[platform]) return false;
+async function gone(page, platform, destination) {
+  // A video's Studio page never says a post is gone.
+  if (!goneText[platform] || (platform === "youtube" && !destination.post)) return false;
   try {
     await page.getByText(goneText[platform]).first().waitFor({ timeout: 8_000 });
     return true;
@@ -200,7 +206,7 @@ export async function deletePublication(
     const page = context.pages()[0] || (await context.newPage());
     page.setDefaultTimeout(15_000);
     await page.goto(destination.url);
-    if (await gone(page, target.platform)) return { state: "deleted", message: "Already removed from the platform" };
+    if (await gone(page, target.platform, destination)) return { state: "deleted", message: "Already removed from the platform" };
     page.on("response", (response) => {
       if (!submitted || !response.ok()) return;
       const task = response
@@ -237,6 +243,14 @@ export async function deletePublication(
         .getByRole("dialog")
         .getByRole("button", { name: /^Delete$/ })
         .click();
+    } else if (target.platform === "youtube" && destination.post) {
+      await page
+        .locator("ytd-backstage-post-renderer")
+        .first()
+        .getByRole("button", { name: /^Action menu$/ })
+        .click();
+      submitted = true;
+      await page.getByRole("menuitem", { name: /^Delete$/ }).or(page.getByText("Delete", { exact: true })).first().click();
     } else if (target.platform === "youtube") {
       await page.getByRole("button", { name: /^Options$/ }).click();
       submitted = true;
@@ -255,7 +269,7 @@ export async function deletePublication(
     const dialog = page.getByRole(target.platform === "twitter" ? "alertdialog" : "dialog");
     const confirmation = dialog.getByRole("button", {
       name:
-        target.platform === "youtube"
+        target.platform === "youtube" && !destination.post
           ? /^Delete forever$/
           : target.platform === "xiaohongshu"
             ? /^(删除|确认删除)$/
@@ -287,7 +301,7 @@ export async function deletePublication(
       await receipt;
     } catch {
       await page.goto(destination.url);
-      if (await gone(page, target.platform))
+      if (await gone(page, target.platform, destination))
         return { state: "deleted", message: "Removed: the post's page no longer exists" };
       throw new Error("Deletion was not confirmed");
     }

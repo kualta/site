@@ -7,5 +7,7 @@ Create button may open the upload dialog directly instead of a Post/Reel/Story
 menu; the create step accepts either layout. The caller
 requires a confirmed URL before recording success, regardless of upstream UI
 success signals. When Instagram confirms a share without its link, the adapter
-finds the post on the profile grid. Keep the verification module with the
+finds the post on the profile grid. Instagram refuses a "video" of more than one
+file, so a Reel never goes out as a carousel, and more than 20 items, which its web
+uploader would silently cut to 20. Keep the verification module with the
 publishing scripts.

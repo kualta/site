@@ -118,27 +118,34 @@ async function fullHash(hash, fetcher) {
 export const castType = (text) =>
   new TextEncoder().encode(text).length <= 320 ? CastType.CAST : CastType.LONG_CAST;
 
-/** Casts only embed URLs. The prepared copies go on Grove, the storage Lens uses, and casts link to them by way of this site. */
+/**
+ * Casts only embed URLs. The prepared copies go on Grove, the storage Lens uses, and casts link to them by way of this
+ * site: a photo as a .jpg, a video as an HLS stream. A mixed post embeds each item in order.
+ */
 async function uploadEmbeds(files, infos, post, grove, makeStream, signal) {
-  if (post.kind === "photo") {
-    const urls = [];
-    for (const file of files) {
-      const { key } = await grove.upload(file, "image/jpeg");
+  if (post.kind === "text") return [];
+  const urls = [];
+  for (let i = 0; i < files.length; i++) {
+    const kind = post.kind === "mixed" ? post.mediaKinds?.[i] : post.kind;
+    if (kind === "photo") {
+      const { key } = await grove.upload(files[i], "image/jpeg");
       urls.push(`${MEDIA_ORIGIN}/${key}.jpg`);
+      continue;
     }
-    return urls;
+    if (kind !== "video") throw rejected("A mixed post says which items are photos and which are videos.");
+    if (infos[i].bytes > MAX_UPLOAD_BYTES) throw rejected("Grove takes files up to 125 MB.");
+    const folder = post.kind === "video" ? "hls" : `hls-${i}`;
+    const stream = await makeStream(files[i], join(dirname(files[i]), folder), { signal });
+    const segments = await grove.uploadAll(stream.segments, "video/mp2t");
+    const segmentUrls = Object.fromEntries(stream.segments.map((path, n) => [path.split("/").at(-1), segments[n].url]));
+    const media = await grove.uploadText(linkPlaylist(stream.media, segmentUrls), "application/vnd.apple.mpegurl");
+    const master = await grove.uploadText(
+      linkPlaylist(stream.master, { "media.m3u8": media.url }),
+      "application/vnd.apple.mpegurl",
+    );
+    urls.push(`${MEDIA_ORIGIN}/${master.key}.m3u8`);
   }
-  if (post.kind !== "video") return [];
-  if (infos[0].bytes > MAX_UPLOAD_BYTES) throw rejected("Grove takes files up to 125 MB.");
-  const stream = await makeStream(files[0], join(dirname(files[0]), "hls"), { signal });
-  const segments = await grove.uploadAll(stream.segments, "video/mp2t");
-  const segmentUrls = Object.fromEntries(stream.segments.map((path, i) => [path.split("/").at(-1), segments[i].url]));
-  const media = await grove.uploadText(linkPlaylist(stream.media, segmentUrls), "application/vnd.apple.mpegurl");
-  const master = await grove.uploadText(
-    linkPlaylist(stream.master, { "media.m3u8": media.url }),
-    "application/vnd.apple.mpegurl",
-  );
-  return [`${MEDIA_ORIGIN}/${master.key}.m3u8`];
+  return urls;
 }
 export async function publishFarcaster(
   files,

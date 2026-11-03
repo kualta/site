@@ -56,6 +56,15 @@ export function extractMetrics(platform, id, payload) {
         saves: stats.collectCount,
       };
     }
+    // A YouTube post shows likes and replies as text; a rounded "1.2K" stays unknown rather than guessed.
+    if (platform === "youtube" && item.postId === id) {
+      const text = (value) =>
+        (value?.simpleText ?? value?.runs?.map((run) => run.text).join("") ?? "").replace(/,/g, "").trim();
+      values = {
+        likes: text(item.voteCount),
+        comments: text(item.actionButtons?.commentActionButtonsRenderer?.replyButton?.buttonRenderer?.text),
+      };
+    }
     if (platform === "xiaohongshu" && (item.note_id === id || item.noteId === id)) {
       const stats = item.interact_info || item.interactInfo || {};
       values = {
@@ -88,7 +97,7 @@ export async function collectAnalytics(
 ) {
   let context;
   try {
-    const { id, url } = deletionDestination(target.platform, target.url, { id: target.job_id });
+    const { id, url, post: youtubePost } = deletionDestination(target.platform, target.url, { id: target.job_id });
     const request = async (url) => {
       const response = await fetcher(url, { signal: AbortSignal.timeout(20_000) });
       if (!response.ok) throw new Error("Metrics request failed");
@@ -148,6 +157,21 @@ export async function collectAnalytics(
         saves: note.collected_count,
         shares: note.shared_count,
       });
+    } else if (target.platform === "youtube" && youtubePost) {
+      // A post's page carries its counts in ytInitialData: read publicly, else in the signed-in profile.
+      const response = await fetcher(url, {
+        headers: { "Accept-Language": "en" },
+        signal: AbortSignal.timeout(20_000),
+      }).catch(() => null);
+      const html = response?.ok ? await response.text() : "";
+      const initial = html.match(/var ytInitialData = (\{.*?\});<\/script>/s)?.[1];
+      metrics = initial ? extractMetrics("youtube", id, JSON.parse(initial)) : {};
+      if (!Object.keys(metrics).length) {
+        context = await open(join(stateDir, target.platform), true);
+        const page = context.pages()[0] || (await context.newPage());
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        metrics = extractMetrics("youtube", id, await page.evaluate(() => window.ytInitialData ?? null));
+      }
     } else if (target.platform === "youtube") {
       // Signed in, YouTube's reply leaves out the like count, and a public read needs no Chrome.
       metrics = await readYoutube().catch(() => ({}));

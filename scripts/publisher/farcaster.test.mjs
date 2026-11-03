@@ -161,6 +161,38 @@ test("a video embeds an HLS playlist whose files all resolve on Grove", async ()
   expect(grove.texts[1]).toContain("RESOLUTION=64x48");
   expect(grove.texts[1]).not.toContain("media.m3u8");
 });
+test("a photo and a video together embed a picture and a stream, in order", async () => {
+  const net = network();
+  const folders = [];
+  const hls = async (_input, folder) => {
+    folders.push(folder);
+    return { segments: ["/tmp/x/0000.ts"], media: "#EXTM3U\n0000.ts\n", master: "#EXTM3U\nmedia.m3u8\n" };
+  };
+  const post = { ...textPost, kind: "mixed", mediaKinds: ["photo", "video"] };
+  await publishFarcaster(["/tmp/x/0.jpg", "/tmp/x/1.mp4"], [{}, { bytes: 10 }], post, {
+    stateDir: await state(),
+    fetcher: net.fetcher,
+    wait: noWait,
+    grove: fakeGrove(),
+    hls,
+  });
+  const urls = net.sent[0].message.data.castAddBody.embeds.map((embed) => embed.url);
+  expect(urls).toHaveLength(2);
+  expect(urls[0]).toMatch(/\.jpg$/);
+  expect(urls[1]).toMatch(/\.m3u8$/);
+  expect(folders).toEqual(["/tmp/x/hls-1"]);
+});
+test("a mixed post that doesn't say what an item is sends nothing", async () => {
+  const net = network();
+  const error = await publishFarcaster(["/a.jpg", "/b.mp4"], [{}, {}], { ...textPost, kind: "mixed" }, {
+    stateDir: await state(),
+    fetcher: net.fetcher,
+    wait: noWait,
+    grove: fakeGrove(),
+  }).catch((e) => e);
+  expect(error.rejected).toBe(true);
+  expect(net.sent).toHaveLength(0);
+});
 test("a video too big for Grove stops before anything is sent", async () => {
   const net = network();
   const error = await publishFarcaster(["/x.mp4"], [{ bytes: 126_000_000 }], { ...textPost, kind: "video" }, {

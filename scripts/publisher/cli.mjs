@@ -115,7 +115,7 @@ if (command === "connect") {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
       const { target, post, connection, deletion, analytics } = await (
-        await api("claim", { platforms: config.platforms, deletePublications: true, analytics: true })
+        await api("claim", { platforms: config.platforms, deletePublications: true, analytics: true, carousels: true })
       ).json();
       if (analytics) {
         const result = await collectAnalytics(analytics.target, { stateDir });

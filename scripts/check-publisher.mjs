@@ -156,7 +156,9 @@ try {
     await art.getByRole("button", { name: "Delete everywhere" }).waitFor();
     // Crosspost reaches destinations the post hasn't; Xiaohongshu asks for its Chinese version first.
     const crosspost = panel.getByRole("group", { name: "Crosspost to" });
-    assert.equal(await crosspost.locator("label", { hasText: "YouTube" }).locator("small").textContent(), "needs a video");
+    // Photos can now go to YouTube as a post and to TikTok as a photo post.
+    assert.equal(await crosspost.locator("label", { hasText: "YouTube" }).locator("small").count(), 0);
+    assert.equal(await crosspost.locator("label", { hasText: "TikTok" }).locator("small").count(), 0);
     await crosspost.locator("label", { hasText: "X / Twitter" }).getByRole("checkbox").check();
     await crosspost.locator("label", { hasText: "Xiaohongshu" }).getByRole("checkbox").check();
     const crossChinese = crosspost.getByRole("group", { name: "Chinese · Xiaohongshu" });
@@ -201,7 +203,7 @@ try {
     assert.equal(await page.locator(".publisher-count").textContent(), "23 / 280 · X / Twitter");
     assert.equal(await reason("Grain"), "needs photos");
     assert.equal(await reason("Instagram"), "needs media");
-    assert.equal(await reason("YouTube"), "needs a video");
+    assert.equal(await reason("YouTube"), "needs media");
     await page.reload();
     await presets.getByRole("button", { name: "Text post", exact: true }).waitFor();
     assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Hello from the composer");
@@ -256,9 +258,13 @@ try {
     await page.keyboard.press("Enter");
     assert.deepEqual(await pressed(), ["Long video"]);
     assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Two photo caption");
-    assert.deepEqual(await checked(), []);
-    assert.equal(await page.locator(".publish-button").isDisabled(), true);
-    await shareTo.getByText("None of the selected destinations take these photos.").waitFor();
+    // Photos make a YouTube post, which everyone sees: the preset's Private visibility holds it back.
+    assert.deepEqual(await checked(), ["YouTubePost"]);
+    const publicIssue = "YouTube: shows photo posts to everyone: set YouTube visibility to Public";
+    await shareTo.getByText(publicIssue).waitFor();
+    await page.locator(".publish-button").click();
+    await page.getByRole("alert").getByText("YouTube shows photo posts to everyone: set YouTube visibility to Public").waitFor();
+    assert.equal(await page.evaluate(() => window.publisherRequests.some((r) => r.path === "jobs")), false);
     assert.equal(await title.count(), 0);
     await shareTo.getByRole("textbox", { name: "Default caption" }).fill("Video default");
     await presets.getByRole("button", { name: "Photo", exact: true }).focus();
@@ -270,7 +276,7 @@ try {
       await page.locator(".publisher-previews img").evaluateAll((imgs) => imgs.map((img) => img.src)),
       previewURLs,
     );
-    assert.deepEqual(await checked(), ["Grain", "Instagram"]);
+    assert.deepEqual(await checked(), ["Grain", "InstagramCarousel"]);
     await page.keyboard.press("Tab");
     assert.equal(
       await presets
@@ -452,15 +458,31 @@ try {
     await attach(video);
     await attached(3);
     assert.equal(await reason("Bluesky"), "takes photos or one video");
-    assert.equal(await reason("YouTube"), "takes one video");
-    assert.deepEqual(await checked(), ["Instagram", "X / Twitter"]);
-    await attach(photos(8));
-    await page.getByText("Attach up to 10 photos and videos: photos up to 30 MB, videos up to 90 MB.").waitFor();
+    assert.equal(await reason("YouTube"), "takes photos or one video");
+    assert.deepEqual(await checked(), ["InstagramCarousel", "X / Twitter"]);
+    await attach(photos(18));
+    await page.getByText("Attach up to 20 photos and videos: photos up to 30 MB, videos up to 90 MB.").waitFor();
     await attached(3);
+    // The video goes inside a carousel only once the owner says so; until then nothing is posted.
+    const publishMix = page.getByRole("button", { name: /^(Publish to 2 places|Queue post)$/ });
+    const asCarousel = page.getByRole("checkbox", { name: "Post as one carousel" });
+    assert.equal(await asCarousel.isChecked(), false);
+    assert.equal(await publishMix.isDisabled(), true);
+    await page.getByText("A video with other media isn't posted until you choose Post as one carousel.", { exact: false }).waitFor();
+    await asCarousel.check();
+    await page.getByText("The video and the other 2 go out together on Instagram, X / Twitter, not as a Reel or Short.").waitFor();
+    // Any change to the attachments asks again.
+    await attach(photos(1));
+    await attached(4);
+    assert.equal(await asCarousel.isChecked(), false);
+    await page.getByRole("button", { name: "Remove photo-1.png" }).last().click();
+    await attached(3);
+    await asCarousel.check();
     await shot("mixed");
-    await page.getByRole("button", { name: /^(Publish to 2 places|Queue post)$/ }).click();
+    await publishMix.click();
     const mix = await queued(page);
     assert.equal(mix.kind, "mixed");
+    assert.equal(mix.carousel, true);
     assert.deepEqual(mix.mediaKinds, ["photo", "photo", "video"]);
     assert.deepEqual(mix.platforms.toSorted(), ["instagram", "twitter"]);
 

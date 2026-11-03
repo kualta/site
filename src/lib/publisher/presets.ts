@@ -28,23 +28,50 @@ export const platformNames: Record<Platform, string> = {
 export const kindNames: Record<PostKind, string> = { text: "Text", photo: "Photo", video: "Video", mixed: "Media" };
 export const support: Record<Platform, readonly PostKind[]> = {
   grain: ["photo"],
-  // Instagram carousels and X posts mix photos and videos; elsewhere a post is photos or one video.
+  // Instagram carousels, X, Farcaster and Lens mix photos and videos; Bluesky's gallery, Xiaohongshu's notes, TikTok's
+  // photo posts and YouTube's posts hold photos only.
   instagram: ["photo", "video", "mixed"],
   bluesky: ["text", "photo", "video"],
   twitter: ["text", "photo", "video", "mixed"],
-  farcaster: ["text", "photo", "video"],
-  lens: ["text", "photo", "video"],
+  farcaster: ["text", "photo", "video", "mixed"],
+  lens: ["text", "photo", "video", "mixed"],
   xiaohongshu: ["photo", "video"],
-  youtube: ["video"],
-  tiktok: ["video"],
+  // Photos go to TikTok as a photo post and to YouTube as a post on the channel's Posts tab.
+  youtube: ["photo", "video"],
+  tiktok: ["photo", "video"],
 };
-export const MAX_PHOTOS = 10;
-/** Destinations that take fewer photos or videos per post than MAX_PHOTOS. */
-export const photoLimits: Partial<Record<Platform, number>> = { twitter: 4, farcaster: 2, lens: 4 };
+/** Photos and videos in one post: Instagram's carousel holds 20, and its web uploader drops any past that. */
+export const MAX_PHOTOS = 20;
+/** Destinations that take fewer photos or videos per post than MAX_PHOTOS. TikTok takes 35. */
+export const photoLimits: Partial<Record<Platform, number>> = {
+  twitter: 4,
+  farcaster: 2,
+  lens: 4,
+  // Bluesky's gallery asks apps to stop at 10 of the 20 it can hold.
+  bluesky: 10,
+  youtube: 10,
+  xiaohongshu: 18,
+};
 /** Longest video, in seconds, where a destination has a limit. */
 export const videoLimits: Partial<Record<Platform, number>> = { bluesky: 180 };
-/** Destinations that publish the post's title, so a post to them needs one; Xiaohongshu has its own Chinese title. */
-export const titled: readonly Platform[] = ["grain", "youtube"];
+/**
+ * Whether a destination publishes the post's title, so a post to it needs one: Grain's galleries and YouTube's
+ * videos have one, YouTube's posts don't. Xiaohongshu has its own Chinese title.
+ */
+export const needsTitle = (platform: Platform, kind: PostKind): boolean =>
+  platform === "grain" || (platform === "youtube" && kind === "video");
+/** YouTube shows a post on the channel's Posts tab to everyone: it has no private or unlisted posts. */
+export const publicOnly = (platform: Platform, kind: PostKind): boolean => platform === "youtube" && kind === "photo";
+/**
+ * Posts only a helper that knows them can publish: an older one would upload photos to YouTube and TikTok as videos,
+ * and post a mixed post to Farcaster and Lens as text alone.
+ */
+export const carouselTargets: readonly (readonly [Platform, PostKind])[] = [
+  ["tiktok", "photo"],
+  ["youtube", "photo"],
+  ["farcaster", "mixed"],
+  ["lens", "mixed"],
+];
 export const MAX_PRESETS = 24;
 
 export function postKind(files: readonly { type: string }[]): PostKind {
@@ -81,6 +108,19 @@ export interface VideoShape {
 export function videoFormat(platform: Platform, video?: VideoShape): string | null {
   if (platform === "instagram") return "Reel";
   if (platform === "youtube" && video && video.height >= video.width && video.seconds <= 180) return "Short";
+  return null;
+}
+/**
+ * What a post becomes where the platform names it, so the owner sees what goes out before it does: one video is a
+ * Reel on Instagram, more than one item is a carousel, and photos on YouTube are a post rather than a video.
+ */
+export function postFormat(platform: Platform, kind: PostKind, count: number, video?: VideoShape): string | null {
+  if (kind === "video") return videoFormat(platform, video);
+  if (kind === "text") return null;
+  if (platform === "youtube") return "Post";
+  if (count > 1 && (platform === "instagram" || platform === "tiktok" || platform === "xiaohongshu")) return "Carousel";
+  if (platform === "tiktok") return "Photo";
+  if (platform === "bluesky" && count > 4) return "Gallery";
   return null;
 }
 /** A horizontal video short enough for YouTube to make it a Short once it's reframed to vertical. */

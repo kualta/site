@@ -112,6 +112,32 @@ test("photos become one image post with the rest attached, each described", asyn
   expect(lens.image).toEqual({ item: "lens://0", type: "image/jpeg", altTag: "first" });
   expect(lens.attachments).toEqual([{ item: "lens://1", type: "image/jpeg" }]);
 });
+test("a mixed post leads with its first item and attaches the rest, videos with their own frames", async () => {
+  const grove = fakeGrove();
+  const mixed = { ...textPost, kind: "mixed", mediaKinds: ["video", "photo"], alt: "" };
+  await publishLens(
+    ["/tmp/x/0.mp4", "/tmp/x/1.jpg"],
+    [{ duration: 4.2, bytes: 10 }, {}],
+    mixed,
+    await options(api(), grove),
+  );
+  expect(grove.uploads[1]).toEqual({ path: "/tmp/x/poster-0.jpg", type: "image/jpeg" });
+  const { lens } = grove.uploads.at(-1).json;
+  expect(lens.mainContentFocus).toBe("VIDEO");
+  expect(lens.video).toEqual({ item: "lens://0", type: "video/mp4", cover: "lens://1", duration: 4 });
+  expect(lens.attachments).toEqual([{ item: "lens://2", type: "image/jpeg" }]);
+  const photoFirst = fakeGrove();
+  await publishLens(
+    ["/tmp/x/0.jpg", "/tmp/x/1.mp4"],
+    [{}, { duration: 9, bytes: 10 }],
+    { ...mixed, mediaKinds: ["photo", "video"] },
+    await options(api(), photoFirst),
+  );
+  const second = photoFirst.uploads.at(-1).json.lens;
+  expect(second.mainContentFocus).toBe("IMAGE");
+  expect(second.image).toEqual({ item: "lens://0", type: "image/jpeg" });
+  expect(second.attachments).toEqual([{ item: "lens://1", type: "video/mp4", cover: "lens://2", duration: 9 }]);
+});
 test("a video carries its length, description and a poster frame", async () => {
   const grove = fakeGrove();
   await publishLens(

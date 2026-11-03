@@ -136,6 +136,9 @@
 .publisher .publisher-destinations label[data-unavailable="true"] { cursor:default; }
 .publisher-destinations label[data-unavailable="true"] > span { color:var(--publisher-muted); }
 .publisher label.publisher-option { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.publisher-carousel { margin:0 0 16px; }
+.publisher .publisher-carousel .publisher-option { margin:0; }
+.publisher-carousel .publisher-note { margin:4px 0 0; }
 .publisher details { margin-bottom:16px; padding:14px 0; border-top:1px solid var(--publisher-line); }
 .publisher summary { color:var(--publisher-muted); font-size:14px; cursor:pointer; transition:color 160ms; }
 .publisher summary:hover, .publisher details[open] > summary { color:var(--publisher-ink); }
