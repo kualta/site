@@ -161,7 +161,7 @@ try {
     assert.equal(await crosspost.locator("label", { hasText: "TikTok" }).locator("small").count(), 0);
     await crosspost.locator("label", { hasText: "X / Twitter" }).getByRole("checkbox").check();
     await crosspost.locator("label", { hasText: "Xiaohongshu" }).getByRole("checkbox").check();
-    const crossChinese = crosspost.getByRole("group", { name: "Xiaohongshu · Chinese" });
+    const crossChinese = crosspost.getByRole("group", { name: "Chinese · Xiaohongshu" });
     await crossChinese.getByRole("button", { name: "Translate" }).click();
     await crossChinese.getByRole("button", { name: "Translate again" }).waitFor();
     await crosspost.getByRole("button", { name: "Crosspost to 2 places" }).click();
@@ -223,7 +223,7 @@ try {
     assert.equal(chooser.isMultiple(), true);
     await chooser.setFiles(photos(5));
     assert.equal(await reason("X / Twitter"), "takes up to 4 photos");
-    const descriptions = page.getByRole("textbox", { name: "Description (Grain / Bluesky / Lens)" });
+    const descriptions = page.getByRole("textbox", { name: "Description · Grain, Bluesky, Lens" });
     assert.equal(await descriptions.count(), 5);
     for (let i = 0; i < 5; i++) await descriptions.nth(i).fill(`Photo ${i + 1} described`);
     assert.equal(await title.count(), 0);
@@ -318,18 +318,18 @@ try {
     assert.equal(await reason("Grain"), "needs photos");
     assert.equal(await reason("Instagram"), "Reel");
     assert.deepEqual(await checked(), ["InstagramReel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
-    await page.getByRole("textbox", { name: "Video description (Bluesky / Lens)" }).fill("A short clip");
+    await page.getByRole("textbox", { name: "Video description · Bluesky, Lens" }).fill("A short clip");
     await title.fill("A clip");
     await presets.getByRole("button", { name: "Photo", exact: true }).click();
     assert.deepEqual(await checked(), ["InstagramReel"]);
     await presets.getByRole("button", { name: "Long video", exact: true }).click();
     assert.deepEqual(await checked(), ["YouTube"]);
     assert.equal(await title.inputValue(), "A clip");
-    assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky / Lens)" }).inputValue(), "A short clip");
+    assert.equal(await page.getByRole("textbox", { name: "Video description · Bluesky, Lens" }).inputValue(), "A short clip");
     await presets.getByRole("button", { name: "Short-form video" }).click();
     // Tags are rendered per platform, and Xiaohongshu gets its Chinese version from Translate.
     await page.getByRole("textbox", { name: "Tags" }).fill("#bogota film");
-    const chinese = page.getByRole("group", { name: "Xiaohongshu · Chinese" });
+    const chinese = page.getByRole("group", { name: "Chinese · Xiaohongshu" });
     await chinese.getByRole("button", { name: "Translate" }).click();
     await chinese.getByRole("button", { name: "Translate again" }).waitFor();
     assert.equal(await chinese.getByRole("textbox", { name: /^Title/ }).inputValue(), "波哥大短片");
@@ -501,7 +501,7 @@ try {
       return transfer;
     });
     await page.locator(".publisher-composer").dispatchEvent("drop", { dataTransfer: dropped });
-    await page.getByRole("textbox", { name: "Description (Grain / Bluesky / Lens)" }).waitFor();
+    await page.getByRole("textbox", { name: "Description · Grain, Bluesky, Lens" }).waitFor();
     await page.getByRole("button", { name: "Remove media" }).click();
     // Custom presets remain editable and survive a reload, alongside the active draft.
     await presets.getByRole("button", { name: "Text post", exact: true }).click();
@@ -618,10 +618,10 @@ try {
   );
   assert.equal(await page.getByRole("textbox", { name: /^Title ·/ }).inputValue(), "Rendered film");
   assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "A film about films");
-  assert.equal(await page.getByRole("textbox", { name: "Video description (Bluesky / Lens)" }).inputValue(), "Titles fade over a dark stage");
+  assert.equal(await page.getByRole("textbox", { name: "Video description · Bluesky, Lens" }).inputValue(), "Titles fade over a dark stage");
   assert.equal(await page.getByRole("textbox", { name: "Tags" }).inputValue(), "film motion");
   assert.equal(await page.getByRole("textbox", { name: /^Short version/ }).inputValue(), "A film");
-  const chinese = page.getByRole("group", { name: "Xiaohongshu · Chinese" });
+  const chinese = page.getByRole("group", { name: "Chinese · Xiaohongshu" });
   assert.equal(await chinese.getByRole("textbox", { name: "Title" }).inputValue(), "短片");
   assert.equal(await chinese.getByRole("textbox", { name: "Topics" }).inputValue(), "短片 动画");
   // Nothing has been queued by opening it; that takes the click.
@@ -714,14 +714,14 @@ try {
     mimeType: "image/png",
     buffer: png,
   });
-  await zhPage.getByRole("group", { name: "Xiaohongshu · Chinese" }).waitFor();
+  await zhPage.getByRole("group", { name: "Chinese · Xiaohongshu" }).waitFor();
   assert.equal(await zhButton.count(), 0);
   await zhPage.getByRole("button", { name: "Remove media" }).click();
   await zhPage.locator('input[type="file"][accept="video/*"]').first().setInputFiles(tallClip);
   await zhPage.locator(".publisher-previews video").first().waitFor();
   await zhPage.getByRole("textbox", { name: /^Title ·/ }).fill("Two versions");
   await zhPage.getByRole("textbox", { name: "Post" }).fill("The original");
-  const zhFields = zhPage.getByRole("group", { name: "Xiaohongshu · Chinese" });
+  const zhFields = zhPage.getByRole("group", { name: "Chinese · Xiaohongshu" });
   await zhFields.getByRole("textbox", { name: "Title" }).fill("两个版本");
   await zhFields.getByRole("textbox", { name: "Text" }).fill("中文版。");
   // Clicking it opens a video picker of its own.

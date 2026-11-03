@@ -2,7 +2,7 @@ import PublisherAnalytics from "./PublisherAnalytics";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
+import { AlertIcon, CheckIcon, CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import PublisherChinese from "./PublisherChinese";
@@ -116,6 +116,19 @@ function MediaButton({
         {label}
       </button>
     </>
+  );
+}
+/** A message held at the bottom of the window: errors are announced at once, notices when the reader is free. */
+function Toast({ tone, text, onDismiss }: { tone: "error" | "notice"; text: string; onDismiss: () => void }) {
+  const Icon = tone === "error" ? AlertIcon : CheckIcon;
+  return (
+    <div className="publisher-toast" data-tone={tone}>
+      <Icon size={18} />
+      <p role={tone === "error" ? "alert" : "status"}>{text}</p>
+      <button type="button" aria-label="Dismiss" onClick={onDismiss}>
+        <CloseIcon size={16} />
+      </button>
+    </div>
   );
 }
 type Access = "loading" | "owner" | "signin" | "denied";
@@ -254,6 +267,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   useEffect(() => {
     if (chinesePreview) return () => URL.revokeObjectURL(chinesePreview);
   }, [chinesePreview]);
+  // A notice is good news that needs no answer, so it steps aside on its own; errors wait to be read.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
   // Each photo's date is read once, so adding more media keeps dates already read or edited.
   useEffect(() => {
     const unread = files.filter((file) => file.type.startsWith("image/") && !datesRead.current.has(file));
@@ -719,6 +738,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                       disabled={busy || submitted}
                       onFiles={(next) => void chooseFiles(next)}
                     />
+                    {!!files.length && (
+                      <button type="button" disabled={busy || submitted} onClick={clearMedia}>
+                        <CloseIcon size={16} />
+                        Remove media
+                      </button>
+                    )}
                     {counted && (
                       <small className="publisher-count" data-over={counted.used > counted.limit}>
                         {counted.used} / {counted.limit} · {platformNames[counted.platform]}
@@ -791,15 +816,95 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     </p>
                   </div>
                 )}
-                {!!files.length && (
-                  <div className="publisher-actions publisher-media-actions">
-                    <button disabled={busy || submitted} onClick={clearMedia}>
-                      Remove media
-                    </button>
-                  </div>
+                {kind === "video" && (
+                  <label>
+                    Video description<span className="publisher-for"> · Bluesky, Lens</span>
+                    <input
+                      value={alt}
+                      maxLength={1000}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setAlt(e.target.value);
+                        submission.current = null;
+                      }}
+                      placeholder="Describe the video for screen readers"
+                    />
+                  </label>
+                )}
+                {needsTitle && (
+                  <label>
+                    Title<span className="publisher-for"> · {titledNames}</span>
+                    <input
+                      value={title}
+                      maxLength={100}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setTitle(e.target.value);
+                        submission.current = null;
+                      }}
+                      placeholder="A moment worth sharing"
+                    />
+                  </label>
+                )}
+                <label>
+                  Tags
+                  <input
+                    value={tagsText}
+                    maxLength={1000}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setTagsText(e.target.value);
+                      submission.current = null;
+                    }}
+                    placeholder="#travel #bogota"
+                  />
+                  <small className="publisher-note">
+                    Most important first. Instagram and TikTok add 5 at the end, YouTube 3 to the description, Bluesky
+                    and Lens keep 8 hidden. X, Grain and Farcaster get none.
+                  </small>
+                </label>
+                {!!locationTargets.length && (
+                  <label>
+                    Location<span className="publisher-for"> · {namesOf(locationTargets)}</span>
+                    <input
+                      value={place}
+                      maxLength={MAX_LOCATION}
+                      list="publisher-places"
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setPlace(e.target.value);
+                        submission.current = null;
+                      }}
+                      placeholder="Bogotá, Colombia"
+                    />
+                    <datalist id="publisher-places">
+                      {recentPlaces.map((recent) => (
+                        <option key={recent} value={recent} />
+                      ))}
+                    </datalist>
+                    <small className="publisher-note">
+                      Each platform tags its closest match from its own list of places.
+                    </small>
+                  </label>
+                )}
+                {needsShort && (
+                  <label>
+                    Short version<span className="publisher-for"> · {namesOf(brief)}</span>
+                    <textarea
+                      value={short}
+                      maxLength={1000}
+                      rows={3}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setShort(e.target.value);
+                        submission.current = null;
+                      }}
+                      placeholder="The post is too long for them; write a shorter one"
+                    />
+                  </label>
                 )}
                 {kind === "photo" && (
-                  <div className="publisher-photo-details">
+                  <div className="publisher-photo-details publisher-group">
                     {destinations.includes("grain") && (
                       <p className="publisher-note">
                         Date taken · Grain · {Intl.DateTimeFormat().resolvedOptions().timeZone}. Photos without a
@@ -807,12 +912,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                       </p>
                     )}
                     {files.map((file, index) => (
-                      <fieldset key={`${file.name}-${index}`}>
+                      <fieldset key={`${file.name}-${index}`} className="publisher-photo">
                         <legend>
-                          Photo {index + 1} · {file.name}
+                          Photo {index + 1}
+                          <span className="publisher-for"> · {file.name}</span>
                         </legend>
                         <label>
-                          Description (Grain / Bluesky / Lens)
+                          Description<span className="publisher-for"> · Grain, Bluesky, Lens</span>
                           <input
                             value={alts[index] || ""}
                             maxLength={1000}
@@ -846,21 +952,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     ))}
                   </div>
                 )}
-                {kind === "video" && (
-                  <label>
-                    Video description (Bluesky / Lens)
-                    <input
-                      value={alt}
-                      maxLength={1000}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setAlt(e.target.value);
-                        submission.current = null;
-                      }}
-                      placeholder="Describe the video for screen readers"
-                    />
-                  </label>
-                )}
                 {kind === "video" && files[0] && !!coverTargets.length && (
                   <PublisherCover
                     video={files[0]}
@@ -874,78 +965,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     disabled={busy || submitted}
                     onError={setError}
                   />
-                )}
-                {needsTitle && (
-                  <label>
-                    Title · {titledNames}
-                    <input
-                      value={title}
-                      maxLength={100}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setTitle(e.target.value);
-                        submission.current = null;
-                      }}
-                      placeholder="A moment worth sharing"
-                    />
-                  </label>
-                )}
-                <label>
-                  Tags
-                  <input
-                    value={tagsText}
-                    maxLength={1000}
-                    disabled={busy || submitted}
-                    onChange={(e) => {
-                      setTagsText(e.target.value);
-                      submission.current = null;
-                    }}
-                    placeholder="#travel #bogota"
-                  />
-                  <small className="publisher-note">
-                    Most important first. Instagram and TikTok add 5 at the end, YouTube 3 to the description, Bluesky
-                    and Lens keep 8 hidden. X, Grain and Farcaster get none.
-                  </small>
-                </label>
-                {!!locationTargets.length && (
-                  <label>
-                    Location · {namesOf(locationTargets)}
-                    <input
-                      value={place}
-                      maxLength={MAX_LOCATION}
-                      list="publisher-places"
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setPlace(e.target.value);
-                        submission.current = null;
-                      }}
-                      placeholder="Bogotá, Colombia"
-                    />
-                    <datalist id="publisher-places">
-                      {recentPlaces.map((recent) => (
-                        <option key={recent} value={recent} />
-                      ))}
-                    </datalist>
-                    <small className="publisher-note">
-                      Each platform tags its closest match from its own list of places.
-                    </small>
-                  </label>
-                )}
-                {needsShort && (
-                  <label>
-                    Short version · {brief.map((p) => platformNames[p]).join(", ")}
-                    <textarea
-                      value={short}
-                      maxLength={1000}
-                      rows={3}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setShort(e.target.value);
-                        submission.current = null;
-                      }}
-                      placeholder="The post is too long for them; write a shorter one"
-                    />
-                  </label>
                 )}
                 {rednote && (
                   <PublisherChinese
@@ -963,7 +982,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                   >
                     {locationTargets.includes("xiaohongshu") && (
                       <label>
-                        地点 · Xiaohongshu
+                        地点
                         <input
                           value={zhPlace}
                           maxLength={MAX_LOCATION}
@@ -1262,16 +1281,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
           </div>
         </>
       )}
-      {error && (
-        <p role="alert" className="publisher-error">
-          {error}
-        </p>
-      )}
-      {notice && (
-        <p role="status" className="publisher-notice">
-          {notice}
-        </p>
-      )}
+      {/* Messages float at the bottom of the window, so they show beside whatever was just pressed. */}
+      <div className="publisher-toasts">
+        {error && <Toast tone="error" text={error} onDismiss={() => setError("")} />}
+        {notice && <Toast tone="notice" text={notice} onDismiss={() => setNotice("")} />}
+      </div>
     </main>
   );
 }

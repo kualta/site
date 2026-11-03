@@ -38,7 +38,7 @@ const timeLabel = new Intl.DateTimeFormat(undefined, {
 });
 const fullTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const fullDay = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-const axisText = { fill: "var(--secondary-text)", fontSize: 12 };
+const axisText = { fill: "var(--publisher-muted)", fontSize: 12 };
 
 type Hovered = {
   active?: boolean;

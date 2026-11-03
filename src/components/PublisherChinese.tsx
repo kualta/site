@@ -33,8 +33,10 @@ export default function PublisherChinese({
   const zh = { title: value.title, text: value.text, topics: parseTags(value.topics) };
   const text = usage("xiaohongshu", renderVariant("xiaohongshu", { title: "", caption: "", zh }))[1];
   return (
-    <fieldset className="publisher-zh">
-      <legend>Xiaohongshu · Chinese</legend>
+    <fieldset className="publisher-zh publisher-group">
+      <legend>
+        Chinese<span className="publisher-for"> · Xiaohongshu</span>
+      </legend>
       <button type="button" disabled={disabled || translating || !canTranslate} onClick={onTranslate}>
         {translating ? "Translating…" : value.title || value.text ? "Translate again" : "Translate"}
       </button>
