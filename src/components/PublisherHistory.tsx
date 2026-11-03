@@ -5,7 +5,7 @@ import {
   platformNames,
   platforms,
   postLabel,
-  titled,
+  needsTitle as titleFor,
   unsupported,
   type Platform,
   type PostKind,
@@ -142,7 +142,7 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
   const { kind, media } = post.post;
   const options = platforms.filter((p) => !post.targets.some((t) => t.platform === p));
   // Asked only when the post went out without them.
-  const needsTitle = !post.post.title.trim() && chosen.some((p) => titled.includes(p));
+  const needsTitle = !post.post.title.trim() && chosen.some((p) => titleFor(p, kind));
   const needsChinese = !post.post.zh && chosen.includes("xiaohongshu");
   async function translate() {
     setTranslating(true);
@@ -209,7 +209,7 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
         <label>
           Title ·{" "}
           {chosen
-            .filter((p) => titled.includes(p))
+            .filter((p) => titleFor(p, kind))
             .map((p) => platformNames[p])
             .join(", ")}
           <input value={title} maxLength={100} disabled={busy} onChange={(e) => setTitle(e.target.value)} />

@@ -29,6 +29,7 @@ from instagram_browser_lib import (
 )
 
 STEP_TIMEOUT_MS = 60_000
+MAX_CAROUSEL_ITEMS = 20
 
 # --- diagnostic instrumentation (no effect unless IG_DEBUG_DIR is set) ---
 _DEBUG_DIR = os.environ.get("IG_DEBUG_DIR")
@@ -653,6 +654,12 @@ def main():
 
     if not all(Path(path).expanduser().is_file() for path in media_paths):
         emit({"ok": False, "message": "Instagram media file was not found."}, 2)
+    # A Reel is one video. More than one item makes a carousel, so a reel never becomes one by accident.
+    if args.kind == "video" and len(media_paths) != 1:
+        emit({"ok": False, "message": "A Reel is one video; nothing was posted."}, 2)
+    # The web uploader keeps the first 20 and silently drops the rest.
+    if len(media_paths) > MAX_CAROUSEL_ITEMS:
+        emit({"ok": False, "message": f"Instagram carousels hold up to {MAX_CAROUSEL_ITEMS} items; nothing was posted."}, 2)
 
     sync_playwright = import_playwright()
     result = {"ok": False, "message": "Instagram publish did not complete."}

@@ -2,10 +2,12 @@ import type { NewsletterDB } from "@/lib/newsletter/types";
 import {
   defaultMetadata,
   kinds,
+  carouselTargets,
   MAX_PHOTOS,
+  needsTitle,
   platformNames,
   platforms,
-  titled,
+  publicOnly,
   unsupported,
   type MetadataPolicy,
   type Platform,
@@ -28,6 +30,11 @@ export interface Post {
   kind: PostKind;
   /** For mixed posts, whether each media item is a photo or a video. */
   mediaKinds?: ("photo" | "video")[];
+  /**
+   * The owner chose to send a video together with other media as one carousel. A mixed post needs it, so a video
+   * meant as a Reel or Short never goes out inside a carousel because something else was attached.
+   */
+  carousel?: true;
   title: string;
   caption: string;
   alt: string;
@@ -116,6 +123,10 @@ export function validatePost(value: unknown): Post {
       : p.mediaKinds !== undefined
   )
     throw new PostError("Mix photos with at least one video");
+  if (p.kind === "mixed" && p.carousel !== true)
+    throw new PostError("A video goes out on its own. Choose Post as one carousel to send it with the other media.");
+  if (p.kind !== "mixed" && p.carousel !== undefined)
+    throw new PostError("Only a video sent with other media is posted as one carousel");
   if (
     !Array.isArray(p.platforms) ||
     !p.platforms.length ||
@@ -133,7 +144,7 @@ export function validatePost(value: unknown): Post {
   if (
     typeof p.title !== "string" ||
     p.title.length > 100 ||
-    (p.platforms.some((platform) => titled.includes(platform)) && !p.title.trim())
+    (p.platforms.some((platform) => needsTitle(platform, p.kind)) && !p.title.trim())
   )
     throw new PostError("Add a title of up to 100 characters");
   if (typeof p.caption !== "string" || p.caption.length > 5000 || typeof p.alt !== "string" || p.alt.length > 1000)
@@ -183,10 +194,12 @@ export function validatePost(value: unknown): Post {
     if (issue) throw new PostError(`${platformNames[platform]}: ${issue}`);
   }
   if (!["PUBLIC", "UNLISTED", "PRIVATE"].includes(p.visibility)) throw new PostError("Choose YouTube visibility");
+  if (p.visibility !== "PUBLIC" && p.platforms.some((platform) => publicOnly(platform, p.kind)))
+    throw new PostError("YouTube shows photo posts to everyone: set YouTube visibility to Public");
   return {
     id: p.id,
     kind: p.kind,
-    ...(p.kind === "mixed" ? { mediaKinds: p.mediaKinds } : {}),
+    ...(p.kind === "mixed" ? { mediaKinds: p.mediaKinds, carousel: true as const } : {}),
     title: p.title.trim(),
     caption: p.caption,
     alt: p.alt,
@@ -258,6 +271,8 @@ export async function addDestinations(
     metadata: { ...defaultMetadata(), ...post.metadata },
     title: !post.title.trim() && typeof input.title === "string" ? input.title : post.title,
     zh: post.zh ?? input.zh,
+    // Mixed posts from before the choice was asked already went out as carousels.
+    ...(post.kind === "mixed" ? { carousel: true } : {}),
   });
   for (const id of postMedia(next))
     if (!(await bucket.head(id)))
@@ -283,7 +298,8 @@ export async function authorizeHelper(request: Request, db: NewsletterDB): Promi
   );
 }
 /** Claim once. An interrupted worker is never automatically replayed. */
-export async function claimTarget(db: NewsletterDB, supported: Platform[]) {
+/** `carousels`: the helper publishes `carouselTargets`; an older one is never given them. */
+export async function claimTarget(db: NewsletterDB, supported: Platform[], { carousels = false } = {}) {
   await db
     .prepare(
       "UPDATE publisher_targets SET state = 'uncertain', message = 'Helper disconnected. Check the destination before retrying.' WHERE state = 'working' AND started_at < ?",
@@ -292,13 +308,23 @@ export async function claimTarget(db: NewsletterDB, supported: Platform[]) {
     .run();
   if (!supported.length) return null;
   const claim = crypto.randomUUID();
+  const newer = carousels
+    ? ""
+    : ` AND NOT EXISTS (SELECT 1 FROM publisher_jobs j WHERE j.id = publisher_targets.job_id AND publisher_targets.platform || ':' || json_extract(j.payload, '$.kind') IN (${carouselTargets
+        .map(() => "?")
+        .join(",")}))`;
   return db
     .prepare(
       `UPDATE publisher_targets SET state = 'working', claim = ?, started_at = ? WHERE id = (SELECT id FROM publisher_targets WHERE state = 'queued' AND platform IN (${supported
         .map(() => "?")
-        .join(",")}) ORDER BY rowid LIMIT 1) AND state = 'queued' RETURNING *`,
+        .join(",")})${newer} ORDER BY rowid LIMIT 1) AND state = 'queued' RETURNING *`,
     )
-    .bind(claim, Date.now(), ...supported)
+    .bind(
+      claim,
+      Date.now(),
+      ...supported,
+      ...(carousels ? [] : carouselTargets.map(([platform, kind]) => `${platform}:${kind}`)),
+    )
     .first<{ id: string; job_id: string; platform: Platform; claim: string }>();
 }
 

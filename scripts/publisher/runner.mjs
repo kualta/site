@@ -71,6 +71,8 @@ export async function publish(
       files.push(output);
       infos.push(info);
     }
+    // A video post is a Reel or a Short: one file, never a carousel because more media came along.
+    if (kind === "video" && files.length !== 1) throw new Error("A video post carries exactly one video");
     // Xiaohongshu's version carries the Chinese video's own frame.
     const coverId = variant?.cover ?? job.cover;
     let cover;
@@ -105,7 +107,8 @@ export async function publish(
     else if (target.platform === "farcaster") result = await until(farcaster(files, infos, post, { stateDir, signal }));
     else if (target.platform === "lens") result = await until(lens(files, infos, post, { stateDir, signal, cover }));
     else if (["twitter", "instagram"].includes(target.platform)) {
-      // Vendored adapters accept one path or an array for carousels; text posts send none.
+      // Vendored adapters accept one path or an array for carousels; text posts send none. Only more than one item
+      // makes a carousel, so a single video always goes as a Reel.
       const media = files.length > 1 ? JSON.stringify(files) : (files[0] ?? "");
       result = await until(python(
         `${target.platform === "twitter" ? "x" : "instagram"}_browser_publish.py`,

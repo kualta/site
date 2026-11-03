@@ -303,6 +303,55 @@ test("mixed posts process each item as what it is and publish them together", as
   expect(JSON.parse(args[args.indexOf("--media") + 1])).toHaveLength(2);
 });
 
+test("a video goes to Instagram on its own as a Reel, never as a one-item carousel", async () => {
+  let args;
+  const result = await publish(
+    { platform: "instagram" },
+    { ...post, kind: "video", media: ["clip"] },
+    fixture({
+      python: async (_script, values) => {
+        args = values;
+        return { ok: true, url: "https://www.instagram.com/reel/abc/" };
+      },
+    }),
+  );
+  expect(result.state).toBe("succeeded");
+  expect(args[args.indexOf("--kind") + 1]).toBe("video");
+  expect(args[args.indexOf("--media") + 1]).toMatch(/0\.mp4$/);
+});
+test("a video post carrying more than one file fails before any platform is touched", async () => {
+  let calls = 0;
+  const result = await publish(
+    { platform: "instagram" },
+    { ...post, kind: "video", media: ["clip", "extra"] },
+    fixture({
+      python: async () => {
+        calls++;
+        return { ok: true };
+      },
+    }),
+  );
+  expect(calls).toBe(0);
+  expect(result).toEqual({ state: "failed", message: "A video post carries exactly one video" });
+});
+test("photos reach TikTok and YouTube through the browser, every one in order", async () => {
+  for (const platform of ["tiktok", "youtube"]) {
+    let sent;
+    const result = await publish(
+      { platform },
+      { ...post, metadata: { ...post.metadata, youtube: "remove-all" } },
+      fixture({
+        browser: async (_platform, _profile, files, job) => {
+          sent = { files, kind: job.kind };
+          return { url: `https://example.invalid/${platform}` };
+        },
+      }),
+    );
+    expect(result.state).toBe("succeeded");
+    expect(sent.kind).toBe("photo");
+    expect(sent.files.map((file) => file.split("/").at(-1))).toEqual(["0.jpg", "1.jpg"]);
+  }
+});
 test("stopping ends an attempt at once, even one that ignores the signal", async () => {
   const stop = new AbortController();
   let seen;

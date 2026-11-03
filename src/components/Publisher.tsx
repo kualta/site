@@ -13,11 +13,13 @@ import {
   MAX_PRESETS,
   parsePreferences,
   platforms,
+  needsTitle as titleFor,
   platformNames,
+  postFormat,
   postKind,
+  publicOnly,
   reframesToShort,
   STORAGE_KEY,
-  titled,
   unsupported,
   videoFormat,
   type VideoShape,
@@ -46,6 +48,9 @@ async function api(path: string, body?: unknown, method = body === undefined ? "
 const DRAFT_KEY = "publisher.draft";
 // Places tagged before, offered first in the location field.
 const PLACES_KEY = "publisher.places";
+/** Why a video attached with other media waits for the owner's word. */
+const carouselRequired =
+  "A video with other media isn't posted until you choose Post as one carousel. To post it as a Reel or Short, remove the other media.";
 const unavailableFor: Record<PostKind, string> = {
   text: "text-only posts",
   photo: "these photos",
@@ -128,6 +133,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [video, setVideo] = useState<VideoShape>();
   // The owner's answer to "Post as a Short"; until they give one, the preset decides.
   const [shortChoice, setShortChoice] = useState<boolean>();
+  // A video goes in a carousel only when the owner says so for exactly these attachments.
+  const [asCarousel, setAsCarousel] = useState(false);
   const [datesTaken, setDatesTaken] = useState<string[]>([]);
   const [readingDates, setReadingDates] = useState(false);
   const datesRead = useRef(new WeakSet<File>());
@@ -382,6 +389,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       if (readingDates) throw new Error("Reading photo dates. Try again in a moment.");
       if (!destinations.length) throw new Error(`None of the selected destinations take ${unavailableFor[kind]}.`);
       if (kind === "text" && !caption.trim()) throw new Error("Write something to post.");
+      if (kind === "mixed" && !asCarousel) throw new Error(carouselRequired);
       if (needsTitle && !title.trim()) throw new Error(`Add a title for ${titledNames}.`);
       const photo = kind === "photo";
       const mediaKinds = files.map((file) => (file.type.startsWith("video/") ? "video" : "photo"));
@@ -390,6 +398,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
         media,
         kind,
         mediaKinds: kind === "mixed" ? mediaKinds : undefined,
+        carousel: kind === "mixed" ? (true as const) : undefined,
         ...text,
         zh: text.zh && zhVideo ? { ...text.zh, video: zhVideo, ...(zhCoverId ? { cover: zhCoverId } : {}) } : text.zh,
         alt: kind === "video" ? alt : "",
@@ -497,6 +506,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     setCover(undefined);
     setVideo(undefined);
     setShortChoice(undefined);
+    setAsCarousel(false);
     setAlts([]);
     setDatesTaken([]);
     submission.current = null;
@@ -510,6 +520,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     if (!first) setChineseVideo(undefined);
     setVideo(first ? await videoShape(first) : undefined);
     setShortChoice(undefined);
+    setAsCarousel(false);
     setFiles(next);
     setAlts(nextAlts);
     setDatesTaken(nextDates);
@@ -551,7 +562,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   ) as Record<Platform, string | null>;
   const destinations = preset.platforms.filter((p) => !reasons[p]);
   const titledNames = destinations
-    .filter((p) => titled.includes(p))
+    .filter((p) => titleFor(p, kind))
     .map((p) => platformNames[p])
     .join(", ");
   const needsTitle = titledNames !== "";
@@ -568,6 +579,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const canReframe = toYouTube && reframesToShort(video);
   const youtubeShort = canReframe && (shortChoice ?? preset.id === "short");
   const videoLabel = (p: Platform) => (p === "youtube" && youtubeShort ? "Short" : videoFormat(p, video));
+  const formatLabel = (p: Platform) => (kind === "video" ? videoLabel(p) : postFormat(p, kind, files.length));
+  // Where a video sent with other media goes out as one post.
+  const carouselNames = namesOf(destinations);
   // One text for everyone; X, Bluesky and Farcaster may take a short version, Xiaohongshu its Chinese one.
   const text = {
     title: needsTitle ? title : "",
@@ -595,6 +609,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     .map(({ platform, variant }) => ({ platform, ...usage(platform, variant).at(-1)! }))
     .sort((a, b) => b.used / b.limit - a.used / a.limit)[0];
   const issues = versions.filter(({ issue }) => issue);
+  if (preset.visibility !== "PUBLIC" && destinations.some((p) => publicOnly(p, kind)))
+    issues.push({
+      platform: "youtube",
+      variant: renderVariant("youtube", text),
+      issue: "shows photo posts to everyone: set YouTube visibility to Public",
+    });
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
@@ -746,6 +766,29 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                         </button>
                       </figure>
                     ))}
+                  </div>
+                )}
+                {kind === "mixed" && (
+                  <div className="publisher-carousel">
+                    <label className="publisher-option">
+                      Post as one carousel
+                      <input
+                        type="checkbox"
+                        checked={asCarousel}
+                        disabled={busy || submitted}
+                        onChange={(e) => {
+                          setAsCarousel(e.target.checked);
+                          submission.current = null;
+                        }}
+                      />
+                    </label>
+                    <p className="publisher-note">
+                      {asCarousel
+                        ? `The video and the other ${files.length - 1} go out together${
+                            carouselNames ? ` on ${carouselNames}` : ""
+                          }, not as a Reel or Short.`
+                        : carouselRequired}
+                    </p>
                   </div>
                 )}
                 {!!files.length && (
@@ -1025,11 +1068,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     <label key={p} data-unavailable={Boolean(reasons[p])}>
                       <span>
                         {platformNames[p]}
-                        {reasons[p] ? (
-                          <small>{reasons[p]}</small>
-                        ) : (
-                          kind === "video" && videoLabel(p) && <small>{videoLabel(p)}</small>
-                        )}
+                        {reasons[p] ? <small>{reasons[p]}</small> : formatLabel(p) && <small>{formatLabel(p)}</small>}
                       </span>
                       <input
                         type="checkbox"
@@ -1141,7 +1180,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                 </details>
                 <button
                   className="publish-button"
-                  disabled={busy || !destinations.length || (kind === "text" && !caption.trim())}
+                  disabled={
+                    busy ||
+                    !destinations.length ||
+                    (kind === "text" && !caption.trim()) ||
+                    (kind === "mixed" && !asCarousel)
+                  }
                   onClick={submit}
                 >
                   {publishLabel}

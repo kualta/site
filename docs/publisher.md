@@ -108,20 +108,34 @@ contain original metadata until the helper prepares each destination's copy.
 
 ## Publishing behavior
 
-- One composer takes text and, optionally, up to ten photos or one video. The
-  attachments decide what the post is: text alone, photos, or a video.
+- One composer takes text and, optionally, up to twenty photos and videos. The
+  attachments decide what the post is: text alone, photos, a video, or photos and
+  videos together.
+- More than one photo is a carousel wherever the platform has one: up to 20 on Instagram
+  (its web uploader silently drops any past 20, so the adapter refuses them), 18 on
+  Xiaohongshu, 10 on YouTube and Bluesky (its gallery past four), 4 on X and Lens, 2 on
+  Farcaster, and every one on Grain and TikTok (which takes 35). Each destination is
+  labelled with what the post becomes there: **Reel**, **Short**, **Carousel**, **Post**,
+  **Photo** or **Gallery**.
+- **A video goes inside a carousel only when the owner says so.** A video attached with
+  anything else isn't posted until **Post as one carousel** is ticked, and any change to
+  the attachments clears it; removing the other media posts the video as a Reel or Short.
+  The server refuses a mixed post without that choice, the helper refuses a video post
+  carrying more than one file, and the Instagram adapter refuses a Reel of more than one
+  file. Mixed posts go to Instagram, X, Farcaster (two items) and Lens (four); Bluesky,
+  Xiaohongshu, YouTube and TikTok hold photos or one video, never both.
 - The **Share to** preset tabs are saved destination sets (Photo: Instagram + Grain;
   Long video: YouTube; Text post: Bluesky + X; Short-form video: YouTube,
   Xiaohongshu, TikTok, X and Bluesky). Switching presets preserves the title, text,
   attachments and their descriptions/dates; default captions apply when starting
   a fresh draft or after queueing. Custom presets and saved settings are retained. Each
   destination shows whether it can take the current post and why not: Grain needs
-  photos, YouTube and TikTok need a video, Instagram and Xiaohongshu need media, X
-  and Lens take up to four photos, Farcaster two, Bluesky takes videos up to three
-  minutes. Selected
+  photos, Instagram, Xiaohongshu, YouTube and TikTok need media, X and Lens take up to
+  four photos, Farcaster two, Bluesky ten and videos up to three minutes. Selected
   destinations that can't take the post are skipped and return when the content
   changes.
-- A title is asked for only when Grain, YouTube or Xiaohongshu is a destination.
+- A title is asked for only when Grain, a YouTube video or Xiaohongshu is a destination;
+  a YouTube post has none.
   Links, mentions and hashtags become Bluesky facets. The counter follows the
   strictest text limit among the destinations (X 280, Bluesky 300, Xiaohongshu
   1,000, Farcaster 1,024 bytes, Instagram 2,200). The short version goes to X, Bluesky
@@ -186,6 +200,18 @@ contain original metadata until the helper prepares each destination's copy.
   permissions can change; these adapters need acceptance with the owner's real
   accounts. TikTok's browser privacy setting remains the account's uploader
   setting; YouTube visibility is an explicit saved preset, initially Private.
+- Photos go to TikTok through TikTok Studio's **Photos** tab (`upload?tab=photo`), all at
+  once and in order, and link as `tiktok.com/@_/photo/<id>`. Photos go to YouTube as a
+  post on the channel's **Posts** tab (`youtube.com/post/<id>`), uploaded through its
+  composer; the helper waits for YouTube's image uploads before pressing Post. YouTube
+  shows every post to everyone, so photos to YouTube need the preset's visibility set to
+  Public, and are refused otherwise. YouTube posts are deleted from the post's own menu
+  and confirmed by its page saying it's gone. Both flows were written against the live
+  pages without posting; their first real post and deletion are the acceptance test.
+- Photo posts to TikTok and YouTube and mixed posts to Farcaster and Lens are claimed only
+  by a helper that says it publishes them: an older one would send the photos as video
+  uploads and the mixed posts as text. Restart the helper after updating; until then
+  those destinations wait in the queue.
 - Farcaster and Lens are posted to directly, with no browser. Casts go to public
   Snapchain nodes (`haatz.quilibrium.com`, then `snap.farcaster.xyz`; Neynar's need a key)
   and count only once read back. Lens goes through its GraphQL API, handling whichever of
@@ -196,6 +222,8 @@ contain original metadata until the helper prepares each destination's copy.
   or `.m3u8` link, which redirects to Grove, because clients go by what a URL looks like.
   Video reaches Farcaster as HLS, cut from the prepared MP4 without re-encoding, because the
   Farcaster app is reported not to play MP4 in a cast; Lens gets the MP4 and a poster frame.
+  A mixed post embeds each item in order on Farcaster, and on Lens leads with its first item
+  and attaches the rest, each video with its own poster frame.
   That report and this playback are unconfirmed in the app itself until the first real post.
 - A destination is marked succeeded only with a confirmed post URL. Unclear
   results become `uncertain`; the helper never automatically repeats them.
@@ -307,7 +335,7 @@ Collector coverage:
 - Farcaster: likes, recasts and replies counted from a Snapchain node; no views/reach field.
 - Lens: reactions, comments, reposts plus quotes, and bookmarks from the public API; no views/reach field.
 - Grain: gallery favorites and comments from `social.grain.unspecced.getGallery`; no views/reach field.
-- YouTube: views, likes and comments from a public read through the existing YouTube client, without opening Chrome. Signed-in replies leave out the like count, so the saved session is only the fallback for a video the public can't read.
+- YouTube: views, likes and comments from a public read through the existing YouTube client, without opening Chrome. Signed-in replies leave out the like count, so the saved session is only the fallback for a video the public can't read. A YouTube post has likes and replies from its public page, or the saved session's when that page can't be read; a rounded count such as 1.2K stays unknown.
 - X/Twitter and TikTok: exact-post views and available engagement counters from the saved-session page's structured data. TikTok's numbers match TikTok Studio, including a real 0 views for a video it hasn't distributed.
 - Instagram: likes and comments from the post's page, and plays for videos from the owner's Reels tab, since the post's page leaves them out; photos have no view count.
 - Xiaohongshu: views and engagement from the creator center's note list.

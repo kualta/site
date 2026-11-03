@@ -132,39 +132,47 @@ async function loadManager(stateDir) {
   if (!key) throw rejected("Connect Lens in the composer first.");
   return privateKeyToAccount(key);
 }
-/** Lens's post formats want the first picture on its own, then the rest, with no empty descriptions. */
+/**
+ * Lens's post formats want the first item on its own, then the rest, with no empty descriptions. A mixed post leads
+ * with whichever item came first and attaches the rest, videos included.
+ */
 async function buildMetadata(files, infos, post, grove, { signal, poster, coverFile }) {
   const shared = {
     ...(post.caption.trim() ? { content: post.caption } : {}),
     ...(post.tags?.length ? { tags: post.tags.filter((tag) => tag.length <= 50) } : {}),
   };
   const described = (text) => (text?.trim() ? { altTag: text } : {});
-  if (post.kind === "photo") {
+  const videoItem = async (i, frameFile, alt) => {
+    if (infos[i].bytes > MAX_UPLOAD_BYTES) throw rejected("Grove takes files up to 125 MB.");
+    const { uri } = await grove.upload(files[i], "video/mp4");
+    // The post's chosen cover, else a frame of the video.
+    const name = post.kind === "video" ? "poster.jpg" : `poster-${i}.jpg`;
+    const frame = frameFile ?? (await poster(files[i], join(dirname(files[i]), name), infos[i].duration, { signal }));
+    const cover = await grove.upload(frame, "image/jpeg");
+    return {
+      item: uri,
+      type: MediaVideoMimeType.MP4,
+      cover: cover.uri,
+      duration: Math.max(1, Math.round(infos[i].duration)),
+      ...described(alt),
+    };
+  };
+  if (post.kind === "video") return video({ ...shared, video: await videoItem(0, coverFile, post.alt) });
+  if (post.kind === "photo" || post.kind === "mixed") {
     const items = [];
     for (let i = 0; i < files.length; i++) {
+      if (post.mediaKinds?.[i] === "video") {
+        items.push(await videoItem(i));
+        continue;
+      }
       const { uri } = await grove.upload(files[i], "image/jpeg");
       items.push({ item: uri, type: MediaImageMimeType.JPEG, ...described(post.alts?.[i] ?? post.alt) });
     }
     const [first, ...rest] = items;
-    return image({ ...shared, image: first, ...(rest.length ? { attachments: rest } : {}) });
-  }
-  if (post.kind === "video") {
-    if (infos[0].bytes > MAX_UPLOAD_BYTES) throw rejected("Grove takes files up to 125 MB.");
-    const { uri } = await grove.upload(files[0], "video/mp4");
-    // The post's chosen cover, else a frame of the video.
-    const frame =
-      coverFile ?? (await poster(files[0], join(dirname(files[0]), "poster.jpg"), infos[0].duration, { signal }));
-    const cover = await grove.upload(frame, "image/jpeg");
-    return video({
-      ...shared,
-      video: {
-        item: uri,
-        type: MediaVideoMimeType.MP4,
-        cover: cover.uri,
-        duration: Math.max(1, Math.round(infos[0].duration)),
-        ...described(post.alt),
-      },
-    });
+    const attachments = rest.length ? { attachments: rest } : {};
+    return first.type === MediaVideoMimeType.MP4
+      ? video({ ...shared, video: first, ...attachments })
+      : image({ ...shared, image: first, ...attachments });
   }
   return textOnly(shared);
 }

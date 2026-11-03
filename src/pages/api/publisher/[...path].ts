@@ -314,6 +314,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
         platforms?: unknown;
         deletePublications?: boolean;
         analytics?: boolean;
+        /** The helper publishes photo posts to TikTok and YouTube, and mixed posts to Farcaster and Lens. */
+        carousels?: boolean;
       };
       const supported = platforms.filter((p) => Array.isArray(input.platforms) && input.platforms.includes(p));
       await db
@@ -333,7 +335,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
           .first<{ payload: string }>();
         return json({ deletion: { ...deletion, target, post: JSON.parse(job!.payload) } });
       }
-      const target = await claimTarget(db, supported);
+      const target = await claimTarget(db, supported, { carousels: input.carousels === true });
       if (!target) {
         const metricClaim =
           input.analytics === true

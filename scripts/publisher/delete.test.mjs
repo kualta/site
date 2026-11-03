@@ -224,6 +224,20 @@ test("RedNote note links are Xiaohongshu publications", () => {
     "Unexpected publication host",
   );
 });
+test("TikTok photo posts and YouTube posts are identified apart from videos", () => {
+  const post = { id: "fixture" };
+  expect(deletionDestination("tiktok", "https://www.tiktok.com/@_/photo/7432100000000000001", post)).toEqual({
+    id: "7432100000000000001",
+    url: "https://www.tiktok.com/@_/photo/7432100000000000001",
+  });
+  expect(deletionDestination("youtube", "https://www.youtube.com/post/UgkxAbCdEf123456", post)).toEqual({
+    id: "UgkxAbCdEf123456",
+    url: "https://www.youtube.com/post/UgkxAbCdEf123456",
+    post: true,
+  });
+  expect(() => deletionDestination("youtube", "https://youtu.be/post/UgkxAbCdEf123456", post)).toThrow();
+  expect(() => deletionDestination("tiktok", "https://www.tiktok.com/@_/photos/123", post)).toThrow();
+});
 test("YouTube Shorts links identify their video", () => {
   expect(deletionDestination("youtube", "https://www.youtube.com/shorts/abcdefghijk", { id: "fixture" })).toEqual({
     id: "abcdefghijk",

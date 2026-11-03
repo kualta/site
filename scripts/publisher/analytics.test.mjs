@@ -109,6 +109,35 @@ test("YouTube counts come from a public read, without opening Chrome", async () 
   );
   expect(result).toEqual({ metrics: { views: 1234, likes: 7, comments: 1024 } });
 });
+test("a YouTube post's likes and replies come from its public page, never a neighbour's or a rounded one", async () => {
+  const renderer = (postId, likes, replies) => ({
+    backstagePostRenderer: {
+      postId,
+      voteCount: { simpleText: likes },
+      actionButtons: {
+        commentActionButtonsRenderer: { replyButton: { buttonRenderer: { text: { simpleText: replies } } } },
+      },
+    },
+  });
+  const data = { contents: [renderer("UgkxOther0000", "99", "99"), renderer("UgkxMine00000", "1,204", "8")] };
+  const page = `<script>var ytInitialData = ${JSON.stringify(data)};</script>`;
+  const result = await collectAnalytics(
+    { platform: "youtube", job_id: "fixture", url: "https://www.youtube.com/post/UgkxMine00000" },
+    {
+      fetcher: async (url) => {
+        expect(url).toBe("https://www.youtube.com/post/UgkxMine00000");
+        return new Response(page);
+      },
+      open: async () => {
+        throw new Error("must not open a browser");
+      },
+    },
+  );
+  expect(result).toEqual({ metrics: { likes: 1204, comments: 8 } });
+  expect(extractMetrics("youtube", "UgkxMine00000", renderer("UgkxMine00000", "1.2K", "3"))).toEqual({
+    comments: 3,
+  });
+});
 test("YouTube with comments turned off still reports its other counts", async () => {
   const result = await collectAnalytics(
     { platform: "youtube", job_id: "fixture", url: "https://youtu.be/abcdefghijk" },

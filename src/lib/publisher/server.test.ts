@@ -86,11 +86,14 @@ test("titles are required only by destinations that publish them", () => {
   expect(() => validatePost({ ...video, platforms: ["youtube"] })).toThrow("title");
   expect(() => validatePost({ ...video, media: [crypto.randomUUID(), crypto.randomUUID()] })).toThrow("one video");
 });
-test("photo posts take up to ten photos, four on X, with a description each", () => {
-  const media = Array.from({ length: 10 }, () => crypto.randomUUID());
+test("photo posts take up to twenty photos, ten on Bluesky, four on X, with a description each", () => {
+  const media = Array.from({ length: 20 }, () => crypto.randomUUID());
   const alts = media.map((_, i) => `Photo ${i}`);
-  expect(validatePost({ ...post(), media, alts, platforms: ["bluesky"] }).alts).toEqual(alts);
-  expect(() => validatePost({ ...post(), media: [...media, crypto.randomUUID()] })).toThrow("1–10");
+  expect(validatePost({ ...post(), media, alts, platforms: ["instagram", "grain"] }).alts).toEqual(alts);
+  expect(() => validatePost({ ...post(), media: [...media, crypto.randomUUID()] })).toThrow("1–20");
+  expect(() => validatePost({ ...post(), media, platforms: ["bluesky"] })).toThrow("Bluesky takes up to 10 photos");
+  const ten = media.slice(0, 10);
+  expect(validatePost({ ...post(), media: ten, alts: alts.slice(0, 10), platforms: ["bluesky"] }).media).toEqual(ten);
   expect(() => validatePost({ ...post(), media: media.slice(0, 5), platforms: ["twitter"] })).toThrow(
     "X / Twitter takes up to 4 photos",
   );
@@ -224,6 +227,35 @@ describe("queue", () => {
     expect((await claimTarget(db, ["twitter"]))?.id).toBe("b");
     sqlite.close();
   });
+  test("photos for TikTok and YouTube and mixed posts for Farcaster and Lens wait for a helper that knows them", async () => {
+    const { db, sqlite } = database();
+    const job = (kind: string) => {
+      const id = crypto.randomUUID();
+      sqlite
+        .query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, 1)")
+        .run(id, JSON.stringify({ kind }));
+      return id;
+    };
+    const photos = job("photo");
+    const mixed = job("mixed");
+    const video = job("video");
+    const target = sqlite.query("INSERT INTO publisher_targets (id, job_id, platform) VALUES (?, ?, ?)");
+    target.run("tiktok-photos", photos, "tiktok");
+    target.run("youtube-photos", photos, "youtube");
+    target.run("lens-mixed", mixed, "lens");
+    target.run("farcaster-mixed", mixed, "farcaster");
+    target.run("tiktok-video", video, "tiktok");
+    target.run("instagram-mixed", mixed, "instagram");
+    const all = ["tiktok", "youtube", "lens", "farcaster", "instagram"] as const;
+    // An older helper would post the photos as videos and the mixed posts as text.
+    expect((await claimTarget(db, [...all]))?.id).toBe("tiktok-video");
+    expect((await claimTarget(db, [...all]))?.id).toBe("instagram-mixed");
+    expect(await claimTarget(db, [...all])).toBeNull();
+    const claimed = [];
+    for (let i = 0; i < 4; i++) claimed.push((await claimTarget(db, [...all], { carousels: true }))?.id);
+    expect(claimed).toEqual(["tiktok-photos", "youtube-photos", "lens-mixed", "farcaster-mixed"]);
+    sqlite.close();
+  });
   test("expired work becomes uncertain and is never automatically reposted", async () => {
     const { db, sqlite } = database();
     sqlite.exec(
@@ -272,9 +304,39 @@ test("validates optional capture dates without accepting mismatched or invalid d
   for (const datesTaken of [[], ["2020-02-30T00:00:00.000Z"], ["yesterday"], ["2020-01-01"], [123]])
     expect(() => validatePost({ ...post(), datesTaken })).toThrow("date taken");
 });
+test("a video goes in a carousel only when the owner chose to post it as one", () => {
+  const media = [crypto.randomUUID(), crypto.randomUUID()];
+  const mixed = { ...post(), kind: "mixed", media, mediaKinds: ["video", "photo"], platforms: ["instagram"] };
+  expect(() => validatePost(mixed)).toThrow("Choose Post as one carousel");
+  expect(() => validatePost({ ...mixed, carousel: false })).toThrow("Choose Post as one carousel");
+  expect(() => validatePost({ ...mixed, carousel: "yes" })).toThrow("Choose Post as one carousel");
+  expect(validatePost({ ...mixed, carousel: true }).carousel).toBe(true);
+  // A Reel, a photo carousel or a text post can't claim to be one.
+  const video = { ...post(), kind: "video", title: "", platforms: ["instagram"] };
+  expect(() => validatePost({ ...video, carousel: true })).toThrow("Only a video sent with other media");
+  expect(() => validatePost({ ...post(), carousel: true })).toThrow("Only a video sent with other media");
+  expect(validatePost(video)).not.toHaveProperty("carousel");
+  // Farcaster and Lens now take one too.
+  const both = validatePost({ ...mixed, carousel: true, platforms: ["farcaster", "lens", "twitter"] });
+  expect(both.platforms).toEqual(["farcaster", "lens", "twitter"]);
+});
+test("photos go to YouTube as a public post without a title, and to TikTok as a photo post", () => {
+  const photos = { ...post(), title: "", media: [crypto.randomUUID(), crypto.randomUUID()], alts: undefined };
+  expect(() => validatePost({ ...photos, platforms: ["youtube"] })).toThrow("set YouTube visibility to Public");
+  expect(() => validatePost({ ...photos, platforms: ["youtube"], visibility: "UNLISTED" })).toThrow("Public");
+  const job = validatePost({ ...photos, platforms: ["youtube", "tiktok"], visibility: "PUBLIC" });
+  expect(job.platforms).toEqual(["youtube", "tiktok"]);
+  expect(job.variants?.youtube?.title).toBe("");
+  // TikTok photos keep whatever visibility YouTube's videos use.
+  expect(validatePost({ ...photos, platforms: ["tiktok"] }).visibility).toBe("PRIVATE");
+  const eleven = Array.from({ length: 11 }, () => crypto.randomUUID());
+  expect(() => validatePost({ ...photos, media: eleven, platforms: ["youtube"], visibility: "PUBLIC" })).toThrow(
+    "YouTube takes up to 10 photos",
+  );
+});
 test("mixed posts say what each item is and include a video", () => {
   const media = [crypto.randomUUID(), crypto.randomUUID()];
-  const mixed = { ...post(), kind: "mixed", media, platforms: ["instagram", "twitter"] };
+  const mixed = { ...post(), kind: "mixed", media, platforms: ["instagram", "twitter"], carousel: true };
   expect(validatePost({ ...mixed, mediaKinds: ["photo", "video"] }).mediaKinds).toEqual(["photo", "video"]);
   expect(() => validatePost(mixed)).toThrow("Mix photos with at least one video");
   expect(() => validatePost({ ...mixed, mediaKinds: ["photo", "photo"] })).toThrow("at least one video");
@@ -302,6 +364,7 @@ test("only a video going to YouTube can ask to be a Short, and a post that doesn
       media,
       mediaKinds: ["photo", "video"],
       platforms: ["instagram"],
+      carousel: true,
       youtubeShort: true,
     }),
   ).toThrow("as a Short");
@@ -330,6 +393,22 @@ test("a published post can go to more destinations, rendered and checked like a 
     state: "queued",
   });
   await expect(addDestinations(db, bucket, { job: job.id, platforms: ["twitter"] })).rejects.toThrow("Choose where");
+});
+test("a mixed post from before the carousel choice can still be crossposted, as the carousel it was", async () => {
+  const media = [crypto.randomUUID(), crypto.randomUUID()];
+  const { carousel, ...legacy } = validatePost({
+    ...post(),
+    kind: "mixed",
+    media,
+    mediaKinds: ["photo", "video"],
+    platforms: ["instagram"],
+    carousel: true,
+  });
+  expect(carousel).toBe(true);
+  const { db, payload } = published(legacy as ReturnType<typeof validatePost>);
+  await addDestinations(db, { head: async () => ({}) }, { job: legacy.id, platforms: ["lens"] });
+  expect(payload().platforms).toEqual(["instagram", "lens"]);
+  expect(payload().carousel).toBe(true);
 });
 test("crossposting keeps a Short a Short, and doesn't make a regular video one", async () => {
   const video = { ...post(), kind: "video" };

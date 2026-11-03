@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
 import {
   defaultPreferences,
+  MAX_PHOTOS,
+  needsTitle,
   parsePreferences,
+  postFormat,
   postKind,
   postLabel,
+  publicOnly,
   reframesToShort,
   unsupported,
   videoFormat,
@@ -36,7 +40,11 @@ test("legacy built-in labels update without replacing saved choices or custom pr
   const parsed = parsePreferences(JSON.stringify(stored));
   expect(parsed.active).toBe("text");
   expect(parsed.presets.map((p) => p.name)).toEqual([
-    "My photos", "Long video", "Text post", "Short-form video", "Video",
+    "My photos",
+    "Long video",
+    "Text post",
+    "Short-form video",
+    "Video",
   ]);
   for (let i = 0; i < stored.presets.length; i++) {
     expect({ ...parsed.presets[i], name: stored.presets[i].name }).toEqual(stored.presets[i]);
@@ -66,7 +74,8 @@ test("each destination says why it can't take a post", () => {
   expect(unsupported("bluesky", "text", 0)).toBeNull();
   expect(unsupported("grain", "text", 0)).toBe("needs photos");
   expect(unsupported("instagram", "text", 0)).toBe("needs media");
-  expect(unsupported("youtube", "photo", 2)).toBe("needs a video");
+  expect(unsupported("youtube", "photo", 2)).toBeNull();
+  expect(unsupported("tiktok", "photo", 2)).toBeNull();
   expect(unsupported("grain", "video", 1)).toBe("needs photos");
   expect(unsupported("twitter", "photo", 4)).toBeNull();
   expect(unsupported("twitter", "photo", 5)).toBe("takes up to 4 photos");
@@ -104,9 +113,11 @@ test("photos and videos together go only where they can be mixed", () => {
   expect(unsupported("twitter", "mixed", 5)).toBe("takes up to 4 photos and videos");
   expect(unsupported("bluesky", "mixed", 2)).toBe("takes photos or one video");
   expect(unsupported("grain", "mixed", 2)).toBe("takes only photos");
-  expect(unsupported("youtube", "mixed", 2)).toBe("takes one video");
+  expect(unsupported("youtube", "mixed", 2)).toBe("takes photos or one video");
+  expect(unsupported("tiktok", "mixed", 2)).toBe("takes photos or one video");
+  expect(unsupported("xiaohongshu", "mixed", 2)).toBe("takes photos or one video");
 });
-test("Farcaster and Lens take text, a few photos or one video, and neither mixes them", () => {
+test("Farcaster and Lens take text, a few photos or one video, or a few of both together", () => {
   expect(unsupported("farcaster", "text", 0)).toBeNull();
   expect(unsupported("farcaster", "photo", 2)).toBeNull();
   expect(unsupported("farcaster", "photo", 3)).toBe("takes up to 2 photos");
@@ -114,14 +125,59 @@ test("Farcaster and Lens take text, a few photos or one video, and neither mixes
   expect(unsupported("lens", "photo", 5)).toBe("takes up to 4 photos");
   expect(unsupported("farcaster", "video", 1, 600)).toBeNull();
   expect(unsupported("lens", "video", 1, 600)).toBeNull();
-  expect(unsupported("farcaster", "mixed", 2)).toBe("takes photos or one video");
-  expect(unsupported("lens", "mixed", 2)).toBe("takes photos or one video");
+  expect(unsupported("farcaster", "mixed", 2)).toBeNull();
+  expect(unsupported("farcaster", "mixed", 3)).toBe("takes up to 2 photos and videos");
+  expect(unsupported("lens", "mixed", 4)).toBeNull();
+  expect(unsupported("lens", "mixed", 5)).toBe("takes up to 4 photos and videos");
+});
+test("each destination takes as many photos as its carousel holds", () => {
+  expect(MAX_PHOTOS).toBe(20);
+  expect(unsupported("instagram", "photo", 20)).toBeNull();
+  expect(unsupported("instagram", "mixed", 20)).toBeNull();
+  expect(unsupported("grain", "photo", 20)).toBeNull();
+  expect(unsupported("tiktok", "photo", 20)).toBeNull();
+  expect(unsupported("xiaohongshu", "photo", 18)).toBeNull();
+  expect(unsupported("xiaohongshu", "photo", 19)).toBe("takes up to 18 photos");
+  expect(unsupported("bluesky", "photo", 10)).toBeNull();
+  expect(unsupported("bluesky", "photo", 11)).toBe("takes up to 10 photos");
+  expect(unsupported("youtube", "photo", 10)).toBeNull();
+  expect(unsupported("youtube", "photo", 11)).toBe("takes up to 10 photos");
+  expect(unsupported("youtube", "text", 0)).toBe("needs media");
+  expect(unsupported("tiktok", "text", 0)).toBe("needs media");
+});
+test("each destination says what the post becomes there, so a Reel is never a carousel unseen", () => {
+  expect(postFormat("instagram", "video", 1)).toBe("Reel");
+  expect(postFormat("instagram", "photo", 1)).toBeNull();
+  expect(postFormat("instagram", "photo", 3)).toBe("Carousel");
+  expect(postFormat("instagram", "mixed", 2)).toBe("Carousel");
+  expect(postFormat("tiktok", "video", 1)).toBeNull();
+  expect(postFormat("tiktok", "photo", 1)).toBe("Photo");
+  expect(postFormat("tiktok", "photo", 5)).toBe("Carousel");
+  expect(postFormat("youtube", "photo", 1)).toBe("Post");
+  expect(postFormat("youtube", "photo", 6)).toBe("Post");
+  expect(postFormat("youtube", "video", 1, { seconds: 30, width: 1080, height: 1920 })).toBe("Short");
+  expect(postFormat("xiaohongshu", "photo", 9)).toBe("Carousel");
+  expect(postFormat("bluesky", "photo", 4)).toBeNull();
+  expect(postFormat("bluesky", "photo", 5)).toBe("Gallery");
+  expect(postFormat("twitter", "mixed", 3)).toBeNull();
+  expect(postFormat("bluesky", "text", 0)).toBeNull();
+});
+test("a YouTube post has no title and is always public; its video has both", () => {
+  expect(needsTitle("youtube", "video")).toBe(true);
+  expect(needsTitle("youtube", "photo")).toBe(false);
+  expect(needsTitle("grain", "photo")).toBe(true);
+  expect(needsTitle("instagram", "photo")).toBe(false);
+  expect(publicOnly("youtube", "photo")).toBe(true);
+  expect(publicOnly("youtube", "video")).toBe(false);
+  expect(publicOnly("tiktok", "photo")).toBe(false);
 });
 test("saved presets keep their destinations when new ones appear, and get a metadata policy for them", () => {
   const raw = JSON.stringify({
     version: 1,
     active: "text",
-    presets: [{ id: "text", name: "Text post", platforms: ["bluesky"], metadata: { bluesky: "remove-all" }, caption: "" }],
+    presets: [
+      { id: "text", name: "Text post", platforms: ["bluesky"], metadata: { bluesky: "remove-all" }, caption: "" },
+    ],
   });
   const [preset] = parsePreferences(raw).presets;
   expect(preset.platforms).toEqual(["bluesky"]);

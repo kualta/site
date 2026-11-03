@@ -186,6 +186,44 @@ export async function setXiaohongshuLocation(page, place) {
   }
   throw new Error(`it offered no place named ${name}`);
 }
+/** TikTok's Photos tab takes the whole set at once, in order, and says how many it has once they're up. */
+export async function addTikTokPhotos(page, files) {
+  await page.locator('input[type="file"][accept*="image"]').first().setInputFiles(files);
+  await page
+    .getByText(new RegExp(`^${files.length} photos? uploaded`))
+    .first()
+    .waitFor({ timeout: 10 * 60_000 });
+}
+/**
+ * Fills a post on the signed-in channel's Posts tab, whose composer takes up to 10 images, and returns its Post
+ * button. Post turns on as soon as images are picked, so this first waits for their uploads to finish.
+ */
+export async function composeYoutubePost(page, files, caption) {
+  await page.goto("https://www.youtube.com/profile");
+  await page.waitForURL(/youtube\.com\/(?:channel\/UC[\w-]+|@[\w.-]+)/, { timeout: 30_000 }).catch(() => {});
+  const channel = new URL(page.url()).pathname.match(/^\/(channel\/UC[\w-]+|@[\w.-]+)/)?.[1];
+  if (!channel) throw new Error("Log in to YouTube first");
+  await page.goto(`https://www.youtube.com/${channel}/posts`);
+  const dialog = page.locator("ytd-backstage-post-dialog-renderer").first();
+  await dialog.getByRole("button", { name: "Add an image", exact: true }).click();
+  let started = 0;
+  let finished = 0;
+  const upload = (request) =>
+    request.method() === "POST" && new URL(request.url()).pathname.startsWith("/channel_image_upload/");
+  page.on("request", (request) => upload(request) && started++);
+  page.on("requestfinished", (request) => upload(request) && finished++);
+  page.on("requestfailed", (request) => upload(request) && finished++);
+  await dialog.locator('input[type="file"][multiple]').first().setInputFiles(files);
+  // Each image goes up in its own requests; all of them answered and nothing new for 1.5 s means they're in.
+  const deadline = Date.now() + 10 * 60_000;
+  for (let quiet = 0; quiet < 3; ) {
+    if (Date.now() > deadline) throw new Error("YouTube didn't finish uploading the images");
+    await page.waitForTimeout(500);
+    quiet = started >= files.length && finished === started ? quiet + 1 : 0;
+  }
+  await dialog.locator("#contenteditable-root").first().fill(caption);
+  return dialog.locator('button[aria-label="Post"]:not([disabled])').first();
+}
 export async function openProfile(path, headless = false) {
   return chromium.launchPersistentContext(path, {
     channel: "chrome",
@@ -204,8 +242,23 @@ function outline(value) {
     .map(([key, item]) => (item && typeof item === "object" && !Array.isArray(item) ? `${key}:${outline(item)}` : key));
   return `{${keys.join(",")}}`;
 }
+/** Where a post published in the browser can be found: TikTok keeps photo posts apart from videos. */
+export function publicationUrl(platform, kind, id, explore) {
+  if (platform === "tiktok") return `https://www.tiktok.com/@_/${kind === "photo" ? "photo" : "video"}/${id}`;
+  if (platform === "youtube") return `https://www.youtube.com/post/${id}`;
+  return `${explore}/${id}`;
+}
 // RedNote and Xiaohongshu create notes with this request; its reply carries the note id.
 const createNote = /\/web_api\/sns\/v\d+\/note(?:[/?]|$)/;
+/** The request each browser flow's Publish sends, and the fields of its reply that carry the new post's id. */
+const publishRequests = {
+  tiktok: { endpoint: /tiktok\.com\/.*(?:publish|\/post\/)/, ids: ["video_id", "item_id"] },
+  youtube: { endpoint: /youtube\.com\/youtubei\/v1\/backstage\/create_post/, ids: ["postId"] },
+  xiaohongshu: {
+    endpoint: new RegExp(`(?:xiaohongshu|rednote)\\.com\\/.*(?:publish|note\\/post)(?:[/?]|$)|${createNote.source}`),
+    ids: ["note_id", "noteId"],
+  },
+};
 function findId(value, names) {
   if (!value || typeof value !== "object") return null;
   for (const [key, item] of Object.entries(value)) {
@@ -223,7 +276,8 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
     if (signal?.aborted) throw new Error("Stopped");
     const page = context.pages()[0] || (await context.newPage());
     page.setDefaultTimeout(60_000);
-    if (platform === "youtube") {
+    // Photos go to the channel's Posts tab in the browser below; a video goes up through YouTube's API.
+    if (platform === "youtube" && post.kind === "video") {
       const cookies = await context.cookies("https://www.youtube.com");
       let cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
       if (!cookies.some((c) => c.name === "SAPISID")) {
@@ -271,12 +325,8 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
     });
     page.on("response", (response) => {
       if (!submitting) return;
-      const url = response.url();
-      const endpoint =
-        platform === "tiktok"
-          ? /tiktok\.com\/.*(?:publish|\/post\/)/
-          : new RegExp(`(?:xiaohongshu|rednote)\\.com\\/.*(?:publish|note\\/post)(?:[/?]|$)|${createNote.source}`);
-      if (response.request().method() !== "POST" || !endpoint.test(url)) return;
+      const { endpoint, ids } = publishRequests[platform];
+      if (response.request().method() !== "POST" || !endpoint.test(response.url())) return;
       if (!response.ok()) {
         reply = `${response.status()}`;
         return;
@@ -288,14 +338,10 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
           if (data.code !== undefined && data.code !== 0) return;
           if (data.status_code !== undefined && data.status_code !== 0) return;
           if (data.success === false) return;
-          const note = typeof data.data?.id === "string" && /^[a-f\d]{24}$/.test(data.data.id) ? data.data.id : null;
-          const id =
-            platform === "tiktok" ? findId(data, ["video_id", "item_id"]) : (findId(data, ["note_id", "noteId"]) ?? note);
-          if (id)
-            publishedUrl =
-              platform === "tiktok"
-                ? `https://www.tiktok.com/@_/video/${id}`
-                : `${explore}/${id}`;
+          let id = findId(data, ids);
+          // Xiaohongshu may answer with only the note's 24-character id under data.id.
+          if (!id && platform === "xiaohongshu" && /^[a-f\d]{24}$/.test(data.data?.id ?? "")) id = data.data.id;
+          if (id) publishedUrl = publicationUrl(platform, post.kind, id, explore);
         })
         .catch(() => {})
         .finally(() => responses.delete(task));
@@ -304,7 +350,9 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
     const url = await destination(platform, context);
     // Notes open on the site the account published from.
     const explore = url === rednote ? "https://www.rednote.com/explore" : "https://www.xiaohongshu.com/explore";
-    await page.goto(url);
+    // TikTok takes photos on its own tab; YouTube's posts open from the channel.
+    if (platform === "tiktok" && post.kind === "photo") await page.goto(`${url}?tab=photo`);
+    else if (platform !== "youtube") await page.goto(url);
     if (platform === "xiaohongshu") {
       await clickUploadTab(page, post.kind === "photo" ? "上传图文" : "上传视频");
       if (post.kind === "photo") {
@@ -355,8 +403,13 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
           for (let tick = 0; tick < 20 && !requested; tick++) await page.waitForTimeout(500);
         }
       } else await publish.click();
+    } else if (platform === "youtube") {
+      const postButton = await composeYoutubePost(page, files, post.caption);
+      submitting = true;
+      await postButton.click();
     } else {
-      await page.locator('input[type="file"]').first().setInputFiles(files);
+      if (platform === "tiktok" && post.kind === "photo") await addTikTokPhotos(page, files);
+      else await page.locator('input[type="file"]').first().setInputFiles(files);
       await page.locator('[contenteditable="true"]').first().fill(post.caption);
       if (cover && platform === "tiktok")
         await setTikTokCover(page, cover).catch(async (error) => {
