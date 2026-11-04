@@ -94,6 +94,78 @@ const chineseDraft = {
   id: "00000000-0000-4000-8000-00000000d1b0",
   zh: { ...draft.zh, video: chineseVideo },
 };
+// A video read on three platforms; two of them show their creator how long people watched.
+const day = 86_400_000;
+const analyticsPost = "00000000-0000-4000-8000-0000000a0001";
+const youtubeShort = { views: 1213, likes: 30, comments: 4, average_watch_ms: 39_786, duration_ms: 29_000 };
+const tiktokVideo = {
+  views: 96,
+  likes: 6,
+  comments: 1,
+  shares: 0,
+  saves: 2,
+  average_watch_ms: 6_060,
+  duration_ms: 28_075,
+};
+const analyticsTarget = (
+  platform: string,
+  metrics: Record<string, number>,
+  retention: Record<string, number> | null,
+) => ({
+  ...target(platform, "succeeded"),
+  id: `analytics-${platform}`,
+  metrics,
+  retention,
+  observed_at: minutes(12),
+  checked_at: minutes(12),
+  next_at: Date.now() + 48 * 60_000,
+  analytics_error: null,
+});
+const analytics = {
+  posts: [
+    {
+      id: analyticsPost,
+      created_at: minutes(3 * 24 * 60),
+      post: { kind: "video", title: "A film about films", caption: "", media: [], alt: "" },
+      targets: [
+        analyticsTarget("youtube", youtubeShort, youtubeShort),
+        analyticsTarget("tiktok", tiktokVideo, tiktokVideo),
+        analyticsTarget("bluesky", { likes: 12, comments: 2, shares: 3 }, null),
+      ],
+    },
+  ],
+  next: null,
+};
+const today = Math.floor(Date.now() / day);
+const overview = {
+  changes: [5, 4, 3, 2, 1, 0].flatMap((ago) => [
+    {
+      platform: "youtube",
+      day: today - ago,
+      at: Date.now() - ago * day,
+      change: [400, 120, 700, 260, 90, 43][5 - ago],
+    },
+    { platform: "tiktok", day: today - ago, at: Date.now() - ago * day, change: [0, 0, 60, 20, 10, 6][5 - ago] },
+  ]),
+  videos: [{ id: analyticsPost, at: minutes(3 * 24 * 60), label: "A film about films", thumbnail: null }],
+  retention: [
+    {
+      platform: "youtube",
+      at: minutes(6 * 24 * 60),
+      metrics: { views: 400, average_watch_ms: 87_833, duration_ms: 330_000 },
+    },
+    { platform: "youtube", at: minutes(3 * 24 * 60), metrics: youtubeShort },
+    { platform: "tiktok", at: minutes(3 * 24 * 60), metrics: tiktokVideo },
+  ],
+};
+const samples = [48, 24, 12, 1].flatMap((hours) =>
+  ["youtube", "tiktok"].map((platform) => ({
+    target_id: `analytics-${platform}`,
+    platform,
+    observed_at: minutes(hours * 60),
+    metrics: { views: Math.round((platform === "youtube" ? 1213 : 96) / (1 + hours / 24)) },
+  })),
+);
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const path = new URL(String(input), location.href).pathname.replace("/api/publisher/", "");
@@ -124,6 +196,9 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
         : [],
     });
   if (path === "history") return json(history);
+  if (path === "analytics") return json(analytics);
+  if (path === "analytics/overview") return json(overview);
+  if (path === `analytics/${analyticsPost}`) return json({ samples });
   if (path === "media") return json({ id: crypto.randomUUID() });
   if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
   if (path === "stop" || path === "mark-published") return json({ ok: true });

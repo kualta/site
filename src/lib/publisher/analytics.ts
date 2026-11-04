@@ -1,6 +1,6 @@
 import type { NewsletterDB } from "../newsletter/types";
 import { historyPage } from "./history";
-import { validMetrics, type DailyChange } from "./metrics";
+import { validMetrics, type DailyChange, type Metrics } from "./metrics";
 import { postLabel, type Platform } from "./presets";
 
 export async function claimAnalytics(db: NewsletterDB, supported: Platform[]) {
@@ -32,13 +32,19 @@ export async function saveAnalytics(db: NewsletterDB, id: string, claim: string,
       .bind(now + 60 * 60_000, now, error?.slice(0, 300) || null, id, claim),
   ]);
 }
+/**
+ * A destination's latest reading that has a watch time. Retention comes from creator pages that can lag or fail on
+ * their own, so one missed read doesn't blank it. Its views come along, to weigh it by.
+ */
+const RETAINED = `SELECT r.metrics FROM publisher_metric_snapshots r WHERE r.target_id=t.id
+  AND json_extract(r.metrics,'$.average_watch_ms') IS NOT NULL ORDER BY r.observed_at DESC LIMIT 1`;
 export async function analyticsPage(db: NewsletterDB, cursor: string | null) {
   const page = await historyPage(db, cursor);
   const ids = page.posts.map((post) => post.id);
   if (!ids.length) return { posts: [], next: page.next };
   const { results } = await db
     .prepare(`SELECT t.id, c.checked_at, c.next_at, c.message AS analytics_error,
-    s.observed_at, s.metrics FROM publisher_targets t
+    s.observed_at, s.metrics, (${RETAINED}) AS retention FROM publisher_targets t
     LEFT JOIN publisher_metric_checks c ON c.target_id=t.id
     LEFT JOIN publisher_metric_snapshots s ON s.target_id=t.id AND s.observed_at=(SELECT MAX(observed_at) FROM publisher_metric_snapshots WHERE target_id=t.id)
     WHERE t.job_id IN (${ids.map(() => "?").join(",")})`)
@@ -46,13 +52,21 @@ export async function analyticsPage(db: NewsletterDB, cursor: string | null) {
     .all<{
       id: string;
       metrics: string | null;
+      retention: string | null;
       observed_at: number | null;
       checked_at: number | null;
       next_at: number | null;
       analytics_error: string | null;
     }>();
   const byId = new Map(
-    results.map((row) => [row.id, { ...row, metrics: row.metrics ? JSON.parse(row.metrics) : null }]),
+    results.map((row) => [
+      row.id,
+      {
+        ...row,
+        metrics: row.metrics ? JSON.parse(row.metrics) : null,
+        retention: row.retention ? JSON.parse(row.retention) : null,
+      },
+    ]),
   );
   return {
     ...page,
@@ -92,12 +106,13 @@ function youtubeThumbnail(url: string | null) {
 }
 const VIEWS = "COALESCE(json_extract(s.metrics,'$.impressions'),json_extract(s.metrics,'$.views'))";
 /**
- * Every post's views over time, and when each video that's still up went out. Each destination's daily change is
- * summed in SQL, so the reply grows with days and platforms instead of with posts, and a day a destination went
- * unread simply adds nothing. `utcOffset`, in minutes, decides where the reader's days begin.
+ * Every post's views over time, when each video that's still up went out, and how long each destination's viewers
+ * watched. Each destination's daily change is summed in SQL, so the reply grows with days and platforms instead of
+ * with posts, and a day a destination went unread simply adds nothing. `utcOffset`, in minutes, decides where the
+ * reader's days begin.
  */
 export async function analyticsOverview(db: NewsletterDB, utcOffset: number) {
-  const [changes, videos] = await Promise.all([
+  const [changes, videos, retention] = await Promise.all([
     db
       .prepare(`WITH closes AS (
         SELECT s.target_id, t.platform, CAST((s.observed_at+?)/86400000 AS INTEGER) AS day, MAX(s.observed_at) AS at, ${VIEWS} AS views
@@ -118,8 +133,15 @@ export async function analyticsOverview(db: NewsletterDB, utcOffset: number) {
         AND NOT EXISTS(SELECT 1 FROM publisher_deletions d WHERE d.target_id=t.id AND d.state='deleted')
         GROUP BY j.id ORDER BY at`)
       .all<{ id: string; at: number; title: string | null; caption: string | null; youtube: string | null }>(),
+    db
+      .prepare(`SELECT * FROM (
+        SELECT t.platform, COALESCE(t.finished_at, j.created_at) AS at, (${RETAINED}) AS metrics
+        FROM publisher_targets t JOIN publisher_jobs j ON j.id=t.job_id
+      ) WHERE metrics IS NOT NULL ORDER BY at`)
+      .all<{ platform: Platform; at: number; metrics: string }>(),
   ]);
   return {
+    retention: retention.results.map((row) => ({ ...row, metrics: JSON.parse(row.metrics) as Metrics })),
     changes: changes.results,
     videos: videos.results.map((video) => ({
       id: video.id,

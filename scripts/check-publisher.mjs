@@ -801,6 +801,43 @@ try {
   assert.deepEqual(twoVersions.media, [videoId]);
   assert.equal(twoVersions.zh.video, chineseVideoId);
   await draftContext.close();
+
+  // Each views chart says how long each platform's viewers watched, where the platform shows it.
+  for (const mobile of [false, true]) {
+    const context = await browser.newContext({
+      viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`http://127.0.0.1:8797/publisher.html?theme=${mobile ? "light" : "dark"}`);
+    await page.getByRole("button", { name: "Analytics" }).click();
+    const overall = page.getByRole("region", { name: "Views" }).locator(".publisher-analytics-retention");
+    await overall.getByText("videos posted in the last 30 days", { exact: false }).waitFor();
+    const lines = await overall.locator("li").allInnerTexts();
+    assert.equal(lines.length, 2);
+    // Two YouTube videos, weighed by their 400 and 1,213 views.
+    assert.match(lines[0], /^TikTok\s*6\.1s\s*22% of the video\s*· 1 video$/);
+    assert.match(lines[1], /^YouTube\s*51\.7s\s*50% of the video\s*· 2 videos$/);
+    const detail = page.locator(".publisher-analytics-detail");
+    const post = detail.locator(".publisher-analytics-retention");
+    await post.waitFor();
+    // A looping short can pass the whole of its length.
+    assert.match(await post.innerText(), /YouTube\s*39\.8s\s*137% of the video/);
+    await detail.getByRole("columnheader", { name: "Avg watch time" }).waitFor();
+    const bluesky = detail.getByRole("row").filter({ hasText: "Bluesky" });
+    assert.equal((await bluesky.getByRole("cell").allInnerTexts()).at(-2), "—");
+    await page.locator(".publisher-analytics-chart svg").first().waitFor();
+    if (shots)
+      await page.screenshot({
+        path: path.join(shots, `analytics-${mobile ? "mobile" : "desktop"}.png`),
+        fullPage: true,
+      });
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
   console.log("Publisher composer passed on desktop and mobile.");
 } finally {
   rmSync(clips, { recursive: true, force: true });
