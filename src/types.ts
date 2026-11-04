@@ -4,7 +4,6 @@ export interface Contact {
   label: string;
   link: string;
   description: string | null;
-  is_main: boolean;
 }
 
 export interface Track {
