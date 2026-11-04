@@ -8,10 +8,13 @@ import {
   metricValue,
   platformColor,
   reportingPlatforms,
+  retentionByPlatform,
   timeAgo,
+  watchTime,
   type DailyChange,
   type Metric,
   type Metrics,
+  type RetentionReading,
   type Sample,
   type SeriesPoint,
   type VideoMark,
@@ -30,6 +33,8 @@ type Target = {
   state: string;
   url: string | null;
   metrics: Metrics | null;
+  /** The latest reading with a watch time, which can be older than `metrics`. */
+  retention: Metrics | null;
   observed_at: number | null;
   checked_at: number | null;
   analytics_error: string | null;
@@ -114,6 +119,47 @@ function Contributions({ point, busy }: { point: SeriesPoint; busy: boolean }) {
   );
 }
 
+const percent = (fraction: number) => `${Math.round(fraction * 100)}%`;
+/**
+ * How long each platform's viewers watched, from what it shows its creator: the average per view, weighed by views
+ * across videos. Platforms that don't share it are left out rather than shown as zero.
+ */
+function Retention({ readings, scope }: { readings: RetentionReading[]; scope?: string }) {
+  const rows = retentionByPlatform(readings);
+  if (!rows.length) return null;
+  return (
+    <div className="publisher-analytics-retention">
+      <p className="publisher-note">Average watch time per view{scope && ` · ${scope}`}</p>
+      <ul className="publisher-analytics-legend">
+        {rows.map((row) => (
+          <li key={row.platform}>
+            <i className="publisher-analytics-swatch" style={{ background: platformColor(row.platform) }} />
+            {platformNames[row.platform]}
+            <strong>{watchTime(row.average)}</strong>
+            {row.watched !== null && <small>{percent(row.watched)} of the video</small>}
+            {scope && (
+              <small>
+                · {row.videos} video{row.videos === 1 ? "" : "s"}
+              </small>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WatchCell({ metrics }: { metrics: Metrics | null }) {
+  const average = metrics?.average_watch_ms;
+  if (average === undefined) return <td>—</td>;
+  return (
+    <td>
+      {watchTime(average)}
+      {!!metrics?.duration_ms && <small>{percent(average / metrics.duration_ms)} of the video</small>}
+    </td>
+  );
+}
+
 function PeriodOptions() {
   return (
     <>
@@ -174,7 +220,11 @@ function Overview({
   canOpen: (id: string) => boolean;
   onOpen: (id: string) => void;
 }) {
-  const [data, setData] = useState<{ changes: DailyChange[]; videos: VideoMark[] } | null>(null);
+  const [data, setData] = useState<{
+    changes: DailyChange[];
+    videos: VideoMark[];
+    retention: (RetentionReading & { at: number })[];
+  } | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [days, setDays] = useState(30);
@@ -202,6 +252,8 @@ function Overview({
     return series.filter((point) => point.at >= cutoff);
   }, [data, days, daily]);
   const marks = useMemo(() => (data?.videos ?? []).filter((video) => video.at >= cutoff), [data, days]);
+  // Like the marks, the videos that went out in the period.
+  const watched = useMemo(() => (data?.retention ?? []).filter((reading) => reading.at >= cutoff), [data, days]);
   // The running total's last day already holds everything; separate days have to be added up.
   let summary: SeriesPoint | null = null;
   if (points.length) summary = daily ? addUp(points) : points.at(-1)!;
@@ -247,6 +299,7 @@ function Overview({
       >
         <div className="publisher-analytics-chart">{plot}</div>
         {summary && <Contributions point={summary} busy={false} />}
+        <Retention readings={watched} scope={days ? `videos posted in the last ${days} days` : "every video"} />
         <figcaption className="publisher-note">
           {daily
             ? "Views gained each day, stacked by platform, with marks on the axis when videos went out. Today's bar is still filling. A platform's first report counts everything it had so far, and a day nothing was read rolls into the next."
@@ -260,6 +313,7 @@ function Overview({
 
 function Trend({
   samples,
+  retention,
   metric,
   days,
   loading,
@@ -267,6 +321,7 @@ function Trend({
   onRetry,
 }: {
   samples: Sample[];
+  retention: RetentionReading[];
   metric: Metric;
   days: number;
   loading: boolean;
@@ -308,6 +363,7 @@ function Trend({
         {plot}
       </div>
       {!!points.length && <Contributions point={points.at(-1)!} busy={loading} />}
+      <Retention readings={retention} />
       <figcaption className="publisher-note">
         Counts are cumulative, stacked by platform. Hourly for the last three days, daily before that; a platform's band
         starts when it first reports.
@@ -443,6 +499,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
   const columns = (["exposure", "reach", "likes", "comments", "shares", "saves"] as Metric[]).filter(
     (key) => key !== "reach" || reported("reach"),
   );
+  const retained = Boolean(post?.targets.some((t) => t.retention?.average_watch_ms !== undefined));
   const refreshBusy = requesting || refreshing;
   let refreshLabel = "Refresh metrics";
   if (refresh) refreshLabel = `Reading ${refresh.queued.length - checking.size} of ${refresh.queued.length}…`;
@@ -557,6 +614,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
               )}
               <Trend
                 samples={samples}
+                retention={published.map((t) => ({ platform: t.platform, metrics: t.retention }))}
                 metric={activeMetric}
                 days={days}
                 loading={!seriesCurrent && !seriesFailed}
@@ -574,6 +632,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
                       <th>Comments</th>
                       <th>Shares</th>
                       <th>Saves</th>
+                      {retained && <th>Avg watch time</th>}
                       <th>Observed</th>
                     </tr>
                   </thead>
@@ -608,6 +667,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
                             )}
                           </td>
                         ))}
+                        {retained && <WatchCell metrics={t.retention} />}
                         <td>{t.observed_at ? dateTime(t.observed_at) : "—"}</td>
                       </tr>
                     ))}

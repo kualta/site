@@ -79,6 +79,80 @@ export function extractMetrics(platform, id, payload) {
   });
   return result;
 }
+/**
+ * A video's lifetime retention from YouTube Studio's analytics reply. Studio takes up to two days to process it, and
+ * until then the retention curve is empty and the totals beside it are provisional, so they're left out.
+ * Studio's own "average percentage viewed" divides by the whole-second length, so that's the length kept.
+ */
+export function youtubeRetention(id, payload) {
+  let totals;
+  let length;
+  walk(payload, (item) => {
+    if (item.videoId !== id) return;
+    if (item.metricTotals && item.retentionValues?.length) totals = item.metricTotals;
+    if (/^\d+$/.test(item.lengthSeconds ?? "")) length = Number(item.lengthSeconds) * 1000;
+  });
+  return totals ? counts({ average_watch_ms: Math.round(totals.avgViewDurationMillis), duration_ms: length }) : {};
+}
+/** TikTok Studio's numbers for one of the account's videos: only the `_realtime` kinds stay filled in as it ages. */
+export function tiktokInsights(id, utcOffset = -new Date().getTimezoneOffset()) {
+  const kinds = ["video_info", "video_view_realtime", "video_per_duration_realtime"];
+  const requests = JSON.stringify(kinds.map((kind) => ({ insigh_type: kind, aweme_id: id })));
+  return `https://www.tiktok.com/aweme/v2/data/insight/?locale=en&aid=1988&tz_offset=${
+    utcOffset * 60
+  }&type_requests=${encodeURIComponent(requests)}`;
+}
+/** Average watch time is play time over plays, replays included, as Studio shows it. A private or unplayed video has none. */
+export function tiktokRetention(id, data) {
+  const value = (key) => (data?.[key]?.value?.status === 0 ? data[key].value.value : undefined);
+  if (data?.status_code !== 0 || data.video_info?.aweme_id !== id || !value("realtime_total_video_views")) return {};
+  return counts({
+    average_watch_ms: Math.round(value("video_per_duration_realtime") * 1000),
+    duration_ms: data.video_info.video?.duration,
+  });
+}
+/** The key X's analytics know this exact post's video by. GIFs and photos have none. */
+export function tweetVideoKey(id, payload) {
+  let key = null;
+  walk(payload, (item) => {
+    if (item.rest_id !== id && item.id_str !== id) return;
+    const media = (item.legacy || item).extended_entities?.media ?? [];
+    key ??= media.find((m) => m.type === "video" && /^(?:7|13)_\d+$/.test(m.media_key ?? ""))?.media_key ?? null;
+  });
+  return key;
+}
+/** The id X's video analytics page takes: a small binary record around the media key, with X's own type numbers. */
+export function apiMediaId(key) {
+  const [kind, number] = key.split("_");
+  const bytes = Buffer.alloc(25);
+  bytes.write("ApiMedia:");
+  bytes[9] = 0x0c;
+  bytes.writeUInt16BE({ 13: 4, 7: 12 }[kind], 10);
+  bytes[12] = 0x0a;
+  bytes.writeUInt16BE(1, 13);
+  bytes.writeBigUInt64BE(BigInt(number), 15);
+  return bytes.toString("base64");
+}
+/** X's lifetime average watch time is per start, autoplay included. A video nobody started has none. */
+export function xRetention(key, payload) {
+  const media = payload?.data?.api_media_v2;
+  const starts = Number(media?.video_quartile_views?.find((stage) => stage.stage === "Start")?.total);
+  if (media?.media_key !== key || !(starts > 0)) return {};
+  return counts({
+    average_watch_ms: Math.round(media.average_watch_time_for_video),
+    duration_ms: media.media_info?.duration_millis,
+  });
+}
+/**
+ * Xiaohongshu's data center figures for a video note. Below zero means it has none to show, as before the account has
+ * data access. The note list gives the length in whole seconds.
+ */
+export function xiaohongshuRetention(reply, note) {
+  const data = reply?.code === 0 ? reply.data : null;
+  const average = data?.view_time_avg_with_double;
+  if (note?.type !== "video" || typeof average !== "number" || average < 0 || !(data.view_count > 0)) return {};
+  return counts({ average_watch_ms: Math.round(average * 1000), duration_ms: note.video_info?.duration * 1000 });
+}
 /** Whose Reels tab lists this post's plays, read from the post's own page. Photos and carousels have none. */
 export function reelsOwner(id, payload) {
   let owner = null;
@@ -119,6 +193,14 @@ export async function collectAnalytics(
         comments: comments?.header?.count?.toString().replace(/\D/g, ""),
       });
     };
+    /** Opens a creator page and reads the reply that carries its numbers. Awaited together, neither can go unhandled. */
+    const replyTo = async (page, address, endpoint) => {
+      const [response] = await Promise.all([
+        page.waitForResponse((reply) => reply.ok() && endpoint.test(reply.url()), { timeout: 30_000 }),
+        page.goto(address, { waitUntil: "domcontentloaded", timeout: 30_000 }),
+      ]);
+      return response.json();
+    };
     let metrics;
     if (target.platform === "farcaster") metrics = counts(await castMetrics(id, { fetcher }));
     else if (target.platform === "lens") metrics = counts(await lensMetrics(id, { fetcher }));
@@ -157,6 +239,22 @@ export async function collectAnalytics(
         saves: note.collected_count,
         shares: note.shared_count,
       });
+      // No RedNote page asks for the data center's figures, so the note manager asks, signed by its own signer.
+      if (metrics.views && note.type === "video") {
+        try {
+          const reply = await page.evaluate(
+            async (path) => {
+              const signed = window._webmsxyw(path, undefined);
+              const response = await fetch(path, { headers: { "X-s": signed["X-s"], "X-t": String(signed["X-t"]) } });
+              return response.ok ? response.json() : null;
+            },
+            `/api/galaxy/creator/datacenter/note/base?note_id=${encodeURIComponent(id)}`,
+          );
+          Object.assign(metrics, xiaohongshuRetention(reply, note));
+        } catch {
+          // The note list's counts still stand.
+        }
+      }
     } else if (target.platform === "youtube" && youtubePost) {
       // A post's page carries its counts in ytInitialData: read publicly, else in the signed-in profile.
       const response = await fetcher(url, {
@@ -186,11 +284,27 @@ export async function collectAnalytics(
         }
         metrics = await readYoutube(cookie);
       }
+      // Only the channel sees how long people watched, in Studio. Headless Chrome needs letting in on every load.
+      if (metrics.views) {
+        try {
+          context ??= await open(join(stateDir, target.platform), true);
+          const page = context.pages()[0] || (await context.newPage());
+          const reply = await replyTo(
+            page,
+            `https://studio.youtube.com/video/${id}/analytics/tab-overview/period-default?approve_browser_access=true`,
+            /^https:\/\/studio\.youtube\.com\/youtubei\/v1\/yta_web\/get_screen/,
+          );
+          Object.assign(metrics, youtubeRetention(id, reply));
+        } catch {
+          // The public counts still stand.
+        }
+      }
     } else {
       context = await open(join(stateDir, target.platform), true);
       const page = context.pages()[0] || (await context.newPage());
       page.setDefaultTimeout(20_000);
       metrics = {};
+      let videoKey = null;
       const pending = new Set();
       const hosts = {
         twitter: /^(?:[^.]+\.)?(?:x|twitter)\.com$/,
@@ -213,7 +327,10 @@ export async function collectAnalytics(
           return;
         const task = response
           .json()
-          .then((data) => Object.assign(metrics, extractMetrics(target.platform, id, data)))
+          .then((data) => {
+            Object.assign(metrics, extractMetrics(target.platform, id, data));
+            if (target.platform === "twitter") videoKey ??= tweetVideoKey(id, data);
+          })
           .catch(() => {})
           .finally(() => pending.delete(task));
         pending.add(task);
@@ -234,6 +351,7 @@ export async function collectAnalytics(
           return data;
         });
         Object.assign(metrics, extractMetrics(target.platform, id, embedded));
+        if (target.platform === "twitter") videoKey ??= tweetVideoKey(id, embedded);
         if (!Object.keys(metrics).length) await page.waitForTimeout(1000);
       }
       await Promise.race([Promise.allSettled([...pending]), page.waitForTimeout(2000)]);
@@ -247,6 +365,28 @@ export async function collectAnalytics(
             await page.waitForTimeout(1000);
             await page.mouse.wheel(0, 4000);
           }
+        } catch {
+          // The post's own counts still stand.
+        }
+      }
+      // X shows watch time on the video's own analytics page, which comes with Premium.
+      if (target.platform === "twitter" && videoKey && metrics.views) {
+        try {
+          const reply = await replyTo(
+            page,
+            `https://x.com/i/account_analytics/video/${encodeURIComponent(apiMediaId(videoKey))}`,
+            /^https:\/\/(?:[\w-]+\.)?x\.com\/i\/api\/graphql\/[\w-]+\/videoDetailsProviderQuery/,
+          );
+          Object.assign(metrics, xRetention(videoKey, reply));
+        } catch {
+          // The post's own counts still stand.
+        }
+      }
+      // Studio answers its own unsigned request with the session's cookies, without loading Studio.
+      if (target.platform === "tiktok" && metrics.views && !new URL(url).pathname.includes("/photo/")) {
+        try {
+          const response = await context.request.get(tiktokInsights(id), { timeout: 20_000 });
+          Object.assign(metrics, tiktokRetention(id, await response.json()));
         } catch {
           // The post's own counts still stand.
         }

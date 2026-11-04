@@ -1,8 +1,12 @@
 import type { Platform } from "./presets";
 
-export const metricKeys = ["views", "impressions", "reach", "likes", "comments", "shares", "saves"] as const;
+const countKeys = ["views", "impressions", "reach", "likes", "comments", "shares", "saves"] as const;
+/** A video's average watch time per view and its length, from where a platform shows them to its creator. */
+const retentionKeys = ["average_watch_ms", "duration_ms"] as const;
+export const metricKeys = [...countKeys, ...retentionKeys] as const;
 export type Metrics = Partial<Record<(typeof metricKeys)[number], number>>;
-export type Metric = keyof Metrics | "exposure";
+/** What can be charted and added up: an average watch time never adds across posts or platforms. */
+export type Metric = (typeof countKeys)[number] | "exposure";
 export function metricValue(metrics: Metrics | null | undefined, metric: Metric): number | null {
   if (!metrics) return null;
   return metric === "exposure" ? metrics.impressions ?? metrics.views ?? null : metrics[metric] ?? null;
@@ -47,6 +51,49 @@ export function platformColor(platform: Platform) {
 /** The platforms with a count at this point, top of the stack first to match what's on screen. */
 export function reportingPlatforms(point: SeriesPoint) {
   return [...stackOrder].reverse().filter((platform) => point.parts[platform] !== undefined);
+}
+export type Retention = { platform: Platform; average: number; watched: number | null; videos: number };
+export type RetentionReading = { platform: Platform; metrics: Metrics | null };
+/**
+ * Each platform's average watch time per view across its videos, weighted by views so a busy video counts for more,
+ * and the share of a video that comes to. A looping short can pass 100%. A video nobody has watched says nothing.
+ * Top of the stack first, to match the chart's key.
+ */
+export function retentionByPlatform(readings: RetentionReading[]): Retention[] {
+  const sums = new Map<Platform, { watch: number; views: number; timed: number; length: number; videos: number }>();
+  for (const { platform, metrics } of readings) {
+    const average = metrics?.average_watch_ms;
+    const views = metrics?.views;
+    if (average === undefined || !views) continue;
+    const sum = sums.get(platform) ?? { watch: 0, views: 0, timed: 0, length: 0, videos: 0 };
+    sum.watch += average * views;
+    sum.views += views;
+    sum.videos += 1;
+    if (metrics.duration_ms) {
+      sum.timed += average * views;
+      sum.length += metrics.duration_ms * views;
+    }
+    sums.set(platform, sum);
+  }
+  return [...stackOrder].reverse().flatMap((platform) => {
+    const sum = sums.get(platform);
+    if (!sum) return [];
+    return [
+      {
+        platform,
+        average: sum.watch / sum.views,
+        watched: sum.length ? sum.timed / sum.length : null,
+        videos: sum.videos,
+      },
+    ];
+  });
+}
+/** "6.1s" under a minute and "1:27" from there, the way TikTok and YouTube Studio each show a watch time. */
+export function watchTime(ms: number) {
+  if (ms < 60_000) return `${(Math.min(Math.round(ms / 100), 599) / 10).toFixed(1)}s`;
+  // Studio drops the part second: 87.8 seconds is 1:27.
+  const seconds = Math.floor(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 const HOUR = 3_600_000;
 /** One point per hour. Carry forward each destination's latest observation; never fill missing counts with zero. */

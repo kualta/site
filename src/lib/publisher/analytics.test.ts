@@ -18,12 +18,14 @@ import {
   groupMarks,
   metricSeries,
   metricValue,
+  retentionByPlatform,
   stackExtent,
   stackOrder,
   timeAgo,
   timeTicks,
   validMetrics,
   valueTicks,
+  watchTime,
 } from "./metrics";
 import { platforms } from "./presets";
 import type { NewsletterDB } from "../newsletter/types";
@@ -223,6 +225,61 @@ test("the overview marks videos that are still up, when they went out, with YouT
     { id: short, at: 400, label: "Short", thumbnail: "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg" },
   ]);
   f.sql.close();
+});
+test("retention is each destination's latest reading with a watch time, so one missed read doesn't blank it", async () => {
+  const f = fixture();
+  const youtube = f.target("youtube");
+  const tiktok = f.target("tiktok");
+  f.target("bluesky");
+  f.sql.query("UPDATE publisher_targets SET finished_at=? WHERE id=?").run(5_000, youtube);
+  for (const [id, at, metrics] of [
+    [youtube, 1_000, { views: 10, average_watch_ms: 9_000, duration_ms: 29_000 }],
+    [youtube, 2_000, { views: 40, average_watch_ms: 12_000, duration_ms: 29_000 }],
+    [youtube, 3_000, { views: 44 }],
+    [tiktok, 1_000, { views: 3, average_watch_ms: 6_060 }],
+  ] as const)
+    f.sql.query("INSERT INTO publisher_metric_snapshots VALUES(?,?,?)").run(id, at, JSON.stringify(metrics));
+  const { retention } = await analyticsOverview(f.db, 0);
+  const created = (f.sql.query("SELECT created_at FROM publisher_jobs").get() as { created_at: number }).created_at;
+  expect(retention).toEqual([
+    { platform: "youtube", at: 5_000, metrics: { views: 40, average_watch_ms: 12_000, duration_ms: 29_000 } },
+    { platform: "tiktok", at: created, metrics: { views: 3, average_watch_ms: 6_060 } },
+  ]);
+  const targets = (await analyticsPage(f.db, null)).posts[0].targets;
+  const byPlatform = Object.fromEntries(targets.map((t: any) => [t.platform, t]));
+  expect(byPlatform.youtube.metrics).toEqual({ views: 44 });
+  expect(byPlatform.youtube.retention).toEqual({ views: 40, average_watch_ms: 12_000, duration_ms: 29_000 });
+  expect(byPlatform.bluesky.retention).toBeNull();
+  f.sql.close();
+});
+test("a platform's watch time weighs each video by its views, and an unwatched video says nothing", () => {
+  const readings = [
+    { platform: "youtube", metrics: { views: 30, average_watch_ms: 10_000, duration_ms: 20_000 } },
+    { platform: "youtube", metrics: { views: 10, average_watch_ms: 50_000, duration_ms: 40_000 } },
+    { platform: "youtube", metrics: { views: 0, average_watch_ms: 0, duration_ms: 20_000 } },
+    { platform: "tiktok", metrics: { views: 3, average_watch_ms: 6_060 } },
+    { platform: "bluesky", metrics: { views: 9 } },
+    { platform: "instagram", metrics: null },
+  ] as const;
+  // Top of the stack first, like the chart's key.
+  expect(retentionByPlatform(readings as any)).toEqual([
+    { platform: "tiktok", average: 6_060, watched: null, videos: 1 },
+    // (30·10s + 10·50s) / 40 views, and that watch time over (30·20s + 10·40s) of video.
+    { platform: "youtube", average: 20_000, watched: 0.8, videos: 2 },
+  ]);
+  expect([4_000, 6_060, 59_990, 60_000, 87_833, 3_723_000].map(watchTime)).toEqual([
+    "4.0s",
+    "6.1s",
+    "59.9s",
+    "1:00",
+    "1:27",
+    "62:03",
+  ]);
+  expect(validMetrics({ views: 3, average_watch_ms: 6_060, duration_ms: 28_075 })).toEqual({
+    views: 3,
+    average_watch_ms: 6_060,
+    duration_ms: 28_075,
+  });
 });
 test("daily views are each day's change, at the middle of the reader's day, with no invented days", () => {
   const day = 86_400_000;

@@ -310,6 +310,9 @@
 .publisher-analytics-legend li { display:flex; align-items:center; gap:6px; }
 .publisher-analytics-legend strong { font-weight:400; font-variant-numeric:tabular-nums; }
 .publisher-analytics-legend small { font-size:inherit; font-variant-numeric:tabular-nums; }
+.publisher-analytics-retention { margin:0 0 16px; padding-top:12px; border-top:1px solid var(--publisher-line); }
+.publisher .publisher-analytics-retention p { margin:0 0 8px; font-size:13px; }
+.publisher-analytics-retention .publisher-analytics-legend { margin:0; }
 .publisher-analytics-swatch { display:inline-block; flex:none; width:10px; height:10px; border-radius:3px; }
 .publisher-analytics-table th > .publisher-analytics-swatch { margin-right:8px; }
 .publisher-skeleton { flex:none; width:100%; max-width:100%; background:var(--publisher-wash); border-radius:12px; animation:publisher-pulse 1.6s ease-in-out infinite; }
