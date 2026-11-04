@@ -23,7 +23,7 @@ import {
   validId,
   validatePost,
 } from "@/lib/publisher/server";
-import { checkDraftText, draftKey, readDraft, saveDraft } from "@/lib/publisher/drafts";
+import { checkDraftText, draftKey, listDrafts, readDraft, saveDraft } from "@/lib/publisher/drafts";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
@@ -218,6 +218,24 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "helper/drafts" && request.method === "POST")
       return json({ id: await saveDraft(bucket, await request.json()) }, 201);
+    if (path === "drafts" && request.method === "GET") {
+      const drafts = await listDrafts(bucket, async (videos) => {
+        const posted = new Set<string>();
+        // D1 binds up to 100 values a statement.
+        for (let i = 0; i < videos.length; i += 90) {
+          const ids = videos.slice(i, i + 90);
+          const { results } = await db
+            .prepare(
+              `SELECT id FROM publisher_media WHERE job_id IS NOT NULL AND id IN (${ids.map(() => "?").join(",")})`,
+            )
+            .bind(...ids)
+            .all<{ id: string }>();
+          for (const { id } of results) posted.add(id);
+        }
+        return posted;
+      });
+      return json({ drafts });
+    }
     if (path.startsWith("drafts/")) {
       const id = path.slice("drafts/".length);
       if (!validId(id)) return json({ error: "Invalid draft" }, 400);

@@ -238,9 +238,13 @@ prints a link to it. The JSON holds `video` (relative to the file), `title`, `ca
 `alt`, `tags`, `short`, `zh` and optionally `preset`, `location` and a cover: `coverAt` (a
 second of the video, taken from the Chinese version too) or `cover` (an image path).
 `zh.video` is an optional Chinese version, relative to the file too, and `zh.location`
-the place's Chinese name for Xiaohongshu. Opening the link fills in the composer: the videos,
-every field, and the preset (up to three minutes Short-form video, otherwise Long video).
-Destinations and YouTube visibility stay whatever that preset has saved in the browser.
+the place's Chinese name for Xiaohongshu. Opening the link fills in the composer: every field
+and the preset (up to three minutes Short-form video, otherwise Long video) as soon as the
+draft is read, then the videos as they finish downloading. Until they arrive the composer stays
+locked. Destinations and YouTube visibility stay whatever that preset has saved in the browser.
+
+Drafts that haven't been published are listed at the top of History, newest first, with when
+the bucket's lifecycle rule removes them. **Open** loads one into the composer.
 
 A draft publishes nothing. It uses the laptop's pairing key to upload the video and store
 the draft, and only **Publish** in the composer queues it. The link needs the owner's

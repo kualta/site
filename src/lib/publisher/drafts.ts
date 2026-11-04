@@ -73,3 +73,56 @@ export async function readDraft(bucket: Pick<MediaBucket, "get">, id: string): P
   const object = await bucket.get(draftKey(id));
   return object && ((await new Response(object.body).json()) as Draft);
 }
+
+/** The bucket expires every object a week after it's uploaded, a draft along with its video. */
+export const DRAFT_LIFETIME = 7 * 86_400_000;
+/** What the composer lists of a draft waiting to be posted. */
+export interface DraftSummary {
+  id: string;
+  title: string;
+  caption: string;
+  video: string;
+  cover?: string;
+  /** Whether it carries a version of the video made for Chinese audiences. */
+  chinese: boolean;
+  created: number;
+  expires: number;
+}
+/**
+ * Drafts not yet posted, newest first. Queueing deletes a draft; if that delete was lost, its video already belongs
+ * to a job, so `posted` (the videos a job holds) leaves it out.
+ */
+export async function listDrafts(
+  bucket: Pick<MediaBucket, "get" | "list">,
+  posted: (videos: string[]) => Promise<Set<string>>,
+): Promise<DraftSummary[]> {
+  const objects: { key: string; uploaded: Date }[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await bucket.list({ prefix: draftKey(""), cursor });
+    objects.push(...page.objects);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  // One can expire between the listing and the read; it's just gone.
+  const found = await Promise.all(
+    objects.map(async ({ key, uploaded }) => {
+      const draft = await readDraft(bucket, key.slice(draftKey("").length));
+      return draft && { draft, created: uploaded.getTime() };
+    }),
+  );
+  const drafts = found.filter((entry) => entry !== null);
+  const taken = await posted(drafts.map(({ draft }) => draft.video));
+  return drafts
+    .filter(({ draft }) => !taken.has(draft.video))
+    .sort((a, b) => b.created - a.created)
+    .map(({ draft, created }) => ({
+      id: draft.id,
+      title: draft.title,
+      caption: draft.caption,
+      video: draft.video,
+      ...(draft.cover ? { cover: draft.cover } : {}),
+      chinese: Boolean(draft.zh?.video),
+      created,
+      expires: created + DRAFT_LIFETIME,
+    }));
+}
