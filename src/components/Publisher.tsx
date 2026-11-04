@@ -979,25 +979,28 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     translating={translating}
                     canTranslate={Boolean(title.trim() || caption.trim())}
                     disabled={busy || submitted}
+                    place={
+                      locationTargets.includes("xiaohongshu") && (
+                        <label>
+                          Location
+                          <input
+                            value={zhPlace}
+                            maxLength={MAX_LOCATION}
+                            disabled={busy || submitted}
+                            onChange={(e) => {
+                              setZhPlace(e.target.value);
+                              submission.current = null;
+                            }}
+                            placeholder="波哥大"
+                          />
+                          <small className="publisher-note">
+                            Xiaohongshu lists places by their Chinese names. Without one, it searches the location
+                            above.
+                          </small>
+                        </label>
+                      )
+                    }
                   >
-                    {locationTargets.includes("xiaohongshu") && (
-                      <label>
-                        地点
-                        <input
-                          value={zhPlace}
-                          maxLength={MAX_LOCATION}
-                          disabled={busy || submitted}
-                          onChange={(e) => {
-                            setZhPlace(e.target.value);
-                            submission.current = null;
-                          }}
-                          placeholder="波哥大"
-                        />
-                        <small className="publisher-note">
-                          Xiaohongshu lists places by their Chinese names. Without one, it searches the location above.
-                        </small>
-                      </label>
-                    )}
                     {kind === "video" && (
                       <div className="publisher-zh-video">
                         {chineseVideo ? (

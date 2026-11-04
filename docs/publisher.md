@@ -171,7 +171,7 @@ contain original metadata until the helper prepares each destination's copy.
 - **Location**, for Instagram and Xiaohongshu (TikTok's web uploader has none), names a
   place; each platform searches its own places and tags one only when it is called that,
   never a café nearby. Xiaohongshu lists places by their Chinese names, so its section
-  takes its own (**地点**, e.g. 波哥大); without one it searches the location above.
+  takes its own **Location** under its title (e.g. 波哥大); without one it searches the location above.
   Recent places are offered in the field.
 - TikTok asks **Continue to post?** while its content check is still running; the helper
   answers **Post now**.

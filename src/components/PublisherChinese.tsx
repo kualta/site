@@ -16,6 +16,8 @@ interface Props {
   disabled: boolean;
   /** The composer's Chinese version of the video. */
   children?: ReactNode;
+  /** Xiaohongshu's place field, shown under the title. */
+  place?: ReactNode;
 }
 /** Xiaohongshu publishes its own Simplified Chinese title, text and topics. */
 export default function PublisherChinese({
@@ -26,6 +28,7 @@ export default function PublisherChinese({
   canTranslate,
   disabled,
   children,
+  place,
 }: Props) {
   const set = (patch: Partial<ChineseDraft>) => onChange({ ...value, ...patch });
   const titleLength = xiaohongshuTitleLength(value.title);
@@ -54,6 +57,7 @@ export default function PublisherChinese({
           {titleLength} / 20
         </small>
       </label>
+      {place}
       <label>
         Text
         <textarea
