@@ -167,9 +167,16 @@ const samples = [48, 24, 12, 1].flatMap((hours) =>
   })),
 );
 // Both drafts wait in Cloudflare: the plain one sent half an hour ago, the one with a Chinese version yesterday.
-const drafts = [
+let drafts = [
   { id: draft.id, title: draft.title, caption: draft.caption, video: draftVideo, chinese: false, created: minutes(30) },
-  { id: chineseDraft.id, title: draft.title, caption: draft.caption, video: draftVideo, chinese: true, created: minutes(26 * 60) },
+  {
+    id: chineseDraft.id,
+    title: draft.title,
+    caption: draft.caption,
+    video: draftVideo,
+    chinese: true,
+    created: minutes(26 * 60),
+  },
 ].map((item) => ({ ...item, expires: item.created + 7 * day }));
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -177,8 +184,12 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const method = init.method || "GET";
   requests.push({ path, method, body: typeof init.body === "string" ? JSON.parse(init.body) : null });
   if (path === `media/${draftVideo}` || path === `media/${chineseVideo}`) return realFetch(input, init);
-  if (path === `drafts/${draft.id}`) return method === "DELETE" ? json({ ok: true }) : json(draft);
-  if (path === `drafts/${chineseDraft.id}`) return method === "DELETE" ? json({ ok: true }) : json(chineseDraft);
+  if (path.startsWith("drafts/") && method === "DELETE") {
+    drafts = drafts.filter((item) => `drafts/${item.id}` !== path);
+    return json({ ok: true });
+  }
+  if (path === `drafts/${draft.id}`) return json(draft);
+  if (path === `drafts/${chineseDraft.id}`) return json(chineseDraft);
   if (path.startsWith("drafts/")) return json({ error: "This draft has expired or was already posted" }, 404);
   if (path === "session") return json({ allowed: true, signedIn: true });
   if (path === "status")

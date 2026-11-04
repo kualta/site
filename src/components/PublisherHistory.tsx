@@ -46,7 +46,7 @@ type Post = {
 };
 type Page = { posts: Post[]; next: string | null };
 type Props = {
-  request: (path: string, body?: unknown) => Promise<any>;
+  request: (path: string, body?: unknown, method?: string) => Promise<any>;
   onError: (message: string) => void;
   /** The draft open in the composer, if any. */
   openDraft?: string | null;
@@ -251,6 +251,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   // Sent from the terminal and waiting in Cloudflare to be opened and published.
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
+  const [deletingDraft, setDeletingDraft] = useState<string | null>(null);
   const [page, setPage] = useState<Page>({ posts: [], next: null });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -300,6 +301,24 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
       clearInterval(timer);
     };
   }, [request, onError, draftsVersion]);
+  async function deleteDraft(draft: DraftSummary) {
+    if (
+      !confirm(
+        `Delete the draft “${draft.title || draft.caption}” and the videos uploaded with it? This can't be undone.`,
+      )
+    )
+      return;
+    setDeletingDraft(draft.id);
+    onError("");
+    try {
+      await request(`drafts/${draft.id}`, undefined, "DELETE");
+      setDrafts((list) => list.filter((item) => item.id !== draft.id));
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setDeletingDraft(null);
+    }
+  }
   async function remove(post: Post, target?: Target) {
     const destinations = target
       ? [target]
@@ -546,6 +565,19 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
                 </a>
               )}
             </li>
+            {!inComposer && (
+              <li>
+                <button
+                  className="publisher-history-icon"
+                  disabled={deletingDraft !== null}
+                  aria-label={`Delete the draft ${draft.title || draft.caption}`}
+                  title="Delete draft"
+                  onClick={() => void deleteDraft(draft)}
+                >
+                  <TrashIcon size={16} />
+                </button>
+              </li>
+            )}
           </ul>
         </div>
       </li>

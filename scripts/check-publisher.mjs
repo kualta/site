@@ -135,6 +135,16 @@ try {
       "?draft=00000000-0000-4000-8000-00000000d1af",
     );
     await draftRows.nth(1).getByText("With a Chinese version").waitFor();
+    // A draft can be deleted from the list once confirmed, which takes its uploads with it on the server.
+    page.once("dialog", (dialog) => {
+      assert.match(dialog.message(), /^Delete the draft “Rendered film” and the videos uploaded with it\?/);
+      return dialog.accept();
+    });
+    await draftRows.nth(1).getByRole("button", { name: "Delete the draft Rendered film" }).click();
+    await page.waitForFunction(() =>
+      window.publisherRequests.some((r) => r.path === "drafts/00000000-0000-4000-8000-00000000d1b0" && r.method === "DELETE"),
+    );
+    await page.waitForFunction(() => document.querySelectorAll("[data-draft]").length === 1);
     const art = history.locator(".publisher-history-item", { hasText: "this, too, is modern art" });
     assert.equal(
       await art.locator(".publisher-history-pills").getByRole("link", { name: "Grain" }).getAttribute("href"),
@@ -636,6 +646,8 @@ try {
   const openRow = page.locator('[data-draft="00000000-0000-4000-8000-00000000d1af"]');
   await openRow.getByText("In the composer").waitFor();
   assert.equal(await openRow.getByRole("link", { name: "Open" }).count(), 0);
+  // The open draft can't be deleted from under the composer.
+  assert.equal(await openRow.getByRole("button", { name: /^Delete the draft/ }).count(), 0);
   releaseVideo();
   await page.locator(".publisher-previews video").waitFor();
   await page.getByRole("button", { name: "Queue post" }).waitFor();
