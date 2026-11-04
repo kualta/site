@@ -11,6 +11,7 @@ import {
   type PostKind,
 } from "@/lib/publisher/presets";
 import { parseTags } from "@/lib/publisher/variants";
+import type { DraftSummary } from "@/lib/publisher/drafts";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
 
 type Target = {
@@ -47,6 +48,10 @@ type Page = { posts: Post[]; next: string | null };
 type Props = {
   request: (path: string, body?: unknown) => Promise<any>;
   onError: (message: string) => void;
+  /** The draft open in the composer, if any. */
+  openDraft?: string | null;
+  /** Changes when a draft has been posted, so the list is read again. */
+  draftsVersion?: number;
 };
 type Tone = "ok" | "busy" | "bad" | "warn" | "gone";
 
@@ -104,6 +109,13 @@ function day(time: number): string {
     month: "short",
     ...(date.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
   });
+}
+/** "expires in 6 days", "expires in 5 hours", "expires within the hour". */
+function expiresIn(at: number): string {
+  const hours = Math.floor((at - Date.now()) / 3_600_000);
+  if (hours < 1) return "expires within the hour";
+  if (hours < 48) return `expires in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  return `expires in ${Math.floor(hours / 24)} days`;
 }
 /** Posts arrive newest first, so each day's posts are consecutive. */
 function byDay(posts: Post[]): { day: string; posts: Post[] }[] {
@@ -235,8 +247,10 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
     </fieldset>
   );
 }
-export default function PublisherHistory({ request, onError }: Props) {
+export default function PublisherHistory({ request, onError, openDraft, draftsVersion }: Props) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  // Sent from the terminal and waiting in Cloudflare to be opened and published.
+  const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [page, setPage] = useState<Page>({ posts: [], next: null });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -266,6 +280,26 @@ export default function PublisherHistory({ request, onError }: Props) {
       clearInterval(timer);
     };
   }, [path, request, onError]);
+  useEffect(() => {
+    let active = true;
+    let reported = false;
+    const load = async () => {
+      try {
+        const result = await request("drafts");
+        if (active) setDrafts(result.drafts);
+      } catch (error) {
+        // Said once; the list keeps what it last read and tries again.
+        if (active && !reported) onError((error as Error).message);
+        reported = true;
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 30_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [request, onError, draftsVersion]);
   async function remove(post: Post, target?: Target) {
     const destinations = target
       ? [target]
@@ -473,12 +507,62 @@ export default function PublisherHistory({ request, onError }: Props) {
       </li>
     );
   }
+  function draftItem(draft: DraftSummary) {
+    const inComposer = draft.id === openDraft;
+    return (
+      <li key={draft.id} className="publisher-history-item" data-draft={draft.id}>
+        <Thumbnail
+          post={{
+            title: draft.title,
+            caption: draft.caption,
+            kind: "video",
+            media: [draft.cover ?? draft.video],
+            mediaKinds: [draft.cover ? "photo" : "video"],
+            alt: "",
+          }}
+        />
+        <div className="publisher-history-body">
+          <div className="publisher-history-head">
+            <p className="publisher-history-text">{draft.title || draft.caption}</p>
+            <time dateTime={new Date(draft.created).toISOString()}>{when(draft.created)}</time>
+          </div>
+          {draft.title && draft.caption && <p className="publisher-history-caption">{draft.caption}</p>}
+          <ul className="publisher-history-pills" aria-label="Status">
+            <li className="publisher-history-pill" data-tone="draft">
+              <span>Not published</span>
+              <small>{expiresIn(draft.expires)}</small>
+            </li>
+            {draft.chinese && (
+              <li className="publisher-history-pill" data-tone="draft">
+                <span>With a Chinese version</span>
+              </li>
+            )}
+            <li>
+              {inComposer ? (
+                <span className="publisher-history-here">In the composer</span>
+              ) : (
+                <a className="publisher-history-open" href={`?draft=${draft.id}`}>
+                  Open
+                </a>
+              )}
+            </li>
+          </ul>
+        </div>
+      </li>
+    );
+  }
   return (
     <section className="publisher-history" id="history" aria-label="Posting history">
       <div className="publisher-heading">
         <h2>History</h2>
         <span className="publisher-note">Posts sent through this app</span>
       </div>
+      {cursors.length === 1 && !!drafts.length && (
+        <section aria-label="Drafts">
+          <h3 className="publisher-history-day">Drafts</h3>
+          <ul className="publisher-history-list">{drafts.map(draftItem)}</ul>
+        </section>
+      )}
       {loading ? (
         <p className="publisher-note">Loading history…</p>
       ) : !page.posts.length ? (

@@ -187,6 +187,11 @@
 .publisher-history-pill a::after { content:" ↗"; color:var(--publisher-muted); }
 .publisher-history-pill a:hover { text-decoration:underline; text-underline-offset:3px; }
 .publisher-history-pill small { font-size:12px; }
+/* A draft's one action: an ink chip beside its status, so it reads as the way in. */
+.publisher a.publisher-history-open { display:inline-flex; align-items:center; padding:2px 12px; border-radius:999px; background:var(--publisher-ink); color:var(--publisher-on-ink); font-size:12px; line-height:20px; transition:opacity 160ms; }
+.publisher a.publisher-history-open:hover { opacity:.85; }
+.publisher a.publisher-history-open:focus-visible { outline:2px solid var(--publisher-ink); outline-offset:2px; }
+.publisher-history-here { padding:2px 6px; color:var(--publisher-muted); font-size:12px; }
 .publisher .publisher-history-manage { display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border:0; background:none; color:var(--publisher-muted); font-size:12px; }
 .publisher-history-manage svg { transition:transform 260ms cubic-bezier(.2,.8,.2,1); }
 .publisher-history-manage[aria-expanded="true"] svg { transform:rotate(180deg); }

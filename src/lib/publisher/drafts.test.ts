@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { checkDraftText, draftKey, readDraft, saveDraft, validateDraft } from "./drafts";
+import { checkDraftText, DRAFT_LIFETIME, draftKey, listDrafts, readDraft, saveDraft, validateDraft } from "./drafts";
 
 const text = () => ({
   title: "A film",
@@ -18,6 +18,15 @@ function bucket(existing: string[] = [video]) {
     get: async (key: string) => {
       const body = objects.get(key);
       return body === undefined ? null : { body: new Response(body).body as ReadableStream };
+    },
+    uploaded: new Map<string, Date>(),
+    /** One object a page, so a listing has to follow the cursor. */
+    async list({ prefix, cursor }: { prefix: string; cursor?: string }) {
+      const keys = [...objects.keys()].filter((key) => key.startsWith(prefix)).sort();
+      const at = cursor ? keys.indexOf(cursor) + 1 : 0;
+      const key = keys[at];
+      const objects_ = key ? [{ key, uploaded: this.uploaded.get(key) ?? new Date(0) }] : [];
+      return { objects: objects_, truncated: at + 1 < keys.length, cursor: key };
     },
   };
 }
@@ -71,6 +80,38 @@ describe("drafts", () => {
     const store = bucket([video, chinese]);
     const id = await saveDraft(store, draft);
     expect((await readDraft(store, id))?.zh?.video).toBe(chinese);
+  });
+
+  test("are listed newest first until they're posted, with when the bucket removes them", async () => {
+    const chinese = "00000000-0000-4000-8000-000000000002";
+    const posted = "00000000-0000-4000-8000-000000000004";
+    const second = "00000000-0000-4000-8000-000000000005";
+    const store = bucket([video, second, chinese, posted]);
+    const older = await saveDraft(store, { ...text(), video });
+    const newer = await saveDraft(store, { ...text(), video: second, zh: { ...text().zh, video: chinese } });
+    const lost = await saveDraft(store, { ...text(), video: posted });
+    store.uploaded.set(draftKey(older), new Date(1_000));
+    store.uploaded.set(draftKey(newer), new Date(2_000));
+    store.uploaded.set(draftKey(lost), new Date(3_000));
+    const asked: string[][] = [];
+    const drafts = await listDrafts(store, async (videos) => {
+      asked.push(videos);
+      return new Set([posted]);
+    });
+    expect(drafts.map((d) => d.id)).toEqual([newer, older]);
+    expect(drafts[0]).toEqual({
+      id: newer,
+      title: "A film",
+      caption: "About films",
+      video: second,
+      chinese: true,
+      created: 2_000,
+      expires: 2_000 + DRAFT_LIFETIME,
+    });
+    expect(drafts[1].chinese).toBe(false);
+    expect(asked[0].sort()).toEqual([posted, second, video].sort());
+    // Media ids aren't drafts, even though they share the bucket.
+    expect(drafts.some((d) => d.id === video)).toBe(false);
   });
 
   test("can carry a cover, which must have been uploaded too, and a location", async () => {

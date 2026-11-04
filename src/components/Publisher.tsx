@@ -190,6 +190,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
   const [openingDraft, setOpeningDraft] = useState(false);
   // How far a draft's videos have come down, so a large one doesn't look like an empty page.
   const [draftLoad, setDraftLoad] = useState<{ video: number; videos: number; loaded: number; total?: number }>();
+  // What an opening draft still has coming once its text is in place; it's a video post from the start.
+  const [pendingDraft, setPendingDraft] = useState<{ zhVideo: boolean; cover: boolean }>();
+  // The draft in the composer, which the drafts list marks rather than offers, and a nudge to list them again.
+  const [openDraftId, setOpenDraftId] = useState<string | null>(null);
+  const [draftsVersion, setDraftsVersion] = useState(0);
   const draftId = useRef<string | null>(null);
   // A draft's video is already in Cloudflare, so publishing it doesn't upload it again.
   const storedMedia = useRef(new WeakMap<File, string>());
@@ -324,8 +329,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     const timer = window.setInterval(() => refresh().catch(() => setHelperOnline(false)), 10_000);
     return () => clearInterval(timer);
   }, [access]);
-  // A draft sent from the terminal opens with its video and text in place, all at once: until the video
-  // arrives the composer stays locked, so it can't go out as a text post.
+  // A draft sent from the terminal shows its text and settings as soon as they arrive, then its videos follow.
+  // Until they're in the composer stays locked, so it can't go out as a text post.
   useEffect(() => {
     if (access !== "owner") return;
     const id = new URLSearchParams(location.search).get("draft");
@@ -352,20 +357,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     async function openDraft(id: string) {
       setBusy(true);
       setOpeningDraft(true);
+      let filled = false;
       try {
         const draft: Draft = await api(`drafts/${id}`);
-        const videos = draft.zh?.video ? 2 : 1;
-        const file = await storedFile(draft.video, draft.title, { video: 1, videos });
-        const chinese = draft.zh?.video
-          ? await storedFile(draft.zh.video, `${draft.title} (Chinese)`, { video: 2, videos })
-          : undefined;
-        const coverFile = draft.cover ? await storedFile(draft.cover, "cover.jpg") : undefined;
-        const zhCoverFile = draft.zh?.cover ? await storedFile(draft.zh.cover, "cover-zh.jpg") : undefined;
-        await showMedia([file], [""], [""]);
-        setChineseVideo(chinese);
-        setCover(coverFile && { file: coverFile, zh: zhCoverFile });
-        setPlace(draft.location ?? "");
-        setZhPlace(draft.zh?.location ?? "");
+        filled = true;
+        setPendingDraft({ zhVideo: Boolean(draft.zh?.video), cover: Boolean(draft.cover) });
+        setOpenDraftId(id);
         const active = draft.preset;
         if (active) setPreferences((p) => (p.presets.some((item) => item.id === active) ? { ...p, active } : p));
         setTitle(draft.title);
@@ -376,10 +373,37 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
         setZhTitle(draft.zh?.title ?? "");
         setZhText(draft.zh?.text ?? "");
         setZhTopicsText(draft.zh?.topics.join(" ") ?? "");
+        setPlace(draft.location ?? "");
+        setZhPlace(draft.zh?.location ?? "");
+        const videos = draft.zh?.video ? 2 : 1;
+        const file = await storedFile(draft.video, draft.title, { video: 1, videos });
+        const chinese = draft.zh?.video
+          ? await storedFile(draft.zh.video, `${draft.title} (Chinese)`, { video: 2, videos })
+          : undefined;
+        const coverFile = draft.cover ? await storedFile(draft.cover, "cover.jpg") : undefined;
+        const zhCoverFile = draft.zh?.cover ? await storedFile(draft.zh.cover, "cover-zh.jpg") : undefined;
+        await showMedia([file], [""], [""]);
+        setChineseVideo(chinese);
+        setCover(coverFile && { file: coverFile, zh: zhCoverFile });
         draftId.current = id;
       } catch (e) {
+        // Without its video the draft can't go out as written, so its text goes too, rather than wait to be sent as text.
+        if (filled) {
+          setTitle("");
+          setCaption("");
+          setAlt("");
+          setTagsText("");
+          setShort("");
+          setZhTitle("");
+          setZhText("");
+          setZhTopicsText("");
+          setPlace("");
+          setZhPlace("");
+          setOpenDraftId(null);
+        }
         setError(e instanceof Error ? e.message : "Could not open this draft");
       } finally {
+        setPendingDraft(undefined);
         setOpeningDraft(false);
         setDraftLoad(undefined);
         setBusy(false);
@@ -467,8 +491,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       setSubmitted(false);
       if (draftId.current) {
         // If this delete is lost, the server still refuses to queue the same video twice.
-        api(`drafts/${draftId.current}`, undefined, "DELETE").catch(() => {});
+        api(`drafts/${draftId.current}`, undefined, "DELETE")
+          .catch(() => {})
+          .finally(() => setDraftsVersion((v) => v + 1));
         draftId.current = null;
+        setOpenDraftId(null);
         window.history.replaceState(null, "", location.pathname);
       }
       clearMedia();
@@ -574,8 +601,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
     submission.current = null;
     setError("");
   }
-  // The attachments decide the kind; the preset's destinations that can't take it are skipped.
-  const kind = postKind(files);
+  // The attachments decide the kind; the preset's destinations that can't take it are skipped. A draft is a video post
+  // while its video is still coming down.
+  const kind: PostKind = !files.length && pendingDraft ? "video" : postKind(files);
   const reasons = Object.fromEntries(
     platforms.map((p) => [p, unsupported(p, kind, files.length, video?.seconds)]),
   ) as Record<Platform, string | null>;
@@ -966,6 +994,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                     onError={setError}
                   />
                 )}
+                {kind === "video" && !files[0] && pendingDraft?.cover && !!coverTargets.length && (
+                  <fieldset className="publisher-cover publisher-group">
+                    <legend>
+                      Cover<span className="publisher-for"> · {namesOf(coverTargets)}</span>
+                    </legend>
+                    <p className="publisher-note">Loading the draft's cover…</p>
+                  </fieldset>
+                )}
                 {rednote && (
                   <PublisherChinese
                     value={{ title: zhTitle, text: zhText, topics: zhTopicsText }}
@@ -1003,7 +1039,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                   >
                     {kind === "video" && (
                       <div className="publisher-zh-video">
-                        {chineseVideo ? (
+                        {chineseVideo && (
                           <div className="publisher-previews" data-single-video>
                             <figure>
                               <video src={chinesePreview} controls playsInline />
@@ -1020,7 +1056,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                               </button>
                             </figure>
                           </div>
-                        ) : (
+                        )}
+                        {!chineseVideo && pendingDraft?.zhVideo && (
+                          <p className="publisher-note">Loading the Chinese version…</p>
+                        )}
+                        {!chineseVideo && !pendingDraft?.zhVideo && (
                           <MediaButton
                             accept="video/*"
                             label="Chinese version"
@@ -1031,7 +1071,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                           />
                         )}
                         <small className="publisher-note">
-                          {chineseVideo
+                          {chineseVideo || pendingDraft?.zhVideo
                             ? "Xiaohongshu gets this video. Every other destination gets the one above."
                             : "Have one made for Chinese audiences? Xiaohongshu gets it, and every other destination keeps the video above."}
                         </small>
@@ -1232,7 +1272,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
                 )}
               </aside>
             </div>
-            <PublisherHistory request={api} onError={setError} />
+            <PublisherHistory request={api} onError={setError} openDraft={openDraftId} draftsVersion={draftsVersion} />
             <PublisherConnections
               online={helperOnline}
               connected={connectedPlatforms}

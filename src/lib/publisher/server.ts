@@ -24,6 +24,12 @@ export interface MediaBucket {
   } | null>;
   head(key: string): Promise<unknown | null>;
   delete(keys: string | string[]): Promise<void>;
+  /** The objects whose keys start with `prefix`, a page at a time. */
+  list(options: { prefix: string; cursor?: string }): Promise<{
+    objects: { key: string; uploaded: Date }[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
 }
 export interface Post {
   id: string;

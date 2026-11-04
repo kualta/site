@@ -120,8 +120,21 @@ try {
     const history = page.getByRole("region", { name: "Posting history" });
     await history.getByText("this, too, is modern art").waitFor();
     const days = await history.locator(".publisher-history-day").allTextContents();
-    assert.deepEqual(days.slice(0, 2), ["Today", "Yesterday"]);
-    assert.equal(days.length, 3);
+    assert.deepEqual(days.slice(0, 3), ["Drafts", "Today", "Yesterday"]);
+    assert.equal(days.length, 4);
+    // Drafts sent from the terminal and not yet published come first, newest first, each with a way in.
+    const draftRows = history.getByRole("region", { name: "Drafts" }).locator(".publisher-history-item");
+    assert.equal(await draftRows.count(), 2);
+    assert.deepEqual(
+      await draftRows.evaluateAll((rows) => rows.map((row) => row.getAttribute("data-draft"))),
+      ["00000000-0000-4000-8000-00000000d1af", "00000000-0000-4000-8000-00000000d1b0"],
+    );
+    assert.match(await draftRows.first().locator(".publisher-history-pill").first().innerText(), /Not published\s+expires in 6 days/);
+    assert.equal(
+      await draftRows.first().getByRole("link", { name: "Open" }).getAttribute("href"),
+      "?draft=00000000-0000-4000-8000-00000000d1af",
+    );
+    await draftRows.nth(1).getByText("With a Chinese version").waitFor();
     const art = history.locator(".publisher-history-item", { hasText: "this, too, is modern art" });
     assert.equal(
       await art.locator(".publisher-history-pills").getByRole("link", { name: "Grain" }).getAttribute("href"),
@@ -609,6 +622,20 @@ try {
   await page.getByRole("button", { name: "Loading video…" }).waitFor();
   assert.equal(await publish.isDisabled(), true);
   assert.equal(await page.getByRole("textbox", { name: "Post" }).isDisabled(), true);
+  // Its text and settings are already in place while the video comes down, as a video post.
+  await page.waitForFunction(
+    () => document.querySelector("#publisher-post")?.value === "A film about films",
+  );
+  assert.equal(await page.getByRole("textbox", { name: /^Title ·/ }).inputValue(), "Rendered film");
+  assert.equal(await page.getByRole("textbox", { name: "Video description · Bluesky, Lens" }).inputValue(), "Titles fade over a dark stage");
+  assert.equal(
+    await page.getByRole("group", { name: "Chinese · Xiaohongshu" }).getByRole("textbox", { name: "Title" }).inputValue(),
+    "短片",
+  );
+  // The list marks the draft that's open rather than offering it again.
+  const openRow = page.locator('[data-draft="00000000-0000-4000-8000-00000000d1af"]');
+  await openRow.getByText("In the composer").waitFor();
+  assert.equal(await openRow.getByRole("link", { name: "Open" }).count(), 0);
   releaseVideo();
   await page.locator(".publisher-previews video").waitFor();
   await page.getByRole("button", { name: "Queue post" }).waitFor();

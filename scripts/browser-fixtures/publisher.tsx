@@ -166,6 +166,11 @@ const samples = [48, 24, 12, 1].flatMap((hours) =>
     metrics: { views: Math.round((platform === "youtube" ? 1213 : 96) / (1 + hours / 24)) },
   })),
 );
+// Both drafts wait in Cloudflare: the plain one sent half an hour ago, the one with a Chinese version yesterday.
+const drafts = [
+  { id: draft.id, title: draft.title, caption: draft.caption, video: draftVideo, chinese: false, created: minutes(30) },
+  { id: chineseDraft.id, title: draft.title, caption: draft.caption, video: draftVideo, chinese: true, created: minutes(26 * 60) },
+].map((item) => ({ ...item, expires: item.created + 7 * day }));
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const path = new URL(String(input), location.href).pathname.replace("/api/publisher/", "");
@@ -196,6 +201,7 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
         : [],
     });
   if (path === "history") return json(history);
+  if (path === "drafts") return json({ drafts });
   if (path === "analytics") return json(analytics);
   if (path === "analytics/overview") return json(overview);
   if (path === `analytics/${analyticsPost}`) return json({ samples });
