@@ -80,7 +80,8 @@ export function deletionResponse(platform, responseUrl, method, body, requestBod
     );
   if (platform === "tiktok")
     return (
-      /(^|\.)tiktok\.com$/.test(host) && /\/(?:item|aweme)\/delete\/?$/.test(path) && hasId && body?.status_code === 0
+      // Studio's request is named its own way; it carries the post's id and TikTok's success code.
+      /(^|\.)tiktok\.com$/.test(host) && /delete/i.test(path) && hasId && body?.status_code === 0
     );
   if (platform === "xiaohongshu")
     return (
@@ -257,9 +258,16 @@ export async function deletePublication(
       await page.getByText("Delete forever", { exact: true }).click();
       await page.getByRole("checkbox").check();
     } else if (target.platform === "tiktok") {
-      await page.getByRole("button", { name: /^(More|More options|More actions)$/ }).click();
+      // A video's own page has no owner menu: TikTok Studio's post list has one on each post's row.
+      await page.goto("https://www.tiktok.com/tiktokstudio/content");
+      await page
+        .locator(`a[href$="/${destination.id}"]`)
+        .first()
+        .locator('xpath=ancestor::*[.//*[@data-tt="components_ActionCell_Clickable"]][1]')
+        .locator('[data-tt="components_ActionCell_Clickable"]')
+        .click();
       submitted = true;
-      await page.getByText("Delete", { exact: true }).click();
+      await page.getByRole("dialog").getByText("Delete", { exact: true }).click();
     } else {
       await page.getByRole("button", { name: /^(更多|More)$/ }).click();
       submitted = true;

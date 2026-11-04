@@ -214,6 +214,16 @@ test("browser deletion confirms the exact post and closes its profile", async ()
   expect(closed).toBe(true);
   expect(result.state).toBe("deleted");
 });
+test("a TikTok Studio deletion counts only for this post and TikTok's success code", () => {
+  const url = "https://www.tiktok.com/tiktok/web/project/delete/";
+  const id = "7704345300730793238";
+  const body = `{"item_id":"${id}"}`;
+  expect(deletionResponse("tiktok", url, "POST", { status_code: 0 }, body, id)).toBe(true);
+  expect(deletionResponse("tiktok", url, "POST", { status_code: 0 }, body, "7703705494896069910")).toBe(false);
+  expect(deletionResponse("tiktok", url, "POST", { status_code: 8 }, body, id)).toBe(false);
+  const list = "https://www.tiktok.com/api/item/list/";
+  expect(deletionResponse("tiktok", list, "POST", { status_code: 0 }, body, id)).toBe(false);
+});
 test("RedNote note links are Xiaohongshu publications", () => {
   const post = { id: crypto.randomUUID() };
   expect(deletionDestination("xiaohongshu", "https://www.rednote.com/explore/65f1a2b3c4d5e6f7a8b9c0d1", post)).toEqual({
