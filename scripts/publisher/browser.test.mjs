@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { closestPlace, publicationUrl } from "./browser.mjs";
+import { closestPlace, publicationUrl, tikTokCaptionParts } from "./browser.mjs";
 
 test("TikTok links photo posts apart from videos; a YouTube post links to the post", () => {
   expect(publicationUrl("tiktok", "video", "7")).toBe("https://www.tiktok.com/@_/video/7");
@@ -39,4 +39,28 @@ test("named: only a place called that, never one whose name mentions it", () => 
   expect(closestPlace([["Bogota Bar"]], "Bogotá", { named: true })).toBe(-1);
   expect(closestPlace([["Hostal en Bogotá"]], "Bogotá", { named: true })).toBe(-1);
   expect(closestPlace([["Hostal en Bogotá"]], "Bogotá")).toBe(0);
+});
+
+test("TikTok's caption splits into text to type and hashtags to pick, minus the space a pick adds", () => {
+  expect(tikTokCaptionParts("Lorax wisdom, part 2\n\n#patriarchy #architects")).toEqual([
+    { text: "Lorax wisdom, part 2\n\n" },
+    { tag: "patriarchy", space: true },
+    { tag: "architects", space: true },
+  ]);
+  expect(tikTokCaptionParts("In #Bogotá, inline #tag\nnext")).toEqual([
+    { text: "In " },
+    { tag: "Bogotá", space: false },
+    { text: ", inline " },
+    { tag: "tag", space: false },
+    { text: "\nnext" },
+  ]);
+});
+
+test("only a # that starts a word is a hashtag", () => {
+  expect(tikTokCaptionParts("C# and #1 in #")).toEqual([
+    { text: "C# and " },
+    { tag: "1", space: true },
+    { text: "in #" },
+  ]);
+  expect(tikTokCaptionParts("plain")).toEqual([{ text: "plain" }]);
 });

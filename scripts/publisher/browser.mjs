@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Innertube } from "youtubei.js";
+import { rejected } from "./protocol.mjs";
 
 export const destinations = {
   twitter: "https://x.com/home",
@@ -193,6 +194,70 @@ export async function addTikTokPhotos(page, files) {
     .getByText(new RegExp(`^${files.length} photos? uploaded`))
     .first()
     .waitFor({ timeout: 10 * 60_000 });
+}
+/**
+ * A caption as TikTok's editor takes it: text to type, and hashtags, which link only when picked from the editor's
+ * list. Picking one types a space after it: `space` says the caption has one there (or ends), so it stays.
+ */
+export function tikTokCaptionParts(caption) {
+  const pieces = caption.replace(/\r\n?/g, "\n").split(/(?<=^|\s)#([\p{L}\p{N}_]+)/u);
+  const parts = [];
+  for (let i = 0; i < pieces.length; i++) {
+    if (i % 2) {
+      const next = pieces[i + 1];
+      parts.push({ tag: pieces[i], space: next === "" || next.startsWith(" ") });
+    } else {
+      const text = i > 0 && pieces[i].startsWith(" ") ? pieces[i].slice(1) : pieces[i];
+      if (text) parts.push({ text });
+    }
+  }
+  return parts;
+}
+/**
+ * Writes TikTok's caption over the file name it fills in on upload, picking each hashtag from its list so it links.
+ * Throws, before anything is posted, if the editor doesn't read back the caption.
+ */
+export async function writeTikTokCaption(page, caption) {
+  const editor = page.locator('[contenteditable="true"]').first();
+  // The file name ("0") shows as the upload starts; typed over sooner, it can land in front of the caption.
+  await editor
+    .filter({ hasText: /\S/ })
+    .waitFor({ timeout: 10_000 })
+    .catch(() => {});
+  await editor.click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  const linked = editor.locator('[data-testid="mentionText"]');
+  const list = page.locator(".mention-list-popover");
+  const parts = tikTokCaptionParts(caption);
+  for (const part of parts) {
+    if (part.text !== undefined) {
+      await page.keyboard.type(part.text);
+      continue;
+    }
+    const before = await linked.count();
+    await page.keyboard.type(`#${part.tag}`, { delay: 120 });
+    try {
+      await list
+        .locator(".hash-tag-topic")
+        .filter({ hasText: new RegExp(`^#${part.tag}$`, "iu") })
+        .first()
+        .click({ timeout: 10_000 });
+      await linked.nth(before).waitFor({ timeout: 5000 });
+      if (!part.space) await page.keyboard.press("Backspace");
+    } catch {
+      // Left as typed: it shows, unlinked. Enter would pick from a list still open.
+      if (await list.isVisible()) await page.keyboard.press("Escape");
+      if (part.space) await page.keyboard.type(" ");
+    }
+  }
+  const flat = (text) => text.replace(/\s+/g, "").toLowerCase();
+  const shown = await editor.innerText();
+  if (flat(shown) !== flat(caption))
+    throw rejected(
+      `TikTok's caption came out as "${shown.replace(/\s+/g, " ").trim().slice(0, 80)}", so nothing was posted.`,
+    );
+  return { linked: await linked.count(), tags: parts.filter((part) => part.tag !== undefined).length };
 }
 /**
  * Fills a post on the signed-in channel's Posts tab, whose composer takes up to 10 images, and returns its Post
@@ -410,7 +475,8 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
     } else {
       if (platform === "tiktok" && post.kind === "photo") await addTikTokPhotos(page, files);
       else await page.locator('input[type="file"]').first().setInputFiles(files);
-      await page.locator('[contenteditable="true"]').first().fill(post.caption);
+      const { linked, tags } = await writeTikTokCaption(page, post.caption);
+      if (linked < tags) notes.push(`TikTok linked ${linked} of ${tags} hashtags.`);
       if (cover && platform === "tiktok")
         await setTikTokCover(page, cover).catch(async (error) => {
           notes.push(`Kept TikTok's own cover: ${error.message.split("\n")[0].slice(0, 100)}.`);
