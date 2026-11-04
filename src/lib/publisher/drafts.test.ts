@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { checkDraftText, DRAFT_LIFETIME, draftKey, listDrafts, readDraft, saveDraft, validateDraft } from "./drafts";
+import {
+  checkDraftText,
+  DRAFT_LIFETIME,
+  deleteDraft,
+  draftKey,
+  listDrafts,
+  readDraft,
+  saveDraft,
+  validateDraft,
+} from "./drafts";
 
 const text = () => ({
   title: "A film",
@@ -15,6 +24,9 @@ function bucket(existing: string[] = [video]) {
     objects,
     head: async (key: string) => (objects.has(key) ? {} : null),
     put: async (key: string, body: ArrayBuffer | string) => objects.set(key, String(body)),
+    delete: async (keys: string | string[]) => {
+      for (const key of [keys].flat()) objects.delete(key);
+    },
     get: async (key: string) => {
       const body = objects.get(key);
       return body === undefined ? null : { body: new Response(body).body as ReadableStream };
@@ -112,6 +124,25 @@ describe("drafts", () => {
     expect(asked[0].sort()).toEqual([posted, second, video].sort());
     // Media ids aren't drafts, even though they share the bucket.
     expect(drafts.some((d) => d.id === video)).toBe(false);
+  });
+
+  test("go with the uploads no job holds", async () => {
+    const chinese = "00000000-0000-4000-8000-000000000002";
+    const cover = "00000000-0000-4000-8000-000000000003";
+    const store = bucket([video, chinese, cover]);
+    const id = await saveDraft(store, { ...text(), video, cover, zh: { ...text().zh, video: chinese } });
+    let offered: string[] = [];
+    // A job already holds the cover, so only the two videos are released.
+    await deleteDraft(store, id, async (uploads) => {
+      offered = uploads;
+      return uploads.filter((upload) => upload !== cover);
+    });
+    expect(offered.sort()).toEqual([chinese, cover, video].sort());
+    expect([...store.objects.keys()]).toEqual([cover]);
+    // One already gone is simply gone.
+    await deleteDraft(store, id, async () => {
+      throw new Error("nothing to release");
+    });
   });
 
   test("can carry a cover, which must have been uploaded too, and a location", async () => {

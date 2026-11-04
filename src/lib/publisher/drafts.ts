@@ -1,5 +1,5 @@
 import { defaultMetadata, platforms, support } from "./presets";
-import { PostError, postUploads, validatePost, type MediaBucket } from "./server";
+import { PostError, postMedia, postUploads, validatePost, type MediaBucket } from "./server";
 
 /** A video post prepared from the terminal, waiting in the composer for the owner to publish it. */
 export interface Draft {
@@ -72,6 +72,22 @@ export async function saveDraft(bucket: Pick<MediaBucket, "head" | "put">, value
 export async function readDraft(bucket: Pick<MediaBucket, "get">, id: string): Promise<Draft | null> {
   const object = await bucket.get(draftKey(id));
   return object && ((await new Response(object.body).json()) as Draft);
+}
+
+/**
+ * Removes a draft and whatever it uploaded that no job holds; `release` drops those uploads' records and says which
+ * they were. Publishing deletes its draft this way too, by which time the job holds its uploads, so they stay.
+ */
+export async function deleteDraft(
+  bucket: Pick<MediaBucket, "get" | "delete">,
+  id: string,
+  release: (uploads: string[]) => Promise<string[]>,
+): Promise<void> {
+  const draft = await readDraft(bucket, id);
+  await bucket.delete(draftKey(id));
+  if (!draft) return;
+  const free = await release(postMedia({ kind: "video", media: [draft.video], zh: draft.zh, cover: draft.cover }));
+  if (free.length) await bucket.delete(free);
 }
 
 /** The bucket expires every object a week after it's uploaded, a draft along with its video. */

@@ -23,7 +23,7 @@ import {
   validId,
   validatePost,
 } from "@/lib/publisher/server";
-import { checkDraftText, draftKey, listDrafts, readDraft, saveDraft } from "@/lib/publisher/drafts";
+import { checkDraftText, deleteDraft, listDrafts, readDraft, saveDraft } from "@/lib/publisher/drafts";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
@@ -244,7 +244,15 @@ export const ALL: APIRoute = async ({ request, params }) => {
         return draft ? json(draft) : json({ error: "This draft has expired or was already posted" }, 404);
       }
       if (request.method === "DELETE") {
-        await bucket.delete(draftKey(id));
+        await deleteDraft(bucket, id, async (uploads) => {
+          // Only what no job holds; the record goes first, so nothing can be queued with an upload being removed.
+          const marks = uploads.map(() => "?").join(",");
+          const { results } = await db
+            .prepare(`DELETE FROM publisher_media WHERE job_id IS NULL AND id IN (${marks}) RETURNING id`)
+            .bind(...uploads)
+            .all<{ id: string }>();
+          return results.map((row) => row.id);
+        });
         return json({ ok: true });
       }
     }
