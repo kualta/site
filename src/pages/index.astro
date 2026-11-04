@@ -14,9 +14,7 @@ import { TAGLINE } from "@/lib/seo";
 // canonical apex; every other route is prerendered
 export const prerender = false;
 
-const contacts = (contactsData as Contact[])
-  .filter((c) => c.is_main)
-  .reverse();
+const contacts = [...(contactsData as Contact[])].reverse();
 
 const initialActivity = await getSharedActivityFeed(env, false, { origin: Astro.url.origin, waitUntil });
 const lastSeenAt = initialActivity.lastSeenAt;
