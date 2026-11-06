@@ -50,7 +50,7 @@ export default defineConfig({
       ],
       // robots.txt disallows /api/, so listing it here only earns a
       // "blocked by robots.txt" report in Search Console
-      filter: (page) => !["/api", "/newsletter/", "/auth/", "/publish", "/flow/", "/links", "/socials"].some(path => page.startsWith(`${SITE}${path}`)),
+      filter: (page) => !["/api", "/newsletter/", "/auth/", "/publish", "/analytics", "/flow/", "/links", "/socials"].some(path => page.startsWith(`${SITE}${path}`)),
       serialize(item) {
         const path = item.url.replace(SITE, "").replace(/\/$/, "") || "/";
         const priorities = {
