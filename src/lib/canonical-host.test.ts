@@ -23,9 +23,10 @@ test("the canonical host and the publisher stay where they are", () => {
   expect(target("https://post.kualta.dev/")).toBeNull();
 });
 
-test("the redirect worker answers with a permanent redirect", () => {
+test("the redirect worker answers with a permanent redirect browsers re-check daily", () => {
   const res = redirectWorker.fetch(new Request("https://kualta.com/links?from=bio"));
   expect(res.status).toBe(301);
   expect(res.headers.get("location")).toBe("https://kualta.dev/links?from=bio");
+  expect(res.headers.get("cache-control")).toBe("max-age=86400");
   expect(redirectWorker.fetch(new Request("https://kualta.dev/")).status).toBe(421);
 });

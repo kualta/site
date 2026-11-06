@@ -1,4 +1,4 @@
-import { canonicalRedirect } from "./lib/canonical-host";
+import { canonicalRedirect, permanentRedirect } from "./lib/canonical-host";
 
 // Serves the hosts in wrangler.redirect.jsonc instead of the site Worker, so a
 // visit to kualta.com/links or www.kualta.dev/posts is sent to kualta.dev
@@ -8,6 +8,6 @@ export default {
     const target = canonicalRedirect(new URL(request.url));
     // a canonical host routed here by mistake would otherwise redirect to itself
     if (!target) return new Response("Misdirected request", { status: 421 });
-    return Response.redirect(target, 301);
+    return permanentRedirect(target);
   },
 };

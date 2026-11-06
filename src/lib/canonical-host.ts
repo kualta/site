@@ -12,6 +12,19 @@ const subdomainPaths: Record<string, string> = {
   join: "/join",
 };
 
+// Browsers keep a 301 without an expiry indefinitely. A day's limit means that
+// if the primary domain ever changes, returning visitors re-check within a day
+// instead of looping between a cached redirect and the new one.
+const REDIRECT_MAX_AGE_SECONDS = 60 * 60 * 24;
+
+/** A permanent redirect that browsers re-check after a day. */
+export function permanentRedirect(target: string): Response {
+  return new Response(null, {
+    status: 301,
+    headers: { Location: target, "Cache-Control": `max-age=${REDIRECT_MAX_AGE_SECONDS}` },
+  });
+}
+
 /** Where a request belongs on the canonical host, or null when it is already there. */
 export function canonicalRedirect(url: URL): string | null {
   const host = url.hostname.toLowerCase();
