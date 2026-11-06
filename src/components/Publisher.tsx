@@ -34,6 +34,7 @@ import { describeProgress, readWithProgress } from "@/lib/publisher/download";
 import { frameAt } from "@/lib/publisher/frame";
 import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost } from "@/lib/publisher/server";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
+import { readPath, tabPath, type Tab } from "@/lib/publisher/route";
 
 async function api(path: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
   const response = await fetch(`/api/publisher/${path}`, {
@@ -136,9 +137,37 @@ type Access = "loading" | "owner" | "signin" | "denied";
 interface Props {
   initialAccess?: Access;
   initialHelper?: { online: boolean; platforms: Platform[] };
+  /** The tab the server rendered, from the path; the browser reads the address itself. */
+  initialTab?: Tab;
 }
-export default function Publisher({ initialAccess = "loading", initialHelper }: Props) {
-  const [tab, setTab] = useState<"compose" | "analytics">("compose");
+type Address = { pathname: string; search: string };
+const currentAddress = (): Address => ({ pathname: location.pathname, search: location.search });
+export default function Publisher({ initialAccess = "loading", initialHelper, initialTab = "compose" }: Props) {
+  // The address says which tab is open and, in Analytics, what it shows; Back and Forward move between them.
+  const [address, setAddress] = useState<Address>(() =>
+    typeof window === "undefined" ? { pathname: tabPath("", initialTab), search: "" } : currentAddress(),
+  );
+  const { base, tab } = readPath(address.pathname);
+  // Where each tab was left, so switching back returns to it.
+  const tabSearch = useRef<Record<Tab, string>>({ compose: "", analytics: "" });
+  useEffect(() => {
+    const sync = () => setAddress(currentAddress());
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+  useEffect(() => {
+    document.title = tab === "analytics" ? "analytics · kualta" : "post · kualta";
+  }, [tab]);
+  function navigate(pathname: string, search: string, replace = false) {
+    if (pathname === location.pathname && search === location.search) return;
+    window.history[replace ? "replaceState" : "pushState"](null, "", pathname + search);
+    setAddress(currentAddress());
+  }
+  function openTab(next: Tab) {
+    if (next === tab) return;
+    tabSearch.current[tab] = location.search;
+    navigate(tabPath(base, next), tabSearch.current[next]);
+  }
   const [access, setAccess] = useState<Access>(initialAccess);
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [ready, setReady] = useState(false);
@@ -699,14 +728,21 @@ export default function Publisher({ initialAccess = "loading", initialHelper }: 
       ) : (
         <>
           <nav className="publisher-tabs" aria-label="Publisher sections">
-            <button aria-pressed={tab === "compose"} onClick={() => setTab("compose")}>
+            <button aria-pressed={tab === "compose"} onClick={() => openTab("compose")}>
               Compose
             </button>
-            <button aria-pressed={tab === "analytics"} onClick={() => setTab("analytics")}>
+            <button aria-pressed={tab === "analytics"} onClick={() => openTab("analytics")}>
               Analytics
             </button>
           </nav>
-          {tab === "analytics" && <PublisherAnalytics request={api} online={helperOnline} />}
+          {tab === "analytics" && (
+            <PublisherAnalytics
+              request={api}
+              online={helperOnline}
+              search={address.search}
+              onNavigate={(search, replace) => navigate(tabPath(base, "analytics"), search, replace)}
+            />
+          )}
           <div hidden={tab !== "compose"}>
             <div className="publisher-heading">
               <h1>New post</h1>

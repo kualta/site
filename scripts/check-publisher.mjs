@@ -16,6 +16,18 @@ const server = await createServer({
   resolve: { alias: [{ find: "@", replacement: path.join(root, "src") }] },
   esbuild: { jsx: "automatic" },
   server: { host: "127.0.0.1", port: 8797, fs: { allow: [root] } },
+  // The Analytics tab has its own path, as on post.kualta.dev, so a reload opens it again.
+  plugins: [
+    {
+      name: "publisher-tabs",
+      configureServer(vite) {
+        vite.middlewares.use((request, _response, next) => {
+          request.url = request.url?.replace(/^\/publisher\.html\/analytics(?=\?|$)/, "/publisher.html");
+          next();
+        });
+      },
+    },
+  ],
 });
 await server.listen();
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH });
@@ -898,8 +910,55 @@ try {
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    // Wide, like the still YouTube serves; its 120px placeholder for a missing one is skipped.
+    await page.route("https://i.ytimg.com/**", (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"><rect width="480" height="360" fill="#d9a7b8"/></svg>',
+      }),
+    );
+    await page.route("**/api/publisher/media/**", (route) =>
+      route.fulfill({ contentType: "image/svg+xml", body: thumbnail }),
+    );
     await page.goto(`http://127.0.0.1:8797/publisher.html?theme=${mobile ? "light" : "dark"}`);
     await page.getByRole("button", { name: "Analytics" }).click();
+    const address = () => {
+      const url = new URL(page.url());
+      return decodeURIComponent(url.pathname + url.search);
+    };
+    assert.equal(address(), "/publisher.html/analytics");
+    assert.equal(await page.title(), "analytics · kualta");
+    // Text posts stay out until asked for; each listed post shows its picture.
+    const cards = page.locator(".publisher-analytics-posts > button");
+    await cards.first().waitFor();
+    assert.equal(await cards.count(), 2);
+    assert.match(await cards.nth(0).innerText(), /A film about films/);
+    assert.match(await cards.nth(1).innerText(), /Two frames from the gallery walk/);
+    assert.equal(
+      await cards.nth(0).locator("img").getAttribute("src"),
+      "https://i.ytimg.com/vi/CJs864wmjB0/hqdefault.jpg",
+    );
+    assert.equal(await cards.nth(1).locator("img").getAttribute("src"), "/api/publisher/media/m-photo-a");
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".publisher-analytics-posts img")].every((img) => img.naturalWidth > 0),
+    );
+    const types = page.getByRole("group", { name: "Post types" });
+    await types.getByRole("button", { name: "Text" }).click();
+    await cards.nth(2).waitFor();
+    assert.match(await cards.nth(0).innerText(), /meow/);
+    assert.equal(address(), "/publisher.html/analytics?type=video,photo,text");
+    await types.getByRole("button", { name: "Text" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".publisher-analytics-posts > button").length === 2);
+    assert.equal(address(), "/publisher.html/analytics");
+    // Choosing a post is a step Back undoes; the detail shows its picture and caption.
+    await cards.nth(1).click();
+    assert.equal(address(), "/publisher.html/analytics?post=00000000-0000-4000-8000-0000000a0002");
+    const detail = page.locator(".publisher-analytics-detail");
+    await detail.getByRole("heading", { name: "Two frames from the gallery walk" }).waitFor();
+    await page.goBack();
+    await detail.getByRole("heading", { name: "A film about films" }).waitFor();
+    assert.equal(await detail.locator(".publisher-analytics-caption").innerText(), "Titles fade over a dark stage.");
+    assert.equal(await detail.locator(".publisher-analytics-thumb img").count(), 1);
     const overall = page.getByRole("region", { name: "Views" }).locator(".publisher-analytics-retention");
     await overall.getByText("videos posted in the last 30 days", { exact: false }).waitFor();
     const lines = await overall.locator("li").allInnerTexts();
@@ -907,7 +966,6 @@ try {
     // Two YouTube videos, weighed by their 400 and 1,213 views.
     assert.match(lines[0], /^TikTok\s*6\.1s\s*22% of the video\s*· 1 video$/);
     assert.match(lines[1], /^YouTube\s*51\.7s\s*50% of the video\s*· 2 videos$/);
-    const detail = page.locator(".publisher-analytics-detail");
     const post = detail.locator(".publisher-analytics-retention");
     await post.waitFor();
     // A looping short can pass the whole of its length.
@@ -916,8 +974,8 @@ try {
     const bluesky = detail.getByRole("row").filter({ hasText: "Bluesky" });
     assert.equal((await bluesky.getByRole("cell").allInnerTexts()).at(-2), "—");
     // A TikTok repost linked to the post is its own row, and its views add to the original's.
-    const platformFilter = detail.getByRole("combobox", { name: "Platform" });
-    assert.deepEqual(await platformFilter.locator("option").allTextContents(), [
+    const platformFilter = detail.getByRole("group", { name: "Platform" });
+    assert.deepEqual(await platformFilter.getByRole("button").allTextContents(), [
       "All platforms",
       "YouTube",
       "TikTok",
@@ -928,9 +986,33 @@ try {
     assert.match(await tiktokRows.nth(0).locator("th small").innerText(), /^Earlier sign-in/);
     assert.match(await tiktokRows.nth(1).locator("th small").innerText(), /^Linked/);
     assert.equal(await detail.locator(".publisher-analytics-total strong").innerText(), "1,339");
-    await platformFilter.selectOption("tiktok");
+    await platformFilter.getByRole("button", { name: "TikTok" }).click();
     assert.equal(await detail.locator(".publisher-analytics-total strong").innerText(), "126");
-    await platformFilter.selectOption("all");
+    await page.getByRole("group", { name: "Period" }).getByRole("button", { name: "7d" }).click();
+    assert.equal(address(), "/publisher.html/analytics?platform=tiktok&period=7");
+    // The address alone opens the same view.
+    await page.reload();
+    await detail.getByRole("heading", { name: "A film about films" }).waitFor();
+    assert.equal(await platformFilter.getByRole("button", { name: "TikTok" }).getAttribute("aria-pressed"), "true");
+    assert.equal(
+      await page.getByRole("group", { name: "Period" }).getByRole("button", { name: "7d" }).getAttribute("aria-pressed"),
+      "true",
+    );
+    assert.equal(await detail.locator(".publisher-analytics-total strong").innerText(), "126");
+    // Compose and back returns to where the tab was left; Back and Forward move between the two.
+    await page.getByRole("button", { name: "Compose" }).click();
+    assert.equal(address(), "/publisher.html");
+    assert.equal(await page.title(), "post · kualta");
+    await page.getByRole("button", { name: "Analytics" }).click();
+    assert.equal(address(), "/publisher.html/analytics?platform=tiktok&period=7");
+    await page.goBack();
+    assert.equal(address(), "/publisher.html");
+    await page.getByRole("heading", { name: "New post" }).waitFor();
+    await page.goForward();
+    await detail.getByRole("heading", { name: "A film about films" }).waitFor();
+    await platformFilter.getByRole("button", { name: "All platforms" }).click();
+    await page.getByRole("group", { name: "Period" }).getByRole("button", { name: "30d" }).click();
+    assert.equal(address(), "/publisher.html/analytics");
     await page.locator(".publisher-analytics-chart svg").first().waitFor();
     if (shots)
       await page.screenshot({

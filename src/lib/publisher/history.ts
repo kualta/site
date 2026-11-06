@@ -1,15 +1,26 @@
 import type { NewsletterDB } from "../newsletter/types";
 import { EARLIER_SIGN_IN, validId } from "./server";
-import type { Platform } from "./presets";
+import type { Platform, PostKind } from "./presets";
 
-export async function historyPage(db: NewsletterDB, cursor: string | null) {
+/** `kinds` keeps only posts of those kinds; without it every post is listed. */
+export async function historyPage(db: NewsletterDB, cursor: string | null, kinds?: readonly PostKind[]) {
   const [timestamp, id] = cursor?.split(":") || [];
   if (cursor && (!/^\d+$/.test(timestamp) || !validId(id))) throw new Error("Invalid history cursor");
-  const condition = cursor ? "WHERE created_at < ? OR (created_at = ? AND id < ?)" : "";
+  const conditions: string[] = [];
+  const values: (string | number)[] = [];
+  if (cursor) {
+    conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
+    values.push(Number(timestamp), Number(timestamp), id);
+  }
+  if (kinds) {
+    conditions.push(`json_extract(payload,'$.kind') IN (${kinds.map(() => "?").join(",")})`);
+    values.push(...kinds);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const query = db.prepare(
-    `SELECT id, payload, created_at FROM publisher_jobs ${condition} ORDER BY created_at DESC, id DESC LIMIT 21`,
+    `SELECT id, payload, created_at FROM publisher_jobs ${where} ORDER BY created_at DESC, id DESC LIMIT 21`,
   );
-  const { results: jobs } = await (cursor ? query.bind(Number(timestamp), Number(timestamp), id) : query).all<{
+  const { results: jobs } = await (values.length ? query.bind(...values) : query).all<{
     id: string;
     payload: string;
     created_at: number;

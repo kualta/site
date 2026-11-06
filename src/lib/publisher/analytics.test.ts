@@ -6,6 +6,7 @@ import {
   analyticsPage,
   analyticsSeries,
   claimAnalytics,
+  parseKinds,
   requestRefresh,
   saveAnalytics,
 } from "./analytics";
@@ -224,9 +225,48 @@ test("the overview marks videos that are still up, when they went out, with YouT
   const { videos } = await analyticsOverview(f.db, 0);
   expect(videos).toEqual([
     { id: elsewhere, at: 100, label: "Elsewhere", thumbnail: null },
-    { id: short, at: 400, label: "Short", thumbnail: "https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg" },
+    { id: short, at: 400, label: "Short", thumbnail: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg" },
   ]);
+  // Without videos asked for, nothing is marked.
+  expect((await analyticsOverview(f.db, 0, ["photo"])).videos).toEqual([]);
+  expect((await analyticsOverview(f.db, 0, ["mixed"])).videos.map((video) => video.id)).toEqual([elsewhere]);
   f.sql.close();
+});
+test("the list and the overview count only the kinds of post asked for", async () => {
+  const f = fixture();
+  const photo = f.target("instagram");
+  const text = crypto.randomUUID();
+  f.sql
+    .query("INSERT INTO publisher_jobs VALUES (?,?,?)")
+    .run(text, JSON.stringify({ title: "", caption: "meow", kind: "text", media: [] }), Date.now() + 1);
+  const said = crypto.randomUUID();
+  f.sql
+    .query("INSERT INTO publisher_targets(id,job_id,platform,state,url,finished_at) VALUES(?,?,?,?,?,?)")
+    .run(said, text, "twitter", "succeeded", "https://x.com/k/status/1", 10);
+  for (const [id, views, watch] of [
+    [photo, 40, null],
+    [said, 7, 2_000],
+  ] as const)
+    f.sql
+      .query("INSERT INTO publisher_metric_snapshots VALUES(?,?,?)")
+      .run(id, 86_400_000, JSON.stringify({ views, ...(watch ? { average_watch_ms: watch } : {}) }));
+  const ids = async (kinds?: ("photo" | "text")[]) =>
+    (await analyticsPage(f.db, null, kinds)).posts.map((post) => post.id);
+  expect(await ids()).toEqual([text, f.job]);
+  expect(await ids(["photo"])).toEqual([f.job]);
+  expect(await ids(["text"])).toEqual([text]);
+  expect((await analyticsOverview(f.db, 0)).changes.map((row) => row.change).sort()).toEqual([40, 7]);
+  const photos = await analyticsOverview(f.db, 0, ["photo"]);
+  expect(photos.changes.map((row) => [row.platform, row.change])).toEqual([["instagram", 40]]);
+  expect(photos.retention).toEqual([]);
+  expect((await analyticsOverview(f.db, 0, ["text"])).retention.map((row) => row.platform)).toEqual(["twitter"]);
+  f.sql.close();
+});
+test("a request names known kinds of post, or none for all of them", () => {
+  expect(parseKinds(null)).toBeUndefined();
+  expect(parseKinds("video,mixed,video")).toEqual(["video", "mixed"]);
+  expect(() => parseKinds("")).toThrow("Invalid post kind");
+  expect(() => parseKinds("video,reel")).toThrow("Invalid post kind");
 });
 test("retention is each destination's latest reading with a watch time, so one missed read doesn't blank it", async () => {
   const f = fixture();
