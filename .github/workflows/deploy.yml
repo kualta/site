@@ -40,6 +40,15 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute kualta-newsletter --remote --config wrangler.jsonc --command "SELECT minute FROM activity_refresh LIMIT 1"
 
+      # Before the site: this takes kualta.com, www and the one-page subdomains
+      # over from the site Worker, whose deploy would otherwise detach them first.
+      - name: Deploy redirect Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.redirect.jsonc
+
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
