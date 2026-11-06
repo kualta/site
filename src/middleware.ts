@@ -1,5 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
-import { canonicalRedirect } from "@/lib/canonical-host";
+import { canonicalRedirect, permanentRedirect } from "@/lib/canonical-host";
 import { forbiddenFormOrigin } from "@/lib/request-origin";
 
 export const onRequest = defineMiddleware((ctx, next) => {
@@ -9,7 +9,7 @@ export const onRequest = defineMiddleware((ctx, next) => {
   // the redirect Worker (wrangler.redirect.jsonc) answers these hosts before
   // the site runs; this only catches one attached to the site Worker by mistake
   const canonical = canonicalRedirect(ctx.url);
-  if (canonical) return Response.redirect(canonical, 301);
+  if (canonical) return permanentRedirect(canonical);
 
   const hostname = (ctx.request.headers.get("host") ?? "").toLowerCase();
   if (!import.meta.env.DEV && hostname === "kualta.dev" && ctx.url.pathname === "/publish") return Response.redirect("https://post.kualta.dev/", 302);
