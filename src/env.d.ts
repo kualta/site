@@ -6,6 +6,7 @@ declare namespace Cloudflare {
     ACTIVITY_CACHE?: import("@/lib/activity").ActivityCacheStore;
     ACTIVITY_STORE?: import("@/lib/activity/durable").ActivityDurableNamespace;
     ACTIVITY_STORE_MODE?: string;
+    LIVE_VISITORS?: import("@/lib/visitors/durable").VisitorNamespace;
     GITHUB_ACTIVITY_TOKEN?: string;
     PLUNK_SECRET_KEY?: string;
     NEWSLETTER_DB?: import("@/lib/newsletter/types").NewsletterDB;
