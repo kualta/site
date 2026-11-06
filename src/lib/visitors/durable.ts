@@ -58,11 +58,57 @@ function closeQuietly(socket: VisitorSocket, code: number, reason: string): void
   } catch {}
 }
 
-/** Only a hash of the address is kept, and only for as long as the socket is open. */
+/**
+ * The connection a person sits behind. An IPv6 device rotates its own address
+ * within one /64, so that prefix stands for it, as the whole address does for IPv4.
+ */
+export function network(address: string | null): string {
+  if (!address) return "unknown";
+  if (!address.includes(":")) return address;
+  const [head, tail] = address.toLowerCase().split("::");
+  let groups = head ? head.split(":") : [];
+  // "::" stands for however many zero groups bring the address to eight
+  if (tail !== undefined) {
+    const right = tail ? tail.split(":") : [];
+    const zeros = Array(Math.max(0, 8 - groups.length - right.length)).fill("0");
+    groups = [...groups, ...zeros, ...right];
+  }
+  return `${groups
+    .slice(0, 4)
+    .map((group) => Number.parseInt(group, 16).toString(16))
+    .join(":")}::/64`;
+}
+
+/** Only a hash of the network is kept, and only for as long as the socket is open. */
 async function addressTag(address: string | null): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(address ?? "unknown"));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(network(address)));
   const hex = [...new Uint8Array(digest).slice(0, 8)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   return ADDRESS_TAG + hex;
+}
+
+/**
+ * Sockets that share a browser or a network are one person: tabs in one
+ * browser share its id, and two browsers on one connection share its address.
+ * Each socket carries both, so the two links chain into groups.
+ */
+export function people(sockets: string[][]): number {
+  const parent = new Map<string, string>();
+  function root(tag: string): string {
+    let node = tag;
+    let next = parent.get(node);
+    while (next !== undefined && next !== node) {
+      node = next;
+      next = parent.get(node);
+    }
+    return node;
+  }
+  for (const tags of sockets) {
+    const [first, ...rest] = tags.map(root);
+    if (first === undefined) continue;
+    parent.set(first, first);
+    for (const other of rest) parent.set(other, first);
+  }
+  return new Set(sockets.filter((tags) => tags.length > 0).map((tags) => root(tags[0]))).size;
 }
 
 export class LiveVisitors {
@@ -129,9 +175,7 @@ export class LiveVisitors {
   /** Tells everyone when the count moves, and a newcomer either way. */
   private announce(newcomer?: VisitorSocket, leaving?: VisitorSocket): VisitorSocket[] {
     const sockets = this.present(leaving);
-    const count = new Set(
-      sockets.map((socket) => this.ctx.getTags(socket).find((tag) => tag.startsWith(VISITOR_TAG))),
-    ).size;
+    const count = people(sockets.map((socket) => this.ctx.getTags(socket)));
     let recipients: VisitorSocket[] = [];
     if (count !== this.told) recipients = sockets;
     else if (newcomer) recipients = [newcomer];

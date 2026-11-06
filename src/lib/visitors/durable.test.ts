@@ -1,5 +1,5 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
-import { LiveVisitors, PING, PONG, STALE_MS, VISITORS_PATH, type VisitorSocket, type VisitorState, visitorsSocket } from "./durable";
+import { LiveVisitors, PING, PONG, STALE_MS, VISITORS_PATH, type VisitorSocket, type VisitorState, network, people, visitorsSocket } from "./durable";
 
 class Socket implements VisitorSocket {
   sent: string[] = [];
@@ -71,11 +71,11 @@ test("counts people rather than tabs, and tells everyone only when the count mov
   expect(first.socket.sent).toEqual(["1"]);
   expect(state.alarm).not.toBeNull();
 
-  const second = await join(object, "visitor-bbbb");
+  const second = await join(object, "visitor-bbbb", "198.51.100.2");
   expect(first.socket.last).toBe("2");
   expect(second.socket.sent).toEqual(["2"]);
 
-  const sameTab = await join(object, "visitor-bbbb");
+  const sameTab = await join(object, "visitor-bbbb", "198.51.100.2");
   expect(sameTab.socket.sent).toEqual(["2"]);
   expect(first.socket.sent).toEqual(["1", "2"]);
 
@@ -83,10 +83,46 @@ test("counts people rather than tabs, and tells everyone only when the count mov
   expect(JSON.stringify([...state.sockets.values()])).not.toContain("203.0.113.1");
 });
 
+test("two browsers on one connection are one person", async () => {
+  const { object } = room();
+  const chrome = await join(object, "visitor-aaaa");
+  const safari = await join(object, "visitor-bbbb");
+  expect(chrome.socket.sent).toEqual(["1"]);
+  expect(safari.socket.sent).toEqual(["1"]);
+  await join(object, "visitor-cccc", "198.51.100.2");
+  expect(chrome.socket.last).toBe("2");
+});
+
+test("one browser reaching the site over IPv4 and IPv6 is one person", async () => {
+  const { object } = room();
+  const v4 = await join(object, "visitor-aaaa", "203.0.113.1");
+  await join(object, "visitor-aaaa", "2001:db8:1:2::5");
+  // a second browser on the IPv6 side joins the same person through the shared address
+  await join(object, "visitor-bbbb", "2001:db8:1:2:aaaa:bbbb:cccc:dddd");
+  expect(v4.socket.sent).toEqual(["1"]);
+});
+
+test("an IPv6 device's rotating addresses stand for one network", () => {
+  expect(network("2001:db8:1:2::5")).toBe("2001:db8:1:2::/64");
+  expect(network("2001:0DB8:0001:0002:aaaa:bbbb:cccc:dddd")).toBe("2001:db8:1:2::/64");
+  expect(network("2001:db8::1")).toBe("2001:db8:0:0::/64");
+  expect(network("::1")).toBe("0:0:0:0::/64");
+  expect(network("2001:db8:1:3::5")).not.toBe(network("2001:db8:1:2::5"));
+  expect(network("203.0.113.1")).toBe("203.0.113.1");
+  expect(network(null)).toBe("unknown");
+});
+
+test("shared browsers and shared networks chain into one person", () => {
+  expect(people([])).toBe(0);
+  expect(people([["v:a", "a:1"], ["v:b", "a:2"]])).toBe(2);
+  expect(people([["v:a", "a:1"], ["v:a", "a:2"], ["v:b", "a:2"], ["v:c", "a:3"]])).toBe(2);
+  expect(people([["v:a", "a:1"], ["v:b", "a:2"], ["v:c", "a:1"], ["v:c", "a:2"]])).toBe(1);
+});
+
 test("someone leaving updates everyone still here", async () => {
   const { object } = room();
   const first = await join(object, "visitor-aaaa");
-  const second = await join(object, "visitor-bbbb");
+  const second = await join(object, "visitor-bbbb", "198.51.100.2");
   object.webSocketClose(second.socket);
   expect(first.socket.last).toBe("1");
   object.webSocketError(first.socket);
@@ -96,7 +132,7 @@ test("someone leaving updates everyone still here", async () => {
 test("pages without a usable id each count once", async () => {
   const { object } = room();
   const first = await join(object, null);
-  await join(object, "<script>");
+  await join(object, "<script>", "198.51.100.2");
   expect(first.socket.last).toBe("2");
 });
 
@@ -106,7 +142,7 @@ test("a page that stops pinging is dropped by the alarm, and the alarm stops wit
   const clock = spyOn(Date, "now").mockReturnValue(start);
   try {
     const quiet = await join(object, "visitor-aaaa");
-    const alive = await join(object, "visitor-bbbb");
+    const alive = await join(object, "visitor-bbbb", "198.51.100.2");
     clock.mockReturnValue(start + STALE_MS + 1);
     state.pings.set(alive.socket, new Date(start + STALE_MS));
     await object.alarm();
@@ -134,7 +170,7 @@ test("one address cannot hold more than ten sockets", async () => {
 test("anything other than a ping closes the socket", async () => {
   const { object } = room();
   const first = await join(object, "visitor-aaaa");
-  const noisy = await join(object, "visitor-bbbb");
+  const noisy = await join(object, "visitor-bbbb", "198.51.100.2");
   object.webSocketMessage(noisy.socket);
   expect(noisy.socket.closed).toBe(1003);
   expect(first.socket.last).toBe("1");
