@@ -1,6 +1,6 @@
 ---
 // How many people have the site open right now, shown only once there is
-// someone besides you. Sits inside the top-right corner bracket.
+// someone besides you. Sits in the top-right corner, opposite the bell.
 ---
 <div class="live-visitors" data-live-visitors transition:persist="live-visitors">
   <span class="live-visitors-count cursor-help" tabindex="0" aria-describedby="live-visitors-tooltip">
@@ -17,17 +17,13 @@
 </div>
 
 <style>
-  /* the same box as the corner bracket, so the count sits centred inside it */
+  /* mirrors the bell in the bottom-left corner: the same box at the same inset,
+     which also lines it up with the header row */
   .live-visitors {
     position: absolute;
     z-index: 100;
-    top: calc(0.75rem + env(safe-area-inset-top));
-    right: calc(0.75rem + env(safe-area-inset-right));
-    display: flex;
-    justify-content: center;
-    min-width: 2.125rem;
-    height: 2.125rem;
-    padding: 2px 2px 0 0;
+    top: calc(1.75rem + env(safe-area-inset-top));
+    right: calc(1.75rem + env(safe-area-inset-right));
     opacity: 0;
     visibility: hidden;
     transition: opacity 200ms ease-out, visibility 200ms;
@@ -41,22 +37,35 @@
   .live-visitors-count {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
-    padding-inline: 0.25rem;
-    font-size: 0.875rem;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding-inline: 0.5rem;
+    font-size: 1rem;
     line-height: 1;
     font-variant-numeric: tabular-nums;
-    border-radius: 0.5rem;
+    border-radius: 0.85rem;
+  }
+
+  /* on a phone the header links reach this corner, so they move over while it shows */
+  @media (max-width: 639px) {
+    :global(.site-header) {
+      transition: padding-right 200ms ease-out;
+    }
+    :global(body:has(.live-visitors[data-shown]) .site-header) {
+      padding-right: 4.5rem;
+    }
   }
 
   .live-visitors-dot {
     width: 0.375rem;
     height: 0.375rem;
     border-radius: 50%;
-    background: linear-gradient(45deg, #ff33cc, #cc77ff);
+    background: var(--secondary-text);
   }
 
-  /* hangs below, flush right, since there is no room above or beside the corner */
+  /* hangs below, flush right, since there is no room above or beside it */
   .live-visitors-tooltip {
     position: absolute;
     inset-block-start: calc(100% + 0.375rem);
@@ -76,7 +85,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .live-visitors,
-    .live-visitors-tooltip {
+    .live-visitors-tooltip,
+    :global(.site-header) {
       transition: none;
     }
   }
