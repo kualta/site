@@ -10,6 +10,7 @@ import {
   type Platform,
   type PostKind,
 } from "@/lib/publisher/presets";
+import { publicationLink } from "@/lib/publisher/links";
 import { parseTags } from "@/lib/publisher/variants";
 import type { DraftSummary } from "@/lib/publisher/drafts";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
@@ -26,6 +27,10 @@ type Target = {
   /** Missing on posts published before it was recorded; started_at is close. */
   finished_at?: number | null;
   deleted_at: number | null;
+  /** 1 when the owner published it themselves and linked it here. */
+  linked: number;
+  /** 1 when the helper published it before the platform's sign-in last changed. */
+  earlier_sign_in: number;
 };
 type Post = {
   id: string;
@@ -70,7 +75,7 @@ function status(target: Target): { label: string; tone: Tone } {
   }
   switch (target.state) {
     case "succeeded":
-      return { label: "Published", tone: "ok" };
+      return { label: target.linked ? "Linked" : "Published", tone: "ok" };
     case "queued":
       return { label: "Queued", tone: "busy" };
     case "working":
@@ -144,6 +149,13 @@ function Thumbnail({ post }: { post: Post["post"] }) {
     </div>
   );
 }
+/**
+ * Where the post can go out now: destinations it hasn't reached, and ones it reached only under an earlier sign-in,
+ * which may have been another account.
+ */
+function crosspostOptions(post: Post): Platform[] {
+  return platforms.filter((p) => !post.targets.some((t) => t.platform === p && !t.earlier_sign_in));
+}
 /** Sends a post that already went out to destinations it hasn't reached yet. */
 function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onDone: () => Promise<void> }) {
   const [chosen, setChosen] = useState<Platform[]>([]);
@@ -152,7 +164,7 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
   const [translating, setTranslating] = useState(false);
   const [busy, setBusy] = useState(false);
   const { kind, media } = post.post;
-  const options = platforms.filter((p) => !post.targets.some((t) => t.platform === p));
+  const options = crosspostOptions(post);
   // Asked only when the post went out without them.
   const needsTitle = !post.post.title.trim() && chosen.some((p) => titleFor(p, kind));
   const needsChinese = !post.post.zh && chosen.includes("xiaohongshu");
@@ -197,11 +209,12 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
       <div className="publisher-crosspost-options">
         {options.map((platform) => {
           const reason = unsupported(platform, kind, media.length);
+          const again = post.targets.some((t) => t.platform === platform);
           return (
             <label key={platform} data-unavailable={Boolean(reason)}>
               <span>
                 {platformNames[platform]}
-                {reason && <small>{reason}</small>}
+                {reason ? <small>{reason}</small> : again && <small>Again: it went out under an earlier sign-in</small>}
               </span>
               <input
                 type="checkbox"
@@ -243,6 +256,52 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
           : chosen.length
             ? `Crosspost to ${chosen.length} ${chosen.length === 1 ? "place" : "places"}`
             : "Crosspost"}
+      </button>
+    </fieldset>
+  );
+}
+/** Adds a post the owner published themselves, such as a repost on a new account, so its stats count toward this one. */
+function LinkPost({ post, request, onDone, onError }: Props & { post: Post; onDone: () => Promise<void> }) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const link = url.trim() ? publicationLink(url) : null;
+  const ready = link && !("error" in link) ? link : null;
+  async function send() {
+    setBusy(true);
+    onError("");
+    try {
+      await request("link", { job: post.id, url: url.trim() });
+      setUrl("");
+      await onDone();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <fieldset className="publisher-crosspost">
+      <legend>Link a post</legend>
+      <p className="publisher-note">
+        Paste the link to a post you published yourself, like a repost on a new account, and its stats count toward
+        this one.
+      </p>
+      <label>
+        Link
+        <input
+          type="url"
+          value={url}
+          placeholder="https://www.tiktok.com/@name/video/…"
+          disabled={busy}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && ready && !busy) void send();
+          }}
+        />
+      </label>
+      {link && "error" in link && <p className="publisher-note">{link.error}</p>}
+      <button disabled={busy || !ready} onClick={() => void send()}>
+        {busy ? "Linking…" : ready ? `Link ${platformNames[ready.platform]} post` : "Link post"}
       </button>
     </fieldset>
   );
@@ -334,11 +393,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     setBusy(true);
     onError("");
     try {
-      await request("delete-publications", {
-        job: post.id,
-        platform: target?.platform,
-        confirmed: true,
-      });
+      await request("delete-publications", { job: post.id, target: target?.id, confirmed: true });
       await refresh();
     } catch (error) {
       onError((error as Error).message);
@@ -350,7 +405,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     setBusy(true);
     onError("");
     try {
-      await request("stop", { job: post.id, platform: target.platform });
+      await request("stop", { job: post.id, target: target.id });
       await refresh();
     } catch (error) {
       onError((error as Error).message);
@@ -364,7 +419,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     setBusy(true);
     onError("");
     try {
-      await request("mark-published", { job: post.id, platform: target.platform, url });
+      await request("mark-published", { job: post.id, target: target.id, url });
       await refresh();
     } catch (error) {
       onError((error as Error).message);
@@ -376,7 +431,27 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     if (!confirm(`Confirm this post is absent from ${platformNames[target.platform]} before publishing again.`)) return;
     setBusy(true);
     try {
-      await request("retry", { job: post.id, platform: target.platform, checked: true });
+      await request("retry", { job: post.id, target: target.id, checked: true });
+      await refresh();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function unlink(post: Post, target: Target) {
+    if (
+      !confirm(
+        `Unlink this ${platformNames[target.platform]} post from “${postLabel(
+          post.post,
+        )}”? Its stats leave this post; the post stays up on ${platformNames[target.platform]}.`,
+      )
+    )
+      return;
+    setBusy(true);
+    onError("");
+    try {
+      await request("unlink", { job: post.id, target: target.id });
       await refresh();
     } catch (error) {
       onError((error as Error).message);
@@ -393,9 +468,9 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     const deleted = post.targets.every((t) => t.deletion_state === "deleted");
     const problems = post.targets.filter((t) => ["bad", "warn"].includes(status(t).tone));
     const dates = (post.post.datesTaken ?? []).flatMap((date, index) => (date ? [{ date, index }] : []));
-    const crosspostable = !deleted && platforms.some((p) => !post.targets.some((t) => t.platform === p));
+    const crosspostable = !deleted && crosspostOptions(post).length > 0;
     const stoppable = post.targets.some((t) => ["queued", "working"].includes(t.state));
-    const manageable = removable || problems.length > 0 || dates.length > 0 || crosspostable || stoppable;
+    const manageable = !deleted || removable || problems.length > 0 || dates.length > 0 || stoppable;
     const expanded = open === post.id;
     return (
       <li key={post.id} className="publisher-history-item" data-deleted={deleted}>
@@ -460,6 +535,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
                         <span className="publisher-note" role="status">
                           {status(target).label}
                           {at && <time dateTime={new Date(at).toISOString()}> · {when(at)}</time>}
+                          {!!target.earlier_sign_in && !target.deletion_state && " · earlier sign-in"}
                         </span>
                       </>
                     );
@@ -494,6 +570,15 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
                             Stop
                           </button>
                         )}
+                        {!!target.linked && !["queued", "working"].includes(target.deletion_state || "") && (
+                          <button
+                            disabled={busy}
+                            aria-label={`Unlink this ${name} post`}
+                            onClick={() => void unlink(post, target)}
+                          >
+                            Unlink
+                          </button>
+                        )}
                         {target.state === "uncertain" && !target.deletion_state && (
                           <button disabled={busy} onClick={() => void markPublished(post, target)}>
                             Mark as published
@@ -513,6 +598,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
                     </p>
                   ))}
                   {crosspostable && <Crosspost post={post} request={request} onDone={refresh} onError={onError} />}
+                  {!deleted && <LinkPost post={post} request={request} onDone={refresh} onError={onError} />}
                   {removable && (
                     <button disabled={busy || pending} onClick={() => void remove(post)}>
                       Delete everywhere

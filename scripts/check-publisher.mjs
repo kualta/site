@@ -204,7 +204,7 @@ try {
     await earlier.getByRole("button", { name: "Mark as published" }).click();
     await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "mark-published"));
     const marked = await page.evaluate(() => window.publisherRequests.find((r) => r.path === "mark-published").body);
-    assert.equal(marked.platform, "twitter");
+    assert.match(marked.target, /^twitter-uncertain-/);
     assert.equal(marked.url, "https://x.com/kualta/status/123");
     await earlier.getByRole("button", { name: "Close" }).click();
     // Stop releases a destination that's waiting or publishing, without waiting for it to time out.
@@ -213,11 +213,58 @@ try {
     await clipRow.getByRole("button", { name: "Stop publishing to YouTube" }).waitFor();
     await clipRow.getByRole("button", { name: "Stop publishing to TikTok" }).click();
     await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "stop"));
-    assert.deepEqual(await page.evaluate(() => window.publisherRequests.find((r) => r.path === "stop").body), {
-      job: "00000000-0000-4000-8000-000000000003",
-      platform: "tiktok",
-    });
+    const stopped = await page.evaluate(() => window.publisherRequests.find((r) => r.path === "stop").body);
+    assert.equal(stopped.job, "00000000-0000-4000-8000-000000000003");
+    assert.match(stopped.target, /^tiktok-queued-/);
     await clipRow.getByRole("button", { name: "Close" }).click();
+    // A TikTok post from an earlier sign-in can go out again, or take the link of a repost made by hand.
+    const quake = history.locator(".publisher-history-item", { hasText: "I LOVE EARTHQUAKES" });
+    const quakeCrosspost = quake.getByRole("group", { name: "Crosspost to" });
+    await quake.getByRole("button", { name: "Manage" }).click();
+    await quake.locator(".publisher-history-panel-row", { hasText: "TikTok" }).getByText("earlier sign-in").waitFor();
+    assert.equal(
+      await quakeCrosspost.locator("label", { hasText: "TikTok" }).locator("small").textContent(),
+      "Again: it went out under an earlier sign-in",
+    );
+    assert.equal(await quakeCrosspost.locator("label", { hasText: "YouTube" }).count(), 0);
+    const link = quake.getByRole("group", { name: "Link a post" });
+    const linkField = link.getByRole("textbox", { name: "Link", exact: true });
+    await linkField.fill("https://vm.tiktok.com/ZMabc/");
+    await link.getByText("copy the link from its page", { exact: false }).waitFor();
+    assert.equal(await link.getByRole("button", { name: "Link post" }).isDisabled(), true);
+    await linkField.fill("https://www.tiktok.com/@kualtq/video/7710000000000000002?is_from_webapp=1");
+    await shot("history-link");
+    await link.getByRole("button", { name: "Link TikTok post" }).click();
+    await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "link"));
+    assert.deepEqual(await page.evaluate(() => window.publisherRequests.find((r) => r.path === "link").body), {
+      job: "00000000-0000-4000-8000-000000000005",
+      url: "https://www.tiktok.com/@kualtq/video/7710000000000000002?is_from_webapp=1",
+    });
+    await page.waitForFunction((field) => !field.value, await linkField.elementHandle());
+    await quake.getByRole("button", { name: "Close" }).click();
+    // With its repost linked, the post doesn't offer TikTok again, and only the linked one can be unlinked.
+    const halloween = history.locator(".publisher-history-item", { hasText: "Colombian halloween" });
+    assert.equal(await halloween.locator(".publisher-history-pills").getByRole("link", { name: "TikTok" }).count(), 2);
+    await halloween.getByRole("button", { name: "Manage" }).click();
+    const rows = halloween.locator(".publisher-history-panel-row");
+    assert.match(await rows.nth(0).innerText(), /Published · .* · earlier sign-in/);
+    assert.match(await rows.nth(1).innerText(), /Linked · /);
+    assert.equal(await halloween.getByRole("button", { name: "Unlink this TikTok post" }).count(), 1);
+    assert.equal(await rows.nth(1).getByRole("button", { name: "Unlink this TikTok post" }).count(), 1);
+    await shot("history-linked");
+    page.once("dialog", (dialog) => {
+      assert.match(dialog.message(), /^Unlink this TikTok post from “Colombian halloween is pure cinema”\?/);
+      return dialog.accept();
+    });
+    await halloween.getByRole("button", { name: "Unlink this TikTok post" }).click();
+    await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "unlink"));
+    assert.deepEqual(await page.evaluate(() => window.publisherRequests.find((r) => r.path === "unlink").body), {
+      job: "00000000-0000-4000-8000-000000000006",
+      target: "tiktok-repost",
+    });
+    const halloweenCrosspost = halloween.getByRole("group", { name: "Crosspost to" });
+    assert.equal(await halloweenCrosspost.locator("label", { hasText: "TikTok" }).count(), 0);
+    await halloween.getByRole("button", { name: "Close" }).click();
 
     // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.
     assert.deepEqual(await pressed(), ["Text post"]);
@@ -868,6 +915,22 @@ try {
     await detail.getByRole("columnheader", { name: "Avg watch time" }).waitFor();
     const bluesky = detail.getByRole("row").filter({ hasText: "Bluesky" });
     assert.equal((await bluesky.getByRole("cell").allInnerTexts()).at(-2), "—");
+    // A TikTok repost linked to the post is its own row, and its views add to the original's.
+    const platformFilter = detail.getByRole("combobox", { name: "Platform" });
+    assert.deepEqual(await platformFilter.locator("option").allTextContents(), [
+      "All platforms",
+      "YouTube",
+      "TikTok",
+      "Bluesky",
+    ]);
+    const tiktokRows = detail.getByRole("row").filter({ hasText: "TikTok" });
+    assert.equal(await tiktokRows.count(), 2);
+    assert.match(await tiktokRows.nth(0).locator("th small").innerText(), /^Earlier sign-in/);
+    assert.match(await tiktokRows.nth(1).locator("th small").innerText(), /^Linked/);
+    assert.equal(await detail.locator(".publisher-analytics-total strong").innerText(), "1,339");
+    await platformFilter.selectOption("tiktok");
+    assert.equal(await detail.locator(".publisher-analytics-total strong").innerText(), "126");
+    await platformFilter.selectOption("all");
     await page.locator(".publisher-analytics-chart svg").first().waitFor();
     if (shots)
       await page.screenshot({

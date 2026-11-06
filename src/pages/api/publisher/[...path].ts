@@ -11,6 +11,8 @@ import { env } from "cloudflare:workers";
 import { publisherSession, publisherSameOrigin } from "@/lib/publisher/auth";
 import {
   addDestinations,
+  linkPublication,
+  unlinkPublication,
   PostError,
   stopTarget,
   markPublished,
@@ -95,18 +97,10 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json(await historyPage(db, new URL(request.url).searchParams.get("before")));
     }
     if (path === "delete-publications" && request.method === "POST") {
-      const data = (await request.json()) as {
-        job: string;
-        platform?: (typeof platforms)[number];
-        confirmed?: boolean;
-      };
-      if (
-        !validId(data.job) ||
-        data.confirmed !== true ||
-        (data.platform !== undefined && !platforms.includes(data.platform))
-      )
+      const data = (await request.json()) as { job: string; target?: string; confirmed?: boolean };
+      if (!validId(data.job) || data.confirmed !== true || (data.target !== undefined && !validId(data.target)))
         return json({ error: "Confirm the post and destinations to delete" }, 400);
-      const result = await queueDeletion(db, data.job, data.platform);
+      const result = await queueDeletion(db, data.job, data.target);
       return json({ queued: result.meta.changes });
     }
     if (path === "helper/deletion-result" && request.method === "POST") {
@@ -299,6 +293,13 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "crosspost" && request.method === "POST")
       return json({ platforms: await addDestinations(db, bucket, (await request.json()) as Record<string, unknown>) });
+    if (path === "link" && request.method === "POST")
+      return json(await linkPublication(db, (await request.json()) as Record<string, unknown>), 201);
+    if (path === "unlink" && request.method === "POST") {
+      const data = (await request.json()) as { job: string; target: string };
+      if (!validId(data.job) || !validId(data.target)) return json({ error: "Invalid post" }, 400);
+      return json({ ok: await unlinkPublication(db, data.job, data.target) });
+    }
     if (path === "jobs" && request.method === "POST") {
       const post = validatePost(await request.json());
       const existing = await db
@@ -411,18 +412,16 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ ok: result.meta.changes > 0 });
     }
     if (path === "stop" && request.method === "POST") {
-      const data = (await request.json()) as { job: string; platform: string };
-      if (!validId(data.job) || !platforms.includes(data.platform as never))
-        return json({ error: "Invalid post" }, 400);
-      return json({ ok: await stopTarget(db, data.job, data.platform) });
+      const data = (await request.json()) as { job: string; target: string };
+      if (!validId(data.job) || !validId(data.target)) return json({ error: "Invalid post" }, 400);
+      return json({ ok: await stopTarget(db, data.job, data.target) });
     }
     if (path === "mark-published" && request.method === "POST") {
-      const data = (await request.json()) as { job: string; platform: string; url: unknown };
-      if (!validId(data.job) || !platforms.includes(data.platform as never))
-        return json({ error: "Invalid post" }, 400);
+      const data = (await request.json()) as { job: string; target: string; url: unknown };
+      if (!validId(data.job) || !validId(data.target)) return json({ error: "Invalid post" }, 400);
       if (typeof data.url !== "string" || data.url.length > 2000 || !/^https:\/\/\S+$/.test(data.url))
         return json({ error: "Paste the post's full link, starting with https://" }, 400);
-      return json({ ok: await markPublished(db, data.job, data.platform, data.url) });
+      return json({ ok: await markPublished(db, data.job, data.target, data.url) });
     }
     if (path.startsWith("helper/targets/") && request.method === "GET") {
       const id = path.slice("helper/targets/".length);
@@ -431,18 +430,14 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ active: await targetActive(db, id, claim) });
     }
     if (path === "retry" && request.method === "POST") {
-      const data = (await request.json()) as {
-        job: string;
-        platform: string;
-        checked: boolean;
-      };
-      if (!validId(data.job) || !platforms.includes(data.platform as never) || data.checked !== true)
+      const data = (await request.json()) as { job: string; target: string; checked: boolean };
+      if (!validId(data.job) || !validId(data.target) || data.checked !== true)
         return json({ error: "Confirm the destination has no duplicate first" }, 400);
       const result = await db
         .prepare(
-          "UPDATE publisher_targets SET state = 'queued', claim = NULL, started_at = NULL, finished_at = NULL, message = NULL, url = NULL WHERE job_id = ? AND platform = ? AND state IN ('failed','uncertain')",
+          "UPDATE publisher_targets SET state = 'queued', claim = NULL, started_at = NULL, finished_at = NULL, message = NULL, url = NULL WHERE id = ? AND job_id = ? AND state IN ('failed','uncertain')",
         )
-        .bind(data.job, data.platform)
+        .bind(data.target, data.job)
         .run();
       return json({ ok: result.meta.changes > 0 });
     }
