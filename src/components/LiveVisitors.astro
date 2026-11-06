@@ -1,87 +1,83 @@
 ---
 // How many people have the site open right now, shown only once there is
-// someone besides you. Sits in the top-right corner bracket.
+// someone besides you. Sits inside the top-right corner bracket.
 ---
-<p class="live-visitors" data-live-visitors transition:persist="live-visitors">
-  <span class="live-visitors-dot" aria-hidden="true"></span>
-  <span aria-hidden="true"><span data-live-visitors-count></span><span class="live-visitors-word"> here</span></span>
-  <span class="sr-only" data-live-visitors-label></span>
-</p>
+<div class="live-visitors" data-live-visitors transition:persist="live-visitors">
+  <span class="live-visitors-count cursor-help" tabindex="0" aria-describedby="live-visitors-tooltip">
+    <span class="live-visitors-dot" aria-hidden="true"></span>
+    <span data-live-visitors-count></span>
+  </span>
+  <span
+    id="live-visitors-tooltip"
+    role="tooltip"
+    class="live-visitors-tooltip rounded-lg bg-secondary px-2 py-1 font-mono text-xs font-normal
+           whitespace-nowrap text-secondary-text drop-shadow-md dark:bg-dark-secondary"
+    data-live-visitors-tooltip
+  ></span>
+</div>
 
 <style>
+  /* the same box as the corner bracket, so the count sits centred inside it */
   .live-visitors {
     position: absolute;
     z-index: 100;
-    top: calc(1.25rem + env(safe-area-inset-top));
-    right: calc(1.25rem + env(safe-area-inset-right));
+    top: calc(0.75rem + env(safe-area-inset-top));
+    right: calc(0.75rem + env(safe-area-inset-right));
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin: 0;
-    font: normal 0.75rem/1 monospace;
-    font-variant-numeric: tabular-nums;
-    color: var(--secondary-text);
-    white-space: nowrap;
-    pointer-events: none;
+    justify-content: center;
+    min-width: 2.125rem;
+    height: 2.125rem;
+    padding: 2px 2px 0 0;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-4px);
-    transition: opacity 200ms ease-out, transform 200ms ease-out, visibility 200ms;
+    transition: opacity 200ms ease-out, visibility 200ms;
   }
 
   .live-visitors[data-shown] {
     opacity: 1;
     visibility: visible;
-    transform: none;
   }
 
-  /* the header links run right up to the corner on a phone */
-  .live-visitors-word {
-    display: none;
-  }
-
-  @media (min-width: 640px) {
-    .live-visitors-word {
-      display: inline;
-    }
+  .live-visitors-count {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding-inline: 0.25rem;
+    font-size: 0.875rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    border-radius: 0.5rem;
   }
 
   .live-visitors-dot {
-    position: relative;
-    width: 0.4rem;
-    height: 0.4rem;
+    width: 0.375rem;
+    height: 0.375rem;
     border-radius: 50%;
     background: linear-gradient(45deg, #ff33cc, #cc77ff);
   }
 
-  .live-visitors-dot::after {
-    content: "";
+  /* hangs below, flush right, since there is no room above or beside the corner */
+  .live-visitors-tooltip {
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: inherit;
-    animation: live-visitors-ping 2.4s var(--ease-out) infinite;
+    inset-block-start: calc(100% + 0.375rem);
+    inset-inline-end: 0;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity 120ms ease,
+      visibility 120ms;
   }
 
-  @keyframes live-visitors-ping {
-    from {
-      transform: scale(1);
-      opacity: 0.6;
-    }
-    70%,
-    to {
-      transform: scale(2.6);
-      opacity: 0;
-    }
+  .live-visitors[data-shown] .live-visitors-count:is(:hover, :focus-visible) + .live-visitors-tooltip {
+    visibility: visible;
+    opacity: 1;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .live-visitors {
+    .live-visitors,
+    .live-visitors-tooltip {
       transition: none;
-    }
-    .live-visitors-dot::after {
-      animation: none;
-      opacity: 0;
     }
   }
 </style>
@@ -122,9 +118,9 @@
     if (!badge) return;
     badge.toggleAttribute("data-shown", count > 1);
     const number = badge.querySelector("[data-live-visitors-count]");
-    const label = badge.querySelector("[data-live-visitors-label]");
+    const tooltip = badge.querySelector("[data-live-visitors-tooltip]");
     if (number) number.textContent = String(count);
-    if (label) label.textContent = count > 1 ? `${count} people on the site right now` : "";
+    if (tooltip) tooltip.textContent = count > 1 ? `${count} people on the site right now` : "";
   }
 
   function settle(next: number) {
