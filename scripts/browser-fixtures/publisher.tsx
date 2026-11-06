@@ -149,7 +149,8 @@ const analyticsTarget = (
   next_at: Date.now() + 48 * 60_000,
   analytics_error: null,
 });
-// Beside it, a newer text post the tab leaves out until asked, and an older photo post whose upload is still there.
+// Beside it, a newer text post the tab leaves out until asked, an older photo post whose upload is still there and
+// has no thumbnail yet, and an older video that kept one before its upload expired.
 const analyticsPhoto = "00000000-0000-4000-8000-0000000a0002";
 const analytics = {
   posts: [
@@ -157,12 +158,14 @@ const analytics = {
       id: "00000000-0000-4000-8000-0000000a0003",
       created_at: minutes(60),
       post: { kind: "text", title: "", caption: "meow", media: [], alt: "" },
+      thumbnail: null,
       targets: [analyticsTarget("bluesky", { likes: 2 }, null)],
     },
     {
       id: analyticsPost,
       created_at: minutes(3 * 24 * 60),
       post: { kind: "video", title: "A film about films", caption: "Titles fade over a dark stage.", media: [], alt: "" },
+      thumbnail: null,
       targets: [
         { ...analyticsTarget("youtube", youtubeShort, youtubeShort), url: "https://www.youtube.com/shorts/CJs864wmjB0" },
         { ...analyticsTarget("tiktok", tiktokVideo, tiktokVideo), earlier_sign_in: 1 },
@@ -175,7 +178,15 @@ const analytics = {
       id: analyticsPhoto,
       created_at: minutes(5 * 24 * 60),
       post: { kind: "photo", title: "", caption: "Two frames from the gallery walk", media: ["m-photo-a"], alt: "" },
+      thumbnail: null,
       targets: [analyticsTarget("instagram", { views: 310, likes: 41 }, null)],
+    },
+    {
+      id: "00000000-0000-4000-8000-0000000a0004",
+      created_at: minutes(9 * 24 * 60),
+      post: { kind: "video", title: "An older reel", caption: "", media: ["m-expired"], alt: "" },
+      thumbnail: 1_761_900_000_000,
+      targets: [{ ...analyticsTarget("tiktok", { views: 75 }, null), id: "analytics-tiktok-older" }],
     },
   ],
   next: null,
@@ -276,6 +287,7 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path.startsWith("analytics/") && method === "GET")
     return json({ samples: path === `analytics/${analyticsPost}` ? samples : [] });
   if (path === "media") return json({ id: crypto.randomUUID() });
+  if (/^jobs\/[^/]+\/thumbnail$/.test(path) && method === "PUT") return json({ ok: true });
   if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
   if (path === "stop" || path === "mark-published" || path === "unlink") return json({ ok: true });
   if (path === "link") return json({ id: crypto.randomUUID(), platform: "tiktok" }, 201);

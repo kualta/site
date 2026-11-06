@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { previewSources, youtubeThumbnail } from "./preview";
+import { previewSources, storedThumbnail, youtubeThumbnail } from "./preview";
 import { defaultView, kindsOf, readPath, readView, tabPath, writeView } from "./route";
 
 test("the path says which tab is open, on the publisher's own host and under /publish", () => {
@@ -42,13 +42,19 @@ test("a post's picture comes from its cover, then YouTube, then its first upload
   expect(youtubeThumbnail("https://youtu.be/CJs864wmjB0")).toBe("https://i.ytimg.com/vi/CJs864wmjB0/hqdefault.jpg");
   expect(youtubeThumbnail("https://www.tiktok.com/@_/video/7702543685921066262")).toBeNull();
   expect(previewSources({ kind: "video", media: ["v"], cover: "c" }, [null, youtube])).toEqual([
-    { src: "/api/publisher/media/c" },
+    { src: "/api/publisher/media/c", upload: true },
     { src: "https://i.ytimg.com/vi/CJs864wmjB0/hqdefault.jpg" },
-    { src: "/api/publisher/media/v#t=0.1", video: true },
+    { src: "/api/publisher/media/v#t=0.1", video: true, upload: true },
   ]);
-  expect(previewSources({ kind: "photo", media: ["p", "q"] }, [])).toEqual([{ src: "/api/publisher/media/p" }]);
+  expect(previewSources({ kind: "photo", media: ["p", "q"] }, [])).toEqual([
+    { src: "/api/publisher/media/p", upload: true },
+  ]);
   expect(previewSources({ kind: "mixed", media: ["v", "p"], mediaKinds: ["video", "photo"] }, [])).toEqual([
-    { src: "/api/publisher/media/v#t=0.1", video: true },
+    { src: "/api/publisher/media/v#t=0.1", video: true, upload: true },
   ]);
+  // A kept thumbnail comes before everything else.
+  const stored = storedThumbnail("job", 5);
+  expect(stored).toBe("/api/publisher/thumbnails/job?v=5");
+  expect(previewSources({ kind: "photo", media: ["p"] }, [], stored)[0]).toEqual({ src: stored });
   expect(previewSources({ kind: "text", media: [] }, [])).toEqual([]);
 });
