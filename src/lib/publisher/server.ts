@@ -7,12 +7,14 @@ import {
   needsTitle,
   platformNames,
   platforms,
+  postLabel,
   publicOnly,
   unsupported,
   type MetadataPolicy,
   type Platform,
   type PostKind,
 } from "./presets";
+import { postKey, publicationLink } from "./links";
 import { isTag, problem, renderVariant, type Variant } from "./variants";
 
 export interface MediaBucket {
@@ -252,7 +254,18 @@ export function postUploads(
 export function postMedia(post: Pick<Post, "kind" | "mediaKinds" | "media" | "zh" | "cover">): string[] {
   return postUploads(post).map((upload) => upload.id);
 }
-/** Sends a post that already went out to more destinations, checked again as if it were new. */
+/**
+ * SQL for whether publication `t` went out through the helper before the platform's sign-in last changed, so it may
+ * be on another account than the one connected now. A reconnect to the same account counts too: the helper can't tell
+ * accounts apart. Grain and Bluesky always post as the owner's one DID.
+ */
+export const EARLIER_SIGN_IN = `(t.linked=0 AND t.state='succeeded' AND t.platform NOT IN ('grain','bluesky')
+  AND EXISTS(SELECT 1 FROM publisher_connections c
+  WHERE c.platform=t.platform AND c.state='succeeded' AND c.created_at>COALESCE(t.finished_at,t.started_at,0)))`;
+/**
+ * Sends a post that already went out to more destinations, checked again as if it were new. A destination it reached
+ * only under an earlier sign-in can take it again, on the account connected now.
+ */
 export async function addDestinations(
   db: NewsletterDB,
   bucket: Pick<MediaBucket, "head">,
@@ -265,14 +278,18 @@ export async function addDestinations(
     .first<{ payload: string }>();
   if (!job) throw new PostError("Invalid post");
   const post = JSON.parse(job.payload) as Post;
+  const { results: current } = await db
+    .prepare(`SELECT DISTINCT t.platform FROM publisher_targets t WHERE t.job_id = ? AND NOT ${EARLIER_SIGN_IN}`)
+    .bind(input.job)
+    .all<{ platform: Platform }>();
   const added = platforms.filter(
-    (p) => Array.isArray(input.platforms) && input.platforms.includes(p) && !post.platforms.includes(p),
+    (p) => Array.isArray(input.platforms) && input.platforms.includes(p) && !current.some((row) => row.platform === p),
   );
   if (!added.length) throw new PostError("Choose where to crosspost");
   // The title and Chinese version can be filled in now when the post went out without them.
   const next = validatePost({
     ...post,
-    platforms: [...post.platforms, ...added],
+    platforms: [...post.platforms, ...added.filter((p) => !post.platforms.includes(p))],
     // A post from before a destination existed has no policy saved for it.
     metadata: { ...defaultMetadata(), ...post.metadata },
     title: !post.title.trim() && typeof input.title === "string" ? input.title : post.title,
@@ -292,6 +309,58 @@ export async function addDestinations(
     ),
   ]);
   return added;
+}
+/**
+ * Adds a post the owner published themselves, such as a repost on a new account, to a post in History, so its stats
+ * count toward it. The helper starts reading them as it does for anything it published.
+ */
+export async function linkPublication(
+  db: NewsletterDB,
+  input: { job?: unknown; url?: unknown },
+): Promise<{ id: string; platform: Platform }> {
+  if (!validId(input.job)) throw new PostError("Invalid post");
+  const link = typeof input.url === "string" && input.url.length <= 2000 ? publicationLink(input.url) : null;
+  if (!link || "error" in link)
+    throw new PostError(link?.error ?? "Paste the post's full link, starting with https://");
+  if (!(await db.prepare("SELECT id FROM publisher_jobs WHERE id = ?").bind(input.job).first()))
+    throw new PostError("Invalid post");
+  const { results } = await db
+    .prepare(
+      "SELECT t.url, j.payload FROM publisher_targets t JOIN publisher_jobs j ON j.id = t.job_id WHERE t.platform = ? AND t.url IS NOT NULL",
+    )
+    .bind(link.platform)
+    .all<{ url: string; payload: string }>();
+  const key = postKey(link.url);
+  const taken = results.find((row) => postKey(row.url) === key);
+  if (taken)
+    throw new PostError(
+      `This ${platformNames[link.platform]} post is already in “${postLabel(JSON.parse(taken.payload) as Post)}”`,
+    );
+  const id = crypto.randomUUID();
+  await db
+    .prepare(
+      "INSERT INTO publisher_targets (id, job_id, platform, state, url, finished_at, linked) VALUES (?, ?, ?, 'succeeded', ?, ?, 1)",
+    )
+    .bind(id, input.job, link.platform, link.url, Date.now())
+    .run();
+  return { id, platform: link.platform };
+}
+/** Takes a linked post and its stats out of History. The post itself stays up on its platform. */
+export async function unlinkPublication(db: NewsletterDB, job: string, target: string): Promise<boolean> {
+  const linked = await db
+    .prepare(
+      "SELECT id FROM publisher_targets WHERE id = ? AND job_id = ? AND linked = 1 AND id NOT IN (SELECT target_id FROM publisher_deletions WHERE state IN ('queued','working'))",
+    )
+    .bind(target, job)
+    .first();
+  if (!linked) return false;
+  await db.batch([
+    db.prepare("DELETE FROM publisher_metric_snapshots WHERE target_id = ?").bind(target),
+    db.prepare("DELETE FROM publisher_metric_checks WHERE target_id = ?").bind(target),
+    db.prepare("DELETE FROM publisher_deletions WHERE target_id = ?").bind(target),
+    db.prepare("DELETE FROM publisher_targets WHERE id = ? AND linked = 1").bind(target),
+  ]);
+  return true;
 }
 export async function authorizeHelper(request: Request, db: NewsletterDB): Promise<boolean> {
   const token = request.headers.get("Authorization")?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
@@ -335,26 +404,26 @@ export async function claimTarget(db: NewsletterDB, supported: Platform[], { car
 }
 
 /** Releases a target at once. Its claim stays, so a success the laptop confirms late still lands; a retry clears it. */
-export async function stopTarget(db: NewsletterDB, job: string, platform: string): Promise<boolean> {
+export async function stopTarget(db: NewsletterDB, job: string, target: string): Promise<boolean> {
   const result = await db
     .prepare(
       `UPDATE publisher_targets SET
         state = CASE state WHEN 'queued' THEN 'failed' ELSE 'uncertain' END,
         message = CASE state WHEN 'queued' THEN 'Stopped before publishing.' ELSE 'Stopped while publishing. Check the destination before publishing again.' END,
         finished_at = ?
-      WHERE job_id = ? AND platform = ? AND state IN ('queued','working')`,
+      WHERE id = ? AND job_id = ? AND state IN ('queued','working')`,
     )
-    .bind(Date.now(), job, platform)
+    .bind(Date.now(), target, job)
     .run();
   return result.meta.changes > 0;
 }
 /** Records a post the owner found on the platform, when publishing couldn't confirm it. */
-export async function markPublished(db: NewsletterDB, job: string, platform: string, url: string): Promise<boolean> {
+export async function markPublished(db: NewsletterDB, job: string, target: string, url: string): Promise<boolean> {
   const result = await db
     .prepare(
-      "UPDATE publisher_targets SET state = 'succeeded', url = ?, message = NULL, finished_at = ? WHERE job_id = ? AND platform = ? AND state = 'uncertain'",
+      "UPDATE publisher_targets SET state = 'succeeded', url = ?, message = NULL, finished_at = ? WHERE id = ? AND job_id = ? AND state = 'uncertain'",
     )
-    .bind(url, Date.now(), job, platform)
+    .bind(url, Date.now(), target, job)
     .run();
   return result.meta.changes > 0;
 }

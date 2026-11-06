@@ -1,5 +1,5 @@
 import type { NewsletterDB } from "../newsletter/types";
-import { validId } from "./server";
+import { EARLIER_SIGN_IN, validId } from "./server";
 import type { Platform } from "./presets";
 
 export async function historyPage(db: NewsletterDB, cursor: string | null) {
@@ -18,7 +18,8 @@ export async function historyPage(db: NewsletterDB, cursor: string | null) {
   if (!page.length) return { posts: [], next: null };
   const { results: targets } = await db
     .prepare(
-      `SELECT t.*, d.state AS deletion_state, d.message AS deletion_message, d.finished_at AS deleted_at
+      `SELECT t.*, d.state AS deletion_state, d.message AS deletion_message, d.finished_at AS deleted_at,
+     ${EARLIER_SIGN_IN} AS earlier_sign_in
      FROM publisher_targets t LEFT JOIN publisher_deletions d ON d.target_id=t.id
      WHERE t.job_id IN (${page.map(() => "?").join(",")}) ORDER BY t.rowid`,
     )
@@ -36,20 +37,21 @@ export async function historyPage(db: NewsletterDB, cursor: string | null) {
   };
 }
 
-export async function queueDeletion(db: NewsletterDB, job: string, platform: Platform | undefined) {
+/** Deletes one publication, or without `target` every one the post has, once nothing of it is still publishing. */
+export async function queueDeletion(db: NewsletterDB, job: string, target: string | undefined) {
   // Only confirmed publications with a URL can be deleted. Retry is explicit;
   // completed/active deletions never get replayed by repeated requests.
   return db
     .prepare(`INSERT INTO publisher_deletions(target_id,requested_at)
     SELECT id, ? FROM publisher_targets WHERE job_id=? AND state='succeeded' AND url IS NOT NULL
     ${
-      platform
-        ? "AND platform=?"
+      target
+        ? "AND id=?"
         : "AND NOT EXISTS (SELECT 1 FROM publisher_targets p WHERE p.job_id=publisher_targets.job_id AND p.state IN ('queued','working'))"
     }
     ON CONFLICT(target_id) DO UPDATE SET state='queued',claim=NULL,started_at=NULL,finished_at=NULL,message=NULL,requested_at=excluded.requested_at
     WHERE publisher_deletions.state IN ('failed','uncertain')`)
-    .bind(Date.now(), job, ...(platform ? [platform] : []))
+    .bind(Date.now(), job, ...(target ? [target] : []))
     .run();
 }
 

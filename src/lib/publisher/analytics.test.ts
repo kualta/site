@@ -33,9 +33,11 @@ function fixture() {
   const sql = new Database(":memory:");
   for (const file of [
     "0002_publisher.sql",
+    "0003_publisher_accounts.sql",
     "0005_publisher_deletions.sql",
     "0006_publisher_analytics.sql",
     "0008_publisher_target_finished.sql",
+    "0009_publisher_reposts.sql",
   ])
     sql.exec(readFileSync(`migrations/${file}`, "utf8"));
   const db = {
@@ -350,6 +352,29 @@ test("metrics preserve unavailable versus zero and never double count views plus
     [35, 2],
   ]);
   expect(series.at(-1)?.parts).toEqual({ youtube: 15, tiktok: 20 });
+});
+test("a repost's counts add to the original's on the same platform instead of replacing them", async () => {
+  const series = metricSeries(
+    [
+      { target_id: "old", platform: "tiktok", observed_at: 0, metrics: { views: 40 } },
+      { target_id: "repost", platform: "tiktok", observed_at: 3_600_000, metrics: { views: 5 } },
+      { target_id: "old", platform: "tiktok", observed_at: 7_200_000, metrics: { views: 41 } },
+    ],
+    "exposure",
+  );
+  expect(series.map((p) => [p.value, p.coverage, p.parts.tiktok])).toEqual([
+    [40, 1, 40],
+    [45, 2, 45],
+    [46, 2, 46],
+  ]);
+  const f = fixture();
+  const [old, repost] = [f.target("tiktok"), f.target("tiktok")];
+  f.sql.query("INSERT INTO publisher_metric_snapshots VALUES(?,?,?)").run(old, 1000, JSON.stringify({ views: 40 }));
+  f.sql.query("INSERT INTO publisher_metric_snapshots VALUES(?,?,?)").run(repost, 2000, JSON.stringify({ views: 5 }));
+  const targets = (await analyticsPage(f.db, null)).posts[0].targets;
+  expect(targets.map((t: any) => t.metrics.views)).toEqual([40, 5]);
+  expect(new Set((await analyticsSeries(f.db, f.job, 3000)).map((s) => s.target_id))).toEqual(new Set([old, repost]));
+  f.sql.close();
 });
 test("a platform's band only starts once it reports, and every platform has a place in the stack", () => {
   const series = metricSeries(

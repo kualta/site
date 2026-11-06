@@ -39,6 +39,10 @@ type Target = {
   checked_at: number | null;
   analytics_error: string | null;
   deletion_state: string | null;
+  /** 1 when the owner published it themselves and linked it to the post. */
+  linked: number;
+  /** 1 when the helper published it before the platform's sign-in last changed. */
+  earlier_sign_in: number;
 };
 type Post = { id: string; created_at: number; post: { title: string; caption: string }; targets: Target[] };
 type Page = { posts: Post[]; next: string | null };
@@ -67,10 +71,17 @@ function Spinner() {
 function Block({ height, width }: { height: number; width?: number | string }) {
   return <div className="publisher-skeleton" style={{ height, width }} />;
 }
+/** Beside a repost on the same platform, what tells the two apart. */
+function origin(target: Target) {
+  if (target.linked) return "Linked";
+  if (target.earlier_sign_in) return "Earlier sign-in";
+  return "";
+}
 function targetStatus(target: Target) {
   if (target.deletion_state === "deleted") return "Deleted · history retained";
   if (target.state !== "succeeded") return target.state;
-  return target.analytics_error || (target.observed_at ? "" : "Waiting for first sample");
+  const reading = target.analytics_error || (target.observed_at ? "" : "Waiting for first sample");
+  return [origin(target), reading].filter(Boolean).join(" · ");
 }
 function Loading() {
   return (
@@ -573,9 +584,9 @@ export default function PublisherAnalytics({ request, online }: Props) {
                   Platform
                   <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
                     <option value="all">All platforms</option>
-                    {post.targets.map((t) => (
-                      <option key={t.id} value={t.platform}>
-                        {platformNames[t.platform]}
+                    {[...new Set(post.targets.map((t) => t.platform))].map((p) => (
+                      <option key={p} value={p}>
+                        {platformNames[p]}
                       </option>
                     ))}
                   </select>

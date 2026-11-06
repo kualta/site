@@ -3,6 +3,8 @@ import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import {
   addDestinations,
+  linkPublication,
+  unlinkPublication,
   markPublished,
   postMedia,
   postUploads,
@@ -28,8 +30,15 @@ const post = () => ({
 });
 function database() {
   const sqlite = new Database(":memory:");
-  sqlite.exec(readFileSync("migrations/0002_publisher.sql", "utf8"));
-  sqlite.exec(readFileSync("migrations/0003_publisher_accounts.sql", "utf8"));
+  for (const file of [
+    "0002_publisher.sql",
+    "0003_publisher_accounts.sql",
+    "0005_publisher_deletions.sql",
+    "0006_publisher_analytics.sql",
+    "0008_publisher_target_finished.sql",
+    "0009_publisher_reposts.sql",
+  ])
+    sqlite.exec(readFileSync(`migrations/${file}`, "utf8"));
   const db = {
     prepare(sql: string) {
       let values: unknown[] = [];
@@ -40,6 +49,9 @@ function database() {
         },
         async first() {
           return sqlite.query(sql).get(...(values as never[]));
+        },
+        async all() {
+          return { results: sqlite.query(sql).all(...(values as never[])) };
         },
         async run() {
           return { meta: sqlite.query(sql).run(...(values as never[])) };
@@ -455,7 +467,6 @@ test("a post from before Farcaster and Lens existed can still be crossposted to 
 });
 test("stopping releases a target at once, and only a retry takes its claim away", async () => {
   const { db, sqlite } = database();
-  sqlite.exec("ALTER TABLE publisher_targets ADD COLUMN finished_at INTEGER");
   const job = crypto.randomUUID();
   sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, '{}', 1)").run(job);
   const claim = crypto.randomUUID();
@@ -471,24 +482,24 @@ test("stopping releases a target at once, and only a retry takes its claim away"
     };
   expect(await targetActive(db, "working", claim)).toBe(true);
 
-  expect(await stopTarget(db, job, "tiktok")).toBe(true);
+  expect(await stopTarget(db, crypto.randomUUID(), "working")).toBe(false);
+  expect(await stopTarget(db, job, "working")).toBe(true);
   expect(target("working").state).toBe("uncertain");
   expect(target("working").message).toContain("Check the destination");
   expect(target("working").claim).toBe(claim);
   expect(await targetActive(db, "working", claim)).toBe(false);
 
-  expect(await stopTarget(db, job, "instagram")).toBe(true);
+  expect(await stopTarget(db, job, "waiting")).toBe(true);
   expect(target("waiting").state).toBe("failed");
   expect(target("waiting").message).toBe("Stopped before publishing.");
 
   // Finished or already stopped targets stay as they are.
-  expect(await stopTarget(db, job, "youtube")).toBe(false);
+  expect(await stopTarget(db, job, "done")).toBe(false);
   expect(target("done").state).toBe("succeeded");
-  expect(await stopTarget(db, job, "tiktok")).toBe(false);
+  expect(await stopTarget(db, job, "working")).toBe(false);
 });
 test("only a destination waiting to be checked can be marked as published", async () => {
   const { db, sqlite } = database();
-  sqlite.exec("ALTER TABLE publisher_targets ADD COLUMN finished_at INTEGER");
   const job = crypto.randomUUID();
   sqlite.query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, '{}', 1)").run(job);
   const add = sqlite.query(
@@ -497,12 +508,104 @@ test("only a destination waiting to be checked can be marked as published", asyn
   add.run("checking", job, "instagram", "uncertain");
   add.run("publishing", job, "tiktok", "working");
   const url = "https://www.instagram.com/reel/abc/";
-  expect(await markPublished(db, job, "instagram", url)).toBe(true);
+  expect(await markPublished(db, job, "checking", url)).toBe(true);
   expect(sqlite.query("SELECT state, url, message FROM publisher_targets WHERE id = 'checking'").get()).toEqual({
     state: "succeeded",
     url,
     message: null,
   });
-  expect(await markPublished(db, job, "tiktok", url)).toBe(false);
-  expect(await markPublished(db, job, "instagram", url)).toBe(false);
+  expect(await markPublished(db, job, "publishing", url)).toBe(false);
+  expect(await markPublished(db, job, "checking", url)).toBe(false);
+});
+/** A video that went out to TikTok and YouTube through the helper, before TikTok's sign-in changed at `signedIn`. */
+function reposted(signedIn: number | null) {
+  const job = validatePost({ ...post(), kind: "video", platforms: ["tiktok", "youtube"] });
+  const { db, sqlite, payload } = published(job);
+  sqlite
+    .query(
+      "UPDATE publisher_targets SET url = 'https://www.tiktok.com/@_/video/7702543685921066262', finished_at = 10 WHERE platform = 'tiktok'",
+    )
+    .run();
+  sqlite
+    .query(
+      "UPDATE publisher_targets SET url = 'https://www.youtube.com/shorts/-rUzAfPDlRQ', finished_at = 10 WHERE platform = 'youtube'",
+    )
+    .run();
+  if (signedIn !== null)
+    sqlite
+      .query(
+        "INSERT INTO publisher_connections (id, platform, action, state, created_at) VALUES (?, 'tiktok', 'disconnect', 'succeeded', ?)",
+      )
+      .run(crypto.randomUUID(), signedIn);
+  const targets = () =>
+    sqlite.query("SELECT platform, state, url, linked FROM publisher_targets ORDER BY rowid").all() as {
+      platform: string;
+      state: string;
+      url: string | null;
+      linked: number;
+    }[];
+  return { job, db, sqlite, payload, targets };
+}
+test("a platform reached only under an earlier sign-in can take the post again, once", async () => {
+  const kept = { head: async () => ({}) };
+  const before = reposted(5);
+  await expect(addDestinations(before.db, kept, { job: before.job.id, platforms: ["tiktok"] })).rejects.toThrow(
+    "Choose where",
+  );
+  const { job, db, payload, targets } = reposted(20);
+  expect(await addDestinations(db, kept, { job: job.id, platforms: ["tiktok", "youtube"] })).toEqual(["tiktok"]);
+  expect(payload().platforms).toEqual(["tiktok", "youtube"]);
+  expect(
+    targets()
+      .filter((t) => t.platform === "tiktok")
+      .map((t) => t.state),
+  ).toEqual(["succeeded", "queued"]);
+  // The repost waiting to go out is on the account connected now.
+  await expect(addDestinations(db, kept, { job: job.id, platforms: ["tiktok"] })).rejects.toThrow("Choose where");
+});
+test("a post published by hand links to a post in History once, and its stats start being read", async () => {
+  const { job, db, sqlite, targets } = reposted(20);
+  await expect(
+    linkPublication(db, { job: job.id, url: "https://www.tiktok.com/@kualtq/video/7702543685921066262?lang=en" }),
+  ).rejects.toThrow("already in “A photo”");
+  await expect(linkPublication(db, { job: job.id, url: "https://vm.tiktok.com/ZMabc/" })).rejects.toThrow(
+    "copy the link from its page",
+  );
+  await expect(linkPublication(db, { job: crypto.randomUUID(), url: "https://youtu.be/dQw4w9WgXcQ" })).rejects.toThrow(
+    "Invalid post",
+  );
+  const linked = await linkPublication(db, {
+    job: job.id,
+    url: "https://www.tiktok.com/@kualtq/video/7710000000000000001?is_from_webapp=1",
+  });
+  expect(linked.platform).toBe("tiktok");
+  expect(targets().at(-1)).toEqual({
+    platform: "tiktok",
+    state: "succeeded",
+    url: "https://www.tiktok.com/@kualtq/video/7710000000000000001",
+    linked: 1,
+  });
+  expect(sqlite.query("SELECT next_at FROM publisher_metric_checks WHERE target_id = ?").get(linked.id)).toEqual({
+    next_at: 0,
+  });
+  // A linked repost is on the account in use, so the post doesn't offer to go out there again.
+  await expect(addDestinations(db, { head: async () => ({}) }, { job: job.id, platforms: ["tiktok"] })).rejects.toThrow(
+    "Choose where",
+  );
+});
+test("unlinking takes a linked post and its stats out, and leaves published ones alone", async () => {
+  const { job, db, sqlite, targets } = reposted(20);
+  const { id } = await linkPublication(db, { job: job.id, url: "https://www.instagram.com/kualta/reel/DfDQW2Ry8cO/" });
+  expect(targets().at(-1)?.url).toBe("https://www.instagram.com/reel/DfDQW2Ry8cO/");
+  sqlite.query("INSERT INTO publisher_metric_snapshots VALUES (?, 1, '{\"views\":3}')").run(id);
+  const original = (sqlite.query("SELECT id FROM publisher_targets WHERE linked = 0 LIMIT 1").get() as { id: string })
+    .id;
+  expect(await unlinkPublication(db, job.id, original)).toBe(false);
+  expect(await unlinkPublication(db, crypto.randomUUID(), id)).toBe(false);
+  expect(await unlinkPublication(db, job.id, id)).toBe(true);
+  expect(targets().map((t) => t.platform)).toEqual(["tiktok", "youtube"]);
+  expect(sqlite.query("SELECT COUNT(*) AS n FROM publisher_metric_snapshots").get()).toEqual({ n: 0 });
+  expect(sqlite.query("SELECT COUNT(*) AS n FROM publisher_metric_checks WHERE target_id = ?").get(id)).toEqual({
+    n: 0,
+  });
 });

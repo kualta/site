@@ -19,6 +19,8 @@ const target = (platform: string, state: string, extra: Record<string, unknown> 
   started_at: state === "queued" ? null : Date.now() - 40_000,
   finished_at: ["succeeded", "failed", "uncertain"].includes(state) ? Date.now() - 20_000 : null,
   deleted_at: "deletion_state" in extra ? Date.now() - 10_000 : null,
+  linked: 0,
+  earlier_sign_in: 0,
   ...extra,
 });
 // Two days of posts plus an older one, covering every destination state the list shows.
@@ -55,6 +57,32 @@ const history = {
       created_at: minutes(24 * 60),
       post: { kind: "video", title: "A clip", caption: "", media: ["m-expired"], alt: "" },
       targets: [target("youtube", "working"), target("tiktok", "queued")],
+    },
+    // TikTok's sign-in changed since these went out: one can go to the new account, the other has its repost linked.
+    {
+      id: "00000000-0000-4000-8000-000000000005",
+      created_at: minutes(24 * 60),
+      post: { kind: "video", title: "I LOVE EARTHQUAKES", caption: "", media: ["m-quake"], alt: "" },
+      targets: [target("youtube", "succeeded"), target("tiktok", "succeeded", { earlier_sign_in: 1 })],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000006",
+      created_at: minutes(24 * 60),
+      post: {
+        kind: "video",
+        title: "Colombian halloween is pure cinema",
+        caption: "",
+        media: ["m-halloween"],
+        alt: "",
+      },
+      targets: [
+        target("tiktok", "succeeded", { id: "tiktok-earlier", earlier_sign_in: 1 }),
+        target("tiktok", "succeeded", {
+          id: "tiktok-repost",
+          linked: 1,
+          url: "https://www.tiktok.com/@kualtq/video/7710000000000000001",
+        }),
+      ],
     },
     {
       id: "00000000-0000-4000-8000-000000000004",
@@ -129,7 +157,9 @@ const analytics = {
       post: { kind: "video", title: "A film about films", caption: "", media: [], alt: "" },
       targets: [
         analyticsTarget("youtube", youtubeShort, youtubeShort),
-        analyticsTarget("tiktok", tiktokVideo, tiktokVideo),
+        { ...analyticsTarget("tiktok", tiktokVideo, tiktokVideo), earlier_sign_in: 1 },
+        // Reposted by hand on a new account and linked, so its views add to the original's.
+        { ...analyticsTarget("tiktok", { views: 30, likes: 4 }, null), id: "analytics-tiktok-repost", linked: 1 },
         analyticsTarget("bluesky", { likes: 12, comments: 2, shares: 3 }, null),
       ],
     },
@@ -158,14 +188,24 @@ const overview = {
     { platform: "tiktok", at: minutes(3 * 24 * 60), metrics: tiktokVideo },
   ],
 };
-const samples = [48, 24, 12, 1].flatMap((hours) =>
-  ["youtube", "tiktok"].map((platform) => ({
+const samples = [48, 24, 12, 1].flatMap((hours) => [
+  ...["youtube", "tiktok"].map((platform) => ({
     target_id: `analytics-${platform}`,
     platform,
     observed_at: minutes(hours * 60),
     metrics: { views: Math.round((platform === "youtube" ? 1213 : 96) / (1 + hours / 24)) },
   })),
-);
+  ...(hours < 24
+    ? [
+        {
+          target_id: "analytics-tiktok-repost",
+          platform: "tiktok",
+          observed_at: minutes(hours * 60 - 1),
+          metrics: { views: Math.round(30 / (1 + hours / 24)) },
+        },
+      ]
+    : []),
+]);
 // Both drafts wait in Cloudflare: the plain one sent half an hour ago, the one with a Chinese version yesterday.
 let drafts = [
   { id: draft.id, title: draft.title, caption: draft.caption, video: draftVideo, chinese: false, created: minutes(30) },
@@ -218,7 +258,8 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === `analytics/${analyticsPost}`) return json({ samples });
   if (path === "media") return json({ id: crypto.randomUUID() });
   if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
-  if (path === "stop" || path === "mark-published") return json({ ok: true });
+  if (path === "stop" || path === "mark-published" || path === "unlink") return json({ ok: true });
+  if (path === "link") return json({ id: crypto.randomUUID(), platform: "tiktok" }, 201);
   if (path === "crosspost") return json({ platforms: JSON.parse(String(init.body)).platforms });
   if (path === "translate") return json({ title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
   return json({ error: `Unexpected ${method} ${path}` }, 404);

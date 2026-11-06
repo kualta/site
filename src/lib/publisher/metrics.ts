@@ -96,19 +96,24 @@ export function watchTime(ms: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 const HOUR = 3_600_000;
-/** One point per hour. Carry forward each destination's latest observation; never fill missing counts with zero. */
+/**
+ * One point per hour. Carry forward each publication's latest observation; never fill missing counts with zero. A
+ * platform's part adds up its publications, such as a repost on a new account beside the original.
+ */
 export function metricSeries(samples: Sample[], metric: Metric) {
-  const latest = new Map<Platform, number>();
+  const latest = new Map<string, { platform: Platform; value: number }>();
   const hours = new Map<number, SeriesPoint>();
   for (const sample of [...samples].sort((a, b) => a.observed_at - b.observed_at)) {
     const value = metricValue(sample.metrics, metric);
     if (value === null) continue;
-    latest.set(sample.platform, value);
+    latest.set(sample.target_id, { platform: sample.platform, value });
+    const parts: SeriesPoint["parts"] = {};
+    for (const reading of latest.values()) parts[reading.platform] = (parts[reading.platform] ?? 0) + reading.value;
     hours.set(Math.floor(sample.observed_at / HOUR), {
       at: sample.observed_at,
-      value: combined([...latest.values()])!,
+      value: combined(Object.values(parts))!,
       coverage: latest.size,
-      parts: Object.fromEntries(latest),
+      parts,
     });
   }
   return [...hours.values()];
