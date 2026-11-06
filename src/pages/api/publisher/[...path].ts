@@ -3,9 +3,12 @@ import {
   analyticsPage,
   analyticsSeries,
   claimAnalytics,
+  MAX_THUMBNAIL,
   parseKinds,
+  readThumbnail,
   requestRefresh,
   saveAnalytics,
+  storeThumbnail,
 } from "@/lib/publisher/analytics";
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
@@ -75,6 +78,25 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const utcOffset = Number(params.get("utcOffset") ?? 0);
       if (!Number.isInteger(utcOffset) || Math.abs(utcOffset) > 14 * 60) return json({ error: "Invalid offset" }, 400);
       return json(await analyticsOverview(db, utcOffset, parseKinds(params.get("kinds"))));
+    }
+    const thumbnailOf = path.match(/^jobs\/([^/]+)\/thumbnail$/)?.[1];
+    if (thumbnailOf !== undefined && request.method === "PUT") {
+      if (!validId(thumbnailOf)) return json({ error: "Invalid post" }, 400);
+      if (Number(request.headers.get("Content-Length")) > MAX_THUMBNAIL)
+        return json({ error: "A thumbnail can be up to 200 KB" }, 413);
+      const type = request.headers.get("Content-Type") || "";
+      const saved = await storeThumbnail(db, thumbnailOf, type, await request.arrayBuffer());
+      return saved ? json({ ok: true }) : json({ error: "No such post" }, 404);
+    }
+    if (path.startsWith("thumbnails/") && request.method === "GET") {
+      const id = path.slice("thumbnails/".length);
+      if (!validId(id)) return json({ error: "Invalid post" }, 400);
+      const thumbnail = await readThumbnail(db, id);
+      if (!thumbnail) return json({ error: "No thumbnail" }, 404);
+      // Its address changes with each new thumbnail, so the browser can keep this one.
+      headers.set("Cache-Control", "private, max-age=31536000, immutable");
+      headers.set("Content-Type", thumbnail.type);
+      return new Response(thumbnail.data, { headers });
     }
     if (path.startsWith("analytics/") && request.method === "GET") {
       const id = path.slice("analytics/".length);
@@ -468,6 +490,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const media = await db.prepare("SELECT id FROM publisher_media WHERE job_id = ?").bind(id).all<{ id: string }>();
       await db.batch([
         db.prepare("DELETE FROM publisher_targets WHERE job_id = ?").bind(id),
+        db.prepare("DELETE FROM publisher_thumbnails WHERE job_id = ?").bind(id),
         db.prepare("DELETE FROM publisher_jobs WHERE id = ?").bind(id),
         db.prepare("DELETE FROM publisher_media WHERE job_id = ?").bind(id),
       ]);

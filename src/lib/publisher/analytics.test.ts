@@ -7,8 +7,10 @@ import {
   analyticsSeries,
   claimAnalytics,
   parseKinds,
+  readThumbnail,
   requestRefresh,
   saveAnalytics,
+  storeThumbnail,
 } from "./analytics";
 import {
   addUp,
@@ -39,6 +41,7 @@ function fixture() {
     "0006_publisher_analytics.sql",
     "0008_publisher_target_finished.sql",
     "0009_publisher_reposts.sql",
+    "0010_publisher_thumbnails.sql",
   ])
     sql.exec(readFileSync(`migrations/${file}`, "utf8"));
   const db = {
@@ -267,6 +270,34 @@ test("a request names known kinds of post, or none for all of them", () => {
   expect(parseKinds("video,mixed,video")).toEqual(["video", "mixed"]);
   expect(() => parseKinds("")).toThrow("Invalid post kind");
   expect(() => parseKinds("video,reel")).toThrow("Invalid post kind");
+});
+test("a post keeps one small picture, which the list and the overview's marks point to", async () => {
+  const f = fixture();
+  f.sql.query("UPDATE publisher_jobs SET payload=?").run(JSON.stringify({ title: "Clip", kind: "video", media: [] }));
+  f.sql.query("UPDATE publisher_targets SET finished_at=10").run();
+  f.target("youtube");
+  f.sql.query("UPDATE publisher_targets SET url='https://youtu.be/abcdefghijk' WHERE platform='youtube'").run();
+  expect((await analyticsPage(f.db, null)).posts[0].thumbnail).toBeNull();
+  expect((await analyticsOverview(f.db, 0)).videos[0].thumbnail).toBe(
+    "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
+  );
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+  expect(await storeThumbnail(f.db, f.job, "image/jpeg", jpeg.buffer)).toBe(true);
+  const first = await readThumbnail(f.db, f.job);
+  expect(first).toEqual({ type: "image/jpeg", data: jpeg });
+  // A newer one replaces it, under a new address.
+  await Bun.sleep(2);
+  expect(await storeThumbnail(f.db, f.job, "image/webp", new Uint8Array([1, 2]).buffer)).toBe(true);
+  expect((await readThumbnail(f.db, f.job))?.type).toBe("image/webp");
+  const saved = (await analyticsPage(f.db, null)).posts[0].thumbnail as number;
+  expect(saved).toBeGreaterThan(0);
+  expect((await analyticsOverview(f.db, 0)).videos[0].thumbnail).toBe(`/api/publisher/thumbnails/${f.job}?v=${saved}`);
+  expect(await storeThumbnail(f.db, crypto.randomUUID(), "image/jpeg", jpeg.buffer)).toBe(false);
+  expect(await readThumbnail(f.db, crypto.randomUUID())).toBeNull();
+  await expect(storeThumbnail(f.db, f.job, "image/svg+xml", jpeg.buffer)).rejects.toThrow("JPEG, WebP or PNG");
+  await expect(storeThumbnail(f.db, f.job, "image/jpeg", new ArrayBuffer(0))).rejects.toThrow("200 KB");
+  await expect(storeThumbnail(f.db, f.job, "image/jpeg", new ArrayBuffer(200_001))).rejects.toThrow("200 KB");
+  f.sql.close();
 });
 test("retention is each destination's latest reading with a watch time, so one missed read doesn't blank it", async () => {
   const f = fixture();

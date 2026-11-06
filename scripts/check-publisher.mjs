@@ -57,6 +57,12 @@ const uploadsBeforeJob = async (page) => {
   await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "jobs"));
   return page.evaluate(() => window.publisherRequests.filter((r) => r.path === "media").length);
 };
+// A queued post's small picture follows it, so Analytics can show it after the uploads expire.
+const thumbnailKept = (page, job) =>
+  page.waitForFunction(
+    (id) => window.publisherRequests.some((r) => r.path === `jobs/${id}/thumbnail` && r.method === "PUT"),
+    job,
+  );
 const queued = (page) =>
   page
     .waitForFunction(() => window.publisherRequests.some((r) => r.path === "jobs"))
@@ -385,6 +391,7 @@ try {
     await shot("photo-preserved");
     await page.getByRole("button", { name: "Publish to 2 places" }).click();
     const photo = await queued(page);
+    await thumbnailKept(page, photo.id);
     assert.deepEqual(photo.platforms.toSorted(), ["grain", "instagram"]);
     assert.equal(photo.title, "Two photos");
     assert.equal(photo.caption, "Two photo caption");
@@ -843,6 +850,8 @@ try {
   await zhPage.getByRole("button", { name: "Queue post" }).click();
   assert.equal(await uploadsBeforeJob(zhPage), 2);
   const zhJob = await zhQueued();
+  // A video this browser can read keeps a thumbnail of its opening frame.
+  await thumbnailKept(zhPage, zhJob.id);
   assert.equal(zhJob.kind, "video");
   assert.equal(zhJob.media.length, 1);
   assert.equal(typeof zhJob.zh.video, "string");
@@ -917,9 +926,8 @@ try {
         body: '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"><rect width="480" height="360" fill="#d9a7b8"/></svg>',
       }),
     );
-    await page.route("**/api/publisher/media/**", (route) =>
-      route.fulfill({ contentType: "image/svg+xml", body: thumbnail }),
-    );
+    for (const kept of ["**/api/publisher/media/**", "**/api/publisher/thumbnails/**"])
+      await page.route(kept, (route) => route.fulfill({ contentType: "image/svg+xml", body: thumbnail }));
     await page.goto(`http://127.0.0.1:8797/publisher.html?theme=${mobile ? "light" : "dark"}`);
     await page.getByRole("button", { name: "Analytics" }).click();
     const address = () => {
@@ -928,10 +936,11 @@ try {
     };
     assert.equal(address(), "/publisher.html/analytics");
     assert.equal(await page.title(), "analytics · kualta");
-    // Text posts stay out until asked for; each listed post shows its picture.
+    // Text posts stay out until asked for; each listed post shows its picture: YouTube's still, its upload, or the
+    // thumbnail it kept once the upload expired.
     const cards = page.locator(".publisher-analytics-posts > button");
     await cards.first().waitFor();
-    assert.equal(await cards.count(), 2);
+    assert.equal(await cards.count(), 3);
     assert.match(await cards.nth(0).innerText(), /A film about films/);
     assert.match(await cards.nth(1).innerText(), /Two frames from the gallery walk/);
     assert.equal(
@@ -939,16 +948,28 @@ try {
       "https://i.ytimg.com/vi/CJs864wmjB0/hqdefault.jpg",
     );
     assert.equal(await cards.nth(1).locator("img").getAttribute("src"), "/api/publisher/media/m-photo-a");
+    assert.equal(
+      await cards.nth(2).locator("img").getAttribute("src"),
+      "/api/publisher/thumbnails/00000000-0000-4000-8000-0000000a0004?v=1761900000000",
+    );
     await page.waitForFunction(() =>
       [...document.querySelectorAll(".publisher-analytics-posts img")].every((img) => img.naturalWidth > 0),
     );
+    // The photo's upload is still there, so a thumbnail of it is kept; the others need none.
+    await thumbnailKept(page, "00000000-0000-4000-8000-0000000a0002");
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.publisherRequests.filter((r) => r.path.endsWith("/thumbnail")).map((r) => r.path),
+      ),
+      ["jobs/00000000-0000-4000-8000-0000000a0002/thumbnail"],
+    );
     const types = page.getByRole("group", { name: "Post types" });
     await types.getByRole("button", { name: "Text" }).click();
-    await cards.nth(2).waitFor();
+    await cards.nth(3).waitFor();
     assert.match(await cards.nth(0).innerText(), /meow/);
     assert.equal(address(), "/publisher.html/analytics?type=video,photo,text");
     await types.getByRole("button", { name: "Text" }).click();
-    await page.waitForFunction(() => document.querySelectorAll(".publisher-analytics-posts > button").length === 2);
+    await page.waitForFunction(() => document.querySelectorAll(".publisher-analytics-posts > button").length === 3);
     assert.equal(address(), "/publisher.html/analytics");
     // Choosing a post is a step Back undoes; the detail shows its picture and caption.
     await cards.nth(1).click();

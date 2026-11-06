@@ -35,6 +35,7 @@ import { frameAt } from "@/lib/publisher/frame";
 import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost } from "@/lib/publisher/server";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 import { readPath, tabPath, type Tab } from "@/lib/publisher/route";
+import { saveThumbnail, thumbnailOf } from "@/lib/publisher/thumbnail";
 
 async function api(path: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
   const response = await fetch(`/api/publisher/${path}`, {
@@ -518,6 +519,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       setSubmitted(true);
       await api("jobs", pending.payload);
       setSubmitted(false);
+      // Uploads expire in a week; a small picture stays with the post for Analytics.
+      const picture = cover?.file ?? files[0];
+      if (picture)
+        thumbnailOf(picture)
+          .then((thumbnail) => saveThumbnail(pending.id, thumbnail))
+          .catch(() => {});
       if (draftId.current) {
         // If this delete is lost, the server still refuses to queue the same video twice.
         api(`drafts/${draftId.current}`, undefined, "DELETE")

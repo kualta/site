@@ -21,7 +21,8 @@ import {
   type VideoMark,
 } from "@/lib/publisher/metrics";
 import { kindNames, platformNames, postLabel, type Platform, type PostKind } from "@/lib/publisher/presets";
-import { previewSources } from "@/lib/publisher/preview";
+import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
+import { saveThumbnail, thumbnailFrom } from "@/lib/publisher/thumbnail";
 import {
   kindsOf,
   periods,
@@ -67,6 +68,8 @@ type Post = {
     mediaKinds?: ("photo" | "video")[];
     cover?: string;
   };
+  /** When its kept thumbnail was saved, or null before it has one. */
+  thumbnail: number | null;
   targets: Target[];
 };
 type Page = { posts: Post[]; next: string | null };
@@ -154,21 +157,46 @@ function Loading() {
 
 const kindIcons = { text: CommentIcon, photo: ImageIcon, video: VideoIcon, mixed: VideoIcon };
 const YOUTUBE_STILL = "https://i.ytimg.com/";
+// Posts whose thumbnail this page has already sent, so the list and the header don't both send it.
+const kept = new Set<string>();
+/** Keeps a thumbnail of an upload the page is showing, for when the upload has expired. */
+function keepThumbnail(job: string, element: HTMLImageElement | HTMLVideoElement) {
+  if (kept.has(job)) return;
+  kept.add(job);
+  thumbnailFrom(element)
+    .then((thumbnail) => saveThumbnail(job, thumbnail))
+    .catch(() => kept.delete(job));
+}
 /**
- * The post's picture: its cover, a YouTube still or its first upload, whichever still loads. Uploads expire after seven
- * days, so a post with none of them shows what kind it is instead.
+ * The post's picture: its kept thumbnail, its cover, a YouTube still or its first upload, whichever loads. A post
+ * without a thumbnail keeps one of its upload while that's still there; after that, a post with none of them shows
+ * what kind it is instead.
  */
 function Preview({ post, large = false }: { post: Post; large?: boolean }) {
   const sources = previewSources(
     post.post,
     post.targets.filter(live).map((t) => t.url),
+    post.thumbnail ? storedThumbnail(post.id, post.thumbnail) : null,
   );
   const [failed, setFailed] = useState(0);
   const source = sources[failed];
   const next = () => setFailed((n) => n + 1);
+  const keep = (element: HTMLImageElement | HTMLVideoElement) => {
+    if (!post.thumbnail && source?.upload) keepThumbnail(post.id, element);
+  };
   const Icon = kindIcons[post.post.kind] ?? ImageIcon;
   let picture = <Icon size={large ? 28 : 18} />;
-  if (source?.video) picture = <video src={source.src} preload="metadata" muted playsInline onError={next} />;
+  if (source?.video)
+    picture = (
+      <video
+        src={source.src}
+        preload="metadata"
+        muted
+        playsInline
+        onError={next}
+        onLoadedData={(event) => keep(event.currentTarget)}
+      />
+    );
   else if (source)
     picture = (
       <img
@@ -176,8 +204,11 @@ function Preview({ post, large = false }: { post: Post; large?: boolean }) {
         alt=""
         loading="lazy"
         onError={next}
-        // YouTube answers a missing still with a 120×90 placeholder rather than an error.
-        onLoad={(event) => source.src.startsWith(YOUTUBE_STILL) && event.currentTarget.naturalWidth === 120 && next()}
+        onLoad={(event) => {
+          // YouTube answers a missing still with a 120×90 placeholder rather than an error.
+          if (source.src.startsWith(YOUTUBE_STILL) && event.currentTarget.naturalWidth === 120) next();
+          else keep(event.currentTarget);
+        }}
       />
     );
   return (

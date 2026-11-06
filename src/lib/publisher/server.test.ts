@@ -37,6 +37,7 @@ function database() {
     "0006_publisher_analytics.sql",
     "0008_publisher_target_finished.sql",
     "0009_publisher_reposts.sql",
+    "0010_publisher_thumbnails.sql",
   ])
     sqlite.exec(readFileSync(`migrations/${file}`, "utf8"));
   const db = {

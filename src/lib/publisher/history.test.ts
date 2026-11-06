@@ -12,6 +12,7 @@ function fixture() {
     "0006_publisher_analytics.sql",
     "0008_publisher_target_finished.sql",
     "0009_publisher_reposts.sql",
+    "0010_publisher_thumbnails.sql",
   ])
     sql.exec(readFileSync(`migrations/${name}`, "utf8"));
   const db = {

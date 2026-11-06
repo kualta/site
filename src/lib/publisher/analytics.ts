@@ -2,7 +2,7 @@ import type { NewsletterDB } from "../newsletter/types";
 import { historyPage } from "./history";
 import { validMetrics, type DailyChange, type Metrics } from "./metrics";
 import { kinds as postKinds, postLabel, type Platform, type PostKind } from "./presets";
-import { youtubeThumbnail } from "./preview";
+import { storedThumbnail, youtubeThumbnail } from "./preview";
 import { PostError } from "./server";
 
 /** The `kinds` a request asks for, comma separated; without the parameter, every kind. */
@@ -57,22 +57,30 @@ export async function analyticsPage(db: NewsletterDB, cursor: string | null, kin
   const page = await historyPage(db, cursor, kinds);
   const ids = page.posts.map((post) => post.id);
   if (!ids.length) return { posts: [], next: page.next };
-  const { results } = await db
-    .prepare(`SELECT t.id, c.checked_at, c.next_at, c.message AS analytics_error,
+  const marks = ids.map(() => "?").join(",");
+  const [{ results }, thumbnails] = await Promise.all([
+    db
+      .prepare(`SELECT t.id, c.checked_at, c.next_at, c.message AS analytics_error,
     s.observed_at, s.metrics, (${RETAINED}) AS retention FROM publisher_targets t
     LEFT JOIN publisher_metric_checks c ON c.target_id=t.id
     LEFT JOIN publisher_metric_snapshots s ON s.target_id=t.id AND s.observed_at=(SELECT MAX(observed_at) FROM publisher_metric_snapshots WHERE target_id=t.id)
-    WHERE t.job_id IN (${ids.map(() => "?").join(",")})`)
-    .bind(...ids)
-    .all<{
-      id: string;
-      metrics: string | null;
-      retention: string | null;
-      observed_at: number | null;
-      checked_at: number | null;
-      next_at: number | null;
-      analytics_error: string | null;
-    }>();
+    WHERE t.job_id IN (${marks})`)
+      .bind(...ids)
+      .all<{
+        id: string;
+        metrics: string | null;
+        retention: string | null;
+        observed_at: number | null;
+        checked_at: number | null;
+        next_at: number | null;
+        analytics_error: string | null;
+      }>(),
+    db
+      .prepare(`SELECT job_id, created_at FROM publisher_thumbnails WHERE job_id IN (${marks})`)
+      .bind(...ids)
+      .all<{ job_id: string; created_at: number }>(),
+  ]);
+  const thumbnailAt = new Map(thumbnails.results.map((row) => [row.job_id, row.created_at]));
   const byId = new Map(
     results.map((row) => [
       row.id,
@@ -85,8 +93,34 @@ export async function analyticsPage(db: NewsletterDB, cursor: string | null, kin
   );
   return {
     ...page,
-    posts: page.posts.map((post) => ({ ...post, targets: post.targets.map((t) => ({ ...t, ...byId.get(t.id) })) })),
+    posts: page.posts.map((post) => ({
+      ...post,
+      // When its stored thumbnail was saved, which versions the thumbnail's address; null until there is one.
+      thumbnail: thumbnailAt.get(post.id) ?? null,
+      targets: post.targets.map((t) => ({ ...t, ...byId.get(t.id) })),
+    })),
   };
+}
+const THUMBNAIL_TYPES = ["image/jpeg", "image/webp", "image/png"];
+export const MAX_THUMBNAIL = 200_000;
+/** Keeps a post's small picture, replacing any it had; false when there's no such post. */
+export async function storeThumbnail(db: NewsletterDB, job: string, type: string, data: ArrayBuffer) {
+  if (!THUMBNAIL_TYPES.includes(type)) throw new PostError("A thumbnail is a JPEG, WebP or PNG image");
+  if (!data.byteLength || data.byteLength > MAX_THUMBNAIL) throw new PostError("A thumbnail can be up to 200 KB");
+  const result = await db
+    .prepare(`INSERT INTO publisher_thumbnails(job_id,type,data,created_at) SELECT id,?,?,? FROM publisher_jobs WHERE id=?
+      ON CONFLICT(job_id) DO UPDATE SET type=excluded.type, data=excluded.data, created_at=excluded.created_at`)
+    .bind(type, new Uint8Array(data), Date.now(), job)
+    .run();
+  return result.meta.changes > 0;
+}
+export async function readThumbnail(db: NewsletterDB, job: string) {
+  const row = await db
+    .prepare("SELECT type, data FROM publisher_thumbnails WHERE job_id=?")
+    .bind(job)
+    .first<{ type: string; data: ArrayBuffer | ArrayLike<number> }>();
+  // D1 hands a BLOB back as an array of bytes.
+  return row && { type: row.type, data: new Uint8Array(row.data) };
 }
 /** Makes a post's destinations due now, at most once each per five minutes, and says which ones will be read. */
 export async function requestRefresh(db: NewsletterDB, job: string) {
@@ -139,13 +173,21 @@ export async function analyticsOverview(db: NewsletterDB, utcOffset: number, kin
     db
       .prepare(`SELECT j.id, COALESCE(MIN(t.finished_at), j.created_at) AS at,
         json_extract(j.payload,'$.title') AS title, json_extract(j.payload,'$.caption') AS caption,
-        MAX(CASE WHEN t.platform='youtube' THEN t.url END) AS youtube
+        MAX(CASE WHEN t.platform='youtube' THEN t.url END) AS youtube,
+        (SELECT created_at FROM publisher_thumbnails WHERE job_id=j.id) AS stored
         FROM publisher_jobs j JOIN publisher_targets t ON t.job_id=j.id AND t.state='succeeded'
         WHERE json_extract(j.payload,'$.kind') IN ('video','mixed')${kind.sql}
         AND NOT EXISTS(SELECT 1 FROM publisher_deletions d WHERE d.target_id=t.id AND d.state='deleted')
         GROUP BY j.id ORDER BY at`)
       .bind(...kind.values)
-      .all<{ id: string; at: number; title: string | null; caption: string | null; youtube: string | null }>(),
+      .all<{
+        id: string;
+        at: number;
+        title: string | null;
+        caption: string | null;
+        youtube: string | null;
+        stored: number | null;
+      }>(),
     db
       .prepare(`SELECT * FROM (
         SELECT t.platform, COALESCE(t.finished_at, j.created_at) AS at, (${RETAINED}) AS metrics
@@ -161,7 +203,7 @@ export async function analyticsOverview(db: NewsletterDB, utcOffset: number, kin
       id: video.id,
       at: video.at,
       label: postLabel({ title: video.title ?? "", caption: video.caption ?? "" }),
-      thumbnail: youtubeThumbnail(video.youtube),
+      thumbnail: video.stored ? storedThumbnail(video.id, video.stored) : youtubeThumbnail(video.youtube),
     })),
   };
 }
