@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { CommentIcon, ImageIcon, VideoIcon } from "@/components/icons";
 import {
   addUp,
   combined,
@@ -19,7 +20,18 @@ import {
   type SeriesPoint,
   type VideoMark,
 } from "@/lib/publisher/metrics";
-import { platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
+import { kindNames, platformNames, postLabel, type Platform, type PostKind } from "@/lib/publisher/presets";
+import { previewSources } from "@/lib/publisher/preview";
+import {
+  kindsOf,
+  periods,
+  postTypes,
+  readView,
+  typeNames,
+  writeView,
+  type AnalyticsView,
+  type PostType,
+} from "@/lib/publisher/route";
 
 // Only the Analytics tab downloads the chart library, and the Worker never loads it.
 const TrendChart = lazy(async () => {
@@ -44,16 +56,40 @@ type Target = {
   /** 1 when the helper published it before the platform's sign-in last changed. */
   earlier_sign_in: number;
 };
-type Post = { id: string; created_at: number; post: { title: string; caption: string }; targets: Target[] };
+type Post = {
+  id: string;
+  created_at: number;
+  post: {
+    title: string;
+    caption: string;
+    kind: PostKind;
+    media: string[];
+    mediaKinds?: ("photo" | "video")[];
+    cover?: string;
+  };
+  targets: Target[];
+};
 type Page = { posts: Post[]; next: string | null };
 type Refresh = { job: string; at: number; queued: string[] };
 type Request = (path: string, body?: unknown) => Promise<any>;
-type Props = { request: Request; online: boolean };
+type Props = {
+  request: Request;
+  online: boolean;
+  /** The Analytics tab's query, which holds what it shows. */
+  search: string;
+  /** Opens another view: pushed for a post or page, replaced for a filter. */
+  onNavigate: (search: string, replace?: boolean) => void;
+};
 const IDLE_POLL = 60_000;
 const REFRESH_POLL = 5_000;
 const REFRESH_TIMEOUT = 3 * 60_000;
 const number = (value: number | null) => (value === null ? "—" : new Intl.NumberFormat().format(value));
 const dateTime = (at: number) => new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+function shortDate(at: number) {
+  const date = new Date(at);
+  const year = date.getFullYear() === new Date().getFullYear() ? undefined : "numeric";
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year });
+}
 const metricNames: Record<Metric, string> = {
   exposure: "Views / impressions",
   views: "Views",
@@ -64,6 +100,12 @@ const metricNames: Record<Metric, string> = {
   shares: "Shares / reposts",
   saves: "Saves",
 };
+/** Whether every kind of post is listed; otherwise at most two of the three are. */
+const allTypes = (types: PostType[]) => types.length === postTypes.length;
+/** "every video and photo post", or "every post" when nothing is left out. */
+function scopeOf(types: PostType[]) {
+  return allTypes(types) ? "every post" : `every ${types.join(" and ")} post`;
+}
 
 function Spinner() {
   return <span className="publisher-spinner" aria-hidden="true" />;
@@ -83,6 +125,9 @@ function targetStatus(target: Target) {
   const reading = target.analytics_error || (target.observed_at ? "" : "Waiting for first sample");
   return [origin(target), reading].filter(Boolean).join(" · ");
 }
+const live = (target: Target) => target.state === "succeeded" && target.deletion_state !== "deleted";
+/** Where the post is, once each, in the order it went out. */
+const destinations = (post: Post) => [...new Set(post.targets.filter(live).map((t) => t.platform))];
 function Loading() {
   return (
     <>
@@ -93,18 +138,62 @@ function Loading() {
         <span className="sr-only">Loading analytics…</span>
         <div className="publisher-analytics-posts" aria-hidden="true">
           {[0, 1, 2].map((i) => (
-            <Block key={i} height={104} />
+            <Block key={i} height={96} />
           ))}
         </div>
         <div className="publisher-analytics-detail publisher-analytics-loading" aria-hidden="true">
-          <Block height={22} width="40%" />
-          <Block height={64} width={380} />
+          <Block height={160} />
           <Block height={58} width={140} />
           <Block height={260} />
           <Block height={160} />
         </div>
       </div>
     </>
+  );
+}
+
+const kindIcons = { text: CommentIcon, photo: ImageIcon, video: VideoIcon, mixed: VideoIcon };
+const YOUTUBE_STILL = "https://i.ytimg.com/";
+/**
+ * The post's picture: its cover, a YouTube still or its first upload, whichever still loads. Uploads expire after seven
+ * days, so a post with none of them shows what kind it is instead.
+ */
+function Preview({ post, large = false }: { post: Post; large?: boolean }) {
+  const sources = previewSources(
+    post.post,
+    post.targets.filter(live).map((t) => t.url),
+  );
+  const [failed, setFailed] = useState(0);
+  const source = sources[failed];
+  const next = () => setFailed((n) => n + 1);
+  const Icon = kindIcons[post.post.kind] ?? ImageIcon;
+  let picture = <Icon size={large ? 28 : 18} />;
+  if (source?.video) picture = <video src={source.src} preload="metadata" muted playsInline onError={next} />;
+  else if (source)
+    picture = (
+      <img
+        src={source.src}
+        alt=""
+        loading="lazy"
+        onError={next}
+        // YouTube answers a missing still with a 120×90 placeholder rather than an error.
+        onLoad={(event) => source.src.startsWith(YOUTUBE_STILL) && event.currentTarget.naturalWidth === 120 && next()}
+      />
+    );
+  return (
+    <div className="publisher-analytics-thumb" data-size={large ? "large" : undefined}>
+      {picture}
+      {post.post.media.length > 1 && <small>{post.post.media.length}</small>}
+    </div>
+  );
+}
+function Dots({ platforms }: { platforms: Platform[] }) {
+  return (
+    <span className="publisher-analytics-dots" aria-hidden="true">
+      {platforms.map((platform) => (
+        <i key={platform} title={platformNames[platform]} style={{ background: platformColor(platform) }} />
+      ))}
+    </span>
   );
 }
 
@@ -171,16 +260,6 @@ function WatchCell({ metrics }: { metrics: Metrics | null }) {
   );
 }
 
-function PeriodOptions() {
-  return (
-    <>
-      <option value={7}>7 days</option>
-      <option value={30}>30 days</option>
-      <option value={90}>90 days</option>
-      <option value={0}>All time</option>
-    </>
-  );
-}
 function Observations({ points, label, byDay = false }: { points: SeriesPoint[]; label: string; byDay?: boolean }) {
   return (
     <details>
@@ -219,34 +298,39 @@ function Failed({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-/** Every post's views, as a running total or day by day, with the moments videos went out marked along the axis. */
+/** Every listed post's views, as a running total or day by day, with the moments videos went out marked along the axis. */
 function Overview({
   request,
   observed,
+  view,
+  onDaily,
   canOpen,
   onOpen,
 }: {
   request: Request;
   observed?: string;
+  view: AnalyticsView;
+  onDaily: (daily: boolean) => void;
   canOpen: (id: string) => boolean;
   onOpen: (id: string) => void;
 }) {
   const [data, setData] = useState<{
+    kinds: string;
     changes: DailyChange[];
     videos: VideoMark[];
     retention: (RetentionReading & { at: number })[];
   } | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [days, setDays] = useState(30);
-  const [daily, setDaily] = useState(false);
+  const { period: days, daily } = view;
+  const kinds = kindsOf(view.types).join(",");
   const utcOffset = -new Date().getTimezoneOffset();
   useEffect(() => {
     let active = true;
     setFailed(false);
-    request(`analytics/overview?utcOffset=${utcOffset}`)
+    request(`analytics/overview?${new URLSearchParams({ utcOffset: String(utcOffset), kinds })}`)
       .then((value) => {
-        if (active) setData(value);
+        if (active) setData({ ...value, kinds });
       })
       .catch(() => {
         if (active) setFailed(true);
@@ -254,7 +338,7 @@ function Overview({
     return () => {
       active = false;
     };
-  }, [request, observed, attempt]);
+  }, [request, observed, attempt, kinds]);
   const label = metricNames.exposure;
   const cutoff = days ? Date.now() - days * 86_400_000 : 0;
   const points = useMemo(() => {
@@ -270,6 +354,7 @@ function Overview({
   if (points.length) summary = daily ? addUp(points) : points.at(-1)!;
   const period = days ? `in the last ${days} days` : "so far";
   const title = daily ? "Daily views" : "Cumulative views";
+  const stale = Boolean(data) && data?.kinds !== kinds;
   let plot;
   if (points.length)
     plot = (
@@ -284,32 +369,29 @@ function Overview({
     <section className="publisher-analytics-overview" aria-label="Views">
       <div className="publisher-heading">
         <h2>Views</h2>
-        <div className="publisher-analytics-controls">
-          <div className="publisher-analytics-view" role="group" aria-label="Chart view">
-            <button type="button" aria-pressed={!daily} onClick={() => setDaily(false)}>
-              Cumulative
-            </button>
-            <button type="button" aria-pressed={daily} onClick={() => setDaily(true)}>
-              Daily
-            </button>
-          </div>
-          <select aria-label="Period" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-            <PeriodOptions />
-          </select>
+        <div className="publisher-analytics-view" role="group" aria-label="Chart view">
+          <button type="button" aria-pressed={!daily} onClick={() => onDaily(false)}>
+            Cumulative
+          </button>
+          <button type="button" aria-pressed={daily} onClick={() => onDaily(true)}>
+            Daily
+          </button>
         </div>
       </div>
       <div className="publisher-analytics-total">
         <strong>{number(summary?.value ?? null)}</strong>
         <span className="publisher-note">
-          {label} {daily ? `${period}, ` : ""}across every post
+          {label} {daily ? `${period}, ` : ""}across {scopeOf(view.types)}
         </span>
       </div>
       <figure
         className="publisher-analytics-trend"
         aria-label={points.length ? `${title}: ${number(points[0].value)} to ${number(points.at(-1)!.value)}` : title}
       >
-        <div className="publisher-analytics-chart">{plot}</div>
-        {summary && <Contributions point={summary} busy={false} />}
+        <div className="publisher-analytics-chart" aria-busy={stale}>
+          {plot}
+        </div>
+        {summary && <Contributions point={summary} busy={stale} />}
         <Retention readings={watched} scope={days ? `videos posted in the last ${days} days` : "every video"} />
         <figcaption className="publisher-note">
           {daily
@@ -384,34 +466,39 @@ function Trend({
   );
 }
 
-export default function PublisherAnalytics({ request, online }: Props) {
-  const [loaded, setLoaded] = useState<{ cursor: string | null; page: Page } | null>(null);
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [selected, setSelected] = useState<string | null>(null);
+export default function PublisherAnalytics({ request, online, search, onNavigate }: Props) {
+  const view = useMemo(() => readView(search), [search]);
+  /** Shows `changes` on top of the current view. Filters replace the address; a post or a page adds to history. */
+  const show = (changes: Partial<AnalyticsView>, replace = true) =>
+    onNavigate(writeView({ ...view, ...changes }), replace);
+  const kinds = kindsOf(view.types).join(",");
+  const cursor = view.before;
+  const listKey = `${kinds}|${cursor ?? ""}`;
+  const [loaded, setLoaded] = useState<{ key: string; page: Page } | null>(null);
+  // Which page each "Older" came from, so "Newer" can go back; a page opened from a link goes back to the newest.
+  const newer = useRef(new Map<string, string | null>());
   const [series, setSeries] = useState<{ post: string; samples: Sample[] } | null>(null);
   const [seriesFailed, setSeriesFailed] = useState(false);
-  const [platform, setPlatform] = useState("all");
-  const [metric, setMetric] = useState<Metric>("exposure");
-  const [days, setDays] = useState(30);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [requesting, setRequesting] = useState(false);
   const [refresh, setRefresh] = useState<Refresh | null>(null);
   const layout = useRef<HTMLDivElement>(null);
-  const cursor = cursors.at(-1) ?? null;
   const page = loaded?.page;
-  const paging = Boolean(loaded) && loaded?.cursor !== cursor && !error;
-  const post = page?.posts.find((p) => p.id === selected) || page?.posts[0];
+  const paging = Boolean(loaded) && loaded?.key !== listKey && !error;
+  const post = page?.posts.find((p) => p.id === view.post) || page?.posts[0];
   const postId = post?.id;
   const refreshing = Boolean(refresh);
   useEffect(() => {
     let active = true;
+    const query = new URLSearchParams({ kinds });
+    if (cursor) query.set("before", cursor);
     const load = async () => {
       try {
-        const value = await request(`analytics${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`);
+        const value = await request(`analytics?${query}`);
         if (active) {
-          setLoaded({ cursor, page: value });
+          setLoaded({ key: listKey, page: value });
           setError("");
         }
       } catch (e) {
@@ -429,7 +516,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
       active = false;
       clearInterval(timer);
     };
-  }, [cursor, request, refreshing, attempt]);
+  }, [listKey, request, refreshing, attempt]);
   // The series only changes when a destination gets a new observation.
   const observed = post?.targets.map((t) => t.observed_at ?? 0).join();
   useEffect(() => {
@@ -448,7 +535,6 @@ export default function PublisherAnalytics({ request, online }: Props) {
     };
   }, [postId, observed, request, attempt]);
   useEffect(() => {
-    setPlatform("all");
     setNotice("");
   }, [postId]);
   const refreshed = refresh && page?.posts.find((p) => p.id === refresh.job);
@@ -484,10 +570,22 @@ export default function PublisherAnalytics({ request, online }: Props) {
       setRequesting(false);
     }
   }
-  function openPost(id: string) {
-    setSelected(id);
-    layout.current?.scrollIntoView({ block: "start" });
+  function openPost(id: string, scroll = false) {
+    show({ post: id, platform: "all" }, false);
+    if (scroll) layout.current?.scrollIntoView({ block: "start" });
   }
+  function toggleType(type: PostType) {
+    const types = view.types.includes(type) ? view.types.filter((t) => t !== type) : [...view.types, type];
+    // Something always stays listed.
+    if (!types.length) return;
+    newer.current.clear();
+    show({ types, before: null, post: null, platform: "all" });
+  }
+  function turnPage(before: string | null) {
+    show({ before, post: null, platform: "all" }, false);
+  }
+  const postPlatforms = post ? [...new Set(post.targets.map((t) => t.platform))] : [];
+  const platform = postPlatforms.includes(view.platform as Platform) ? view.platform : "all";
   const targets = post?.targets.filter((t) => platform === "all" || t.platform === platform) || [];
   const reported = (key: keyof Metrics) => Boolean(post?.targets.some((t) => t.metrics?.[key] !== undefined));
   const metricOptions = (Object.keys(metricNames) as Metric[]).filter((key) => {
@@ -496,7 +594,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
     if (key === "reach") return platform !== "all" && reported("reach");
     return true;
   });
-  const activeMetric = metricOptions.includes(metric) ? metric : "exposure";
+  const activeMetric = metricOptions.includes(view.metric) ? view.metric : "exposure";
   const published = targets.filter((t) => t.state === "succeeded");
   const values = published.map((t) => metricValue(t.metrics, activeMetric));
   const total = combined(values);
@@ -515,98 +613,103 @@ export default function PublisherAnalytics({ request, online }: Props) {
   let refreshLabel = "Refresh metrics";
   if (refresh) refreshLabel = `Reading ${refresh.queued.length - checking.size} of ${refresh.queued.length}…`;
   else if (requesting) refreshLabel = "Requesting…";
-  let placeholder = <Loading />;
-  if (page) placeholder = <p className="publisher-analytics-empty">Publish a post to start tracking performance.</p>;
-  else if (error) placeholder = <button onClick={() => setAttempt((n) => n + 1)}>Try again</button>;
   const observations = page?.posts.flatMap((p) => p.targets.map((t) => t.observed_at ?? 0)) ?? [];
   const lastObserved = Math.max(0, ...observations);
   const updated = lastObserved ? `Updated ${timeAgo(lastObserved, Date.now())}` : "No observations yet";
-  return (
-    <section className="publisher-analytics" aria-label="Post analytics">
-      <div className="publisher-heading">
-        <h1>Analytics</h1>
-        <span className="publisher-note">
-          {updated} · {online ? "hourly while your helper runs" : "helper offline"}
-        </span>
-      </div>
-      <p className="publisher-note">
-        Posts published through this app. Combined views / impressions add reported counts, not unique people.
-        Unavailable metrics stay blank.
-      </p>
-      {error && (
-        <p role="alert" className="publisher-error">
-          {error}
-        </p>
-      )}
-      {!!page?.posts.length && (
+  const label = post ? postLabel(post.post) : "";
+  // The caption, when the label above doesn't already say all of it.
+  const caption = post && post.post.caption.trim() !== label ? post.post.caption.trim() : "";
+  let body;
+  if (page?.posts.length)
+    body = (
+      <>
         <Overview
           request={request}
           observed={observations.join()}
+          view={view}
+          onDaily={(daily) => show({ daily })}
           canOpen={(id) => page.posts.some((p) => p.id === id)}
-          onOpen={openPost}
+          onOpen={(id) => openPost(id, true)}
         />
-      )}
-      {page?.posts.length ? (
         <div className="publisher-analytics-layout" ref={layout}>
           <aside aria-label="Choose a post" aria-busy={paging}>
             <div className="publisher-analytics-posts" data-busy={paging}>
               {page.posts.map((p) => (
-                <button key={p.id} aria-pressed={post?.id === p.id} onClick={() => setSelected(p.id)}>
-                  <strong>{postLabel(p.post)}</strong>
-                  <span>{new Date(p.created_at).toLocaleDateString()}</span>
-                  <span>
-                    {number(combined(p.targets.map((t) => metricValue(t.metrics, "exposure"))))} views / impressions
+                <button key={p.id} aria-pressed={post?.id === p.id} onClick={() => openPost(p.id)}>
+                  <Preview post={p} />
+                  <span className="publisher-analytics-post-text">
+                    <strong>{postLabel(p.post)}</strong>
+                    <span>
+                      {shortDate(p.created_at)} · {kindNames[p.post.kind]}
+                    </span>
+                    <span className="publisher-analytics-post-reach">
+                      {number(combined(p.targets.map((t) => metricValue(t.metrics, "exposure"))))} views
+                      <Dots platforms={destinations(p)} />
+                    </span>
                   </span>
                 </button>
               ))}
             </div>
             <div className="publisher-history-pagination">
               {paging && <Spinner />}
-              <button disabled={cursors.length === 1 || paging} onClick={() => setCursors((v) => v.slice(0, -1))}>
+              <button
+                disabled={!cursor || paging}
+                onClick={() => turnPage((cursor && newer.current.get(cursor)) ?? null)}
+              >
                 Newer
               </button>
-              <button disabled={!page.next || paging} onClick={() => setCursors((v) => [...v, page.next])}>
+              <button
+                disabled={!page.next || paging}
+                onClick={() => {
+                  newer.current.set(page.next!, cursor);
+                  turnPage(page.next);
+                }}
+              >
                 Older
               </button>
             </div>
           </aside>
           {post && (
             <div className="publisher-analytics-detail">
-              <div className="publisher-heading">
-                <h2>{postLabel(post.post)}</h2>
+              <header className="publisher-analytics-post">
+                <Preview key={post.id} post={post} large />
+                <div className="publisher-analytics-post-about">
+                  <h2>{label}</h2>
+                  {caption && <p className="publisher-analytics-caption">{caption}</p>}
+                  <p className="publisher-note">
+                    {dateTime(post.created_at)} · {kindNames[post.post.kind]}
+                  </p>
+                </div>
                 <button disabled={!online || refreshBusy} aria-busy={refreshBusy} onClick={startRefresh}>
                   {refreshBusy && <Spinner />}
                   {refreshLabel}
                 </button>
-              </div>
+              </header>
               <div className="publisher-analytics-filters">
-                <label>
-                  Platform
-                  <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
-                    <option value="all">All platforms</option>
-                    {[...new Set(post.targets.map((t) => t.platform))].map((p) => (
-                      <option key={p} value={p}>
+                {postPlatforms.length > 1 && (
+                  <div className="publisher-analytics-chips" role="group" aria-label="Platform">
+                    <button type="button" aria-pressed={platform === "all"} onClick={() => show({ platform: "all" })}>
+                      All platforms
+                    </button>
+                    {postPlatforms.map((p) => (
+                      <button key={p} type="button" aria-pressed={platform === p} onClick={() => show({ platform: p })}>
+                        <i className="publisher-analytics-swatch" style={{ background: platformColor(p) }} />
                         {platformNames[p]}
-                      </option>
+                      </button>
                     ))}
-                  </select>
-                </label>
-                <label>
-                  Metric
-                  <select value={activeMetric} onChange={(e) => setMetric(e.target.value as Metric)}>
-                    {metricOptions.map((key) => (
-                      <option key={key} value={key}>
-                        {metricNames[key]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Chart period
-                  <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-                    <PeriodOptions />
-                  </select>
-                </label>
+                  </div>
+                )}
+                <select
+                  aria-label="Metric"
+                  value={activeMetric}
+                  onChange={(e) => show({ metric: e.target.value as Metric })}
+                >
+                  {metricOptions.map((key) => (
+                    <option key={key} value={key}>
+                      {metricNames[key]}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="publisher-analytics-total">
                 <span className="publisher-note">
@@ -627,7 +730,7 @@ export default function PublisherAnalytics({ request, online }: Props) {
                 samples={samples}
                 retention={published.map((t) => ({ platform: t.platform, metrics: t.retention }))}
                 metric={activeMetric}
-                days={days}
+                days={view.period}
                 loading={!seriesCurrent && !seriesFailed}
                 failed={seriesFailed}
                 onRetry={() => setAttempt((n) => n + 1)}
@@ -688,9 +791,52 @@ export default function PublisherAnalytics({ request, online }: Props) {
             </div>
           )}
         </div>
-      ) : (
-        placeholder
+      </>
+    );
+  else if (page)
+    body = (
+      <p className="publisher-analytics-empty">
+        {allTypes(view.types)
+          ? "Publish a post to start tracking performance."
+          : `No ${view.types.join(" or ")} posts yet.`}
+      </p>
+    );
+  else if (error) body = <button onClick={() => setAttempt((n) => n + 1)}>Try again</button>;
+  else body = <Loading />;
+  return (
+    <section className="publisher-analytics" aria-label="Post analytics">
+      <div className="publisher-heading">
+        <h1>Analytics</h1>
+        <span className="publisher-note">
+          {updated} · {online ? "hourly while your helper runs" : "helper offline"}
+        </span>
+      </div>
+      <p className="publisher-note">
+        Posts published through this app. Combined views / impressions add reported counts, not unique people.
+        Unavailable metrics stay blank.
+      </p>
+      {error && (
+        <p role="alert" className="publisher-error">
+          {error}
+        </p>
       )}
+      <div className="publisher-analytics-toolbar">
+        <div className="publisher-analytics-chips" role="group" aria-label="Post types">
+          {postTypes.map((type) => (
+            <button key={type} type="button" aria-pressed={view.types.includes(type)} onClick={() => toggleType(type)}>
+              {typeNames[type]}
+            </button>
+          ))}
+        </div>
+        <div className="publisher-analytics-view" role="group" aria-label="Period">
+          {periods.map((days) => (
+            <button key={days} type="button" aria-pressed={view.period === days} onClick={() => show({ period: days })}>
+              {days ? `${days}d` : "All time"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {body}
     </section>
   );
 }

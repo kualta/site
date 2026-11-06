@@ -3,6 +3,7 @@ import {
   analyticsPage,
   analyticsSeries,
   claimAnalytics,
+  parseKinds,
   requestRefresh,
   saveAnalytics,
 } from "@/lib/publisher/analytics";
@@ -65,12 +66,15 @@ export const ALL: APIRoute = async ({ request, params }) => {
       await db.prepare("DELETE FROM publisher_helper WHERE id = 1").run();
       return json({ ok: true });
     }
-    if (path === "analytics" && request.method === "GET")
-      return json(await analyticsPage(db, new URL(request.url).searchParams.get("before")));
+    if (path === "analytics" && request.method === "GET") {
+      const params = new URL(request.url).searchParams;
+      return json(await analyticsPage(db, params.get("before"), parseKinds(params.get("kinds"))));
+    }
     if (path === "analytics/overview" && request.method === "GET") {
-      const utcOffset = Number(new URL(request.url).searchParams.get("utcOffset") ?? 0);
+      const params = new URL(request.url).searchParams;
+      const utcOffset = Number(params.get("utcOffset") ?? 0);
       if (!Number.isInteger(utcOffset) || Math.abs(utcOffset) > 14 * 60) return json({ error: "Invalid offset" }, 400);
-      return json(await analyticsOverview(db, utcOffset));
+      return json(await analyticsOverview(db, utcOffset, parseKinds(params.get("kinds"))));
     }
     if (path.startsWith("analytics/") && request.method === "GET") {
       const id = path.slice("analytics/".length);

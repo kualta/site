@@ -8,6 +8,10 @@ import { publisherSession } from "@/lib/publisher/auth";
 import { platforms, type Platform } from "@/lib/publisher/presets";
 import "@/styles/globals.css";
 export const prerender = false;
+// The composer, or with /analytics its other tab; the tab then keeps its own place in the query.
+const { tab } = Astro.params;
+if (tab && tab !== "analytics") return new Response("Not found", { status: 404 });
+const initialTab = tab === "analytics" ? "analytics" : "compose";
 Astro.response.headers.set("Cache-Control", "no-store");
 // Check access while rendering, so the page opens straight into the composer or the sign-in prompt.
 let access: "owner" | "signin" | "denied" | undefined;
@@ -40,14 +44,14 @@ Astro.response.headers.set("Referrer-Policy", "same-origin");
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>post · kualta</title>
+    <title>{initialTab === "analytics" ? "analytics · kualta" : "post · kualta"}</title>
     <link rel="icon" href="/favicon.ico" />
     <link rel="preload" href={fredoka} as="font" type="font/woff2" crossorigin />
     <ThemeInit />
   </head>
   <body class="publisher-page bg-bg dark:bg-dark-bg text-text dark:text-dark-text min-h-screen relative">
     <div class="noise" aria-hidden="true"></div>
-    <Publisher client:load initialAccess={access} initialHelper={helper} />
+    <Publisher client:load initialAccess={access} initialHelper={helper} initialTab={initialTab} />
     <div class="pointer-events-none" aria-hidden="true"><CornersScope /></div>
   </body>
 </html>

@@ -149,19 +149,33 @@ const analyticsTarget = (
   next_at: Date.now() + 48 * 60_000,
   analytics_error: null,
 });
+// Beside it, a newer text post the tab leaves out until asked, and an older photo post whose upload is still there.
+const analyticsPhoto = "00000000-0000-4000-8000-0000000a0002";
 const analytics = {
   posts: [
     {
+      id: "00000000-0000-4000-8000-0000000a0003",
+      created_at: minutes(60),
+      post: { kind: "text", title: "", caption: "meow", media: [], alt: "" },
+      targets: [analyticsTarget("bluesky", { likes: 2 }, null)],
+    },
+    {
       id: analyticsPost,
       created_at: minutes(3 * 24 * 60),
-      post: { kind: "video", title: "A film about films", caption: "", media: [], alt: "" },
+      post: { kind: "video", title: "A film about films", caption: "Titles fade over a dark stage.", media: [], alt: "" },
       targets: [
-        analyticsTarget("youtube", youtubeShort, youtubeShort),
+        { ...analyticsTarget("youtube", youtubeShort, youtubeShort), url: "https://www.youtube.com/shorts/CJs864wmjB0" },
         { ...analyticsTarget("tiktok", tiktokVideo, tiktokVideo), earlier_sign_in: 1 },
         // Reposted by hand on a new account and linked, so its views add to the original's.
         { ...analyticsTarget("tiktok", { views: 30, likes: 4 }, null), id: "analytics-tiktok-repost", linked: 1 },
         analyticsTarget("bluesky", { likes: 12, comments: 2, shares: 3 }, null),
       ],
+    },
+    {
+      id: analyticsPhoto,
+      created_at: minutes(5 * 24 * 60),
+      post: { kind: "photo", title: "", caption: "Two frames from the gallery walk", media: ["m-photo-a"], alt: "" },
+      targets: [analyticsTarget("instagram", { views: 310, likes: 41 }, null)],
     },
   ],
   next: null,
@@ -220,7 +234,8 @@ let drafts = [
 ].map((item) => ({ ...item, expires: item.created + 7 * day }));
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
-  const path = new URL(String(input), location.href).pathname.replace("/api/publisher/", "");
+  const url = new URL(String(input), location.href);
+  const path = url.pathname.replace("/api/publisher/", "");
   const method = init.method || "GET";
   requests.push({ path, method, body: typeof init.body === "string" ? JSON.parse(init.body) : null });
   if (path === `media/${draftVideo}` || path === `media/${chineseVideo}`) return realFetch(input, init);
@@ -253,9 +268,13 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     });
   if (path === "history") return json(history);
   if (path === "drafts") return json({ drafts });
-  if (path === "analytics") return json(analytics);
+  if (path === "analytics") {
+    const kinds = url.searchParams.get("kinds")?.split(",");
+    return json({ ...analytics, posts: analytics.posts.filter((post) => !kinds || kinds.includes(post.post.kind)) });
+  }
   if (path === "analytics/overview") return json(overview);
-  if (path === `analytics/${analyticsPost}`) return json({ samples });
+  if (path.startsWith("analytics/") && method === "GET")
+    return json({ samples: path === `analytics/${analyticsPost}` ? samples : [] });
   if (path === "media") return json({ id: crypto.randomUUID() });
   if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
   if (path === "stop" || path === "mark-published" || path === "unlink") return json({ ok: true });
