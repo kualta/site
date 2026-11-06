@@ -9,6 +9,7 @@ import ThemeInit from "@/components/ThemeInit.astro";
 import Header from "@/components/Header.astro";
 import NotificationsButton from "@/components/NotificationsButton.astro";
 import CornersScope from "@/components/CornersScope.astro";
+import LiveVisitors from "@/components/LiveVisitors.astro";
 import { Snow } from "@/components/Snow.tsx";
 import { Toaster } from "@/components/Toaster.tsx";
 import SEO from "@/components/SEO.astro";
@@ -153,6 +154,7 @@ const robots = noindex
     </main>
 
     <CornersScope bottom_left={false} bottom_right={false} />
+    <LiveVisitors />
     {Astro.url.pathname === "/" && (
       <div class="home-screen-corners" aria-hidden="true">
         <CornersScope top_left={false} top_right={false} />

@@ -11,9 +11,15 @@
   // serve links/index.html at /links and redirect /links/ to it
   "assets": { "html_handling": "drop-trailing-slash" },
   "durable_objects": {
-    "bindings": [{ "name": "ACTIVITY_STORE", "class_name": "ActivityStatusCache" }]
+    "bindings": [
+      { "name": "ACTIVITY_STORE", "class_name": "ActivityStatusCache" },
+      { "name": "LIVE_VISITORS", "class_name": "LiveVisitors" }
+    ]
   },
-  "migrations": [{ "tag": "activity-store-v1", "new_sqlite_classes": ["ActivityStatusCache"] }],
+  "migrations": [
+    { "tag": "activity-store-v1", "new_sqlite_classes": ["ActivityStatusCache"] },
+    { "tag": "live-visitors-v1", "new_sqlite_classes": ["LiveVisitors"] }
+  ],
   "kv_namespaces": [
     { "binding": "ACTIVITY_CACHE", "id": "2b4fd9e1881247b0aa2d7a030a5e1961" }
   ],

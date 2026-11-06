@@ -1,0 +1,200 @@
+---
+// How many people have the site open right now, shown only once there is
+// someone besides you. Sits in the top-right corner bracket.
+---
+<p class="live-visitors" data-live-visitors transition:persist="live-visitors">
+  <span class="live-visitors-dot" aria-hidden="true"></span>
+  <span aria-hidden="true"><span data-live-visitors-count></span><span class="live-visitors-word"> here</span></span>
+  <span class="sr-only" data-live-visitors-label></span>
+</p>
+
+<style>
+  .live-visitors {
+    position: absolute;
+    z-index: 100;
+    top: calc(1.25rem + env(safe-area-inset-top));
+    right: calc(1.25rem + env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font: normal 0.75rem/1 monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--secondary-text);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity 200ms ease-out, transform 200ms ease-out, visibility 200ms;
+  }
+
+  .live-visitors[data-shown] {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
+
+  /* the header links run right up to the corner on a phone */
+  .live-visitors-word {
+    display: none;
+  }
+
+  @media (min-width: 640px) {
+    .live-visitors-word {
+      display: inline;
+    }
+  }
+
+  .live-visitors-dot {
+    position: relative;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #ff33cc, #cc77ff);
+  }
+
+  .live-visitors-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: inherit;
+    animation: live-visitors-ping 2.4s var(--ease-out) infinite;
+  }
+
+  @keyframes live-visitors-ping {
+    from {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    70%,
+    to {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .live-visitors {
+      transition: none;
+    }
+    .live-visitors-dot::after {
+      animation: none;
+      opacity: 0;
+    }
+  }
+</style>
+
+<script>
+  const PATH = "/api/visitors";
+  const PING_MS = 30_000;
+  /** two missed pongs means the line is dead even if the browser has not noticed */
+  const SILENT_MS = 75_000;
+  /** a quick switch to another tab should not count as leaving */
+  const AWAY_MS = 30_000;
+
+  let socket: WebSocket | undefined;
+  let count = 0;
+  let pinger: ReturnType<typeof setInterval> | undefined;
+  let away: ReturnType<typeof setTimeout> | undefined;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let failures = 0;
+
+  // shared by every tab, so one person with three tabs open still counts once
+  let fallbackId: string | undefined;
+  function visitorId(): string {
+    try {
+      let id = localStorage.getItem("live-visitor");
+      if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem("live-visitor", id);
+      }
+      return id;
+    } catch {
+      fallbackId ??= crypto.randomUUID();
+      return fallbackId;
+    }
+  }
+
+  function render() {
+    const badge = document.querySelector<HTMLElement>("[data-live-visitors]");
+    if (!badge) return;
+    badge.toggleAttribute("data-shown", count > 1);
+    const number = badge.querySelector("[data-live-visitors-count]");
+    const label = badge.querySelector("[data-live-visitors-label]");
+    if (number) number.textContent = String(count);
+    if (label) label.textContent = count > 1 ? `${count} people on the site right now` : "";
+  }
+
+  function settle(next: number) {
+    count = next;
+    render();
+  }
+
+  function drop() {
+    const current = socket;
+    socket = undefined;
+    clearInterval(pinger);
+    if (current) {
+      current.onclose = current.onmessage = current.onerror = null;
+      try {
+        current.close(1000);
+      } catch {}
+    }
+    settle(0);
+  }
+
+  function connect() {
+    clearTimeout(retry);
+    if (socket || document.visibilityState !== "visible") return;
+    const url = new URL(PATH, location.href);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.searchParams.set("id", visitorId());
+
+    const current = new WebSocket(url);
+    socket = current;
+    let heard = Date.now();
+    current.onopen = () => {
+      failures = 0;
+      heard = Date.now();
+      pinger = setInterval(() => {
+        if (Date.now() - heard > SILENT_MS) return reconnect();
+        current.send("ping");
+      }, PING_MS);
+    };
+    current.onmessage = (event) => {
+      heard = Date.now();
+      const next = Number(event.data);
+      if (Number.isInteger(next) && next >= 0) settle(next);
+    };
+    current.onclose = () => reconnect();
+  }
+
+  function reconnect() {
+    drop();
+    if (document.visibilityState !== "visible") return;
+    // spread out, so a deploy that drops everyone does not bring them all back at once
+    const delay = Math.min(60_000, 2_000 * 2 ** failures++) * (0.5 + Math.random());
+    retry = setTimeout(connect, delay);
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      clearTimeout(away);
+      connect();
+    } else {
+      clearTimeout(retry);
+      away = setTimeout(drop, AWAY_MS);
+    }
+  });
+  // an open socket keeps the page out of the back-forward cache
+  window.addEventListener("pagehide", drop);
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) connect();
+  });
+  window.addEventListener("online", connect);
+  document.addEventListener("astro:page-load", render);
+
+  connect();
+</script>
