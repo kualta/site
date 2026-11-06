@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Answers the hosts that have no pages of their own and sends every request
+  // to kualta.dev (see src/lib/canonical-host.ts). These hosts are attached
+  // here rather than to the site Worker, because the site serves its static
+  // pages before any of its code runs and would render them on the wrong host.
+  //
+  // Deploy this before the site Worker: it takes these custom domains over,
+  // and the site's deploy would otherwise detach them first.
+  "name": "kualta-redirect",
+  "main": "src/redirect-worker.ts",
+  "compatibility_date": "2026-05-18",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "www.kualta.dev", "custom_domain": true },
+    { "pattern": "moji.kualta.dev", "custom_domain": true },
+    { "pattern": "join.kualta.dev", "custom_domain": true },
+    { "pattern": "kualta.com", "custom_domain": true },
+    { "pattern": "www.kualta.com", "custom_domain": true }
+  ]
+}

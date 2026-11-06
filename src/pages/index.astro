@@ -10,8 +10,8 @@ import type { Contact } from "@/types";
 import contactsData from "@/data/contacts.json";
 import { TAGLINE } from "@/lib/seo";
 
-// rendered per request so the middleware can send www and kualta.com to the
-// canonical apex; every other route is prerendered
+// rendered per request so the activity feed is current; every other route is
+// prerendered
 export const prerender = false;
 
 const contacts = [...(contactsData as Contact[])].reverse();

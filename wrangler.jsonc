@@ -35,13 +35,11 @@
   },
   "routes": [
     { "pattern": "kualta.dev", "custom_domain": true },
-    { "pattern": "www.kualta.dev", "custom_domain": true },
-    { "pattern": "moji.kualta.dev", "custom_domain": true },
-    { "pattern": "post.kualta.dev", "custom_domain": true },
-    { "pattern": "join.kualta.dev", "custom_domain": true },
-    { "pattern": "kualta.com", "custom_domain": true },
-    { "pattern": "www.kualta.com", "custom_domain": true }
+    { "pattern": "post.kualta.dev", "custom_domain": true }
   ]
+  // www.kualta.dev, moji, join, kualta.com and www.kualta.com belong to the
+  // redirect Worker in wrangler.redirect.jsonc, which sends them to kualta.dev
+  // before this Worker's static pages can render on them.
   // blog.kualta.dev is intentionally NOT attached — DNS points at Paragraph for the publication.
   //
   // The Astro adapter generates the runtime wrangler.json (main + assets +
