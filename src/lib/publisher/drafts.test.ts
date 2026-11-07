@@ -6,7 +6,9 @@ import {
   draftKey,
   listDrafts,
   readDraft,
+  saveComposerDraft,
   saveDraft,
+  validateComposerDraft,
   validateDraft,
 } from "./drafts";
 
@@ -153,5 +155,77 @@ describe("drafts", () => {
     const saved = await readDraft(store, await saveDraft(store, draft));
     expect(saved?.cover).toBe(cover);
     expect(saved?.location).toBe("Bogotá");
+  });
+});
+
+describe("drafts saved from the composer", () => {
+  const cover = "00000000-0000-4000-8000-000000000003";
+  const newCover = "00000000-0000-4000-8000-000000000006";
+  const edited = () => ({ ...text(), video, tagsText: "film motion half-typed", zhTopicsText: "短片" });
+
+  test("keep half-written text that couldn't be published yet", async () => {
+    const store = bucket();
+    const draft = { ...edited(), title: "", caption: "word ".repeat(70), zh: { ...text().zh, title: "很".repeat(21) } };
+    const { id } = await saveComposerDraft(store, draft, undefined, 5_000);
+    expect(await readDraft(store, id)).toEqual({ id, ...draft, created: 5_000 });
+  });
+
+  test("still have to be shaped like a draft", () => {
+    expect(() => validateComposerDraft({ ...edited(), video: "../secret" })).toThrow("can't be saved");
+    expect(() => validateComposerDraft({ ...edited(), title: "t".repeat(101) })).toThrow("can't be saved");
+    expect(() => validateComposerDraft({ ...edited(), cover: video })).toThrow("can't be saved");
+    expect(() => validateComposerDraft({ ...edited(), zh: { ...text().zh, cover } })).toThrow("can't be saved");
+    expect(validateComposerDraft({ ...edited(), coverAt: 2 })).not.toHaveProperty("coverAt");
+    expect(validateComposerDraft({ ...edited(), cover, coverAt: 2 }).coverAt).toBe(2);
+  });
+
+  test("save over a draft from the terminal, keeping when its video went up, and let go of a replaced cover", async () => {
+    const store = bucket([video, cover, newCover]);
+    const id = await saveDraft(store, { ...text(), video, cover });
+    const get = store.get;
+    // The bucket says when the terminal's draft went up.
+    store.get = async (key: string) => {
+      const object = await get(key);
+      return object && { ...object, uploaded: new Date(3_000) };
+    };
+    const saved = await saveComposerDraft(
+      store,
+      { ...edited(), caption: "Edited", cover: newCover, coverAt: 4.2 },
+      id,
+      9_000,
+    );
+    expect(saved).toEqual({ id, released: [cover] });
+    const draft = await readDraft(store, id);
+    expect(draft).toMatchObject({ caption: "Edited", cover: newCover, coverAt: 4.2, created: 3_000 });
+    expect(draft?.tagsText).toBe("film motion half-typed");
+  });
+
+  test("count their week again once the video is replaced", async () => {
+    const second = "00000000-0000-4000-8000-000000000005";
+    const store = bucket([video, second]);
+    const { id } = await saveComposerDraft(store, edited(), undefined, 1_000);
+    expect(await saveComposerDraft(store, { ...edited(), video: second }, id, 7_000)).toEqual({
+      id,
+      released: [video],
+    });
+    expect((await readDraft(store, id))?.created).toBe(7_000);
+  });
+
+  test("need new uploads in the bucket and a draft that's still there", async () => {
+    await expect(saveComposerDraft(bucket([]), edited())).rejects.toThrow("video is missing");
+    const store = bucket();
+    const { id } = await saveComposerDraft(store, edited());
+    await expect(saveComposerDraft(store, { ...edited(), cover })).rejects.toThrow("cover is missing");
+    await expect(saveComposerDraft(store, edited(), crypto.randomUUID())).rejects.toThrow("expired");
+    expect(await readDraft(store, id)).not.toBeNull();
+  });
+
+  test("leave the list when their week is up, by the video's clock rather than the draft's", async () => {
+    const store = bucket();
+    const { id } = await saveComposerDraft(store, edited(), undefined, 1_000);
+    store.uploaded.set(draftKey(id), new Date(1_000 + DRAFT_LIFETIME));
+    const none = async () => new Set<string>();
+    expect((await listDrafts(store, none, 2_000)).map((d) => [d.id, d.created])).toEqual([[id, 1_000]]);
+    expect(await listDrafts(store, none, 1_000 + DRAFT_LIFETIME)).toEqual([]);
   });
 });

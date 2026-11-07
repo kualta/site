@@ -23,6 +23,7 @@ export interface MediaBucket {
     body: ReadableStream;
     httpMetadata?: { contentType?: string };
     size?: number;
+    uploaded?: Date;
   } | null>;
   head(key: string): Promise<unknown | null>;
   delete(keys: string | string[]): Promise<void>;
