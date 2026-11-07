@@ -796,6 +796,82 @@ try {
   assert.deepEqual(errors, []);
   await context.close();
 
+  // An open draft takes the owner's edits as they type, so a reload opens them; Save keeps it and starts a new post.
+  {
+    const draft = new URL(draftUrl).searchParams.get("draft");
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route(`**/api/publisher/media/${videoId}`, (route) =>
+      route.fulfill({ contentType: tallClip.mimeType, body: tallClip.buffer }),
+    );
+    const requests = (filter) =>
+      page.evaluate((f) => window.publisherRequests.filter(new Function("r", `return ${f}`)), filter);
+    const post = page.getByRole("textbox", { name: "Post" });
+    const tags = page.getByRole("textbox", { name: "Tags" });
+    const title = page.getByRole("textbox", { name: /^Title ·/ });
+    const zhTopics = page.getByRole("group", { name: "Chinese · Xiaohongshu" }).getByRole("textbox", { name: "Topics" });
+    const opened = () => page.getByRole("button", { name: "Queue post" }).waitFor();
+    await page.goto(draftUrl);
+    await opened();
+    await post.fill("Edited after the terminal sent it");
+    await tags.fill("film motion half-typed");
+    await zhTopics.fill("短片 街头");
+    await page.getByText("Draft saved. Edits save as you go.").waitFor();
+    const saved = (await requests(`r.method === "PUT" && r.path === "drafts/${draft}"`)).at(-1).body;
+    assert.equal(saved.video, videoId);
+    assert.equal(saved.caption, "Edited after the terminal sent it");
+    assert.equal(saved.tagsText, "film motion half-typed");
+    assert.deepEqual(saved.zh.topics, ["短片", "街头"]);
+    // Opening it saved nothing new; only typing did.
+    assert.equal((await requests(`r.path === "media" && r.method === "POST"`)).length, 0);
+    await page.reload();
+    await opened();
+    assert.equal(await post.inputValue(), "Edited after the terminal sent it");
+    assert.equal(await tags.inputValue(), "film motion half-typed");
+    assert.equal(await zhTopics.inputValue(), "短片 街头");
+    // An edit the draft hadn't saved yet when the page reloaded comes back from this tab, and goes to the draft.
+    await title.fill("Retitled");
+    await page.reload();
+    await opened();
+    assert.equal(await title.inputValue(), "Retitled");
+    await page.waitForFunction(
+      (id) =>
+        window.publisherRequests.some((r) => r.method === "PUT" && r.path === `drafts/${id}` && r.body.title === "Retitled"),
+      draft,
+    );
+    if (shots) await page.screenshot({ path: path.join(shots, "draft-autosaved.png"), fullPage: true });
+    // Save keeps the draft as it is and empties the composer, without uploading its video again.
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await page.getByRole("status").getByText("Saved to drafts.").waitFor();
+    const kept = (await requests(`r.method === "PUT" && r.path === "drafts/${draft}"`)).at(-1).body;
+    assert.equal(kept.title, "Retitled");
+    assert.equal(kept.caption, "Edited after the terminal sent it");
+    assert.equal((await requests(`r.path === "media" && r.method === "POST"`)).length, 0);
+    assert.equal(new URL(page.url()).searchParams.has("draft"), false);
+    assert.equal(await page.locator(".publisher-previews video").count(), 0);
+    assert.equal(await post.inputValue(), "");
+    assert.equal(await tags.inputValue(), "");
+    // A new video post can be saved as a draft too: its video goes up first, then the draft joins the list.
+    await page.locator('input[type="file"][accept="video/*"]').first().setInputFiles(tallClip);
+    await page.locator(".publisher-previews video").first().waitFor();
+    await post.fill("A new one for later");
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await page.getByRole("status").getByText("Saved to drafts.").waitFor();
+    const created = (await requests(`r.method === "POST" && r.path === "drafts"`)).at(-1).body;
+    assert.equal(created.caption, "A new one for later");
+    assert.equal((await requests(`r.path === "media" && r.method === "POST"`)).length, 1);
+    await page.locator(".publisher-history-item[data-draft]", { hasText: "A new one for later" }).waitFor();
+    assert.equal(await post.inputValue(), "");
+    // Photos and text aren't drafts.
+    const photo = { name: "p.png", mimeType: "image/png", buffer: png };
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles(photo);
+    assert.equal(await page.getByRole("button", { name: "Save draft" }).count(), 0);
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+
   // A Chinese version goes to Xiaohongshu in place of the video; every other destination keeps the original.
   const chineseContext = await browser.newContext({ viewport: { width: 1280, height: 1400 } });
   const zhPage = await chineseContext.newPage();

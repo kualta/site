@@ -48,6 +48,23 @@ async function api(path: string, body?: unknown, method = body === undefined ? "
   return data;
 }
 const DRAFT_KEY = "publisher.draft";
+/**
+ * The composer's text as this tab keeps it, so a reload keeps what was typed. For an open draft it also names the
+ * draft and says whether it has edits the draft hasn't saved yet; opening that draft again puts them back.
+ */
+interface StoredText {
+  title?: string;
+  caption?: string;
+  alt?: string;
+  tags?: string;
+  short?: string;
+  zh?: { title?: string; text?: string; topics?: string; location?: string };
+  location?: string;
+  draft?: string;
+  pending?: boolean;
+}
+/** How long the composer waits after the last edit before it saves the open draft. */
+const AUTOSAVE_MS = 1000;
 // Places tagged before, offered first in the location field.
 const PLACES_KEY = "publisher.places";
 /** Why a video attached with other media waits for the owner's word. */
@@ -242,6 +259,15 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const draftId = useRef<string | null>(null);
   // A draft's video is already in Cloudflare, so publishing it doesn't upload it again.
   const storedMedia = useRef(new WeakMap<File, string>());
+  // Each file goes up once, whether a draft or the post takes it first.
+  const uploads = useRef(new WeakMap<File, Promise<string>>());
+  // An open draft's edits from before a reload, read before the composer starts saving over them.
+  const storedText = useRef<StoredText | null>(null);
+  // What the open draft holds now, so an edit that changes nothing saves nothing.
+  const savedDraft = useRef("");
+  const autosaving = useRef<Promise<void>>(undefined);
+  const [draftStatus, setDraftStatus] = useState<"saving" | "saved" | { failed: string }>();
+  const [saving, setSaving] = useState(false);
   const preset = preferences.presets.find((p) => p.id === preferences.active) || preferences.presets[0];
   function updatePreset(patch: Partial<Preset>) {
     if (busy || submitted) return;
@@ -259,15 +285,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       setError("Browser storage is unavailable. Presets will last for this visit.");
     }
     try {
-      const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null");
-      if (typeof draft?.title === "string") setTitle(draft.title.slice(0, 100));
-      if (typeof draft?.caption === "string" && draft.caption) setCaption(draft.caption.slice(0, 5000));
-      if (typeof draft?.tags === "string") setTagsText(draft.tags.slice(0, 1000));
-      if (typeof draft?.short === "string") setShort(draft.short.slice(0, 1000));
-      if (typeof draft?.zh?.title === "string") setZhTitle(draft.zh.title.slice(0, 100));
-      if (typeof draft?.zh?.text === "string") setZhText(draft.zh.text.slice(0, 5000));
-      if (typeof draft?.zh?.topics === "string") setZhTopicsText(draft.zh.topics.slice(0, 500));
-      if (typeof draft?.location === "string") setPlace(draft.location.slice(0, MAX_LOCATION));
+      const stored: StoredText | null = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null");
+      // An open draft's text comes back when the draft opens again, over the draft's own. Without the draft, a new
+      // post starts empty.
+      if (stored?.draft) {
+        if (new URLSearchParams(location.search).get("draft") === stored.draft) storedText.current = stored;
+      } else if (stored) fillText(stored);
     } catch {
       // A draft is a convenience; start empty without it.
     }
@@ -294,20 +317,68 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       setError("Could not save presets in this browser.");
     }
   }, [preferences, ready]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the text and the draft's status are the trigger; draftJson reads them
   useEffect(() => {
-    if (!ready) return;
+    // Until a draft opens and takes back its edits, they stay stored; while it opens, its text isn't the owner's yet.
+    if (!ready || openingDraft || storedText.current) return;
     try {
-      const zh = { title: zhTitle, text: zhText, topics: zhTopicsText };
-      if (title || caption || tagsText || short || zhTitle || zhText || zhTopicsText || place)
-        sessionStorage.setItem(
-          DRAFT_KEY,
-          JSON.stringify({ title, caption, tags: tagsText, short, zh, location: place }),
-        );
+      const zh = { title: zhTitle, text: zhText, topics: zhTopicsText, location: zhPlace };
+      const stored: StoredText = { title, caption, alt, tags: tagsText, short, zh, location: place };
+      if (openDraftId) {
+        stored.draft = openDraftId;
+        stored.pending = draftJson() !== savedDraft.current;
+      }
+      if (openDraftId || title || caption || alt || tagsText || short || zhTitle || zhText || zhTopicsText || place)
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
       else sessionStorage.removeItem(DRAFT_KEY);
     } catch {
       // Keep the draft in memory.
     }
-  }, [title, caption, tagsText, short, zhTitle, zhText, zhTopicsText, place, ready]);
+  }, [
+    title,
+    caption,
+    alt,
+    tagsText,
+    short,
+    zhTitle,
+    zhText,
+    zhTopicsText,
+    place,
+    zhPlace,
+    ready,
+    openingDraft,
+    openDraftId,
+    draftStatus,
+  ]);
+  // The open draft keeps the owner's edits a moment after each one, so a reload or another device opens them.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: every field of the draft is the trigger; draftJson and autosave read them
+  useEffect(() => {
+    if (!openDraftId || openingDraft || busy || submitted || draftJson() === savedDraft.current) return;
+    const timer = window.setTimeout(() => {
+      // One save at a time, so an older one never lands after a newer one.
+      autosaving.current = (autosaving.current ?? Promise.resolve()).then(() => autosave(openDraftId));
+    }, AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [
+    openDraftId,
+    openingDraft,
+    busy,
+    submitted,
+    preset.id,
+    title,
+    caption,
+    alt,
+    tagsText,
+    short,
+    zhTitle,
+    zhText,
+    zhTopicsText,
+    place,
+    zhPlace,
+    cover,
+    chineseVideo,
+    files,
+  ]);
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
     setPreviews(urls);
@@ -417,16 +488,26 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         setOpenDraftId(id);
         const active = draft.preset;
         if (active) setPreferences((p) => (p.presets.some((item) => item.id === active) ? { ...p, active } : p));
-        setTitle(draft.title);
-        setCaption(draft.caption);
-        setAlt(draft.alt);
-        setTagsText(draft.tags?.join(" ") ?? "");
-        setShort(draft.short ?? "");
-        setZhTitle(draft.zh?.title ?? "");
-        setZhText(draft.zh?.text ?? "");
-        setZhTopicsText(draft.zh?.topics.join(" ") ?? "");
-        setPlace(draft.location ?? "");
-        setZhPlace(draft.zh?.location ?? "");
+        // Edits this tab made before a reload that the draft didn't get in time win over its saved text.
+        const edits = storedText.current?.draft === id && storedText.current.pending ? storedText.current : null;
+        storedText.current = null;
+        fillText(
+          edits ?? {
+            draft: id,
+            title: draft.title,
+            caption: draft.caption,
+            alt: draft.alt,
+            tags: draft.tagsText ?? draft.tags?.join(" ") ?? "",
+            short: draft.short ?? "",
+            zh: {
+              title: draft.zh?.title ?? "",
+              text: draft.zh?.text ?? "",
+              topics: draft.zhTopicsText ?? draft.zh?.topics.join(" ") ?? "",
+              location: draft.zh?.location ?? "",
+            },
+            location: draft.location ?? "",
+          },
+        );
         const videos = draft.zh?.video ? 2 : 1;
         const file = await storedFile(draft.video, draft.title, { video: 1, videos });
         const chinese = draft.zh?.video
@@ -436,7 +517,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         const zhCoverFile = draft.zh?.cover ? await storedFile(draft.zh.cover, "cover-zh.jpg") : undefined;
         await showMedia([file], [""], [""]);
         setChineseVideo(chinese);
-        setCover(coverFile && { file: coverFile, zh: zhCoverFile });
+        setCover(coverFile && { file: coverFile, zh: zhCoverFile, at: draft.coverAt });
         draftId.current = id;
       } catch (e) {
         // Without its video the draft can't go out as written, so its text goes too, rather than wait to be sent as text.
@@ -455,6 +536,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         }
         setError(e instanceof Error ? e.message : "Could not open this draft");
       } finally {
+        storedText.current = null;
         setPendingDraft(undefined);
         setOpeningDraft(false);
         setDraftLoad(undefined);
@@ -515,18 +597,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           sendsZhCover ? crypto.randomUUID() : undefined,
         ),
       );
-      const uploadMedia = async (file: File): Promise<string> => {
-        const stored = storedMedia.current.get(file);
-        if (stored) return stored;
-        const response = await fetch("/api/publisher/media", {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || "Upload failed");
-        return result.id;
-      };
       const pending = (submission.current ||= { id: crypto.randomUUID(), media: [] });
       for (let i = pending.media.length; i < files.length; i++) pending.media.push(await uploadMedia(files[i]));
       if (sentChineseVideo) pending.zhVideo ||= await uploadMedia(sentChineseVideo);
@@ -549,15 +619,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           .then((thumbnail) => saveThumbnail(pending.id, thumbnail))
           .catch(() => {});
       if (draftId.current) {
-        // If this delete is lost, the server still refuses to queue the same video twice.
-        api(`drafts/${draftId.current}`, undefined, "DELETE")
+        const posted = draftId.current;
+        // After any autosave on its way, which would put the draft back. If this delete is lost, the server still
+        // refuses to queue the same video twice.
+        (autosaving.current ?? Promise.resolve())
+          .then(() => api(`drafts/${posted}`, undefined, "DELETE"))
           .catch(() => {})
           .finally(() => setDraftsVersion((v) => v + 1));
-        draftId.current = null;
-        setOpenDraftId(null);
-        window.history.replaceState(null, "", location.pathname);
       }
-      clearMedia();
       if (sentLocation) {
         const next = [sentLocation, ...recentPlaces.filter((recent) => recent !== sentLocation)].slice(0, 8);
         setRecentPlaces(next);
@@ -567,16 +636,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           // The place is still offered for this visit.
         }
       }
-      setPlace("");
-      setZhPlace("");
-      setTitle("");
-      setAlt("");
-      setCaption(preset.caption);
-      setTagsText("");
-      setShort("");
-      setZhTitle("");
-      setZhText("");
-      setZhTopicsText("");
+      clearComposer();
       setNotice("Queued. Your laptop will publish each destination once.");
       await refresh();
     } catch (e) {
@@ -615,6 +675,146 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     setAlts([]);
     setDatesTaken([]);
     submission.current = null;
+  }
+  /** Empties the composer for the next post, letting go of the draft it held. */
+  function clearComposer() {
+    if (draftId.current) {
+      draftId.current = null;
+      setOpenDraftId(null);
+      window.history.replaceState(null, "", location.pathname);
+    }
+    savedDraft.current = "";
+    setDraftStatus(undefined);
+    clearMedia();
+    setPlace("");
+    setZhPlace("");
+    setTitle("");
+    setAlt("");
+    setCaption(preset.caption);
+    setTagsText("");
+    setShort("");
+    setZhTitle("");
+    setZhText("");
+    setZhTopicsText("");
+  }
+  /** Puts text back in the composer. An empty caption keeps the preset's, unless it's a draft's. */
+  function fillText(text: StoredText) {
+    const field = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
+    setTitle(field(text.title, 100));
+    if (text.caption || text.draft) setCaption(field(text.caption, 5000));
+    setAlt(field(text.alt, 1000));
+    setTagsText(field(text.tags, 1000));
+    setShort(field(text.short, 1000));
+    setZhTitle(field(text.zh?.title, 100));
+    setZhText(field(text.zh?.text, 5000));
+    setZhTopicsText(field(text.zh?.topics, 500));
+    setPlace(field(text.location, MAX_LOCATION));
+    setZhPlace(field(text.zh?.location, MAX_LOCATION));
+  }
+  /** Uploads a file once; a draft or the post that takes it again gets the same id. */
+  function uploadMedia(file: File): Promise<string> {
+    const stored = storedMedia.current.get(file);
+    if (stored) return Promise.resolve(stored);
+    let upload = uploads.current.get(file);
+    if (!upload) {
+      upload = (async () => {
+        const response = await fetch("/api/publisher/media", {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Upload failed");
+        storedMedia.current.set(file, result.id);
+        return result.id as string;
+      })();
+      // A failed upload can be tried again.
+      upload.catch(() => uploads.current.delete(file));
+      uploads.current.set(file, upload);
+    }
+    return upload;
+  }
+  /** The composer as a draft, with `idOf` naming each upload. A draft is one video and its text. */
+  function draftFields(idOf: (file: File) => string | undefined) {
+    if (kind !== "video" || files.length !== 1) return null;
+    const words = (text: string) =>
+      parseTags(text)
+        .filter((word) => word.length <= 100)
+        .slice(0, 30);
+    const zhVideo = chineseVideo && idOf(chineseVideo);
+    const coverId = cover && idOf(cover.file);
+    const zhCover = zhVideo && coverId && cover?.zh && idOf(cover.zh);
+    return {
+      video: idOf(files[0]),
+      preset: preset.id,
+      title,
+      caption,
+      alt,
+      tags: words(tagsText),
+      tagsText,
+      short,
+      zh: {
+        title: zhTitle,
+        text: zhText,
+        topics: words(zhTopicsText),
+        ...(zhVideo ? { video: zhVideo } : {}),
+        ...(zhCover ? { cover: zhCover } : {}),
+        ...(zhPlace.trim() ? { location: zhPlace.trim() } : {}),
+      },
+      zhTopicsText,
+      ...(coverId ? { cover: coverId, ...(cover?.at !== undefined ? { coverAt: cover.at } : {}) } : {}),
+      location: place.trim(),
+    };
+  }
+  /** The open draft as the composer has it, with anything not uploaded yet marked, to tell whether it's saved. */
+  function draftJson() {
+    return JSON.stringify(draftFields((file) => storedMedia.current.get(file) ?? "unsaved"));
+  }
+  /** Saves the composer's edits to the open draft. A new cover goes up with them; a new video waits for Save. */
+  async function autosave(id: string) {
+    setDraftStatus("saving");
+    try {
+      if (cover) await uploadMedia(cover.file);
+      if (cover?.zh && chineseVideo) await uploadMedia(cover.zh);
+      const body = draftFields((file) => storedMedia.current.get(file));
+      if (!body?.video || (chineseVideo && !body.zh.video)) {
+        setDraftStatus(undefined);
+        return;
+      }
+      const json = JSON.stringify(body);
+      if (json !== savedDraft.current) await api(`drafts/${id}`, body, "PUT");
+      if (draftId.current !== id) return;
+      savedDraft.current = json;
+      setDraftStatus("saved");
+    } catch (e) {
+      if (draftId.current === id) setDraftStatus({ failed: e instanceof Error ? e.message : "Could not save" });
+    }
+  }
+  /** Saves the post as a draft, the open one or a new one, uploading what it needs, and starts a new post. */
+  async function saveToDrafts() {
+    setBusy(true);
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      // An autosave still on its way could land after this save and undo it.
+      await autosaving.current;
+      for (const file of [files[0], chineseVideo, cover?.file, chineseVideo && cover?.zh])
+        if (file) await uploadMedia(file);
+      const body = draftFields((file) => storedMedia.current.get(file));
+      if (!body?.video) throw new Error("A draft is one video and its text.");
+      const id = draftId.current;
+      if (id) await api(`drafts/${id}`, body, "PUT");
+      else await api("drafts", body);
+      clearComposer();
+      setDraftsVersion((v) => v + 1);
+      setNotice("Saved to drafts.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save the draft");
+    } finally {
+      setSaving(false);
+      setBusy(false);
+    }
   }
   /** Media lists stay index-aligned with each photo's description and date. */
   async function showMedia(next: File[], nextAlts: string[], nextDates: string[]) {
@@ -725,7 +925,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
   if (submitted) publishLabel = "Retry queue request";
-  if (busy && !openingDraft) publishLabel = "Uploading…";
+  if (busy && !openingDraft && !saving) publishLabel = "Uploading…";
+  // An open draft says whether the owner's edits are in it yet.
+  const newVideo = [files[0], chineseVideo].some((file) => file && !storedMedia.current.has(file));
+  let draftNote = "Edits save to this draft as you go.";
+  if (draftStatus === "saving") draftNote = "Saving the draft…";
+  if (draftStatus === "saved") draftNote = "Draft saved. Edits save as you go.";
+  if (typeof draftStatus === "object") draftNote = `Couldn't save the draft: ${draftStatus.failed}`;
+  if (newVideo) draftNote = "Save draft to keep the new video in it.";
   if (busy && openingDraft) {
     const which = draftLoad && draftLoad.videos > 1 ? `video ${draftLoad.video} of ${draftLoad.videos}` : "video";
     const percent = draftLoad?.total ? ` ${Math.floor((draftLoad.loaded / draftLoad.total) * 100)}%` : "";
@@ -1318,6 +1525,21 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 >
                   {publishLabel}
                 </button>
+                {kind === "video" && (
+                  <button
+                    type="button"
+                    className="publisher-save"
+                    disabled={busy || submitted || files.length !== 1}
+                    onClick={saveToDrafts}
+                  >
+                    {saving ? "Saving…" : "Save draft"}
+                  </button>
+                )}
+                {openDraftId && !openingDraft && (
+                  <p className="publisher-note" role="status">
+                    {draftNote}
+                  </p>
+                )}
                 {!destinations.length && (
                   <p className="publisher-note">None of the selected destinations take {unavailableFor[kind]}.</p>
                 )}

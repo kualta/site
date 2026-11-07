@@ -145,6 +145,7 @@
 .publisher details[open] > summary { margin-bottom:16px; }
 .publisher summary:focus-visible { outline:2px solid var(--publisher-ink); outline-offset:3px; border-radius:4px; }
 .publisher-compose aside > .publisher-note { margin:12px 0 0; }
+.publisher .publisher-save { justify-content:center; width:100%; margin-top:8px; padding:11px 16px; }
 .publisher-problem { margin:12px 0 0; color:var(--publisher-danger); font-size:13px; overflow-wrap:anywhere; }
 
 /* --- status messages float above the page, so they're seen wherever the action was --- */

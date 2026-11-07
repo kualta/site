@@ -243,17 +243,45 @@ let drafts = [
     created: minutes(26 * 60),
   },
 ].map((item) => ({ ...item, expires: item.created + 7 * day }));
+// Drafts the composer saved, kept across reloads as Cloudflare would keep them.
+const SAVED = "publisher.fixture.drafts";
+const saved: Record<string, { id: string; title: string; caption: string; video: string; zh?: { video?: string } }> =
+  JSON.parse(localStorage.getItem(SAVED) ?? "{}");
+const listed = (item: (typeof saved)[string], created: number) => ({
+  id: item.id,
+  title: item.title,
+  caption: item.caption,
+  video: item.video,
+  chinese: Boolean(item.zh?.video),
+  created,
+  expires: created + 7 * day,
+});
+drafts = [...Object.values(saved).map((item) => listed(item, Date.now())), ...drafts].filter(
+  (item, i, all) => all.findIndex((other) => other.id === item.id) === i,
+);
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const url = new URL(String(input), location.href);
   const path = url.pathname.replace("/api/publisher/", "");
   const method = init.method || "GET";
-  requests.push({ path, method, body: typeof init.body === "string" ? JSON.parse(init.body) : null });
+  const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
+  requests.push({ path, method, body });
   if (path === `media/${draftVideo}` || path === `media/${chineseVideo}`) return realFetch(input, init);
   if (path.startsWith("drafts/") && method === "DELETE") {
     drafts = drafts.filter((item) => `drafts/${item.id}` !== path);
     return json({ ok: true });
   }
+  if ((path === "drafts" && method === "POST") || (path.startsWith("drafts/") && method === "PUT")) {
+    const id = method === "POST" ? crypto.randomUUID() : path.slice("drafts/".length);
+    if (method === "PUT" && !saved[id] && id !== draft.id && id !== chineseDraft.id)
+      return json({ error: "This draft has expired or was already posted" }, 404);
+    saved[id] = { id, ...body };
+    localStorage.setItem(SAVED, JSON.stringify(saved));
+    drafts = [listed(saved[id], Date.now()), ...drafts.filter((item) => item.id !== id)];
+    return json({ id }, method === "POST" ? 201 : 200);
+  }
+  const savedId = path.slice("drafts/".length);
+  if (path.startsWith("drafts/") && saved[savedId]) return json(saved[savedId]);
   if (path === `drafts/${draft.id}`) return json(draft);
   if (path === `drafts/${chineseDraft.id}`) return json(chineseDraft);
   if (path.startsWith("drafts/")) return json({ error: "This draft has expired or was already posted" }, 404);
