@@ -18,19 +18,35 @@ function kindFilter(column: string, kinds?: readonly PostKind[]) {
   return { sql: ` AND json_extract(${column},'$.kind') IN (${kinds.map(() => "?").join(",")})`, values: [...kinds] };
 }
 
+/** SQL for whether publication `t` can be read on one of `supported`, which are bound in its place. */
+function readable(supported: Platform[]): string {
+  return `t.state='succeeded' AND t.url IS NOT NULL
+    AND t.platform IN (${supported.map(() => "?").join(",")})
+    AND NOT EXISTS(SELECT 1 FROM publisher_deletions d WHERE d.target_id=t.id AND d.state IN ('queued','working','deleted'))`;
+}
+/**
+ * The helper asks every few seconds, so this reads only the checks that are due. CROSS JOIN keeps SQLite starting from
+ * them rather than from every publication. A due check nothing can read, such as a deleted post's or one on a
+ * platform the helper isn't signed in to, is set aside for an hour so the next asks don't read it again.
+ */
 export async function claimAnalytics(db: NewsletterDB, supported: Platform[]) {
   if (!supported.length) return null;
   const now = Date.now();
-  return db
+  const claimed = await db
     .prepare(`UPDATE publisher_metric_checks SET claim=?, next_at=? WHERE target_id=(
-    SELECT c.target_id FROM publisher_metric_checks c JOIN publisher_targets t ON t.id=c.target_id
-    WHERE c.next_at<=? AND t.state='succeeded' AND t.url IS NOT NULL
-    AND t.platform IN (${supported.map(() => "?").join(",")})
-    AND NOT EXISTS(SELECT 1 FROM publisher_deletions d WHERE d.target_id=t.id AND d.state IN ('queued','working','deleted'))
+    SELECT c.target_id FROM publisher_metric_checks c CROSS JOIN publisher_targets t ON t.id=c.target_id
+    WHERE c.next_at<=? AND ${readable(supported)}
     ORDER BY c.next_at, t.rowid LIMIT 1
   ) AND next_at<=? RETURNING target_id,claim`)
     .bind(crypto.randomUUID(), now + 5 * 60_000, now, ...supported, now)
     .first<{ target_id: string; claim: string }>();
+  if (claimed) return claimed;
+  await db
+    .prepare(`UPDATE publisher_metric_checks SET next_at=? WHERE next_at<=? AND NOT EXISTS(
+    SELECT 1 FROM publisher_targets t WHERE t.id=publisher_metric_checks.target_id AND ${readable(supported)})`)
+    .bind(now + 60 * 60_000, now, ...supported)
+    .run();
+  return null;
 }
 export async function saveAnalytics(db: NewsletterDB, id: string, claim: string, input: unknown, error?: string) {
   const metrics = error ? null : validMetrics(input);

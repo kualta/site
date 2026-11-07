@@ -57,6 +57,8 @@ type Props = {
   openDraft?: string | null;
   /** Changes when a draft has been posted, so the list is read again. */
   draftsVersion?: number;
+  /** Changes when the composer queues a post, so the list shows it at once. */
+  postsVersion?: number;
 };
 type Tone = "ok" | "busy" | "bad" | "warn" | "gone";
 
@@ -306,7 +308,7 @@ function LinkPost({ post, request, onDone, onError }: Props & { post: Post; onDo
     </fieldset>
   );
 }
-export default function PublisherHistory({ request, onError, openDraft, draftsVersion }: Props) {
+export default function PublisherHistory({ request, onError, openDraft, draftsVersion, postsVersion }: Props) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   // Sent from the terminal and waiting in Cloudflare to be opened and published.
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
@@ -320,9 +322,17 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
   async function refresh() {
     setPage(await request(path));
   }
+  // Every read counts against D1's daily cap. A destination that's publishing or being deleted changes within seconds,
+  // so it's watched closely; otherwise the list changes only when the composer or this page changes it. A hidden tab
+  // reads nothing and catches up when it's shown.
+  const pending = page.posts.some((post) =>
+    post.targets.some(
+      (t) => ["queued", "working"].includes(t.state) || ["queued", "working"].includes(t.deletion_state || ""),
+    ),
+  );
+  useEffect(() => setLoading(true), [path]);
   useEffect(() => {
     let active = true;
-    setLoading(true);
     const load = async () => {
       try {
         const result = await request(path);
@@ -334,12 +344,17 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
       }
     };
     void load();
-    const timer = window.setInterval(load, 5000);
+    const poll = () => {
+      if (!document.hidden) void load();
+    };
+    const timer = window.setInterval(poll, pending ? 5000 : 60_000);
+    document.addEventListener("visibilitychange", poll);
     return () => {
       active = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", poll);
     };
-  }, [path, request, onError]);
+  }, [path, request, onError, pending, postsVersion]);
   useEffect(() => {
     let active = true;
     let reported = false;
@@ -354,7 +369,9 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
       }
     };
     void load();
-    const timer = window.setInterval(load, 30_000);
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load();
+    }, 30_000);
     return () => {
       active = false;
       clearInterval(timer);

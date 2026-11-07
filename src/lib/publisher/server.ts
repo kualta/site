@@ -255,13 +255,18 @@ export function postMedia(post: Pick<Post, "kind" | "mediaKinds" | "media" | "zh
   return postUploads(post).map((upload) => upload.id);
 }
 /**
+ * Each platform's latest sign-in as `s`, joined to publications `t`. Read once per query: looking it up again for every
+ * publication read every connection each time, and the History list is read often.
+ */
+export const SIGN_INS = `LEFT JOIN (SELECT platform, MAX(created_at) AS at FROM publisher_connections
+  WHERE state='succeeded' GROUP BY platform) s ON s.platform=t.platform`;
+/**
  * SQL for whether publication `t` went out through the helper before the platform's sign-in last changed, so it may
  * be on another account than the one connected now. A reconnect to the same account counts too: the helper can't tell
- * accounts apart. Grain and Bluesky always post as the owner's one DID.
+ * accounts apart. Grain and Bluesky always post as the owner's one DID. Needs `SIGN_INS`.
  */
 export const EARLIER_SIGN_IN = `(t.linked=0 AND t.state='succeeded' AND t.platform NOT IN ('grain','bluesky')
-  AND EXISTS(SELECT 1 FROM publisher_connections c
-  WHERE c.platform=t.platform AND c.state='succeeded' AND c.created_at>COALESCE(t.finished_at,t.started_at,0)))`;
+  AND COALESCE(s.at,0)>COALESCE(t.finished_at,t.started_at,0))`;
 /**
  * Sends a post that already went out to more destinations, checked again as if it were new. A destination it reached
  * only under an earlier sign-in can take it again, on the account connected now.
@@ -279,7 +284,9 @@ export async function addDestinations(
   if (!job) throw new PostError("Invalid post");
   const post = JSON.parse(job.payload) as Post;
   const { results: current } = await db
-    .prepare(`SELECT DISTINCT t.platform FROM publisher_targets t WHERE t.job_id = ? AND NOT ${EARLIER_SIGN_IN}`)
+    .prepare(
+      `SELECT DISTINCT t.platform FROM publisher_targets t ${SIGN_INS} WHERE t.job_id = ? AND NOT ${EARLIER_SIGN_IN}`,
+    )
     .bind(input.job)
     .all<{ platform: Platform }>();
   const added = platforms.filter(
@@ -435,6 +442,11 @@ export async function targetActive(db: NewsletterDB, id: string, claim: string):
     .first();
   return Boolean(row);
 }
+/**
+ * publisher_one_connection's condition, word for word. The helper asks every few seconds, and SQLite reads that
+ * one-row partial index only for a query that repeats it; otherwise it reads every connection there has been.
+ */
+export const OPEN_CONNECTION = "state IN ('queued','working')";
 export async function claimConnection(db: NewsletterDB) {
   await db
     .prepare(
@@ -444,7 +456,8 @@ export async function claimConnection(db: NewsletterDB) {
     .run();
   return db
     .prepare(
-      "UPDATE publisher_connections SET state='working', claim=? WHERE id=(SELECT id FROM publisher_connections WHERE state='queued' ORDER BY created_at LIMIT 1) AND state='queued' RETURNING *",
+      `UPDATE publisher_connections SET state='working', claim=? WHERE id=(SELECT id FROM publisher_connections
+      WHERE ${OPEN_CONNECTION} AND state='queued' ORDER BY created_at LIMIT 1) AND state='queued' RETURNING *`,
     )
     .bind(crypto.randomUUID())
     .first<{ id: string; platform: Platform; action: string; payload: string | null; claim: string }>();
