@@ -59,12 +59,17 @@ const unavailableFor: Record<PostKind, string> = {
   video: "this video",
   mixed: "photos and videos together",
 };
+/** How long a video's shape is waited for before the composer goes on without it. */
+const SHAPE_WAIT_MS = 10_000;
 /** Resolves undefined when this browser cannot read the file; the laptop checks it again. */
 function videoShape(file: File): Promise<VideoShape | undefined> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
     const url = URL.createObjectURL(file);
+    let timer: number | undefined;
     const done = (shape?: VideoShape) => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", read);
       URL.revokeObjectURL(url);
       resolve(shape);
     };
@@ -77,7 +82,15 @@ function videoShape(file: File): Promise<VideoShape | undefined> {
           : undefined,
       );
     video.onerror = () => done();
-    video.src = url;
+    // A background tab defers media loading, and a video outside the page never gets it back once the tab is shown,
+    // so a draft opened behind other tabs waited forever. Read the file once the tab is visible, and never for long.
+    const read = () => {
+      if (document.hidden || timer !== undefined) return;
+      timer = window.setTimeout(done, SHAPE_WAIT_MS);
+      video.src = url;
+    };
+    document.addEventListener("visibilitychange", read);
+    read();
   });
 }
 /** A toolbar button that opens its own file picker. */
