@@ -225,6 +225,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   // The draft in the composer, which the drafts list marks rather than offers, and a nudge to list them again.
   const [openDraftId, setOpenDraftId] = useState<string | null>(null);
   const [draftsVersion, setDraftsVersion] = useState(0);
+  const [postsVersion, setPostsVersion] = useState(0);
   const draftId = useRef<string | null>(null);
   // A draft's video is already in Cloudflare, so publishing it doesn't upload it again.
   const storedMedia = useRef(new WeakMap<File, string>());
@@ -356,8 +357,16 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   useEffect(() => {
     if (access !== "owner") return;
     refresh().catch((e) => setError(e.message));
-    const timer = window.setInterval(() => refresh().catch(() => setHelperOnline(false)), 10_000);
-    return () => clearInterval(timer);
+    // A hidden tab reads nothing, since every read counts against D1's daily cap, and catches up when it's shown.
+    const poll = () => {
+      if (!document.hidden) refresh().catch(() => setHelperOnline(false));
+    };
+    const timer = window.setInterval(poll, 10_000);
+    document.addEventListener("visibilitychange", poll);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", poll);
+    };
   }, [access]);
   // A draft sent from the terminal shows its text and settings as soon as they arrive, then its videos follow.
   // Until they're in the composer stays locked, so it can't go out as a text post.
@@ -519,6 +528,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       setSubmitted(true);
       await api("jobs", pending.payload);
       setSubmitted(false);
+      setPostsVersion((v) => v + 1);
       // Uploads expire in a week; a small picture stays with the post for Analytics.
       const picture = cover?.file ?? files[0];
       if (picture)
@@ -1315,7 +1325,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 )}
               </aside>
             </div>
-            <PublisherHistory request={api} onError={setError} openDraft={openDraftId} draftsVersion={draftsVersion} />
+            <PublisherHistory
+              request={api}
+              onError={setError}
+              openDraft={openDraftId}
+              draftsVersion={draftsVersion}
+              postsVersion={postsVersion}
+            />
             <PublisherConnections
               online={helperOnline}
               connected={connectedPlatforms}

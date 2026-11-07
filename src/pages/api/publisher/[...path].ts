@@ -25,6 +25,7 @@ import {
   authorizeHelper,
   claimTarget,
   claimConnection,
+  OPEN_CONNECTION,
   hashToken,
   validId,
   validatePost,
@@ -148,12 +149,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
           "SELECT id, platform, action, state, confirmed, message FROM publisher_connections ORDER BY created_at DESC LIMIT 10",
         )
         .all();
-      const { results } = await db
-        .prepare(
-          "SELECT j.id,j.payload,j.created_at,t.platform,t.state,t.message,t.url FROM publisher_jobs j JOIN publisher_targets t ON t.job_id=j.id WHERE j.id IN (SELECT id FROM publisher_jobs ORDER BY created_at DESC LIMIT 20) ORDER BY j.created_at DESC",
-        )
-        .all();
-      return json({ helper, results, connections: connections.results });
+      return json({ helper, connections: connections.results });
     }
     if (path === "accounts" && request.method === "POST") {
       const data = (await request.json()) as {
@@ -377,7 +373,9 @@ export const ALL: APIRoute = async ({ request, params }) => {
         .run();
       const connection = await claimConnection(db);
       if (connection) return json({ connection, target: null });
-      const connecting = await db.prepare("SELECT id FROM publisher_connections WHERE state='working' LIMIT 1").first();
+      const connecting = await db
+        .prepare(`SELECT id FROM publisher_connections WHERE ${OPEN_CONNECTION} AND state='working' LIMIT 1`)
+        .first();
       if (connecting) return json({ target: null });
       const deletion = input.deletePublications === true ? await claimDeletion(db, supported) : null;
       if (deletion) {

@@ -99,6 +99,22 @@ test("analytics leases each eligible publication once and excludes deleted/pendi
   expect(await claimAnalytics(f.db, ["twitter"])).toBeNull();
   f.sql.close();
 });
+test("a due check nothing can read waits an hour, so the helper's next asks don't read it again", async () => {
+  const f = fixture();
+  const unsigned = f.target("instagram"),
+    deleted = f.target("grain");
+  f.sql.query("INSERT INTO publisher_deletions(target_id,state,requested_at) VALUES(?,'deleted',0)").run(deleted);
+  const before = Date.now();
+  expect(await claimAnalytics(f.db, ["twitter", "grain"])).toBeNull();
+  const nextAt = (id: string) =>
+    (f.sql.query("SELECT next_at FROM publisher_metric_checks WHERE target_id=?").get(id) as { next_at: number })
+      .next_at;
+  expect(nextAt(unsigned)).toBeGreaterThanOrEqual(before + 60 * 60_000);
+  expect(nextAt(deleted)).toBeGreaterThanOrEqual(before + 60 * 60_000);
+  const readable = f.target();
+  expect((await claimAnalytics(f.db, ["twitter", "grain"]))?.target_id).toBe(readable);
+  f.sql.close();
+});
 test("errors preserve snapshots and stale receipts cannot overwrite a newer lease", async () => {
   const f = fixture();
   const id = f.target();

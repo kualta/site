@@ -1,5 +1,5 @@
 import type { NewsletterDB } from "../newsletter/types";
-import { EARLIER_SIGN_IN, validId } from "./server";
+import { EARLIER_SIGN_IN, SIGN_INS, validId } from "./server";
 import type { Platform, PostKind } from "./presets";
 
 /** `kinds` keeps only posts of those kinds; without it every post is listed. */
@@ -31,7 +31,7 @@ export async function historyPage(db: NewsletterDB, cursor: string | null, kinds
     .prepare(
       `SELECT t.*, d.state AS deletion_state, d.message AS deletion_message, d.finished_at AS deleted_at,
      ${EARLIER_SIGN_IN} AS earlier_sign_in
-     FROM publisher_targets t LEFT JOIN publisher_deletions d ON d.target_id=t.id
+     FROM publisher_targets t LEFT JOIN publisher_deletions d ON d.target_id=t.id ${SIGN_INS}
      WHERE t.job_id IN (${page.map(() => "?").join(",")}) ORDER BY t.rowid`,
     )
     .bind(...page.map((job) => job.id))
