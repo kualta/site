@@ -30,9 +30,12 @@ const shortNames: Record<Platform, string> = {
 const kindIcons = { text: CommentIcon, photo: ImageIcon, video: VideoIcon, mixed: VideoIcon };
 
 /** A destination's state in a word: what the calendar marks it with. */
-function stateOf(target: CalendarTarget): "published" | "scheduled" | "queued" | "failed" | "check" | "deleted" {
+function stateOf(
+  target: CalendarTarget,
+): "published" | "scheduled" | "queued" | "failed" | "check" | "deleted" | "stopped" {
   if (target.deleted) return "deleted";
   if (target.scheduled) return "scheduled";
+  if (target.stopped) return "stopped";
   switch (target.state) {
     case "succeeded":
       return "published";
@@ -52,6 +55,7 @@ const stateWords = {
   failed: "Failed",
   check: "Check the platform",
   deleted: "Deleted",
+  stopped: "Stopped",
 };
 const dayKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -270,7 +274,9 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
                 </li>
               ))}
             </ul>
-            <p className="publisher-note">Stop a scheduled post from its History entry on the Compose tab.</p>
+            <p className="publisher-note">
+              Change a scheduled time, or cancel it, from the post's History entry on the Compose tab.
+            </p>
           </div>
         </div>
       )}

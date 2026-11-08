@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import type { NewsletterDB } from "../newsletter/types";
 import { calendarPosts } from "./calendar";
+import { STOPPED_BEFORE } from "./server";
 
 function database() {
   const sqlite = new Database(":memory:");
@@ -42,7 +43,7 @@ const job = (sqlite: Database, id: string, created: number, post: object) =>
 const target = (sqlite: Database, row: Record<string, string | number | null>) =>
   sqlite
     .query(
-      "INSERT INTO publisher_targets (id, job_id, platform, state, url, started_at, finished_at, scheduled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO publisher_targets (id, job_id, platform, state, url, started_at, finished_at, scheduled_at, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       crypto.randomUUID(),
@@ -53,6 +54,7 @@ const target = (sqlite: Database, row: Record<string, string | number | null>) =
       row.started ?? null,
       row.finished ?? null,
       row.scheduled ?? null,
+      row.message ?? null,
     );
 
 test("the calendar shows each destination on the day it published or is scheduled to", async () => {
@@ -94,8 +96,17 @@ test("the calendar shows each destination on the day it published or is schedule
         at: 8 * day + 600,
         scheduled: false,
         deleted: false,
+        stopped: false,
       },
-      { platform: "tiktok", state: "failed", url: null, at: 8 * day + 900, scheduled: false, deleted: false },
+      {
+        platform: "tiktok",
+        state: "failed",
+        url: null,
+        at: 8 * day + 900,
+        scheduled: false,
+        deleted: false,
+        stopped: false,
+      },
     ],
   });
   expect(posts[1].cover).toBe("c2");
@@ -127,5 +138,20 @@ test("a destination not yet claimed sits at its time or when it was queued, and 
     ["bluesky", 6 * day - 3_600_000, false, false],
   ]);
   expect(await calendarPosts(db, 20 * day, 30 * day)).toEqual([]);
+  // Stopped before it published, it never reached the platform; a real failure did try.
+  job(sqlite, "stopped", 7 * day, { title: "S", caption: "", kind: "text", media: [] });
+  target(sqlite, { job: "stopped", platform: "lens", state: "failed", finished: 7 * day, message: STOPPED_BEFORE });
+  target(sqlite, {
+    job: "stopped",
+    platform: "farcaster",
+    state: "failed",
+    finished: 7 * day + 1,
+    message: "Rejected",
+  });
+  const [stopped] = await calendarPosts(db, 7 * day, 8 * day);
+  expect(stopped.targets.map((t) => [t.platform, t.stopped])).toEqual([
+    ["lens", true],
+    ["farcaster", false],
+  ]);
   sqlite.close();
 });

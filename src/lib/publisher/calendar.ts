@@ -1,5 +1,6 @@
 import type { NewsletterDB } from "../newsletter/types";
 import type { Platform, PostKind } from "./presets";
+import { STOPPED_BEFORE } from "./server";
 
 /** One destination on the calendar: when it published, or is to. */
 export interface CalendarTarget {
@@ -12,6 +13,8 @@ export interface CalendarTarget {
   scheduled: boolean;
   /** Taken down since. */
   deleted: boolean;
+  /** Stopped before it published: it never reached the platform. */
+  stopped: boolean;
 }
 /** A post with what the calendar shows of it. */
 export interface CalendarPost {
@@ -45,7 +48,8 @@ export async function calendarPosts(
 ): Promise<CalendarPost[]> {
   const { results } = await db
     .prepare(
-      `SELECT t.job_id, t.platform, t.state, t.url, t.scheduled_at, ${MOMENT} AS at, d.state AS deletion_state
+      `SELECT t.job_id, t.platform, t.state, t.url, t.message, t.scheduled_at, ${MOMENT} AS at,
+         d.state AS deletion_state
        FROM publisher_targets t JOIN publisher_jobs j ON j.id=t.job_id
        LEFT JOIN publisher_deletions d ON d.target_id=t.id
        WHERE ${MOMENT} >= ? AND ${MOMENT} < ? ORDER BY at, t.rowid`,
@@ -56,6 +60,7 @@ export async function calendarPosts(
       platform: Platform;
       state: CalendarTarget["state"];
       url: string | null;
+      message: string | null;
       scheduled_at: number | null;
       at: number;
       deletion_state: string | null;
@@ -101,6 +106,7 @@ export async function calendarPosts(
             at: row.at,
             scheduled: row.state === "queued" && row.scheduled_at !== null && row.scheduled_at > now,
             deleted: row.deletion_state === "deleted",
+            stopped: row.state === "failed" && row.message === STOPPED_BEFORE,
           })),
       };
     })

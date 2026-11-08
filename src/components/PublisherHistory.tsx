@@ -11,6 +11,8 @@ import {
   type PostKind,
 } from "@/lib/publisher/presets";
 import { publicationLink } from "@/lib/publisher/links";
+import { localInput } from "@/lib/publisher/schedule";
+import { STOPPED_BEFORE } from "@/lib/publisher/server";
 import { parseTags } from "@/lib/publisher/variants";
 import type { DraftSummary } from "@/lib/publisher/drafts";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
@@ -64,6 +66,10 @@ type Props = {
 };
 type Tone = "ok" | "busy" | "bad" | "warn" | "gone";
 
+/** Whether a destination was stopped before it published, so it can be scheduled again. */
+function stopped(target: Target): boolean {
+  return target.state === "failed" && target.message === STOPPED_BEFORE;
+}
 /** Whether a destination is still waiting for its scheduled time. */
 function waiting(target: Target): boolean {
   return target.state === "queued" && (target.scheduled_at ?? 0) > Date.now();
@@ -101,7 +107,8 @@ function status(target: Target): { label: string; tone: Tone } {
     case "working":
       return { label: "Publishing…", tone: "busy" };
     case "failed":
-      return { label: "Failed", tone: "bad" };
+      // Stopped before it published, it never reached the platform: nothing went wrong.
+      return stopped(target) ? { label: "Stopped", tone: "gone" } : { label: "Failed", tone: "bad" };
     default:
       return { label: "Check platform", tone: "warn" };
   }
@@ -331,6 +338,8 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  // The destination whose time is being changed, and the time typed so far.
+  const [retiming, setRetiming] = useState<{ target: string; value: string } | null>(null);
   const cursor = cursors[cursors.length - 1];
   const path = `history${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`;
   async function refresh() {
@@ -433,6 +442,22 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     onError("");
     try {
       await request("stop", { job: post.id, target: target.id });
+      await refresh();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  /** Moves a scheduled destination to a new time, or schedules a stopped one again. */
+  async function reschedule(post: Post, target: Target, value: string) {
+    const at = new Date(value).getTime();
+    if (!Number.isFinite(at)) return onError("Choose a day and time.");
+    setBusy(true);
+    onError("");
+    try {
+      await request("reschedule", { job: post.id, target: target.id, at });
+      setRetiming(null);
       await refresh();
     } catch (error) {
       onError((error as Error).message);
@@ -586,13 +611,56 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
                               <TrashIcon size={16} />
                             </button>
                           )}
-                        {["queued", "working"].includes(target.state) && (
+                        {retiming?.target === target.id ? (
+                          <form
+                            className="publisher-history-retime"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void reschedule(post, target, retiming.value);
+                            }}
+                          >
+                            <input
+                              type="datetime-local"
+                              aria-label={`New time for ${name}`}
+                              value={retiming.value}
+                              min={localInput(Date.now())}
+                              max={localInput(Date.now() + 7 * 86_400_000)}
+                              onChange={(event) => setRetiming({ target: target.id, value: event.target.value })}
+                            />
+                            <button type="submit" disabled={busy}>
+                              Save
+                            </button>
+                            <button type="button" onClick={() => setRetiming(null)}>
+                              Cancel
+                            </button>
+                          </form>
+                        ) : (
+                          (target.state === "queued" || stopped(target)) && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                setRetiming({
+                                  target: target.id,
+                                  value: localInput(
+                                    target.state === "queued" && target.scheduled_at
+                                      ? target.scheduled_at
+                                      : Date.now() + 3_600_000,
+                                  ),
+                                })
+                              }
+                            >
+                              {target.state === "queued" ? "Change time" : "Schedule again"}
+                            </button>
+                          )
+                        )}
+                        {["queued", "working"].includes(target.state) && retiming?.target !== target.id && (
                           <button
                             disabled={busy}
-                            aria-label={`Stop publishing to ${name}`}
+                            aria-label={`${waiting(target) ? "Cancel" : "Stop"} publishing to ${name}`}
                             onClick={() => void stop(post, target)}
                           >
-                            Stop
+                            {waiting(target) ? "Cancel" : "Stop"}
                           </button>
                         )}
                         {!!target.linked && !["queued", "working"].includes(target.deletion_state || "") && (

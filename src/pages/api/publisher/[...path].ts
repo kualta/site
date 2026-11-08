@@ -19,6 +19,7 @@ import {
   unlinkPublication,
   PostError,
   stopTarget,
+  rescheduleTarget,
   markPublished,
   postUploads,
   targetActive,
@@ -494,6 +495,13 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const data = (await request.json()) as { job: string; target: string };
       if (!validId(data.job) || !validId(data.target)) return json({ error: "Invalid post" }, 400);
       return json({ ok: await stopTarget(db, data.job, data.target) });
+    }
+    if (path === "reschedule" && request.method === "POST") {
+      const data = (await request.json()) as { job: string; target: string; at: unknown };
+      if (!validId(data.job) || !validId(data.target)) return json({ error: "Invalid post" }, 400);
+      if (!(await rescheduleTarget(db, data.job, data.target, data.at)))
+        return json({ error: "It's publishing or done by now, so its time can't change." }, 409);
+      return json({ ok: true });
     }
     if (path === "mark-published" && request.method === "POST") {
       const data = (await request.json()) as { job: string; target: string; url: unknown };

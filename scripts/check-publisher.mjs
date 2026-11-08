@@ -237,6 +237,33 @@ try {
     assert.equal(stopped.job, "00000000-0000-4000-8000-000000000003");
     assert.match(stopped.target, /^tiktok-queued-/);
     await clipRow.getByRole("button", { name: "Close" }).click();
+    // A scheduled destination's time can change; one stopped before it published isn't a failure and can go again.
+    const schools = history.locator(".publisher-history-item", { hasText: "Better schools" });
+    assert.equal(await schools.getByText("Stopped before publishing").count(), 0);
+    await schools.getByRole("button", { name: "Manage" }).click();
+    const instagramRow = schools.locator(".publisher-history-panel-row", { hasText: "Instagram" });
+    await instagramRow.getByText(/^Scheduled · /).waitFor();
+    await instagramRow.getByRole("button", { name: "Cancel publishing to Instagram" }).waitFor();
+    const stoppedRow = schools.locator(".publisher-history-panel-row", { hasText: "Xiaohongshu" });
+    await stoppedRow.getByText(/^Stopped/).waitFor();
+    await stoppedRow.getByRole("button", { name: "Schedule again" }).click();
+    const newTime = new Date(Date.now() + 2 * 86_400_000);
+    newTime.setHours(7, 0, 0, 0);
+    const pad = (n) => String(n).padStart(2, "0");
+    const typed = `${newTime.getFullYear()}-${pad(newTime.getMonth() + 1)}-${pad(newTime.getDate())}T07:00`;
+    await stoppedRow.getByRole("textbox", { name: "New time for Xiaohongshu" }).fill(typed);
+    await stoppedRow.getByRole("button", { name: "Save" }).click();
+    await stoppedRow.getByText(/^Scheduled · /).waitFor();
+    const moved = await page.evaluate(() => window.publisherRequests.find((r) => r.path === "reschedule").body);
+    assert.deepEqual(moved, { job: "00000000-0000-4000-8000-000000000007", target: "xiaohongshu-stopped", at: newTime.getTime() });
+    await instagramRow.getByRole("button", { name: "Change time" }).click();
+    assert.equal(
+      new Date(await instagramRow.getByRole("textbox", { name: "New time for Instagram" }).inputValue()).getTime() >
+        Date.now(),
+      true,
+    );
+    await instagramRow.getByRole("button", { name: "Cancel", exact: true }).click();
+    await schools.getByRole("button", { name: "Close" }).click();
     // A TikTok post from an earlier sign-in can go out again, or take the link of a repost made by hand.
     const quake = history.locator(".publisher-history-item", { hasText: "I LOVE EARTHQUAKES" });
     const quakeCrosspost = quake.getByRole("group", { name: "Crosspost to" });

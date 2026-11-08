@@ -52,6 +52,16 @@ const history = {
         target("bluesky", "succeeded", { deletion_state: "deleted", deletion_message: "Deleted from the platform" }),
       ],
     },
+    // Scheduled for tomorrow on Instagram; Xiaohongshu was stopped before it published, to move it.
+    {
+      id: "00000000-0000-4000-8000-000000000007",
+      created_at: minutes(3),
+      post: { kind: "video", title: "Better schools", caption: "", media: ["m-schools"], alt: "" },
+      targets: [
+        target("instagram", "queued", { id: "instagram-scheduled", scheduled_at: Date.now() + 86_400_000 }),
+        target("xiaohongshu", "failed", { id: "xiaohongshu-stopped", message: "Stopped before publishing." }),
+      ],
+    },
     {
       id: "00000000-0000-4000-8000-000000000003",
       created_at: minutes(24 * 60),
@@ -363,6 +373,14 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (/^jobs\/[^/]+\/thumbnail$/.test(path) && method === "PUT") return json({ ok: true });
   if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
   if (path === "stop" || path === "mark-published" || path === "unlink") return json({ ok: true });
+  // A new time puts the destination back in the queue, waiting for it.
+  if (path === "reschedule") {
+    const { target: id, at } = body as { target: string; at: number };
+    for (const post of history.posts)
+      for (const item of post.targets as Record<string, unknown>[])
+        if (item.id === id) Object.assign(item, { state: "queued", scheduled_at: at, message: null, finished_at: null });
+    return json({ ok: true });
+  }
   if (path === "link") return json({ id: crypto.randomUUID(), platform: "tiktok" }, 201);
   if (path === "crosspost") return json({ platforms: JSON.parse(String(init.body)).platforms });
   if (path === "translate") return json({ title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });

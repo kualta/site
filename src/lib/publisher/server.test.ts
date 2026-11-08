@@ -9,6 +9,8 @@ import {
   postMedia,
   postUploads,
   stopTarget,
+  rescheduleTarget,
+  STOPPED_BEFORE,
   targetActive,
   claimTarget,
   claimConnection,
@@ -253,6 +255,51 @@ test("a post can name a place, trimmed and kept short", () => {
   ).toThrow("location");
 });
 describe("queue", () => {
+  test("a destination waiting to publish can move, and one stopped before publishing can be scheduled again", async () => {
+    const { db, sqlite } = database();
+    const hour = 3_600_000;
+    const day = 24 * hour;
+    // The post's video went up two days ago, so its uploads last five more days.
+    sqlite
+      .query("INSERT INTO publisher_media (id, kind, name, job_id, created_at) VALUES ('m', 'video', 'v', 'job', ?)")
+      .run(Date.now() - 2 * day);
+    const target = (id: string, state: string, message: string | null = null) =>
+      sqlite
+        .query(
+          "INSERT INTO publisher_targets (id, job_id, platform, state, message, scheduled_at) VALUES (?, 'job', 'tiktok', ?, ?, ?)",
+        )
+        .run(id, state, message, Date.now() + day);
+    target("waiting", "queued");
+    target("stopped", "failed", STOPPED_BEFORE);
+    target("failed", "failed", "Upload rejected");
+    target("working", "working");
+    target("done", "succeeded");
+    const later = Date.now() + 3 * day;
+    expect(await rescheduleTarget(db, "job", "waiting", later)).toBe(true);
+    expect(await rescheduleTarget(db, "job", "stopped", later)).toBe(true);
+    const rows = sqlite
+      .query(
+        "SELECT id, state, scheduled_at, message FROM publisher_targets WHERE id IN ('waiting','stopped') ORDER BY rowid",
+      )
+      .all();
+    expect(rows).toEqual([
+      { id: "waiting", state: "queued", scheduled_at: later, message: null },
+      { id: "stopped", state: "queued", scheduled_at: later, message: null },
+    ]);
+    // A real failure may have reached the platform, and the others are publishing or done.
+    for (const id of ["failed", "working", "done"]) expect(await rescheduleTarget(db, "job", id, later)).toBe(false);
+    expect(await rescheduleTarget(db, "other", "waiting", later)).toBe(false);
+    // Not after the uploads expire, nor outside the next week, nor anything but a time.
+    await expect(rescheduleTarget(db, "job", "waiting", Date.now() + 5 * day + hour)).rejects.toThrow("expire");
+    await expect(rescheduleTarget(db, "job", "waiting", Date.now() - day)).rejects.toThrow("within the next week");
+    await expect(rescheduleTarget(db, "job", "waiting", String(later))).rejects.toThrow("within the next week");
+    // Stopped, it says so; moved, it waits for the new time.
+    await stopTarget(db, "job", "waiting");
+    expect(sqlite.query("SELECT message FROM publisher_targets WHERE id='waiting'").get()).toEqual({
+      message: STOPPED_BEFORE,
+    });
+    sqlite.close();
+  });
   test("a scheduled destination waits for its time", async () => {
     const { db, sqlite } = database();
     const later = Date.now() + 3_600_000;

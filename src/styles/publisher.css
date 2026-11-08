@@ -224,6 +224,8 @@
 .publisher-history-panel-row:has(> a:hover), .publisher-history-panel-row:has(> a:focus-visible) { background:var(--publisher-wash); }
 .publisher-history-panel-row > a, .publisher-history-panel-row > div { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; padding:10px 12px; outline:none; }
 .publisher-history-panel-row > a > span:first-child::after { content:" ↗"; color:var(--publisher-muted); }
+.publisher-history-retime { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+.publisher .publisher-history-retime input { width:auto; margin:0; padding-block:6px; }
 .publisher .publisher-history-icon { display:grid; place-items:center; flex:none; width:32px; height:32px; padding:0; border:0; border-radius:999px; background:transparent; color:var(--publisher-muted); }
 .publisher .publisher-history-icon:hover:not(:disabled), .publisher .publisher-history-icon:focus-visible { background:color-mix(in srgb, var(--publisher-danger) 14%, transparent); color:var(--publisher-danger); }
 .publisher-history-panel-body > p { margin:6px 12px 0; }
@@ -420,7 +422,7 @@
 .publisher-calendar-mark { padding:0 4px; border:1px solid var(--publisher-ink); border-radius:4px; font-size:10px; line-height:14px; }
 .publisher-calendar-mark[data-state="published"] { background:var(--publisher-ink); color:var(--publisher-on-ink); }
 .publisher-calendar-mark[data-state="scheduled"], .publisher-calendar-mark[data-state="queued"] { border-style:dashed; color:var(--publisher-ink); }
-.publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"]) { border-color:var(--publisher-muted); color:var(--publisher-muted); text-decoration:line-through; }
+.publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"]) { border-color:var(--publisher-muted); color:var(--publisher-muted); text-decoration:line-through; }
 .publisher-calendar-detail { display:flex; gap:16px; margin-top:24px; padding:16px; border:1px solid var(--publisher-edge); border-radius:14px; }
 .publisher-calendar-detail .publisher-calendar-thumb { width:56px; height:74px; border-radius:10px; }
 .publisher-calendar-detail h2 { margin:0 0 10px; font-size:16px; }
