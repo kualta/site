@@ -15,7 +15,28 @@ import {
   type PostKind,
 } from "./presets";
 import { postKey, publicationLink } from "./links";
+import { UPLOAD_LIFETIME } from "./schedule";
 import { isTag, problem, renderVariant, type Variant } from "./variants";
+
+/** A scheduled time can be this far in the past by the time the post reaches the server: it publishes at once. */
+const SCHEDULE_SLACK = 10 * 60_000;
+/** A schedule names some of the post's destinations, each at a whole millisecond within the next week. */
+function validSchedule(schedule: unknown, destinations: string[]): boolean {
+  if (typeof schedule !== "object" || schedule === null) return false;
+  const now = Date.now();
+  const times = Object.entries(schedule);
+  return (
+    times.length > 0 &&
+    times.every(
+      ([platform, at]) =>
+        destinations.includes(platform) &&
+        typeof at === "number" &&
+        Number.isInteger(at) &&
+        at >= now - SCHEDULE_SLACK &&
+        at <= now + UPLOAD_LIFETIME,
+    )
+  );
+}
 
 export interface MediaBucket {
   put(key: string, body: ArrayBuffer | string, options?: { httpMetadata: { contentType: string } }): Promise<unknown>;
@@ -71,6 +92,8 @@ export interface Post {
   cover?: string;
   /** A place to tag, by name: each platform picks its closest match (see `locationPlatforms`). */
   location?: string;
+  /** When each destination publishes, in ms; a destination without a time publishes at once. */
+  schedule?: Partial<Record<Platform, number>>;
 }
 /** Where a video post can choose its cover; the rest pick their own frame. */
 export const coverPlatforms: Platform[] = ["youtube", "tiktok", "instagram", "xiaohongshu", "lens"];
@@ -196,6 +219,9 @@ export function validatePost(value: unknown): Post {
     )
   )
     throw new PostError(`Name the location in up to ${MAX_LOCATION} characters`);
+  const schedule = p.schedule;
+  if (schedule !== undefined && !validSchedule(schedule, p.platforms))
+    throw new PostError("Schedule each destination for a time within the next week");
   const variants: Partial<Record<Platform, Variant>> = {};
   for (const platform of p.platforms) {
     variants[platform] = renderVariant(platform, p);
@@ -236,6 +262,16 @@ export function validatePost(value: unknown): Post {
     ...(p.youtubeShort ? { youtubeShort: true } : {}),
     ...(p.cover ? { cover: p.cover } : {}),
     ...(p.location?.trim() ? { location: p.location.trim() } : {}),
+    // In the destinations' order, so a retried request is the same post.
+    ...(schedule
+      ? {
+          schedule: Object.fromEntries(
+            p.platforms.flatMap((platform) =>
+              schedule[platform] === undefined ? [] : [[platform, schedule[platform]]],
+            ),
+          ),
+        }
+      : {}),
   };
 }
 /** Every upload a post uses, with the kind it was uploaded as: its own media, its Chinese version, then the covers. */
@@ -398,12 +434,14 @@ export async function claimTarget(db: NewsletterDB, supported: Platform[], { car
         .join(",")}))`;
   return db
     .prepare(
-      `UPDATE publisher_targets SET state = 'working', claim = ?, started_at = ? WHERE id = (SELECT id FROM publisher_targets WHERE state = 'queued' AND platform IN (${supported
+      // A scheduled destination waits for its time.
+      `UPDATE publisher_targets SET state = 'working', claim = ?, started_at = ? WHERE id = (SELECT id FROM publisher_targets WHERE state = 'queued' AND (scheduled_at IS NULL OR scheduled_at <= ?) AND platform IN (${supported
         .map(() => "?")
         .join(",")})${newer} ORDER BY rowid LIMIT 1) AND state = 'queued' RETURNING *`,
     )
     .bind(
       claim,
+      Date.now(),
       Date.now(),
       ...supported,
       ...(carousels ? [] : carouselTargets.map(([platform, kind]) => `${platform}:${kind}`)),

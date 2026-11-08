@@ -307,6 +307,8 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     });
   if (path === "history") return json(history);
   if (path === "drafts") return json({ drafts });
+  // Bluesky posted an hour ago, so its next free slot keeps its gap from that.
+  if (path === "schedule") return json({ busy: { bluesky: [Date.now() - 3_600_000] } });
   if (path === "analytics") {
     const kinds = url.searchParams.get("kinds")?.split(",");
     return json({ ...analytics, posts: analytics.posts.filter((post) => !kinds || kinds.includes(post.post.kind)) });

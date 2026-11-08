@@ -872,6 +872,61 @@ try {
     await context.close();
   }
 
+  // A post can be scheduled: each destination at its platform's next free slot, or its best time on a chosen day,
+  // and any of them moved by hand.
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 1400 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("http://127.0.0.1:8797/publisher.html");
+    await page.getByRole("navigation", { name: "Presets" }).getByRole("button", { name: "Text post", exact: true }).click();
+    await page.getByRole("textbox", { name: "Post" }).fill("Later, please");
+    const when = page.getByRole("combobox", { name: "When" });
+    await when.selectOption("next");
+    const times = page.getByRole("group", { name: "Publishes" });
+    await times.getByRole("textbox", { name: "Bluesky" }).waitFor();
+    await page.getByRole("button", { name: "Schedule for 2 places" }).waitFor();
+    const shown = async (name) => new Date(await times.getByRole("textbox", { name }).inputValue()).getTime();
+    // Bluesky posted an hour ago, and its posts stay four hours apart.
+    assert.ok((await shown("Bluesky")) >= Date.now() + 3 * 3_600_000 - 60_000);
+    assert.ok((await shown("X / Twitter")) > Date.now());
+    if (shots) await page.screenshot({ path: path.join(shots, "schedule-next.png"), fullPage: true });
+    // Moved by hand, X goes out at that time instead.
+    const tomorrow = new Date(Date.now() + 86_400_000);
+    const pad = (n) => String(n).padStart(2, "0");
+    const day = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+    await times.getByRole("textbox", { name: "X / Twitter" }).fill(`${day}T07:45`);
+    await page.getByRole("button", { name: "Schedule for 2 places" }).click();
+    const scheduled = await queued(page);
+    assert.deepEqual(scheduled.platforms, ["bluesky", "twitter"]);
+    assert.deepEqual(Object.keys(scheduled.schedule), ["bluesky", "twitter"]);
+    assert.equal(scheduled.schedule.twitter, new Date(`${day}T07:45`).getTime());
+    await page.getByRole("status").getByText("Scheduled. Your laptop publishes each destination at its time.").waitFor();
+    // On a day: each platform's best time that day, in its time zone; tomorrow to start with.
+    await page.getByRole("textbox", { name: "Post" }).fill("Tomorrow");
+    await when.selectOption("day");
+    assert.equal(await page.getByRole("textbox", { name: "Day", exact: true }).inputValue(), day);
+    assert.equal(await times.getByRole("textbox", { name: "X / Twitter" }).inputValue(), `${day}T09:00`);
+    assert.equal(await times.getByRole("textbox", { name: "Bluesky" }).inputValue(), `${day}T20:00`);
+    // Posting times can change, and stay in this browser.
+    await page.getByText("Posting times").click();
+    const blueskyTimes = page.getByRole("group", { name: "Bluesky", exact: true }).getByRole("textbox", { name: "Times" });
+    await blueskyTimes.fill("7:30, 21:00");
+    await blueskyTimes.blur();
+    assert.equal(await times.getByRole("textbox", { name: "Bluesky" }).inputValue(), `${day}T07:30`);
+    await page.reload();
+    await page.getByText("Posting times").click();
+    assert.equal(await blueskyTimes.inputValue(), "07:30, 21:00");
+    // A new visit starts at Now, and nothing is scheduled.
+    assert.equal(await when.inputValue(), "now");
+    await page.getByRole("textbox", { name: "Post" }).fill("Right away");
+    await page.getByRole("button", { name: "Publish to 2 places" }).click();
+    assert.equal((await queued(page)).schedule, undefined);
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+
   // A Chinese version goes to Xiaohongshu in place of the video; every other destination keeps the original.
   const chineseContext = await browser.newContext({ viewport: { width: 1280, height: 1400 } });
   const zhPage = await chineseContext.newPage();

@@ -146,6 +146,17 @@
 .publisher summary:focus-visible { outline:2px solid var(--publisher-ink); outline-offset:3px; border-radius:4px; }
 .publisher-compose aside > .publisher-note { margin:12px 0 0; }
 .publisher .publisher-save { justify-content:center; width:100%; margin-top:8px; padding:11px 16px; }
+
+/* --- scheduling: each destination's time, and each platform's posting times --- */
+.publisher-schedule, .publisher-posting-times { min-width:0; margin:0 0 20px; padding:0; border:0; }
+.publisher-schedule legend, .publisher-posting-times legend { margin-bottom:10px; font-size:14px; color:var(--publisher-ink); }
+.publisher .publisher-schedule label { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.publisher .publisher-schedule input { width:auto; min-width:0; margin:0; }
+.publisher-posting-times { padding-bottom:16px; border-bottom:1px solid var(--publisher-line); }
+.publisher .publisher-posting-times label { margin-bottom:10px; }
+.publisher-days { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
+.publisher .publisher-days button { padding:4px 9px; border-radius:999px; font-size:12px; }
+.publisher .publisher-days button[aria-pressed="true"], .publisher .publisher-days button[aria-pressed="true"]:hover:not(:disabled) { background:var(--publisher-ink); border-color:var(--publisher-ink); color:var(--publisher-on-ink); }
 .publisher-problem { margin:12px 0 0; color:var(--publisher-danger); font-size:13px; overflow-wrap:anywhere; }
 
 /* --- status messages float above the page, so they're seen wherever the action was --- */
