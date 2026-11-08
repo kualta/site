@@ -41,6 +41,7 @@ import {
 import { EXPIRY_MARGIN, UPLOAD_LIFETIME } from "@/lib/publisher/schedule";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
+import { calendarPosts } from "@/lib/publisher/calendar";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
 import { isTag } from "@/lib/publisher/variants";
 export const prerender = false;
@@ -130,6 +131,15 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "history" && request.method === "GET") {
       return json(await historyPage(db, new URL(request.url).searchParams.get("before")));
+    }
+    // The Calendar's month, with the days around it its grid shows: at most about six weeks.
+    if (path === "calendar" && request.method === "GET") {
+      const params = new URL(request.url).searchParams;
+      const from = Number(params.get("from"));
+      const to = Number(params.get("to"));
+      if (!Number.isInteger(from) || !Number.isInteger(to) || to <= from || to - from > 45 * 86_400_000)
+        return json({ error: "Choose a month" }, 400);
+      return json({ posts: await calendarPosts(db, from, to) });
     }
     if (path === "delete-publications" && request.method === "POST") {
       const data = (await request.json()) as { job: string; target?: string; confirmed?: boolean };

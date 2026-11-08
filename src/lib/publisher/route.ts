@@ -1,17 +1,27 @@
 import type { Metric } from "./metrics";
 import type { PostKind } from "./presets";
 
-export type Tab = "compose" | "analytics";
-const ANALYTICS = /\/analytics\/?$/;
-/** Which tab a path opens, and the composer's own path: `/` and `/analytics` on post.kualta.dev, `/publish…` locally. */
+export type Tab = "compose" | "analytics" | "calendar";
+const TAB = /\/(analytics|calendar)\/?$/;
+/**
+ * Which tab a path opens, and the composer's own path: `/`, `/analytics` and `/calendar` on post.kualta.dev,
+ * `/publish…` locally.
+ */
 export function readPath(pathname: string): { base: string; tab: Tab } {
   return {
-    base: pathname.replace(ANALYTICS, "").replace(/\/+$/, ""),
-    tab: ANALYTICS.test(pathname) ? "analytics" : "compose",
+    base: pathname.replace(TAB, "").replace(/\/+$/, ""),
+    tab: (pathname.match(TAB)?.[1] as Tab | undefined) ?? "compose",
   };
 }
 export function tabPath(base: string, tab: Tab) {
-  return tab === "analytics" ? `${base}/analytics` : base || "/";
+  return tab === "compose" ? base || "/" : `${base}/${tab}`;
+}
+
+/** The month the Calendar tab shows, "YYYY-MM", from its address; this month without one. */
+export function readMonth(search: string, now = new Date()): string {
+  const month = new URLSearchParams(search).get("month") ?? "";
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return month;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export const postTypes = ["video", "photo", "text"] as const;

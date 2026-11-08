@@ -1,4 +1,5 @@
 import PublisherAnalytics from "./PublisherAnalytics";
+import PublisherCalendar from "./PublisherCalendar";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -191,7 +192,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   );
   const { base, tab } = readPath(address.pathname);
   // Where each tab was left, so switching back returns to it.
-  const tabSearch = useRef<Record<Tab, string>>({ compose: "", analytics: "" });
+  const tabSearch = useRef<Record<Tab, string>>({ compose: "", analytics: "", calendar: "" });
   useEffect(() => {
     const sync = () => setAddress(currentAddress());
     window.addEventListener("popstate", sync);
@@ -1045,6 +1046,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
             <button aria-pressed={tab === "compose"} onClick={() => openTab("compose")}>
               Compose
             </button>
+            <button aria-pressed={tab === "calendar"} onClick={() => openTab("calendar")}>
+              Calendar
+            </button>
             <button aria-pressed={tab === "analytics"} onClick={() => openTab("analytics")}>
               Analytics
             </button>
@@ -1055,6 +1059,15 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               online={helperOnline}
               search={address.search}
               onNavigate={(search, replace) => navigate(tabPath(base, "analytics"), search, replace)}
+            />
+          )}
+          {tab === "calendar" && (
+            <PublisherCalendar
+              request={api}
+              onError={setError}
+              search={address.search}
+              onNavigate={(search, replace) => navigate(tabPath(base, "calendar"), search, replace)}
+              postsVersion={postsVersion}
             />
           )}
           <div hidden={tab !== "compose"}>

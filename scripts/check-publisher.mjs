@@ -16,13 +16,13 @@ const server = await createServer({
   resolve: { alias: [{ find: "@", replacement: path.join(root, "src") }] },
   esbuild: { jsx: "automatic" },
   server: { host: "127.0.0.1", port: 8797, fs: { allow: [root] } },
-  // The Analytics tab has its own path, as on post.kualta.dev, so a reload opens it again.
+  // The Analytics and Calendar tabs have their own paths, as on post.kualta.dev, so a reload opens them again.
   plugins: [
     {
       name: "publisher-tabs",
       configureServer(vite) {
         vite.middlewares.use((request, _response, next) => {
-          request.url = request.url?.replace(/^\/publisher\.html\/analytics(?=\?|$)/, "/publisher.html");
+          request.url = request.url?.replace(/^\/publisher\.html\/(analytics|calendar)(?=\?|$)/, "/publisher.html");
           next();
         });
       },
@@ -868,6 +868,53 @@ try {
     const photo = { name: "p.png", mimeType: "image/png", buffer: png };
     await page.locator('input[type="file"][accept="image/*"]').setInputFiles(photo);
     assert.equal(await page.getByRole("button", { name: "Save draft" }).count(), 0);
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+
+  // The Calendar shows each post on the days it published or is scheduled to, each platform marked with its state.
+  for (const [width, height, name] of [
+    [1280, 1100, "desktop"],
+    [390, 1100, "mobile"],
+  ]) {
+    const context = await browser.newContext({ viewport: { width, height } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("http://127.0.0.1:8797/publisher.html");
+    await page.getByRole("button", { name: "Calendar" }).click();
+    const now = new Date();
+    const monthName = now.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    await page.getByRole("heading", { name: monthName }).waitFor();
+    // Posts that fall next month show there instead; this check looks at the ones in this month.
+    const inMonth = (days) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + days).getMonth() === now.getMonth();
+    const film = page.getByRole("button", { name: /Square windows/ });
+    if (inMonth(-2)) {
+      await film.waitFor();
+      assert.equal(await film.locator('[data-state="published"]').textContent(), "YT");
+      assert.equal(await film.locator('[data-state="failed"]').textContent(), "TT");
+      await film.click();
+      const detail = page.getByRole("region", { name: "Square windows" });
+      assert.equal(await detail.getByRole("link", { name: "Open" }).getAttribute("href"), "https://example.test/youtube");
+      await detail.getByText(/^Failed /).waitFor();
+    }
+    if (inMonth(1)) {
+      // Scheduled across two days, the next part shows on each with that day's platforms.
+      const days = page.getByRole("button", { name: /Better schools/ });
+      assert.equal(await days.count(), inMonth(2) ? 2 : 1);
+      assert.equal(await days.first().locator('[data-state="scheduled"]').textContent(), "IG");
+    }
+    if (shots) await page.screenshot({ path: path.join(shots, `calendar-${name}.png`), fullPage: true });
+    // The month is in the address, so a reload or a link opens it again.
+    await page.getByRole("button", { name: "Next month" }).click();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    await page.getByRole("heading", { name: next.toLocaleDateString(undefined, { month: "long", year: "numeric" }) }).waitFor();
+    assert.match(page.url(), /\/calendar\?month=\d{4}-\d{2}$/);
+    await page.reload();
+    await page.getByRole("heading", { name: next.toLocaleDateString(undefined, { month: "long", year: "numeric" }) }).waitFor();
+    await page.getByRole("button", { name: "Today" }).click();
+    await page.getByRole("heading", { name: monthName }).waitFor();
+    assert.equal(new URL(page.url()).search, "");
     assert.deepEqual(errors, []);
     await context.close();
   }
