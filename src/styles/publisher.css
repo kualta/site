@@ -399,6 +399,8 @@
 }
 
 /* --- calendar: posts on the days they published or are scheduled to --- */
+/* The month takes the whole width of the window. */
+.publisher[data-tab="calendar"] { max-width:none; }
 .publisher-calendar-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:8px; }
 .publisher-calendar-head h1 { margin:0; }
 .publisher-calendar-head .publisher-actions { flex:none; flex-wrap:nowrap; }
@@ -417,17 +419,19 @@
 .publisher-calendar-thumb img { width:100%; height:100%; object-fit:cover; }
 .publisher-calendar-text { display:flex; flex-direction:column; gap:3px; min-width:0; }
 .publisher-calendar-label { overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
-.publisher-calendar-marks { display:flex; flex-wrap:wrap; gap:2px; }
+.publisher-calendar-marks { display:flex; flex-wrap:wrap; gap:3px; }
 /* Filled when published, outlined when scheduled, struck through when it failed or was taken down. */
-.publisher-calendar-mark { padding:0 4px; border:1px solid var(--publisher-ink); border-radius:4px; font-size:10px; line-height:14px; }
+.publisher-calendar-mark { position:relative; display:inline-grid; place-items:center; width:24px; height:20px; border:1px solid var(--publisher-ink); border-radius:6px; color:var(--publisher-ink); }
 .publisher-calendar-mark[data-state="published"] { background:var(--publisher-ink); color:var(--publisher-on-ink); }
-.publisher-calendar-mark[data-state="scheduled"], .publisher-calendar-mark[data-state="queued"] { border-style:dashed; color:var(--publisher-ink); }
-.publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"]) { border-color:var(--publisher-muted); color:var(--publisher-muted); text-decoration:line-through; }
+.publisher-calendar-mark:is([data-state="scheduled"], [data-state="queued"]) { border-style:dashed; }
+.publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"]) { border-color:var(--publisher-muted); color:var(--publisher-muted); }
+.publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"])::after { content:""; position:absolute; left:-1px; right:-1px; top:calc(50% - 1px); height:2px; border-radius:1px; background:currentColor; box-shadow:0 0 0 1.5px var(--publisher-surface); transform:rotate(40deg); }
 .publisher-calendar-detail { display:flex; gap:16px; margin-top:24px; padding:16px; border:1px solid var(--publisher-edge); border-radius:14px; }
 .publisher-calendar-detail .publisher-calendar-thumb { width:56px; height:74px; border-radius:10px; }
 .publisher-calendar-detail h2 { margin:0 0 10px; font-size:16px; }
 .publisher-calendar-detail ul { margin:0 0 10px; padding:0; list-style:none; }
 .publisher-calendar-detail li { display:flex; justify-content:space-between; gap:16px; padding:4px 0; font-size:14px; }
+.publisher-calendar-detail li > span:first-child { display:inline-flex; align-items:center; gap:8px; }
 .publisher-calendar-detail li > span:last-child { color:var(--publisher-muted); text-align:right; }
 .publisher-calendar-detail li:is([data-state="failed"], [data-state="check"]) > span:last-child { color:var(--publisher-danger); }
 /* A phone gets the month as a list of its days with posts. */

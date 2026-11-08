@@ -1,5 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, CommentIcon, ImageIcon, VideoIcon } from "@/components/icons";
+import {
+  BlueskyIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CommentIcon,
+  FarcasterIcon,
+  GrainIcon,
+  ImageIcon,
+  InstagramIcon,
+  LensIcon,
+  TiktokIcon,
+  VideoIcon,
+  XiaohongshuIcon,
+  XLogoIcon,
+  YoutubeIcon,
+  type IconComponent,
+} from "@/components/icons";
 import type { CalendarPost, CalendarTarget } from "@/lib/publisher/calendar";
 import { platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
 import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
@@ -15,18 +31,22 @@ type Props = {
   postsVersion: number;
 };
 
-/** Short names that fit a day's cell. */
-const shortNames: Record<Platform, string> = {
-  grain: "Grain",
-  instagram: "IG",
-  bluesky: "Bsky",
-  twitter: "X",
-  farcaster: "FC",
-  lens: "Lens",
-  xiaohongshu: "XHS",
-  youtube: "YT",
-  tiktok: "TT",
+/** Each platform's mark, small enough for a day's cell. */
+const platformIcons: Record<Platform, IconComponent> = {
+  grain: GrainIcon,
+  instagram: InstagramIcon,
+  bluesky: BlueskyIcon,
+  twitter: XLogoIcon,
+  farcaster: FarcasterIcon,
+  lens: LensIcon,
+  xiaohongshu: XiaohongshuIcon,
+  youtube: YoutubeIcon,
+  tiktok: TiktokIcon,
 };
+function PlatformIcon({ platform, size }: { platform: Platform; size: number }) {
+  const Icon = platformIcons[platform];
+  return <Icon size={size} />;
+}
 const kindIcons = { text: CommentIcon, photo: ImageIcon, video: VideoIcon, mixed: VideoIcon };
 
 /** A destination's state in a word: what the calendar marks it with. */
@@ -223,18 +243,23 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
                       <small>{clock(targets[0].at)}</small> {postLabel(post)}
                     </span>
                     <span className="publisher-calendar-marks">
-                      {targets.map((target) => (
-                        <span
-                          key={target.platform}
-                          className="publisher-calendar-mark"
-                          data-state={stateOf(target)}
-                          title={`${platformNames[target.platform]}: ${stateWords[stateOf(target)]} ${clock(
-                            target.at,
-                          )}`}
-                        >
-                          {shortNames[target.platform]}
-                        </span>
-                      ))}
+                      {targets.map((target) => {
+                        const state = stateOf(target);
+                        const label = `${platformNames[target.platform]}: ${stateWords[state]} ${clock(target.at)}`;
+                        return (
+                          <span
+                            key={target.platform}
+                            className="publisher-calendar-mark"
+                            role="img"
+                            aria-label={label}
+                            title={label}
+                            data-state={state}
+                            data-platform={target.platform}
+                          >
+                            <PlatformIcon platform={target.platform} size={13} />
+                          </span>
+                        );
+                      })}
                     </span>
                   </span>
                 </button>
@@ -252,7 +277,10 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
             <ul>
               {selectedPost.targets.map((target) => (
                 <li key={target.platform} data-state={stateOf(target)}>
-                  <span>{platformNames[target.platform]}</span>
+                  <span>
+                    <PlatformIcon platform={target.platform} size={14} />
+                    {platformNames[target.platform]}
+                  </span>
                   <span>
                     {stateWords[stateOf(target)]}{" "}
                     {new Date(target.at).toLocaleString(undefined, {

@@ -1027,7 +1027,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     publishLabel = `Loading ${which}…${percent}`;
   }
   return (
-    <main className="publisher">
+    <main className="publisher" data-tab={access === "owner" ? tab : undefined}>
       <header className="publisher-header">
         <a href="https://kualta.dev">
           kualta<span> / post</span>

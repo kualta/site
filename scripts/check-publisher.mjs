@@ -903,6 +903,7 @@ try {
   // The Calendar shows each post on the days it published or is scheduled to, each platform marked with its state.
   for (const [width, height, name] of [
     [1280, 1100, "desktop"],
+    [1920, 1100, "wide"],
     [390, 1100, "mobile"],
   ]) {
     const context = await browser.newContext({ viewport: { width, height } });
@@ -914,13 +915,18 @@ try {
     const now = new Date();
     const monthName = now.toLocaleDateString(undefined, { month: "long", year: "numeric" });
     await page.getByRole("heading", { name: monthName }).waitFor();
+    // The month spans the window rather than the other tabs' column.
+    const grid = await page.locator(".publisher-calendar-grid").boundingBox();
+    assert.ok(Math.abs(grid.width - (width - (width > 700 ? 96 : 40))) <= 2, `calendar is ${grid.width}px wide at ${width}px`);
     // Posts that fall next month show there instead; this check looks at the ones in this month.
     const inMonth = (days) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + days).getMonth() === now.getMonth();
     const film = page.getByRole("button", { name: /Square windows/ });
     if (inMonth(-2)) {
       await film.waitFor();
-      assert.equal(await film.locator('[data-state="published"]').textContent(), "YT");
-      assert.equal(await film.locator('[data-state="failed"]').textContent(), "TT");
+      assert.equal(await film.locator('[data-state="published"]').getAttribute("data-platform"), "youtube");
+      assert.equal(await film.locator('[data-state="failed"]').getAttribute("data-platform"), "tiktok");
+      // Each platform is its icon, named for screen readers.
+      await film.getByRole("img", { name: /^YouTube: Published / }).waitFor();
       await film.click();
       const detail = page.getByRole("region", { name: "Square windows" });
       assert.equal(await detail.getByRole("link", { name: "Open" }).getAttribute("href"), "https://example.test/youtube");
@@ -930,7 +936,7 @@ try {
       // Scheduled across two days, the next part shows on each with that day's platforms.
       const days = page.getByRole("button", { name: /Better schools/ });
       assert.equal(await days.count(), inMonth(2) ? 2 : 1);
-      assert.equal(await days.first().locator('[data-state="scheduled"]').textContent(), "IG");
+      assert.equal(await days.first().locator('[data-state="scheduled"]').getAttribute("data-platform"), "instagram");
     }
     if (shots) await page.screenshot({ path: path.join(shots, `calendar-${name}.png`), fullPage: true });
     // The month is in the address, so a reload or a link opens it again.
