@@ -15,7 +15,7 @@ import {
   type PostKind,
 } from "./presets";
 import { postKey, publicationLink } from "./links";
-import { UPLOAD_LIFETIME } from "./schedule";
+import { EXPIRY_MARGIN, UPLOAD_LIFETIME } from "./schedule";
 import { isTag, problem, renderVariant, type Variant } from "./variants";
 
 /** A scheduled time can be this far in the past by the time the post reaches the server: it publishes at once. */
@@ -449,17 +449,45 @@ export async function claimTarget(db: NewsletterDB, supported: Platform[], { car
     .first<{ id: string; job_id: string; platform: Platform; claim: string }>();
 }
 
+/** What a destination stopped before it published says. It never reached the platform, so it can be scheduled again. */
+export const STOPPED_BEFORE = "Stopped before publishing.";
 /** Releases a target at once. Its claim stays, so a success the laptop confirms late still lands; a retry clears it. */
 export async function stopTarget(db: NewsletterDB, job: string, target: string): Promise<boolean> {
   const result = await db
     .prepare(
       `UPDATE publisher_targets SET
         state = CASE state WHEN 'queued' THEN 'failed' ELSE 'uncertain' END,
-        message = CASE state WHEN 'queued' THEN 'Stopped before publishing.' ELSE 'Stopped while publishing. Check the destination before publishing again.' END,
+        message = CASE state WHEN 'queued' THEN ? ELSE 'Stopped while publishing. Check the destination before publishing again.' END,
         finished_at = ?
       WHERE id = ? AND job_id = ? AND state IN ('queued','working')`,
     )
-    .bind(Date.now(), target, job)
+    .bind(STOPPED_BEFORE, Date.now(), target, job)
+    .run();
+  return result.meta.changes > 0;
+}
+/**
+ * Moves a destination still waiting to publish to a new time, or schedules one stopped before it published again.
+ * The time must fall within the next week and before the post's first upload expires. False when the destination is
+ * publishing or done by now.
+ */
+export async function rescheduleTarget(db: NewsletterDB, job: string, target: string, at: unknown): Promise<boolean> {
+  const now = Date.now();
+  if (typeof at !== "number" || !Number.isInteger(at) || at < now - SCHEDULE_SLACK || at > now + UPLOAD_LIFETIME)
+    throw new PostError("Choose a time within the next week");
+  const first = await db
+    .prepare("SELECT MIN(created_at) AS at FROM publisher_media WHERE job_id = ?")
+    .bind(job)
+    .first<{ at: number | null }>();
+  const expires = first?.at ? first.at + UPLOAD_LIFETIME - EXPIRY_MARGIN : Number.POSITIVE_INFINITY;
+  if (at > expires)
+    throw new PostError(`This post's uploads expire ${new Date(expires).toUTCString()}. Choose an earlier time.`);
+  const result = await db
+    .prepare(
+      `UPDATE publisher_targets SET state = 'queued', scheduled_at = ?, claim = NULL, started_at = NULL,
+        finished_at = NULL, message = NULL, url = NULL
+      WHERE id = ? AND job_id = ? AND (state = 'queued' OR (state = 'failed' AND message = ?))`,
+    )
+    .bind(at, target, job, STOPPED_BEFORE)
     .run();
   return result.meta.changes > 0;
 }
