@@ -38,6 +38,7 @@ import {
   saveComposerDraft,
   saveDraft,
 } from "@/lib/publisher/drafts";
+import { EXPIRY_MARGIN, UPLOAD_LIFETIME } from "@/lib/publisher/schedule";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
@@ -352,14 +353,25 @@ export const ALL: APIRoute = async ({ request, params }) => {
           ? json({ id: post.id })
           : json({ error: "Post identifier already used" }, 409);
       const uploads = postUploads(post).map((upload) => upload.id);
+      // The bucket removes an upload a week after it went up, so a scheduled post must go out before its first one does.
+      let expires = Number.POSITIVE_INFINITY;
       for (const { id, kind } of postUploads(post)) {
         const media = await db
-          .prepare("SELECT kind, job_id FROM publisher_media WHERE id = ?")
+          .prepare("SELECT kind, job_id, created_at FROM publisher_media WHERE id = ?")
           .bind(id)
-          .first<{ kind: string; job_id: string | null }>();
+          .first<{ kind: string; job_id: string | null; created_at: number }>();
         if (!media || media.kind !== kind || media.job_id)
           return json({ error: "Media is missing or already queued" }, 400);
+        expires = Math.min(expires, media.created_at + UPLOAD_LIFETIME - EXPIRY_MARGIN);
       }
+      const latest = Math.max(0, ...Object.values(post.schedule ?? {}));
+      if (latest > expires)
+        return json(
+          {
+            error: `This post's uploads expire ${new Date(expires).toUTCString()}. Schedule it before then.`,
+          },
+          400,
+        );
       await db.batch([
         db
           .prepare("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)")
@@ -367,11 +379,25 @@ export const ALL: APIRoute = async ({ request, params }) => {
         ...uploads.map((id) => db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ?").bind(post.id, id)),
         ...post.platforms.map((platform) =>
           db
-            .prepare("INSERT INTO publisher_targets (id, job_id, platform) VALUES (?, ?, ?)")
-            .bind(crypto.randomUUID(), post.id, platform),
+            .prepare("INSERT INTO publisher_targets (id, job_id, platform, scheduled_at) VALUES (?, ?, ?, ?)")
+            .bind(crypto.randomUUID(), post.id, platform, post.schedule?.[platform] ?? null),
         ),
       ]);
       return json({ id: post.id }, 201);
+    }
+    // When each platform last posted or is scheduled to, for the composer's "Next free slot": a week back and on.
+    if (path === "schedule" && request.method === "GET") {
+      const since = Date.now() - UPLOAD_LIFETIME;
+      const { results } = await db
+        .prepare(
+          `SELECT platform, COALESCE(scheduled_at, finished_at, started_at, ?) AS at FROM publisher_targets
+           WHERE state IN ('queued','working','succeeded') AND COALESCE(scheduled_at, finished_at, started_at, ?) >= ?`,
+        )
+        .bind(Date.now(), Date.now(), since)
+        .all<{ platform: string; at: number }>();
+      const busy: Record<string, number[]> = {};
+      for (const { platform, at } of results) (busy[platform] ??= []).push(at);
+      return json({ busy });
     }
     if (path === "helper/heartbeat" && request.method === "POST") {
       await db.prepare("UPDATE publisher_helper SET last_seen = ? WHERE id = 1").bind(Date.now()).run();

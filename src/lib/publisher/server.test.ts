@@ -38,6 +38,7 @@ function database() {
     "0008_publisher_target_finished.sql",
     "0009_publisher_reposts.sql",
     "0010_publisher_thumbnails.sql",
+    "0011_publisher_schedule.sql",
   ])
     sqlite.exec(readFileSync(`migrations/${file}`, "utf8"));
   const db = {
@@ -89,6 +90,28 @@ test("text posts carry no media and reach only text destinations", () => {
   expect(() => validatePost({ ...text, platforms: ["grain"] })).toThrow("Grain needs photos");
   expect(() => validatePost({ ...text, platforms: ["instagram"] })).toThrow("Instagram needs media");
   expect(() => validatePost({ ...text, caption: "x".repeat(281) })).toThrow("280");
+});
+test("destinations can be scheduled each for a time within the next week", () => {
+  const text = { ...post(), kind: "text", title: "", media: [], platforms: ["bluesky", "twitter"], caption: "Hi" };
+  const hour = 3_600_000;
+  const at = Date.now() + hour;
+  // Kept in the destinations' order, so a retry is the same post; one left out publishes at once.
+  expect(validatePost({ ...text, schedule: { twitter: at + hour, bluesky: at } }).schedule).toEqual({
+    bluesky: at,
+    twitter: at + hour,
+  });
+  expect(JSON.stringify(validatePost({ ...text, schedule: { twitter: at } }).schedule)).toBe(`{"twitter":${at}}`);
+  expect(validatePost(text)).not.toHaveProperty("schedule");
+  for (const schedule of [
+    { grain: at },
+    { bluesky: at + 8 * 24 * hour },
+    { bluesky: Date.now() - hour },
+    { bluesky: at + 0.5 },
+    { bluesky: String(at) },
+    {},
+    null,
+  ])
+    expect(() => validatePost({ ...text, schedule })).toThrow("within the next week");
 });
 test("titles are required only by destinations that publish them", () => {
   const photo = { ...post(), title: "", platforms: ["bluesky", "instagram"] };
@@ -230,6 +253,19 @@ test("a post can name a place, trimmed and kept short", () => {
   ).toThrow("location");
 });
 describe("queue", () => {
+  test("a scheduled destination waits for its time", async () => {
+    const { db, sqlite } = database();
+    const later = Date.now() + 3_600_000;
+    sqlite
+      .query("INSERT INTO publisher_targets (id, job_id, platform, scheduled_at) VALUES (?, 'job', 'grain', ?)")
+      .run("later", later);
+    sqlite.exec("INSERT INTO publisher_targets (id, job_id, platform) VALUES ('now', 'job', 'grain')");
+    expect((await claimTarget(db, ["grain"]))?.id).toBe("now");
+    expect(await claimTarget(db, ["grain"])).toBeNull();
+    sqlite.query("UPDATE publisher_targets SET scheduled_at = ? WHERE id = 'later'").run(Date.now() - 1);
+    expect((await claimTarget(db, ["grain"]))?.id).toBe("later");
+    sqlite.close();
+  });
   test("claims each target once, only for configured platforms", async () => {
     const { db, sqlite } = database();
     sqlite.exec(

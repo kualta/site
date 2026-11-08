@@ -24,6 +24,8 @@ type Target = {
   deletion_state: string | null;
   deletion_message: string | null;
   started_at: number | null;
+  /** When it publishes, if it was scheduled. */
+  scheduled_at?: number | null;
   /** Missing on posts published before it was recorded; started_at is close. */
   finished_at?: number | null;
   deleted_at: number | null;
@@ -62,6 +64,20 @@ type Props = {
 };
 type Tone = "ok" | "busy" | "bad" | "warn" | "gone";
 
+/** Whether a destination is still waiting for its scheduled time. */
+function waiting(target: Target): boolean {
+  return target.state === "queued" && (target.scheduled_at ?? 0) > Date.now();
+}
+/**
+ * Whether a destination is about to change: publishing, being deleted, or queued and due. One waiting for its time
+ * isn't, so the list doesn't poll fast for days.
+ */
+function changing(target: Target): boolean {
+  return (
+    (["queued", "working"].includes(target.state) && !waiting(target)) ||
+    ["queued", "working"].includes(target.deletion_state || "")
+  );
+}
 /** One destination's state in a word or two, deletion first since it follows publishing. */
 function status(target: Target): { label: string; tone: Tone } {
   switch (target.deletion_state) {
@@ -79,7 +95,9 @@ function status(target: Target): { label: string; tone: Tone } {
     case "succeeded":
       return { label: target.linked ? "Linked" : "Published", tone: "ok" };
     case "queued":
-      return { label: "Queued", tone: "busy" };
+      return waiting(target)
+        ? { label: `Scheduled · ${when(target.scheduled_at as number)}`, tone: "busy" }
+        : { label: "Queued", tone: "busy" };
     case "working":
       return { label: "Publishing…", tone: "busy" };
     case "failed":
@@ -285,8 +303,8 @@ function LinkPost({ post, request, onDone, onError }: Props & { post: Post; onDo
     <fieldset className="publisher-crosspost">
       <legend>Link a post</legend>
       <p className="publisher-note">
-        Paste the link to a post you published yourself, like a repost on a new account, and its stats count toward
-        this one.
+        Paste the link to a post you published yourself, like a repost on a new account, and its stats count toward this
+        one.
       </p>
       <label>
         Link
@@ -325,11 +343,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
   // Every read counts against D1's daily cap. A destination that's publishing or being deleted changes within seconds,
   // so it's watched closely; otherwise the list changes only when the composer or this page changes it. A hidden tab
   // reads nothing and catches up when it's shown.
-  const pending = page.posts.some((post) =>
-    post.targets.some(
-      (t) => ["queued", "working"].includes(t.state) || ["queued", "working"].includes(t.deletion_state || ""),
-    ),
-  );
+  const pending = page.posts.some((post) => post.targets.some(changing));
   useEffect(() => setLoading(true), [path]);
   useEffect(() => {
     let active = true;
@@ -478,9 +492,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
   }
   function item(post: Post) {
     const { title, caption } = post.post;
-    const pending = post.targets.some(
-      (t) => ["queued", "working"].includes(t.state) || ["queued", "working"].includes(t.deletion_state || ""),
-    );
+    const pending = post.targets.some(changing);
     const removable = post.targets.some((t) => t.state === "succeeded" && t.url && t.deletion_state !== "deleted");
     const deleted = post.targets.every((t) => t.deletion_state === "deleted");
     const problems = post.targets.filter((t) => ["bad", "warn"].includes(status(t).tone));

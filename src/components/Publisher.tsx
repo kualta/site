@@ -35,6 +35,17 @@ import { frameAt } from "@/lib/publisher/frame";
 import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost } from "@/lib/publisher/server";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 import { readPath, tabPath, type Tab } from "@/lib/publisher/route";
+import {
+  defaultSchedule,
+  localInput,
+  nextSlot,
+  parseSchedule,
+  parseTimes,
+  SCHEDULE_KEY,
+  slotOnDay,
+  type Schedule,
+  validTimeZone,
+} from "@/lib/publisher/schedule";
 import { saveThumbnail, thumbnailOf } from "@/lib/publisher/thumbnail";
 
 async function api(path: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
@@ -228,6 +239,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   // Xiaohongshu's own name for the place, in Chinese.
   const [zhPlace, setZhPlace] = useState("");
   const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
+  // When the post goes out: now, at each platform's next free slot, or on a chosen day, at local times.
+  const [when, setWhen] = useState<"now" | "next" | "day">("now");
+  const [day, setDay] = useState("");
+  // Times the owner set by hand, over the computed ones.
+  const [ownTimes, setOwnTimes] = useState<Partial<Record<Platform, number>>>({});
+  // Each platform's best times of day and the hours its posts keep apart.
+  const [postingTimes, setPostingTimes] = useState<Schedule>(defaultSchedule);
+  const [busyTimes, setBusyTimes] = useState<Record<string, number[]>>({});
   const chinesePreview = useMemo(() => chineseVideo && URL.createObjectURL(chineseVideo), [chineseVideo]);
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState("");
@@ -300,6 +319,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     } catch {
       // Recent places are a convenience too.
     }
+    try {
+      setPostingTimes(parseSchedule(localStorage.getItem(SCHEDULE_KEY)));
+    } catch {
+      // The defaults stand in.
+    }
     setReady(true);
     if (initialAccess !== "loading") return;
     api("session")
@@ -317,6 +341,22 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       setError("Could not save presets in this browser.");
     }
   }, [preferences, ready]);
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      localStorage.setItem(SCHEDULE_KEY, JSON.stringify(postingTimes));
+    } catch {
+      // They last for this visit.
+    }
+  }, [postingTimes, ready]);
+  // What each platform has out or scheduled already, read when a post is to be scheduled and after each one is.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new post is the trigger to read them again
+  useEffect(() => {
+    if (access !== "owner" || when === "now") return;
+    api("schedule")
+      .then((data) => setBusyTimes(data.busy ?? {}))
+      .catch((e) => setError(e.message));
+  }, [access, when, postsVersion]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the text and the draft's status are the trigger; draftJson reads them
   useEffect(() => {
     // Until a draft opens and takes back its edits, they stay stored; while it opens, its text isn't the owner's yet.
@@ -568,6 +608,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       if (kind === "text" && !caption.trim()) throw new Error("Write something to post.");
       if (kind === "mixed" && !asCarousel) throw new Error(carouselRequired);
       if (needsTitle && !title.trim()) throw new Error(`Add a title for ${titledNames}.`);
+      if (unplanned.length)
+        throw new Error(
+          when === "day"
+            ? `Pick a day, or a time for ${unplanned.join(", ")}: none of its times are left that day.`
+            : `${unplanned.join(", ")} has no free slot in the next two weeks. Pick a time for it.`,
+        );
       const photo = kind === "photo";
       const mediaKinds = files.map((file) => (file.type.startsWith("video/") ? "video" : "photo"));
       const payload = (id: string, media: string[], zhVideo?: string, coverId?: string, zhCoverId?: string) => ({
@@ -587,6 +633,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         youtubeShort: youtubeShort || undefined,
         cover: coverId,
         location: sentLocation || undefined,
+        schedule,
       });
       validatePost(
         payload(
@@ -637,7 +684,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         }
       }
       clearComposer();
-      setNotice("Queued. Your laptop will publish each destination once.");
+      setNotice(
+        schedule
+          ? "Scheduled. Your laptop publishes each destination at its time."
+          : "Queued. Your laptop will publish each destination once.",
+      );
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not queue post");
@@ -696,6 +747,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     setZhTitle("");
     setZhText("");
     setZhTopicsText("");
+    // "When" stays, so the next post can follow this one; times set by hand were for this one.
+    setOwnTimes({});
+  }
+  /** Changes one platform's posting times, which "Next free slot" and "On a day" follow. */
+  function updatePostingTimes(platform: Platform, patch: Partial<Schedule[Platform]>) {
+    setPostingTimes((times) => ({ ...times, [platform]: { ...times[platform], ...patch } }));
+    submission.current = null;
   }
   /** Puts text back in the composer. An empty caption keeps the preset's, unless it's a draft's. */
   function fillText(text: StoredText) {
@@ -921,9 +979,28 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       variant: renderVariant("youtube", text),
       issue: "shows photo posts to everyone: set YouTube visibility to Public",
     });
+  // A scheduled post's time on each destination: the owner's own, else the platform's next free slot or its first
+  // time on the chosen day, at least ten minutes out.
+  const earliest = Date.now() + 10 * 60_000;
+  const plan =
+    when === "now"
+      ? []
+      : destinations.map((platform) => ({
+          platform,
+          at:
+            ownTimes[platform] ??
+            (when === "next"
+              ? nextSlot(postingTimes[platform], busyTimes[platform] ?? [], earliest)
+              : slotOnDay(postingTimes[platform], day, earliest)),
+        }));
+  const unplanned = plan.filter(({ at }) => at === null).map(({ platform }) => platformNames[platform]);
+  const schedule =
+    when === "now" ? undefined : Object.fromEntries(plan.flatMap(({ platform, at }) => (at ? [[platform, at]] : [])));
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
+  if (when !== "now")
+    publishLabel = `Schedule for ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   if (submitted) publishLabel = "Retry queue request";
   if (busy && !openingDraft && !saving) publishLabel = "Uploading…";
   // An open draft says whether the owner's edits are in it yet.
@@ -1452,6 +1529,167 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 {toYouTube && preset.id === "short" && !!video && video.seconds > 180 && (
                   <p className="publisher-note">Over 3 minutes, so YouTube gets this as a regular video.</p>
                 )}
+                <label>
+                  When
+                  <select
+                    value={when}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setWhen(e.target.value as typeof when);
+                      // A day to start from: tomorrow.
+                      if (e.target.value === "day" && !day) setDay(localInput(Date.now() + 86_400_000).slice(0, 10));
+                      setOwnTimes({});
+                      submission.current = null;
+                    }}
+                  >
+                    <option value="now">Now</option>
+                    <option value="next">Next free slot on each platform</option>
+                    <option value="day">On a day</option>
+                  </select>
+                </label>
+                {when === "day" && (
+                  <label>
+                    Day
+                    <input
+                      type="date"
+                      value={day}
+                      min={localInput(Date.now()).slice(0, 10)}
+                      max={localInput(Date.now() + 6 * 86_400_000).slice(0, 10)}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setDay(e.target.value);
+                        setOwnTimes({});
+                        submission.current = null;
+                      }}
+                    />
+                  </label>
+                )}
+                {!!plan.length && (
+                  <fieldset className="publisher-schedule">
+                    <legend>Publishes</legend>
+                    {plan.map(({ platform, at }) => (
+                      <label key={platform}>
+                        {platformNames[platform]}
+                        <input
+                          type="datetime-local"
+                          value={at ? localInput(at) : ""}
+                          min={localInput(Date.now())}
+                          max={localInput(Date.now() + 7 * 86_400_000)}
+                          disabled={busy || submitted}
+                          onChange={(e) => {
+                            const time = new Date(e.target.value).getTime();
+                            setOwnTimes((times) => ({
+                              ...times,
+                              [platform]: Number.isFinite(time) ? time : undefined,
+                            }));
+                            submission.current = null;
+                          }}
+                        />
+                      </label>
+                    ))}
+                    <small className="publisher-note">
+                      Your laptop publishes each one at its time. If it's asleep then, it publishes when it wakes.
+                    </small>
+                  </fieldset>
+                )}
+                <details>
+                  <summary>Posting times</summary>
+                  <p className="publisher-note">
+                    Each platform's best times, how far apart its posts stay and how many a week, from published
+                    studies. Next free slot follows them; times are in your time zone unless a platform has its own.
+                    Saved in this browser.
+                  </p>
+                  {platforms.map((platform) => {
+                    const times = postingTimes[platform];
+                    return (
+                      <fieldset key={platform} className="publisher-posting-times">
+                        <legend>{platformNames[platform]}</legend>
+                        <label>
+                          Times
+                          <input
+                            key={times.times.join()}
+                            defaultValue={times.times.join(", ")}
+                            onBlur={(e) => {
+                              const parsed = parseTimes(e.target.value);
+                              if (parsed) updatePostingTimes(platform, { times: parsed });
+                              else {
+                                e.target.value = times.times.join(", ");
+                                setError(`Write ${platformNames[platform]}'s times as HH:MM, such as 9:00, 18:30.`);
+                              }
+                            }}
+                          />
+                        </label>
+                        <label>
+                          Hours apart
+                          <input
+                            type="number"
+                            min={0}
+                            max={168}
+                            value={times.minGapHours}
+                            onChange={(e) => {
+                              const hours = Number(e.target.value);
+                              if (Number.isFinite(hours) && hours >= 0 && hours <= 168)
+                                updatePostingTimes(platform, { minGapHours: hours });
+                            }}
+                          />
+                        </label>
+                        <label>
+                          A week, at most
+                          <input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={times.perWeek}
+                            onChange={(e) => {
+                              const count = Number(e.target.value);
+                              if (Number.isInteger(count) && count >= 1 && count <= 50)
+                                updatePostingTimes(platform, { perWeek: count });
+                            }}
+                          />
+                        </label>
+                        <div className="publisher-days" role="group" aria-label={`${platformNames[platform]} days`}>
+                          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name, weekday) => (
+                            <button
+                              type="button"
+                              key={name}
+                              aria-pressed={times.days.includes(weekday)}
+                              onClick={() =>
+                                updatePostingTimes(platform, {
+                                  days: times.days.includes(weekday)
+                                    ? times.days.filter((d) => d !== weekday)
+                                    : [...times.days, weekday].sort(),
+                                })
+                              }
+                            >
+                              {name}
+                            </button>
+                          ))}
+                        </div>
+                        <label>
+                          Time zone
+                          <input
+                            key={times.timeZone}
+                            defaultValue={times.timeZone}
+                            placeholder="Yours"
+                            onBlur={(e) => {
+                              const zone = e.target.value.trim();
+                              if (!zone || validTimeZone(zone)) updatePostingTimes(platform, { timeZone: zone });
+                              else {
+                                e.target.value = times.timeZone;
+                                setError(`${zone} isn't a time zone. Use one like America/New_York.`);
+                              }
+                            }}
+                          />
+                        </label>
+                      </fieldset>
+                    );
+                  })}
+                  <div className="publisher-actions">
+                    <button type="button" onClick={() => setPostingTimes(defaultSchedule())}>
+                      Reset to the studies' defaults
+                    </button>
+                  </div>
+                </details>
                 <details>
                   <summary>Preset settings</summary>
                   <label>
