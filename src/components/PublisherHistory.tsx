@@ -135,12 +135,12 @@ function day(time: number): string {
     ...(date.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
   });
 }
-/** "expires in 6 days", "expires in 5 hours", "expires within the hour". */
+/** "Expires in 6 days", "Expires in 5 hours", "Expires within the hour". */
 function expiresIn(at: number): string {
   const hours = Math.floor((at - Date.now()) / 3_600_000);
-  if (hours < 1) return "expires within the hour";
-  if (hours < 48) return `expires in ${hours} ${hours === 1 ? "hour" : "hours"}`;
-  return `expires in ${Math.floor(hours / 24)} days`;
+  if (hours < 1) return "Expires within the hour";
+  if (hours < 48) return `Expires in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  return `Expires in ${Math.floor(hours / 24)} days`;
 }
 /** Posts arrive newest first, so each day's posts are consecutive. */
 function byDay(posts: Post[]): { day: string; posts: Post[] }[] {
@@ -234,7 +234,7 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
             <label key={platform} data-unavailable={Boolean(reason)}>
               <span>
                 {platformNames[platform]}
-                {reason ? <small>{reason}</small> : again && <small>Again: it went out under an earlier sign-in</small>}
+                {reason ? <small>{reason}</small> : again && <small>Again · earlier sign-in</small>}
               </span>
               <input
                 type="checkbox"
@@ -302,10 +302,6 @@ function LinkPost({ post, request, onDone, onError }: Props & { post: Post; onDo
   return (
     <fieldset className="publisher-crosspost">
       <legend>Link a post</legend>
-      <p className="publisher-note">
-        Paste the link to a post you published yourself, like a repost on a new account, and its stats count toward this
-        one.
-      </p>
       <label>
         Link
         <input
@@ -415,9 +411,9 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
       : post.targets.filter((t) => t.state === "succeeded" && t.url && t.deletion_state !== "deleted");
     if (
       !confirm(
-        `Permanently delete “${postLabel(post.post)}” from ${destinations
+        `Delete “${postLabel(post.post)}” from ${destinations
           .map((t) => platformNames[t.platform])
-          .join(", ")}? This cannot be undone. History will be kept.`,
+          .join(", ")}? This can't be undone.`,
       )
     )
       return;
@@ -459,7 +455,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     }
   }
   async function retry(post: Post, target: Target) {
-    if (!confirm(`Confirm this post is absent from ${platformNames[target.platform]} before publishing again.`)) return;
+    if (!confirm(`Publish again? Check it isn't already on ${platformNames[target.platform]}.`)) return;
     setBusy(true);
     try {
       await request("retry", { job: post.id, target: target.id, checked: true });
@@ -473,9 +469,9 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
   async function unlink(post: Post, target: Target) {
     if (
       !confirm(
-        `Unlink this ${platformNames[target.platform]} post from “${postLabel(
-          post.post,
-        )}”? Its stats leave this post; the post stays up on ${platformNames[target.platform]}.`,
+        `Unlink this ${platformNames[target.platform]} post from “${postLabel(post.post)}”? It stays up on ${
+          platformNames[target.platform]
+        }.`,
       )
     )
       return;
@@ -662,15 +658,6 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
           </div>
           {draft.title && draft.caption && <p className="publisher-history-caption">{draft.caption}</p>}
           <ul className="publisher-history-pills" aria-label="Status">
-            <li className="publisher-history-pill" data-tone="draft">
-              <span>Not published</span>
-              <small>{expiresIn(draft.expires)}</small>
-            </li>
-            {draft.chinese && (
-              <li className="publisher-history-pill" data-tone="draft">
-                <span>With a Chinese version</span>
-              </li>
-            )}
             <li>
               {inComposer ? (
                 <span className="publisher-history-here">In the composer</span>
@@ -693,6 +680,10 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
                 </button>
               </li>
             )}
+            <li className="publisher-history-meta">
+              {expiresIn(draft.expires)}
+              {draft.chinese && " · Chinese version"}
+            </li>
           </ul>
         </div>
       </li>
@@ -700,10 +691,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
   }
   return (
     <section className="publisher-history" id="history" aria-label="Posting history">
-      <div className="publisher-heading">
-        <h2>History</h2>
-        <span className="publisher-note">Posts sent through this app</span>
-      </div>
+      <h2>History</h2>
       {cursors.length === 1 && !!drafts.length && (
         <section aria-label="Drafts">
           <h3 className="publisher-history-day">Drafts</h3>
@@ -713,7 +701,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
       {loading ? (
         <p className="publisher-note">Loading history…</p>
       ) : !page.posts.length ? (
-        <p className="publisher-history-empty">Your posts will appear here.</p>
+        <p className="publisher-history-empty">No posts yet.</p>
       ) : (
         byDay(page.posts).map((group) => (
           <section key={group.day} aria-label={group.day}>

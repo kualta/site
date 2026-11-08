@@ -53,7 +53,6 @@ export default function PublisherConnections({ online, connected, connections, r
   return (
     <section className="publisher-accounts" aria-label="Publishing accounts">
       <h2>Accounts</h2>
-      {!online && <p className="publisher-note">Start your laptop helper to connect accounts.</p>}
       {platforms
         .filter((p) => p !== "bluesky")
         .map((platform) => {
@@ -84,9 +83,7 @@ export default function PublisherConnections({ online, connected, connections, r
                   disabled={!online || busy || !!active}
                   onClick={() => {
                     if (ready) {
-                      if (
-                        confirm(`Disconnect ${label} from this publisher? Queued posts will wait until you reconnect.`)
-                      )
+                      if (confirm(`Disconnect ${label}? Queued posts wait until you reconnect.`))
                         void send("accounts", { platform, action: "disconnect" });
                     } else void send("accounts", { platform, action: "connect" });
                   }}
@@ -100,18 +97,12 @@ export default function PublisherConnections({ online, connected, connections, r
                     <p className="publisher-note">Authorize Grain and Bluesky in the browser window on your laptop.</p>
                   )}
                   {connecting && platform === "farcaster" && (
-                    <p className="publisher-note">
-                      Approve the posting key in the Chrome window on your laptop. It needs your Farcaster recovery phrase
-                      once, stays on the laptop and isn't stored.
-                    </p>
+                    <p className="publisher-note">Approve the posting key in the Chrome window on your laptop.</p>
                   )}
                   {connecting && platform === "lens" && active.message && <HelperMessage text={active.message} />}
                   {connecting && !["grain", "farcaster", "lens"].includes(platform) && (
                     <>
-                      <p className="publisher-note">
-                        Sign in in the Chrome window on your laptop, then finish here. Finishing gives Chrome about 30
-                        seconds to save the session, then closes that window and checks it.
-                      </p>
+                      <p className="publisher-note">Sign in in the Chrome window on your laptop, then finish here.</p>
                       <button
                         disabled={busy || !!active.confirmed}
                         onClick={() => void send(`accounts/${active.id}`, { action: "finish" })}

@@ -13,9 +13,8 @@ interface Props {
   video: File;
   value?: Cover;
   onChange: (cover?: Cover) => void;
-  /** The destinations that use it, named, and the ones that pick their own frame. */
+  /** The destinations that use it, named. */
   platforms: string;
-  others: string;
   disabled: boolean;
   onError: (message: string) => void;
 }
@@ -23,7 +22,7 @@ interface Props {
 const COVER_TYPES = ["image/jpeg", "image/png"];
 
 /** Pick a frame of the video, or upload an image, as its cover. */
-export default function PublisherCover({ video, value, onChange, platforms, others, disabled, onError }: Props) {
+export default function PublisherCover({ video, value, onChange, platforms, disabled, onError }: Props) {
   const videoUrl = useMemo(() => URL.createObjectURL(video), [video]);
   const coverUrl = useMemo(() => value && URL.createObjectURL(value.file), [value]);
   useEffect(() => () => URL.revokeObjectURL(videoUrl), [videoUrl]);
@@ -115,9 +114,6 @@ export default function PublisherCover({ video, value, onChange, platforms, othe
           </div>
         </>
       )}
-      <small className="publisher-note">
-        Without one, each platform picks its own frame.{others && ` ${others} always pick their own.`}
-      </small>
     </fieldset>
   );
 }

@@ -118,6 +118,8 @@ try {
         .allTextContents();
     const reason = (name) =>
       page.locator(".publisher-destinations label", { hasText: name }).locator("small").textContent();
+    // A destination that never takes this kind of post is only dimmed; its tooltip says why.
+    const why = (name) => page.locator(".publisher-destinations label", { hasText: name }).getAttribute("title");
     // Each toolbar button has its own picker; a lone video goes through the video one.
     const attach = (files) => {
       const video = !Array.isArray(files) && files.mimeType.startsWith("video/");
@@ -147,12 +149,12 @@ try {
       await draftRows.evaluateAll((rows) => rows.map((row) => row.getAttribute("data-draft"))),
       ["00000000-0000-4000-8000-00000000d1af", "00000000-0000-4000-8000-00000000d1b0"],
     );
-    assert.match(await draftRows.first().locator(".publisher-history-pill").first().innerText(), /Not published\s+expires in 6 days/);
+    assert.equal(await draftRows.first().locator(".publisher-history-meta").innerText(), "Expires in 6 days");
     assert.equal(
       await draftRows.first().getByRole("link", { name: "Open" }).getAttribute("href"),
       "?draft=00000000-0000-4000-8000-00000000d1af",
     );
-    await draftRows.nth(1).getByText("With a Chinese version").waitFor();
+    assert.equal(await draftRows.nth(1).locator(".publisher-history-meta").innerText(), "Expires in 5 days · Chinese version");
     // A draft can be deleted from the list once confirmed, which takes its uploads with it on the server.
     page.once("dialog", (dialog) => {
       assert.match(dialog.message(), /^Delete the draft “Rendered film” and the videos uploaded with it\?/);
@@ -242,7 +244,7 @@ try {
     await quake.locator(".publisher-history-panel-row", { hasText: "TikTok" }).getByText("earlier sign-in").waitFor();
     assert.equal(
       await quakeCrosspost.locator("label", { hasText: "TikTok" }).locator("small").textContent(),
-      "Again: it went out under an earlier sign-in",
+      "Again · earlier sign-in",
     );
     assert.equal(await quakeCrosspost.locator("label", { hasText: "YouTube" }).count(), 0);
     const link = quake.getByRole("group", { name: "Link a post" });
@@ -289,9 +291,10 @@ try {
     assert.equal(await title.count(), 0);
     await page.getByRole("textbox", { name: "Post" }).fill("Hello from the composer");
     assert.equal(await page.locator(".publisher-count").textContent(), "23 / 280 · X / Twitter");
-    assert.equal(await reason("Grain"), "needs photos");
-    assert.equal(await reason("Instagram"), "needs media");
-    assert.equal(await reason("YouTube"), "needs media");
+    assert.equal(await why("Grain"), "needs photos");
+    assert.equal(await why("Instagram"), "needs media");
+    assert.equal(await why("YouTube"), "needs media");
+    assert.equal(await page.locator(".publisher-destinations small").count(), 0);
     await page.reload();
     await presets.getByRole("button", { name: "Text post", exact: true }).waitFor();
     assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Hello from the composer");
@@ -311,7 +314,7 @@ try {
     assert.equal(chooser.isMultiple(), true);
     await chooser.setFiles(photos(5));
     assert.equal(await reason("X / Twitter"), "takes up to 4 photos");
-    const descriptions = page.getByRole("textbox", { name: "Description · Grain, Bluesky, Lens" });
+    const descriptions = page.getByRole("textbox", { name: /^Description of / });
     assert.equal(await descriptions.count(), 5);
     for (let i = 0; i < 5; i++) await descriptions.nth(i).fill(`Photo ${i + 1} described`);
     assert.equal(await title.count(), 0);
@@ -404,7 +407,7 @@ try {
     await page.locator(".publisher-previews video").waitFor(); // the duration is read first
     const asShort = shareTo.getByRole("checkbox", { name: "Post as a Short" });
     assert.equal(await asShort.count(), 0); // this browser can't read its shape
-    assert.equal(await reason("Grain"), "needs photos");
+    assert.equal(await why("Grain"), "needs photos");
     assert.equal(await reason("Instagram"), "Reel");
     assert.deepEqual(await checked(), ["InstagramReel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
     await page.getByRole("textbox", { name: "Video description · Bluesky, Lens" }).fill("A short clip");
@@ -439,7 +442,7 @@ try {
     const youtubeFormat = () => youtubeRow.locator("small").allTextContents();
     const shortForm = presets.getByRole("button", { name: "Short-form video" });
     const longVideo = presets.getByRole("button", { name: "Long video", exact: true });
-    const tooLong = shareTo.getByText("Over 3 minutes, so YouTube gets this as a regular video.");
+    const tooLong = youtubeRow.getByText("Video · over 3 minutes");
     // Queueing clears the draft just after the request, and media attached before that would add to the old clip.
     const queueClip = async () => {
       await page.getByRole("button", { name: "Queue post" }).click();
@@ -523,7 +526,6 @@ try {
     assert.equal(await reason("Bluesky"), "takes videos up to 3 minutes");
     await shot("short-too-long");
     await youtubeRow.getByRole("checkbox").uncheck();
-    assert.equal(await tooLong.count(), 0);
     await youtubeRow.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Remove media" }).click();
     assert.equal(await tooLong.count(), 0);
@@ -557,9 +559,8 @@ try {
     const asCarousel = page.getByRole("checkbox", { name: "Post as one carousel" });
     assert.equal(await asCarousel.isChecked(), false);
     assert.equal(await publishMix.isDisabled(), true);
-    await page.getByText("A video with other media isn't posted until you choose Post as one carousel.", { exact: false }).waitFor();
     await asCarousel.check();
-    await page.getByText("The video and the other 2 go out together on Instagram, X / Twitter, not as a Reel or Short.").waitFor();
+    assert.equal(await publishMix.isDisabled(), false);
     // Any change to the attachments asks again.
     await attach(photos(1));
     await attached(4);
@@ -581,7 +582,7 @@ try {
     await attached(1);
     assert.equal(await descriptions.count(), 1);
     await page.getByRole("button", { name: "Remove media" }).click();
-    assert.equal(await reason("Grain"), "needs photos");
+    assert.equal(await why("Grain"), "needs photos");
 
     // Files dropped on the composer attach like the buttons do.
     const dropped = await page.evaluateHandle(() => {
@@ -590,7 +591,7 @@ try {
       return transfer;
     });
     await page.locator(".publisher-composer").dispatchEvent("drop", { dataTransfer: dropped });
-    await page.getByRole("textbox", { name: "Description · Grain, Bluesky, Lens" }).waitFor();
+    await page.getByRole("textbox", { name: /^Description of / }).waitFor();
     await page.getByRole("button", { name: "Remove media" }).click();
     // Custom presets remain editable and survive a reload, alongside the active draft.
     await presets.getByRole("button", { name: "Text post", exact: true }).click();
@@ -668,7 +669,7 @@ try {
     await shot("queue-retry");
     await page.getByRole("button", { name: "Retry queue request" }).click();
     await queued(page);
-    await page.getByRole("status").getByText("Queued. Your laptop will publish each destination once.").waitFor();
+    await page.getByRole("status").getByText("Post queued.").waitFor();
     const attempts = await page.evaluate(() => window.publisherAttempts);
     assert.equal(attempts.uploads, 2);
     assert.equal(attempts.jobs.length, 2);
@@ -744,7 +745,7 @@ try {
   assert.deepEqual(job.tags, ["film", "motion"]);
   assert.equal(job.alt, "Titles fade over a dark stage");
   assert.deepEqual(job.zh, { title: "短片", text: "一部关于电影的短片。", topics: ["短片", "动画"] });
-  await page.getByRole("status").getByText("Queued. Your laptop will publish each destination once.").waitFor();
+  await page.getByRole("status").getByText("Post queued.").waitFor();
   assert.equal(new URL(page.url()).searchParams.has("draft"), false);
   assert.equal(await page.locator(".publisher-previews video").count(), 0);
   // A draft that's gone says so, and leaves the composer usable.
@@ -818,7 +819,7 @@ try {
     await post.fill("Edited after the terminal sent it");
     await tags.fill("film motion half-typed");
     await zhTopics.fill("短片 街头");
-    await page.getByText("Draft saved. Edits save as you go.").waitFor();
+    await page.getByText("Draft saved", { exact: true }).waitFor();
     const saved = (await requests(`r.method === "PUT" && r.path === "drafts/${draft}"`)).at(-1).body;
     assert.equal(saved.video, videoId);
     assert.equal(saved.caption, "Edited after the terminal sent it");
@@ -949,7 +950,7 @@ try {
     assert.deepEqual(scheduled.platforms, ["bluesky", "twitter"]);
     assert.deepEqual(Object.keys(scheduled.schedule), ["bluesky", "twitter"]);
     assert.equal(scheduled.schedule.twitter, new Date(`${day}T07:45`).getTime());
-    await page.getByRole("status").getByText("Scheduled. Your laptop publishes each destination at its time.").waitFor();
+    await page.getByRole("status").getByText("Post scheduled.").waitFor();
     // On a day: each platform's best time that day, in its time zone; tomorrow to start with.
     await page.getByRole("textbox", { name: "Post" }).fill("Tomorrow");
     await when.selectOption("day");
@@ -958,15 +959,19 @@ try {
     assert.equal(await times.getByRole("textbox", { name: "Bluesky" }).inputValue(), `${day}T20:00`);
     // Posting times can change, and stay in this browser.
     await page.getByText("Posting times").click();
+    if (shots) await page.screenshot({ path: path.join(shots, "posting-times.png"), fullPage: true });
     const blueskyTimes = page.getByRole("group", { name: "Bluesky", exact: true }).getByRole("textbox", { name: "Times" });
     await blueskyTimes.fill("7:30, 21:00");
     await blueskyTimes.blur();
     assert.equal(await times.getByRole("textbox", { name: "Bluesky" }).inputValue(), `${day}T07:30`);
     await page.reload();
+    // A new visit starts at Now, which keeps posting times out of the way, and nothing is scheduled.
+    assert.equal(await when.inputValue(), "now");
+    assert.equal(await page.getByText("Posting times").count(), 0);
+    await when.selectOption("next");
     await page.getByText("Posting times").click();
     assert.equal(await blueskyTimes.inputValue(), "07:30, 21:00");
-    // A new visit starts at Now, and nothing is scheduled.
-    assert.equal(await when.inputValue(), "now");
+    await when.selectOption("now");
     await page.getByRole("textbox", { name: "Post" }).fill("Right away");
     await page.getByRole("button", { name: "Publish to 2 places" }).click();
     assert.equal((await queued(page)).schedule, undefined);
@@ -1016,7 +1021,6 @@ try {
   assert.equal(await zhButton.count(), 0);
   // Each version has its own preview.
   assert.equal(await zhPage.locator(".publisher-previews video").count(), 2);
-  await zhFields.getByText("Xiaohongshu gets this video.").waitFor();
   await zhPage.locator(".publisher-variants summary").click();
   await zhPage.locator(".publisher-variants section", { hasText: "Xiaohongshu" }).getByText("Video: the Chinese version").waitFor();
   assert.equal(await zhPage.locator(".publisher-variants section", { hasText: "TikTok" }).getByText("Video: the Chinese version").count(), 0);
@@ -1035,7 +1039,7 @@ try {
   assert.equal(typeof zhJob.zh.video, "string");
   assert.notEqual(zhJob.zh.video, zhJob.media[0]);
   assert.equal(zhJob.zh.title, "两个版本");
-  await zhPage.getByRole("status").getByText("Queued. Your laptop will publish each destination once.").waitFor();
+  await zhPage.getByRole("status").getByText("Post queued.").waitFor();
   assert.equal(await zhPage.locator(".publisher-previews video").count(), 0);
 
   // Removed, it isn't sent, and leaving Xiaohongshu out leaves it out of the post too.
@@ -1051,7 +1055,7 @@ try {
   await zhButton.waitFor();
   await zhPage.getByRole("button", { name: "Queue post" }).click();
   assert.equal((await zhQueued()).zh.video, undefined);
-  await zhPage.getByRole("status").getByText("Queued.", { exact: false }).waitFor();
+  await zhPage.getByRole("status").getByText("Post queued.").waitFor();
   await zhPage.locator('input[type="file"][accept="video/*"]').first().setInputFiles(tallClip);
   await zhPage.locator(".publisher-previews video").first().waitFor();
   await zhPage.getByRole("textbox", { name: /^Title ·/ }).fill("Two versions");

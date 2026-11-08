@@ -105,10 +105,6 @@ const metricNames: Record<Metric, string> = {
 };
 /** Whether every kind of post is listed; otherwise at most two of the three are. */
 const allTypes = (types: PostType[]) => types.length === postTypes.length;
-/** "every video and photo post", or "every post" when nothing is left out. */
-function scopeOf(types: PostType[]) {
-  return allTypes(types) ? "every post" : `every ${types.join(" and ")} post`;
-}
 
 function Spinner() {
   return <span className="publisher-spinner" aria-hidden="true" />;
@@ -123,9 +119,9 @@ function origin(target: Target) {
   return "";
 }
 function targetStatus(target: Target) {
-  if (target.deletion_state === "deleted") return "Deleted · history retained";
+  if (target.deletion_state === "deleted") return "Deleted";
   if (target.state !== "succeeded") return target.state;
-  const reading = target.analytics_error || (target.observed_at ? "" : "Waiting for first sample");
+  const reading = target.analytics_error || (target.observed_at ? "" : "No data yet");
   return [origin(target), reading].filter(Boolean).join(" · ");
 }
 const live = (target: Target) => target.state === "succeeded" && target.deletion_state !== "deleted";
@@ -395,7 +391,7 @@ function Overview({
     );
   else if (!data && !failed) plot = <Block height={310} />;
   else if (failed) plot = <Failed onRetry={() => setAttempt((n) => n + 1)} />;
-  else plot = <div className="publisher-analytics-empty">No views observed in this period.</div>;
+  else plot = <div className="publisher-analytics-empty">No views in this period.</div>;
   return (
     <section className="publisher-analytics-overview" aria-label="Views">
       <div className="publisher-heading">
@@ -411,9 +407,7 @@ function Overview({
       </div>
       <div className="publisher-analytics-total">
         <strong>{number(summary?.value ?? null)}</strong>
-        <span className="publisher-note">
-          {label} {daily ? `${period}, ` : ""}across {scopeOf(view.types)}
-        </span>
+        <span className="publisher-note">{daily ? period : "total"}</span>
       </div>
       <figure
         className="publisher-analytics-trend"
@@ -424,11 +418,6 @@ function Overview({
         </div>
         {summary && <Contributions point={summary} busy={stale} />}
         <Retention readings={watched} scope={days ? `videos posted in the last ${days} days` : "every video"} />
-        <figcaption className="publisher-note">
-          {daily
-            ? "Views gained each day, stacked by platform, with marks on the axis when videos went out. Today's bar is still filling. A platform's first report counts everything it had so far, and a day nothing was read rolls into the next."
-            : "Each day's closing total, stacked by platform, with marks on the axis when videos went out. A platform's first report counts everything it had so far, and views of deleted posts stay in."}
-        </figcaption>
         {!!points.length && <Observations points={points} label={label} byDay={daily} />}
       </figure>
     </section>
@@ -468,11 +457,7 @@ function Trend({
   else if (failed) plot = <Failed onRetry={onRetry} />;
   else
     plot = (
-      <div className="publisher-analytics-empty">
-        {samples.length
-          ? "No observations for this metric in this period."
-          : "No observations yet. The first arrives when your helper reads this post."}
-      </div>
+      <div className="publisher-analytics-empty">{samples.length ? "Nothing in this period." : "No data yet."}</div>
     );
   return (
     <figure
@@ -488,10 +473,6 @@ function Trend({
       </div>
       {!!points.length && <Contributions point={points.at(-1)!} busy={loading} />}
       <Retention readings={retention} />
-      <figcaption className="publisher-note">
-        Counts are cumulative, stacked by platform. Hourly for the last three days, daily before that; a platform's band
-        starts when it first reports.
-      </figcaption>
       {!!points.length && <Observations points={points} label={label} />}
     </figure>
   );
@@ -583,7 +564,7 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
     }
     const timer = setTimeout(() => {
       setRefresh(null);
-      setNotice("Some destinations are still queued. They'll update when your helper reaches them.");
+      setNotice("Some destinations are still queued.");
     }, REFRESH_TIMEOUT);
     return () => clearTimeout(timer);
   }, [refresh, checking.size]);
@@ -594,7 +575,7 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
     try {
       const { at, queued } = await request("analytics/refresh", { job: postId });
       if (queued.length) setRefresh({ job: postId, at, queued });
-      else setNotice("Every destination was read in the last five minutes.");
+      else setNotice("Already up to date.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -629,6 +610,7 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
   const published = targets.filter((t) => t.state === "succeeded");
   const values = published.map((t) => metricValue(t.metrics, activeMetric));
   const total = combined(values);
+  const reporting = values.filter((v) => v !== null).length;
   // While another post's series loads, its predecessor holds the frame, dimmed.
   const seriesCurrent = series?.post === postId;
   const samples = useMemo(() => {
@@ -646,7 +628,7 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
   else if (requesting) refreshLabel = "Requesting…";
   const observations = page?.posts.flatMap((p) => p.targets.map((t) => t.observed_at ?? 0)) ?? [];
   const lastObserved = Math.max(0, ...observations);
-  const updated = lastObserved ? `Updated ${timeAgo(lastObserved, Date.now())}` : "No observations yet";
+  const updated = lastObserved ? `Updated ${timeAgo(lastObserved, Date.now())}` : "";
   const label = post ? postLabel(post.post) : "";
   // The caption, when the label above doesn't already say all of it.
   const caption = post && post.post.caption.trim() !== label ? post.post.caption.trim() : "";
@@ -743,14 +725,12 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
                 </select>
               </div>
               <div className="publisher-analytics-total">
-                <span className="publisher-note">
-                  Latest {platform === "all" ? "combined " : ""}
-                  {metricNames[activeMetric].toLowerCase()}
-                </span>
                 <strong>{number(total)}</strong>
-                <span className="publisher-note">
-                  {values.filter((v) => v !== null).length} of {published.length} published destinations reporting
-                </span>
+                {reporting < published.length && (
+                  <span className="publisher-note">
+                    {reporting} of {published.length} reporting
+                  </span>
+                )}
               </div>
               {notice && (
                 <p role="status" className="publisher-note">
@@ -778,7 +758,7 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
                       <th>Shares</th>
                       <th>Saves</th>
                       {retained && <th>Avg watch time</th>}
-                      <th>Observed</th>
+                      <th>Updated</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -813,7 +793,7 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
                           </td>
                         ))}
                         {retained && <WatchCell metrics={t.retention} />}
-                        <td>{t.observed_at ? dateTime(t.observed_at) : "—"}</td>
+                        <td>{t.observed_at ? timeAgo(t.observed_at, Date.now()) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -827,25 +807,14 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
   else if (page)
     body = (
       <p className="publisher-analytics-empty">
-        {allTypes(view.types)
-          ? "Publish a post to start tracking performance."
-          : `No ${view.types.join(" or ")} posts yet.`}
+        {allTypes(view.types) ? "No posts yet." : `No ${view.types.join(" or ")} posts yet.`}
       </p>
     );
   else if (error) body = <button onClick={() => setAttempt((n) => n + 1)}>Try again</button>;
   else body = <Loading />;
   return (
     <section className="publisher-analytics" aria-label="Post analytics">
-      <div className="publisher-heading">
-        <h1>Analytics</h1>
-        <span className="publisher-note">
-          {updated} · {online ? "hourly while your helper runs" : "helper offline"}
-        </span>
-      </div>
-      <p className="publisher-note">
-        Posts published through this app. Combined views / impressions add reported counts, not unique people.
-        Unavailable metrics stay blank.
-      </p>
+      <h1 className="publisher-hidden">Analytics</h1>
       {error && (
         <p role="alert" className="publisher-error">
           {error}
@@ -859,12 +828,20 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
             </button>
           ))}
         </div>
-        <div className="publisher-analytics-view" role="group" aria-label="Period">
-          {periods.map((days) => (
-            <button key={days} type="button" aria-pressed={view.period === days} onClick={() => show({ period: days })}>
-              {days ? `${days}d` : "All time"}
-            </button>
-          ))}
+        <div className="publisher-analytics-period">
+          <span className="publisher-note">{updated}</span>
+          <div className="publisher-analytics-view" role="group" aria-label="Period">
+            {periods.map((days) => (
+              <button
+                key={days}
+                type="button"
+                aria-pressed={view.period === days}
+                onClick={() => show({ period: days })}
+              >
+                {days ? `${days}d` : "All time"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {body}
