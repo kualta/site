@@ -13,12 +13,12 @@ export const onRequest = defineMiddleware((ctx, next) => {
   if (canonical) return permanentRedirect(canonical);
 
   const hostname = (ctx.request.headers.get("host") ?? "").toLowerCase();
-  const publisherTab = ctx.url.pathname.match(/^\/publish(\/analytics)?$/);
+  const publisherTab = ctx.url.pathname.match(/^\/publish(\/(?:analytics|calendar))?$/);
   if (!import.meta.env.DEV && hostname === "kualta.dev" && publisherTab)
     return Response.redirect(`https://post.kualta.dev${publisherTab[1] ?? "/"}${ctx.url.search}`, 302);
-  // src/pages/analytics.astro gives /analytics a route here; on other hosts it's a 404.
-  if (hostname === "post.kualta.dev" && (ctx.url.pathname === "/" || ctx.url.pathname === "/analytics"))
-    return ctx.rewrite(ctx.url.pathname === "/" ? "/publish" : "/publish/analytics");
+  // src/pages/analytics.astro and calendar.astro give those paths a route here; on other hosts they're a 404.
+  if (hostname === "post.kualta.dev" && ["/", "/analytics", "/calendar"].includes(ctx.url.pathname))
+    return ctx.rewrite(ctx.url.pathname === "/" ? "/publish" : `/publish${ctx.url.pathname}`);
 
   return next();
 });

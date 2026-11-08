@@ -309,6 +309,49 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "drafts") return json({ drafts });
   // Bluesky posted an hour ago, so its next free slot keeps its gap from that.
   if (path === "schedule") return json({ busy: { bluesky: [Date.now() - 3_600_000] } });
+  // The month: a film out two days ago (TikTok failed), and the next part scheduled for tomorrow and the day after.
+  if (path === "calendar") {
+    const from = Number(url.searchParams.get("from"));
+    const to = Number(url.searchParams.get("to"));
+    const atHour = (days: number, hour: number) => {
+      const date = new Date();
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days, hour).getTime();
+    };
+    const target = (platform: string, state: string, at: number, scheduled = false) => ({
+      platform,
+      state,
+      url: state === "succeeded" ? `https://example.test/${platform}` : null,
+      at,
+      scheduled,
+      deleted: false,
+    });
+    const posts = [
+      {
+        id: "00000000-0000-4000-8000-0000000c0001",
+        title: "Square windows",
+        caption: "Lorax wisdom, part 7",
+        kind: "video",
+        media: [],
+        thumbnail: null,
+        targets: [target("youtube", "succeeded", atHour(-2, 16)), target("tiktok", "failed", atHour(-2, 18))],
+      },
+      {
+        id: "00000000-0000-4000-8000-0000000c0002",
+        title: "Better schools",
+        caption: "Lorax wisdom, part 6",
+        kind: "video",
+        media: [],
+        thumbnail: null,
+        targets: [
+          target("instagram", "queued", atHour(1, 18), true),
+          target("xiaohongshu", "queued", atHour(2, 7), true),
+        ],
+      },
+    ]
+      .map((post) => ({ ...post, targets: post.targets.filter((t) => t.at >= from && t.at < to) }))
+      .filter((post) => post.targets.length);
+    return json({ posts });
+  }
   if (path === "analytics") {
     const kinds = url.searchParams.get("kinds")?.split(",");
     return json({ ...analytics, posts: analytics.posts.filter((post) => !kinds || kinds.includes(post.post.kind)) });

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { previewSources, storedThumbnail, youtubeThumbnail } from "./preview";
-import { defaultView, kindsOf, readPath, readView, tabPath, writeView } from "./route";
+import { defaultView, kindsOf, readMonth, readPath, readView, tabPath, writeView } from "./route";
 
 test("the path says which tab is open, on the publisher's own host and under /publish", () => {
   expect(readPath("/")).toEqual({ base: "", tab: "compose" });
@@ -10,6 +10,17 @@ test("the path says which tab is open, on the publisher's own host and under /pu
   expect(tabPath("", "compose")).toBe("/");
   expect(tabPath("", "analytics")).toBe("/analytics");
   expect(tabPath("/publish", "compose")).toBe("/publish");
+  expect(readPath("/calendar")).toEqual({ base: "", tab: "calendar" });
+  expect(readPath("/publish/calendar")).toEqual({ base: "/publish", tab: "calendar" });
+  expect(tabPath("", "calendar")).toBe("/calendar");
+  expect(tabPath("/publish", "calendar")).toBe("/publish/calendar");
+});
+test("the calendar's month comes from its address, else this month", () => {
+  const now = new Date(2026, 10, 8);
+  expect(readMonth("?month=2026-12", now)).toBe("2026-12");
+  expect(readMonth("", now)).toBe("2026-11");
+  expect(readMonth("?month=2026-13", now)).toBe("2026-11");
+  expect(readMonth("?month=26-1", now)).toBe("2026-11");
 });
 test("a plain view has a plain address, and every choice survives the round trip", () => {
   expect(readView("")).toEqual(defaultView);

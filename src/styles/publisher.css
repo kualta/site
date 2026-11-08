@@ -392,3 +392,45 @@
   .publisher button, .publisher a, .publisher-composer, .publisher summary, .publisher :is(input, textarea, select), .publisher-history-panel, .publisher-history-manage svg, .publisher-history-panel-row { transition:none; }
   .publisher-history-pill[data-tone="busy"]::before, .publisher-account-status[data-tone="busy"]::before, .publisher-skeleton, .publisher-spinner, .publisher-toast { animation:none; }
 }
+
+/* --- calendar: posts on the days they published or are scheduled to --- */
+.publisher-calendar-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:8px; }
+.publisher-calendar-head h1 { margin:0; }
+.publisher-calendar-head .publisher-actions { flex:none; flex-wrap:nowrap; }
+.publisher-calendar > .publisher-note { margin:0 0 20px; }
+.publisher-calendar[data-loading] .publisher-calendar-grid { opacity:.6; }
+.publisher-calendar-grid { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); border-top:1px solid var(--publisher-line); border-left:1px solid var(--publisher-line); transition:opacity 160ms; }
+.publisher-calendar-weekday { padding:8px; border-right:1px solid var(--publisher-line); border-bottom:1px solid var(--publisher-line); color:var(--publisher-muted); font-size:12px; }
+.publisher-calendar-day { display:flex; flex-direction:column; gap:4px; min-width:0; min-height:112px; padding:6px; border-right:1px solid var(--publisher-line); border-bottom:1px solid var(--publisher-line); }
+.publisher-calendar-day > time { font-size:12px; }
+.publisher-calendar-day[data-outside] > time { opacity:.45; }
+.publisher-calendar-day[data-today] > time { align-self:flex-start; padding:0 6px; border-radius:999px; background:var(--publisher-ink); color:var(--publisher-on-ink); }
+.publisher-calendar-weekname { display:none; }
+.publisher .publisher-calendar-post { display:flex; align-items:flex-start; gap:6px; width:100%; min-width:0; padding:4px; border-radius:8px; border-color:transparent; background:var(--publisher-surface); text-align:left; font-size:12px; line-height:1.3; }
+.publisher .publisher-calendar-post[aria-expanded="true"] { border-color:var(--publisher-ink); }
+.publisher-calendar-thumb { flex:none; display:grid; place-items:center; width:24px; height:32px; overflow:hidden; border-radius:5px; background:var(--publisher-wash); color:var(--publisher-muted); }
+.publisher-calendar-thumb img { width:100%; height:100%; object-fit:cover; }
+.publisher-calendar-text { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.publisher-calendar-label { overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
+.publisher-calendar-marks { display:flex; flex-wrap:wrap; gap:2px; }
+/* Filled when published, outlined when scheduled, struck through when it failed or was taken down. */
+.publisher-calendar-mark { padding:0 4px; border:1px solid var(--publisher-ink); border-radius:4px; font-size:10px; line-height:14px; }
+.publisher-calendar-mark[data-state="published"] { background:var(--publisher-ink); color:var(--publisher-on-ink); }
+.publisher-calendar-mark[data-state="scheduled"], .publisher-calendar-mark[data-state="queued"] { border-style:dashed; color:var(--publisher-ink); }
+.publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"]) { border-color:var(--publisher-muted); color:var(--publisher-muted); text-decoration:line-through; }
+.publisher-calendar-detail { display:flex; gap:16px; margin-top:24px; padding:16px; border:1px solid var(--publisher-edge); border-radius:14px; }
+.publisher-calendar-detail .publisher-calendar-thumb { width:56px; height:74px; border-radius:10px; }
+.publisher-calendar-detail h2 { margin:0 0 10px; font-size:16px; }
+.publisher-calendar-detail ul { margin:0 0 10px; padding:0; list-style:none; }
+.publisher-calendar-detail li { display:flex; justify-content:space-between; gap:16px; padding:4px 0; font-size:14px; }
+.publisher-calendar-detail li > span:last-child { color:var(--publisher-muted); text-align:right; }
+.publisher-calendar-detail li:is([data-state="failed"], [data-state="check"]) > span:last-child { color:var(--publisher-danger); }
+/* A phone gets the month as a list of its days with posts. */
+@media(max-width:700px) {
+  .publisher-calendar-grid { display:block; border:0; }
+  .publisher-calendar-weekday, .publisher-calendar-day:is([data-empty], [data-outside]) { display:none; }
+  .publisher-calendar-day { min-height:0; padding:12px 0; border-right:0; border-bottom:1px solid var(--publisher-line); }
+  .publisher-calendar-weekname { display:inline; }
+  .publisher-calendar-day > time { font-size:13px; }
+  .publisher .publisher-calendar-post { font-size:14px; }
+}
