@@ -129,7 +129,8 @@ contain original metadata until the helper prepares each destination's copy.
   Xiaohongshu, TikTok, X and Bluesky). Switching presets preserves the title, text,
   attachments and their descriptions/dates; default captions apply when starting
   a fresh draft or after queueing. Custom presets and saved settings are retained. Each
-  destination shows whether it can take the current post and why not: Grain needs
+  destination shows whether it can take the current post. One that never takes this
+  kind of post is dimmed, with the reason on hover; one over a limit says so: Grain needs
   photos, Instagram, Xiaohongshu, YouTube and TikTok need media, X and Lens take up to
   four photos, Farcaster two, Bluesky ten and videos up to three minutes. Selected
   destinations that can't take the post are skipped and return when the content

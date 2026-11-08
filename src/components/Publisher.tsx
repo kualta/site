@@ -20,6 +20,7 @@ import {
   publicOnly,
   reframesToShort,
   STORAGE_KEY,
+  support,
   unsupported,
   videoFormat,
   type VideoShape,
@@ -79,8 +80,7 @@ const AUTOSAVE_MS = 1000;
 // Places tagged before, offered first in the location field.
 const PLACES_KEY = "publisher.places";
 /** Why a video attached with other media waits for the owner's word. */
-const carouselRequired =
-  "A video with other media isn't posted until you choose Post as one carousel. To post it as a Reel or Short, remove the other media.";
+const carouselRequired = "Choose Post as one carousel, or remove the other media.";
 const unavailableFor: Record<PostKind, string> = {
   text: "text-only posts",
   photo: "these photos",
@@ -684,11 +684,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         }
       }
       clearComposer();
-      setNotice(
-        schedule
-          ? "Scheduled. Your laptop publishes each destination at its time."
-          : "Queued. Your laptop will publish each destination once.",
-      );
+      setNotice(schedule ? "Post scheduled." : "Post queued.");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not queue post");
@@ -936,16 +932,30 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const coverTargets = kind === "video" ? destinations.filter((p) => coverPlatforms.includes(p)) : [];
   const sentCover = coverTargets.length ? cover : undefined;
   const locationTargets = destinations.filter((p) => locationPlatforms.includes(p));
+  // Photo descriptions go to Grain, Bluesky and Lens; Grain also shows when each photo was taken.
+  const describedFor = destinations.filter((p) => p === "grain" || p === "bluesky" || p === "lens");
+  const dated = destinations.includes("grain");
   const sentLocation = locationTargets.length ? place.trim() : "";
   // Xiaohongshu's Chinese version gets its own cover: the draft's, or its frame at the chosen moment.
   const sendsZhCover = Boolean(sentCover && sentChineseVideo && (sentCover.zh || sentCover.at !== undefined));
   const toYouTube = kind === "video" && destinations.includes("youtube");
   const canReframe = toYouTube && reframesToShort(video);
   const youtubeShort = canReframe && (shortChoice ?? preset.id === "short");
-  const videoLabel = (p: Platform) => (p === "youtube" && youtubeShort ? "Short" : videoFormat(p, video));
+  const videoLabel = (p: Platform) => {
+    if (p !== "youtube") return videoFormat(p, video);
+    if (youtubeShort) return "Short";
+    // Short-form video expects a Short; past three minutes YouTube keeps it a regular video.
+    if (preset.id === "short" && video && video.seconds > 180) return "Video · over 3 minutes";
+    return videoFormat(p, video);
+  };
   const formatLabel = (p: Platform) => (kind === "video" ? videoLabel(p) : postFormat(p, kind, files.length));
-  // Where a video sent with other media goes out as one post.
-  const carouselNames = namesOf(destinations);
+  // What a destination's row says under its name: what the post becomes there, or the limit it's over. One that never
+  // takes this kind of post is only dimmed, since the attachments already say why; a mixed post's reasons aren't obvious.
+  const destinationNote = (p: Platform) => {
+    let note = formatLabel(p);
+    if (reasons[p]) note = support[p].includes(kind) || kind === "mixed" ? reasons[p] : null;
+    return note && <small>{note}</small>;
+  };
   // One text for everyone; X, Bluesky and Farcaster may take a short version, Xiaohongshu its Chinese one.
   const text = {
     title: needsTitle ? title : "",
@@ -1005,11 +1015,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   if (busy && !openingDraft && !saving) publishLabel = "Uploading…";
   // An open draft says whether the owner's edits are in it yet.
   const newVideo = [files[0], chineseVideo].some((file) => file && !storedMedia.current.has(file));
-  let draftNote = "Edits save to this draft as you go.";
-  if (draftStatus === "saving") draftNote = "Saving the draft…";
-  if (draftStatus === "saved") draftNote = "Draft saved. Edits save as you go.";
+  let draftNote = "";
+  if (draftStatus === "saving") draftNote = "Saving draft…";
+  if (draftStatus === "saved") draftNote = "Draft saved";
   if (typeof draftStatus === "object") draftNote = `Couldn't save the draft: ${draftStatus.failed}`;
-  if (newVideo) draftNote = "Save draft to keep the new video in it.";
+  if (newVideo) draftNote = "Save draft to keep the new video";
   if (busy && openingDraft) {
     const which = draftLoad && draftLoad.videos > 1 ? `video ${draftLoad.video} of ${draftLoad.videos}` : "video";
     const percent = draftLoad?.total ? ` ${Math.floor((draftLoad.loaded / draftLoad.total) * 100)}%` : "";
@@ -1058,14 +1068,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
             />
           )}
           <div hidden={tab !== "compose"}>
-            <div className="publisher-heading">
-              <h1>New post</h1>
-            </div>
+            <h1 className="publisher-hidden">New post</h1>
             <div className="publisher-compose">
               <section>
-                <label htmlFor="publisher-post" className="publisher-composer-label">
-                  Post
-                </label>
                 {/* Files can also be dropped anywhere on the composer. */}
                 <div
                   className="publisher-composer"
@@ -1087,6 +1092,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 >
                   <textarea
                     id="publisher-post"
+                    aria-label="Post"
                     value={caption}
                     maxLength={5000}
                     disabled={busy || submitted}
@@ -1185,13 +1191,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                         }}
                       />
                     </label>
-                    <p className="publisher-note">
-                      {asCarousel
-                        ? `The video and the other ${files.length - 1} go out together${
-                            carouselNames ? ` on ${carouselNames}` : ""
-                          }, not as a Reel or Short.`
-                        : carouselRequired}
-                    </p>
                   </div>
                 )}
                 {kind === "video" && (
@@ -1205,7 +1204,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                         setAlt(e.target.value);
                         submission.current = null;
                       }}
-                      placeholder="Describe the video for screen readers"
                     />
                   </label>
                 )}
@@ -1220,7 +1218,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                         setTitle(e.target.value);
                         submission.current = null;
                       }}
-                      placeholder="A moment worth sharing"
                     />
                   </label>
                 )}
@@ -1236,10 +1233,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                     }}
                     placeholder="#travel #bogota"
                   />
-                  <small className="publisher-note">
-                    Most important first. Instagram and TikTok add 5 at the end, YouTube 3 to the description, Bluesky
-                    and Lens keep 8 hidden. X, Grain and Farcaster get none.
-                  </small>
                 </label>
                 {!!locationTargets.length && (
                   <label>
@@ -1260,9 +1253,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                         <option key={recent} value={recent} />
                       ))}
                     </datalist>
-                    <small className="publisher-note">
-                      Each platform tags its closest match from its own list of places.
-                    </small>
                   </label>
                 )}
                 {needsShort && (
@@ -1277,58 +1267,47 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                         setShort(e.target.value);
                         submission.current = null;
                       }}
-                      placeholder="The post is too long for them; write a shorter one"
                     />
                   </label>
                 )}
-                {kind === "photo" && (
-                  <div className="publisher-photo-details publisher-group">
-                    {destinations.includes("grain") && (
-                      <p className="publisher-note">
-                        Date taken · Grain · {Intl.DateTimeFormat().resolvedOptions().timeZone}. Photos without a
-                        timezone use this timezone. Read from the original photo; edit or clear before posting.
-                      </p>
-                    )}
+                {kind === "photo" && !!describedFor.length && (
+                  <fieldset className="publisher-photo-details publisher-group">
+                    <legend>
+                      Photos<span className="publisher-for"> · {namesOf(describedFor)}</span>
+                    </legend>
                     {files.map((file, index) => (
-                      <fieldset key={`${file.name}-${index}`} className="publisher-photo">
-                        <legend>
-                          Photo {index + 1}
-                          <span className="publisher-for"> · {file.name}</span>
-                        </legend>
-                        <label>
-                          Description<span className="publisher-for"> · Grain, Bluesky, Lens</span>
+                      <div key={`${file.name}-${index}`} className="publisher-photo" data-dated={dated || undefined}>
+                        <img src={previews[index]} alt="" />
+                        <input
+                          aria-label={`Description of ${file.name}`}
+                          placeholder="Description"
+                          value={alts[index] || ""}
+                          maxLength={1000}
+                          disabled={busy || submitted}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setAlts((list) => list.map((item, i) => (i === index ? value : item)));
+                            submission.current = null;
+                          }}
+                        />
+                        {dated && (
                           <input
-                            value={alts[index] || ""}
-                            maxLength={1000}
-                            disabled={busy || submitted}
+                            type="datetime-local"
+                            step="1"
+                            aria-label={`Date taken for ${file.name}`}
+                            title="Date taken"
+                            disabled={busy || submitted || readingDates}
+                            value={datesTaken[index] || ""}
                             onChange={(event) => {
                               const value = event.target.value;
-                              setAlts((list) => list.map((item, i) => (i === index ? value : item)));
+                              setDatesTaken((dates) => dates.map((date, i) => (i === index ? value : date)));
                               submission.current = null;
                             }}
-                            placeholder="Describe this photo for screen readers"
                           />
-                        </label>
-                        {destinations.includes("grain") && (
-                          <label>
-                            Date taken
-                            <input
-                              type="datetime-local"
-                              step="1"
-                              aria-label={`Date taken for ${file.name}`}
-                              disabled={busy || submitted || readingDates}
-                              value={datesTaken[index] || ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setDatesTaken((dates) => dates.map((date, i) => (i === index ? value : date)));
-                                submission.current = null;
-                              }}
-                            />
-                          </label>
                         )}
-                      </fieldset>
+                      </div>
                     ))}
-                  </div>
+                  </fieldset>
                 )}
                 {kind === "video" && files[0] && !!coverTargets.length && (
                   <PublisherCover
@@ -1339,7 +1318,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                       submission.current = null;
                     }}
                     platforms={namesOf(coverTargets)}
-                    others={namesOf(destinations.filter((p) => !coverPlatforms.includes(p)))}
                     disabled={busy || submitted}
                     onError={setError}
                   />
@@ -1379,10 +1357,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                             }}
                             placeholder="波哥大"
                           />
-                          <small className="publisher-note">
-                            Xiaohongshu lists places by their Chinese names. Without one, it searches the location
-                            above.
-                          </small>
                         </label>
                       )
                     }
@@ -1420,11 +1394,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                             onFiles={([file]) => file && chooseChineseVideo(file)}
                           />
                         )}
-                        <small className="publisher-note">
-                          {chineseVideo || pendingDraft?.zhVideo
-                            ? "Xiaohongshu gets this video. Every other destination gets the one above."
-                            : "Have one made for Chinese audiences? Xiaohongshu gets it, and every other destination keeps the video above."}
-                        </small>
                       </div>
                     )}
                   </PublisherChinese>
@@ -1477,10 +1446,10 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 </nav>
                 <div className="publisher-destinations">
                   {platforms.map((p) => (
-                    <label key={p} data-unavailable={Boolean(reasons[p])}>
+                    <label key={p} data-unavailable={Boolean(reasons[p])} title={reasons[p] ?? undefined}>
                       <span>
                         {platformNames[p]}
-                        {reasons[p] ? <small>{reasons[p]}</small> : formatLabel(p) && <small>{formatLabel(p)}</small>}
+                        {destinationNote(p)}
                       </span>
                       <input
                         type="checkbox"
@@ -1525,9 +1494,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                       }}
                     />
                   </label>
-                )}
-                {toYouTube && preset.id === "short" && !!video && video.seconds > 180 && (
-                  <p className="publisher-note">Over 3 minutes, so YouTube gets this as a regular video.</p>
                 )}
                 <label>
                   When
@@ -1587,109 +1553,103 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                         />
                       </label>
                     ))}
-                    <small className="publisher-note">
-                      Your laptop publishes each one at its time. If it's asleep then, it publishes when it wakes.
-                    </small>
                   </fieldset>
                 )}
-                <details>
-                  <summary>Posting times</summary>
-                  <p className="publisher-note">
-                    Each platform's best times, how far apart its posts stay and how many a week, from published
-                    studies. Next free slot follows them; times are in your time zone unless a platform has its own.
-                    Saved in this browser.
-                  </p>
-                  {platforms.map((platform) => {
-                    const times = postingTimes[platform];
-                    return (
-                      <fieldset key={platform} className="publisher-posting-times">
-                        <legend>{platformNames[platform]}</legend>
-                        <label>
-                          Times
-                          <input
-                            key={times.times.join()}
-                            defaultValue={times.times.join(", ")}
-                            onBlur={(e) => {
-                              const parsed = parseTimes(e.target.value);
-                              if (parsed) updatePostingTimes(platform, { times: parsed });
-                              else {
-                                e.target.value = times.times.join(", ");
-                                setError(`Write ${platformNames[platform]}'s times as HH:MM, such as 9:00, 18:30.`);
-                              }
-                            }}
-                          />
-                        </label>
-                        <label>
-                          Hours apart
-                          <input
-                            type="number"
-                            min={0}
-                            max={168}
-                            value={times.minGapHours}
-                            onChange={(e) => {
-                              const hours = Number(e.target.value);
-                              if (Number.isFinite(hours) && hours >= 0 && hours <= 168)
-                                updatePostingTimes(platform, { minGapHours: hours });
-                            }}
-                          />
-                        </label>
-                        <label>
-                          A week, at most
-                          <input
-                            type="number"
-                            min={1}
-                            max={50}
-                            value={times.perWeek}
-                            onChange={(e) => {
-                              const count = Number(e.target.value);
-                              if (Number.isInteger(count) && count >= 1 && count <= 50)
-                                updatePostingTimes(platform, { perWeek: count });
-                            }}
-                          />
-                        </label>
-                        <div className="publisher-days" role="group" aria-label={`${platformNames[platform]} days`}>
-                          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name, weekday) => (
-                            <button
-                              type="button"
-                              key={name}
-                              aria-pressed={times.days.includes(weekday)}
-                              onClick={() =>
-                                updatePostingTimes(platform, {
-                                  days: times.days.includes(weekday)
-                                    ? times.days.filter((d) => d !== weekday)
-                                    : [...times.days, weekday].sort(),
-                                })
-                              }
-                            >
-                              {name}
-                            </button>
-                          ))}
-                        </div>
-                        <label>
-                          Time zone
-                          <input
-                            key={times.timeZone}
-                            defaultValue={times.timeZone}
-                            placeholder="Yours"
-                            onBlur={(e) => {
-                              const zone = e.target.value.trim();
-                              if (!zone || validTimeZone(zone)) updatePostingTimes(platform, { timeZone: zone });
-                              else {
-                                e.target.value = times.timeZone;
-                                setError(`${zone} isn't a time zone. Use one like America/New_York.`);
-                              }
-                            }}
-                          />
-                        </label>
-                      </fieldset>
-                    );
-                  })}
-                  <div className="publisher-actions">
-                    <button type="button" onClick={() => setPostingTimes(defaultSchedule())}>
-                      Reset to the studies' defaults
-                    </button>
-                  </div>
-                </details>
+                {when !== "now" && !!destinations.length && (
+                  <details>
+                    <summary>Posting times</summary>
+                    {destinations.map((platform) => {
+                      const times = postingTimes[platform];
+                      return (
+                        <fieldset key={platform} className="publisher-posting-times">
+                          <legend>{platformNames[platform]}</legend>
+                          <label>
+                            Times
+                            <input
+                              key={times.times.join()}
+                              defaultValue={times.times.join(", ")}
+                              onBlur={(e) => {
+                                const parsed = parseTimes(e.target.value);
+                                if (parsed) updatePostingTimes(platform, { times: parsed });
+                                else {
+                                  e.target.value = times.times.join(", ");
+                                  setError(`Write ${platformNames[platform]}'s times as HH:MM, such as 9:00, 18:30.`);
+                                }
+                              }}
+                            />
+                          </label>
+                          <label>
+                            Hours apart
+                            <input
+                              type="number"
+                              min={0}
+                              max={168}
+                              value={times.minGapHours}
+                              onChange={(e) => {
+                                const hours = Number(e.target.value);
+                                if (Number.isFinite(hours) && hours >= 0 && hours <= 168)
+                                  updatePostingTimes(platform, { minGapHours: hours });
+                              }}
+                            />
+                          </label>
+                          <label>
+                            Per week
+                            <input
+                              type="number"
+                              min={1}
+                              max={50}
+                              value={times.perWeek}
+                              onChange={(e) => {
+                                const count = Number(e.target.value);
+                                if (Number.isInteger(count) && count >= 1 && count <= 50)
+                                  updatePostingTimes(platform, { perWeek: count });
+                              }}
+                            />
+                          </label>
+                          <div className="publisher-days" role="group" aria-label={`${platformNames[platform]} days`}>
+                            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name, weekday) => (
+                              <button
+                                type="button"
+                                key={name}
+                                aria-pressed={times.days.includes(weekday)}
+                                onClick={() =>
+                                  updatePostingTimes(platform, {
+                                    days: times.days.includes(weekday)
+                                      ? times.days.filter((d) => d !== weekday)
+                                      : [...times.days, weekday].sort(),
+                                  })
+                                }
+                              >
+                                {name}
+                              </button>
+                            ))}
+                          </div>
+                          <label>
+                            Time zone
+                            <input
+                              key={times.timeZone}
+                              defaultValue={times.timeZone}
+                              placeholder="Yours"
+                              onBlur={(e) => {
+                                const zone = e.target.value.trim();
+                                if (!zone || validTimeZone(zone)) updatePostingTimes(platform, { timeZone: zone });
+                                else {
+                                  e.target.value = times.timeZone;
+                                  setError(`${zone} isn't a time zone. Use one like America/New_York.`);
+                                }
+                              }}
+                            />
+                          </label>
+                        </fieldset>
+                      );
+                    })}
+                    <div className="publisher-actions">
+                      <button type="button" onClick={() => setPostingTimes(defaultSchedule())}>
+                        Reset to defaults
+                      </button>
+                    </div>
+                  </details>
+                )}
                 <details>
                   <summary>Preset settings</summary>
                   <label>
@@ -1708,26 +1668,30 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                       onChange={(e) => updatePreset({ caption: e.target.value.slice(0, 5000) })}
                     />
                   </label>
-                  <p className="publisher-note">Saved in this browser. Videos remove all optional metadata.</p>
-                  {preset.platforms.map((p) => (
-                    <label key={p}>
-                      {platformNames[p]} photo metadata
-                      <select
-                        value={preset.metadata[p]}
-                        onChange={(e) =>
-                          updatePreset({
-                            metadata: {
-                              ...preset.metadata,
-                              [p]: e.target.value as "remove-location" | "remove-all",
-                            },
-                          })
-                        }
-                      >
-                        <option value="remove-location">Remove location · keep camera settings</option>
-                        <option value="remove-all">Remove all optional metadata</option>
-                      </select>
-                    </label>
-                  ))}
+                  {!!preset.platforms.length && (
+                    <fieldset className="publisher-metadata">
+                      <legend>Photo metadata</legend>
+                      {preset.platforms.map((p) => (
+                        <label key={p}>
+                          {platformNames[p]}
+                          <select
+                            value={preset.metadata[p]}
+                            onChange={(e) =>
+                              updatePreset({
+                                metadata: {
+                                  ...preset.metadata,
+                                  [p]: e.target.value as "remove-location" | "remove-all",
+                                },
+                              })
+                            }
+                          >
+                            <option value="remove-location">Remove location</option>
+                            <option value="remove-all">Remove all</option>
+                          </select>
+                        </label>
+                      ))}
+                    </fieldset>
+                  )}
                   <div className="publisher-actions">
                     <button
                       disabled={busy || submitted || preferences.presets.length >= MAX_PRESETS}
@@ -1773,7 +1737,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                     {saving ? "Saving…" : "Save draft"}
                   </button>
                 )}
-                {openDraftId && !openingDraft && (
+                {openDraftId && !openingDraft && draftNote && (
                   <p className="publisher-note" role="status">
                     {draftNote}
                   </p>
@@ -1786,11 +1750,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                     {platformNames[platform]}: {issue}
                   </p>
                 ))}
-                {!!files.length && (
-                  <p className="publisher-note">
-                    Media stays private in Cloudflare. Your laptop removes metadata before publishing.
-                  </p>
-                )}
                 {!!missingPlatforms.length && (
                   <p className="publisher-note">
                     Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.
@@ -1817,11 +1776,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               <summary>Laptop connection</summary>
               {!helperOnline && (
                 <p>
-                  Run <code>bun run publisher:setup</code>, then <code>bun run publisher connect</code> on your laptop.
-                  Paste a pairing key when prompted.
+                  Pair with <code>bun run publisher connect</code>
                 </p>
               )}
-              {helperOnline && <p>Laptop paired and running.</p>}
               <button
                 onClick={async () => {
                   try {
@@ -1835,7 +1792,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               </button>
               {token && (
                 <label>
-                  One-time display · replaces the previous key
+                  Pairing key · shown once · replaces the previous one
                   <input readOnly value={token} onFocus={(e) => e.target.select()} autoComplete="off" />
                 </label>
               )}
