@@ -231,6 +231,26 @@ export const BlueskyIcon = icon(
   "BlueskyIcon",
   <path d="M12 10.5C13.2 7.9 15.8 4.7 18.6 3.8C20.1 3.3 21.4 3.8 21.4 5.5C21.4 6.9 21.1 9.2 20.6 10.3C20 11.6 18.8 12.2 17.4 12.7C18.8 13.6 20.9 15.2 19.5 17.6C18.2 19.7 15 20.5 13.5 18C13 17.1 12.4 15.9 12 15C11.6 15.9 11 17.1 10.5 18C9 20.5 5.8 19.7 4.5 17.6C3.1 15.2 5.2 13.6 6.6 12.7C5.2 12.2 4 11.6 3.4 10.3C2.9 9.2 2.6 6.9 2.6 5.5C2.6 3.8 3.9 3.3 5.4 3.8C8.2 4.7 10.8 7.9 12 10.5Z" />,
 );
+/** Farcaster's arch: the beam, two legs on their feet, and the arched opening between them */
+export const FarcasterIcon = icon(
+  "FarcasterIcon",
+  <path d="M4 5h16M6 5v14M18 5v14M4.5 19h3M16.5 19h3M6 14a6 4.5 0 0 1 12 0" />,
+);
+/** Lens's three-lobed cloud from its wordmark, as one outline */
+export const LensIcon = icon(
+  "LensIcon",
+  <path d="M18.2 8.3A3.8 3.8 0 0 0 15.7 9.2A3.7 3.7 0 0 0 8.3 9.2A3.6 3.6 0 0 0 5.8 8.3A3.8 3.8 0 0 0 2 12.1C2 13.9 3.8 15.4 4.2 15.8A12.4 12.4 0 0 0 12 18.4C15 18.4 17.7 17.5 19.8 15.8C20.2 15.4 22 13.9 22 12.1A3.8 3.8 0 0 0 18.2 8.3Z" />,
+);
+/** Xiaohongshu's mark is its name in characters, too fine at this size, so the name's meaning: a little book */
+export const XiaohongshuIcon = icon(
+  "XiaohongshuIcon",
+  <path d="M5 18.5V6a3 3 0 0 1 3-3h10a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H7.5a2.5 2.5 0 0 0 0 5H19" />,
+);
+/** Grain has only a wordmark, so its name: an ear of grain */
+export const GrainIcon = icon(
+  "GrainIcon",
+  <path d="M12 22v-4M12 10c-1.6-1.6-1.6-4.4 0-6 1.6 1.6 1.6 4.4 0 6zM12 14c-2.8 0-4.5-1.7-4.5-4 2.8 0 4.5 1.7 4.5 4zM12 14c2.8 0 4.5-1.7 4.5-4-2.8 0-4.5 1.7-4.5 4zM12 18c-2.8 0-4.5-1.7-4.5-4 2.8 0 4.5 1.7 4.5 4zM12 18c2.8 0 4.5-1.7 4.5-4-2.8 0-4.5 1.7-4.5 4z" />,
+);
 export const EthereumIcon = icon(
   "EthereumIcon",
   <path d="M11.08 3.31Q12 2 12.92 3.31L18.08 10.69Q19 12 18.08 13.31L12.92 20.69Q12 22 11.08 20.69L5.92 13.31Q5 12 5.92 10.69ZM5.46 12L11.12 15.03Q12 15.5 12.88 15.03L18.54 12" />,
