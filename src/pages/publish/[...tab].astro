@@ -8,8 +8,8 @@ import { publisherSession } from "@/lib/publisher/auth";
 import { platforms, type Platform } from "@/lib/publisher/presets";
 import "@/styles/globals.css";
 export const prerender = false;
-// The composer, or with /history, /calendar or /analytics another tab; the tab then keeps its own place in the query.
-const tabs = ["history", "calendar", "analytics"] as const;
+// The composer, or another tab by its path; the tab then keeps its own place in the query.
+const tabs = ["history", "calendar", "analytics", "accounts"] as const;
 const { tab } = Astro.params;
 const initialTab = tabs.find((name) => name === tab) ?? "compose";
 if (tab && initialTab === "compose") return new Response("Not found", { status: 404 });

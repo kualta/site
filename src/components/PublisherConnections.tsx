@@ -52,7 +52,7 @@ export default function PublisherConnections({ online, connected, connections, r
   }
   return (
     <section className="publisher-accounts" aria-label="Publishing accounts">
-      <h2>Accounts</h2>
+      <h1 className="publisher-hidden">Accounts</h1>
       {platforms
         .filter((p) => p !== "bluesky")
         .map((platform) => {

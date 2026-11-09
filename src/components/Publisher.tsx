@@ -192,7 +192,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   );
   const { base, tab } = readPath(address.pathname);
   // Where each tab was left, so switching back returns to it.
-  const tabSearch = useRef<Record<Tab, string>>({ compose: "", history: "", calendar: "", analytics: "" });
+  const tabSearch = useRef<Partial<Record<Tab, string>>>({});
   useEffect(() => {
     const sync = () => setAddress(currentAddress());
     window.addEventListener("popstate", sync);
@@ -209,9 +209,19 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   function openTab(next: Tab) {
     if (next === tab) return;
     tabSearch.current[tab] = location.search;
-    navigate(tabPath(base, next), tabSearch.current[next]);
+    navigate(tabPath(base, next), tabSearch.current[next] ?? "");
   }
   const [access, setAccess] = useState<Access>(initialAccess);
+  // On a narrow phone the tabs scroll sideways; the open one is kept in view.
+  const tabsBar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const bar = tabsBar.current;
+    const open = bar?.querySelector('[aria-pressed="true"]');
+    if (!bar || !open) return;
+    const shown = bar.getBoundingClientRect();
+    const button = open.getBoundingClientRect();
+    bar.scrollLeft += Math.max(0, button.right - shown.right) + Math.min(0, button.left - shown.left);
+  }, [tab, access]);
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [ready, setReady] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -1052,7 +1062,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         </section>
       ) : (
         <>
-          <nav className="publisher-tabs" aria-label="Publisher sections">
+          <nav ref={tabsBar} className="publisher-tabs" aria-label="Publisher sections">
             <button aria-pressed={tab === "compose"} onClick={() => openTab("compose")}>
               Compose
             </button>
@@ -1064,6 +1074,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
             </button>
             <button aria-pressed={tab === "analytics"} onClick={() => openTab("analytics")}>
               Analytics
+            </button>
+            <button aria-pressed={tab === "accounts"} onClick={() => openTab("accounts")}>
+              Accounts
             </button>
           </nav>
           {tab === "history" && (
@@ -1092,6 +1105,56 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               onNavigate={(search, replace) => navigate(tabPath(base, "calendar"), search, replace)}
               postsVersion={postsVersion}
             />
+          )}
+          {tab === "accounts" && (
+            <>
+              <PublisherConnections
+                online={helperOnline}
+                connected={connectedPlatforms}
+                connections={connections}
+                request={api}
+                refresh={refresh}
+                onError={setError}
+              />
+              <details className="publisher-connection">
+                <summary>Laptop connection</summary>
+                {!helperOnline && (
+                  <p>
+                    Pair with <code>bun run publisher connect</code>
+                  </p>
+                )}
+                <button
+                  onClick={async () => {
+                    try {
+                      setToken((await api("pair", {})).token);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  Generate pairing key
+                </button>
+                {token && (
+                  <label>
+                    Pairing key · shown once · replaces the previous one
+                    <input readOnly value={token} onFocus={(e) => e.target.select()} autoComplete="off" />
+                  </label>
+                )}
+                <button
+                  onClick={async () => {
+                    try {
+                      await api("pair", undefined, "DELETE");
+                      setToken("");
+                      setHelperOnline(false);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  Disconnect laptop
+                </button>
+              </details>
+            </>
           )}
           <div hidden={tab !== "compose"}>
             <h1 className="publisher-hidden">New post</h1>
@@ -1783,52 +1846,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 )}
               </aside>
             </div>
-            <PublisherConnections
-              online={helperOnline}
-              connected={connectedPlatforms}
-              connections={connections}
-              request={api}
-              refresh={refresh}
-              onError={setError}
-            />
-            <details className="publisher-connection">
-              <summary>Laptop connection</summary>
-              {!helperOnline && (
-                <p>
-                  Pair with <code>bun run publisher connect</code>
-                </p>
-              )}
-              <button
-                onClick={async () => {
-                  try {
-                    setToken((await api("pair", {})).token);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                Generate pairing key
-              </button>
-              {token && (
-                <label>
-                  Pairing key · shown once · replaces the previous one
-                  <input readOnly value={token} onFocus={(e) => e.target.select()} autoComplete="off" />
-                </label>
-              )}
-              <button
-                onClick={async () => {
-                  try {
-                    await api("pair", undefined, "DELETE");
-                    setToken("");
-                    setHelperOnline(false);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                Disconnect laptop
-              </button>
-            </details>
           </div>
         </>
       )}

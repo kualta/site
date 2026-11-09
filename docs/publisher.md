@@ -51,9 +51,9 @@ moving either. `bun run publisher uninstall` removes it. `bun run publisher star
 runs the helper in the foreground instead; stop the background helper first, since
 only one helper can hold the OAuth port.
 
-In the composer, expand **Laptop connection**, generate a key, and paste it into
-`publisher connect`. A new key revokes the previous one. Then use **Accounts** in
-the composer to connect each destination. Instagram, X, YouTube, TikTok and
+On the **Accounts** tab (post.kualta.dev/accounts), expand **Laptop connection**,
+generate a key, and paste it into `publisher connect`. A new key revokes the previous
+one. Then connect each destination from the same tab. Instagram, X, YouTube, TikTok and
 Xiaohongshu open an isolated Chrome window on your laptop. Sign in there, then
 click **Finish sign-in** in the composer. Missing or expired sessions are not
 marked connected; Cancel closes the pending connection. No terminal input is
