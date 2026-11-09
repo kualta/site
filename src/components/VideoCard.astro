@@ -19,7 +19,7 @@ const { video, layout = "grid", now, eager = false } = Astro.props;
     {video.duration && <span class="video-duration">{formatDuration(video.duration)}</span>}
   </div>
   <div class="video-info">
-    <h3 class="video-title">{video.title}</h3>
+    <h2 class="video-title">{video.title}</h2>
     <p class="video-meta"><time datetime={video.date}>{timeAgo(video.date, now)}</time></p>
   </div>
 </a>
