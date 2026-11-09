@@ -72,7 +72,7 @@ try {
   await setRange("c-exposure", 0.75);
   await setRange("c-kelvin", 4800);
   await setRange("c-saturation", 1.3);
-  await page.getByText("+0.75 EV").waitFor();
+  await page.waitForFunction(() => document.getElementById("n-exposure").value === "+0.75");
   await page.waitForTimeout(1500);
   if (shots) await page.screenshot({ path: path.join(shots, "grade-2-graded.png") });
 
