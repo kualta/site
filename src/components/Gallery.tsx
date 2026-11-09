@@ -1,58 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowUpRightIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, MinusIcon, PlayIcon, PlusIcon } from "@/components/icons";
+import HlsVideo from "@/components/HlsVideo";
+import {
+  ArrowUpRightIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  MinusIcon,
+  PlayIcon,
+  PlusIcon,
+} from "@/components/icons";
 import type { GalleryPage, GalleryPost } from "@/lib/gallery";
-import type { BlueskyMedia } from "@/lib/activity/bluesky-media";
 import "@/styles/gallery.css";
-
-function Video({ media }: { media: BlueskyMedia }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    const video = ref.current!;
-    let disposed = false;
-    let destroy: (() => void) | undefined;
-    import("hls.js")
-      .then(({ default: Hls }) => {
-        if (disposed) return;
-        if (!Hls.isSupported()) {
-          if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = media.src;
-          else setFailed(true);
-          return;
-        }
-        const hls = new Hls();
-        hls.loadSource(media.src);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.ERROR, (_, data) => {
-          if (data.fatal) setFailed(true);
-        });
-        destroy = () => hls.destroy();
-      })
-      .catch(() => {
-        if (!disposed) setFailed(true);
-      });
-    return () => {
-      disposed = true;
-      destroy?.();
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-    };
-  }, [media.src]);
-  return (
-    <>
-      <video
-        ref={ref}
-        controls
-        playsInline
-        preload="metadata"
-        poster={media.thumbnail}
-        aria-label={media.alt || "Bluesky video"}
-        onError={() => setFailed(true)}
-      />
-      {failed && <p>Video unavailable. Open the post on Bluesky to watch.</p>}
-    </>
-  );
-}
 
 export default function Gallery() {
   const [posts, setPosts] = useState<GalleryPost[]>([]);
@@ -272,7 +230,11 @@ export default function Gallery() {
             </div>
             <div className="gallery-full-media" key={current.id}>
               {current.media.kind === "video" ? (
-                <Video media={current.media} />
+                <HlsVideo
+                  src={current.media.src}
+                  poster={current.media.thumbnail}
+                  label={current.media.alt || "Bluesky video"}
+                />
               ) : (
                 <img src={current.media.src} alt={current.media.alt} />
               )}

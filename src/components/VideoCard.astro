@@ -1,0 +1,27 @@
+---
+import { formatDuration, isShort, timeAgo, type Video } from "@/lib/videos";
+
+interface Props {
+  video: Video;
+  /** grid: a 16:9 card, short: a 9:16 card, compact: a sidebar row */
+  layout?: "grid" | "short" | "compact";
+  now: number;
+  eager?: boolean;
+}
+
+const { video, layout = "grid", now, eager = false } = Astro.props;
+// a vertical frame in a landscape slot is pillarboxed, not cropped
+const pillarbox = layout !== "short" && isShort(video);
+---
+<a class:list={["video-card", `video-card-${layout}`]} href={`/videos/${video.rkey}`}>
+  <div class:list={["video-thumb", { "video-thumb-pillarbox": pillarbox }]}>
+    {video.thumbnail && (
+      <img src={video.thumbnail} alt="" loading={eager ? "eager" : "lazy"} decoding="async" />
+    )}
+    {video.duration && <span class="video-duration">{formatDuration(video.duration)}</span>}
+  </div>
+  <div class="video-info">
+    <h3 class="video-title">{video.title}</h3>
+    <p class="video-meta"><time datetime={video.date}>{timeAgo(video.date, now)}</time></p>
+  </div>
+</a>

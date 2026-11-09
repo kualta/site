@@ -1,0 +1,51 @@
+---
+import { env, waitUntil } from "cloudflare:workers";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import VideoCard from "@/components/VideoCard.astro";
+import { getVideoLibrary, isShort, type VideoLibrary } from "@/lib/videos";
+import "@/styles/videos.css";
+export const prerender = false;
+
+let library: VideoLibrary | undefined;
+try {
+  library = await getVideoLibrary({ cache: env.ACTIVITY_CACHE, waitUntil });
+} catch {
+  Astro.response.status = 503;
+}
+const now = Date.now();
+const long = library?.videos.filter((video) => !isShort(video)) ?? [];
+const shorts = library?.videos.filter(isShort) ?? [];
+const profile = `https://bsky.app/profile/${library?.channel.handle ?? "kualta.dev"}`;
+Astro.response.headers.set("cache-control", library ? "public, max-age=60" : "no-store");
+---
+<BaseLayout title="videos" description="Videos by kualta, published on Bluesky.">
+  <section class="videos" aria-labelledby="videos-title">
+    <header class="videos-header">
+      <h1 id="videos-title">videos</h1>
+      <p>from <a href={profile} target="_blank" rel="noreferrer">Bluesky</a></p>
+    </header>
+    {!library && (
+      <div class="videos-status" role="status">
+        <p>Couldn’t load the videos.</p>
+        <a href="/videos">Try again</a>
+      </div>
+    )}
+    {library && !library.videos.length && <p class="videos-status">No videos yet.</p>}
+    {long.length > 0 && (
+      <section class="videos-section" aria-labelledby="videos-long">
+        <h2 id="videos-long">long form</h2>
+        <div class="videos-grid">
+          {long.map((video, index) => <VideoCard video={video} now={now} eager={index < 6} />)}
+        </div>
+      </section>
+    )}
+    {shorts.length > 0 && (
+      <section class="videos-section" aria-labelledby="videos-shorts">
+        <h2 id="videos-shorts">shorts</h2>
+        <div class="videos-grid videos-grid-shorts">
+          {shorts.map((video) => <VideoCard video={video} layout="short" now={now} />)}
+        </div>
+      </section>
+    )}
+  </section>
+</BaseLayout>
