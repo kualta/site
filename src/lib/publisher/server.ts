@@ -491,6 +491,65 @@ export async function rescheduleTarget(db: NewsletterDB, job: string, target: st
     .run();
   return result.meta.changes > 0;
 }
+/** What can change in a post once it's queued: its words. */
+export interface PostEdit {
+  title: string;
+  caption: string;
+  tags: string[];
+  short: string;
+  zh?: { title: string; text: string; topics: string[] };
+}
+/**
+ * Rewrites a post's words for the destinations it hasn't reached: those waiting, stopped or failed, which a retry
+ * publishes as edited. One that's out, or publishing now, keeps the version it got. False when none is left to change.
+ */
+export async function editPost(db: NewsletterDB, job: string, edit: PostEdit): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
+    .bind(job)
+    .first<{ payload: string }>();
+  if (!row) throw new PostError("Invalid post");
+  const post = JSON.parse(row.payload) as Post;
+  const { results } = await db
+    .prepare("SELECT DISTINCT platform FROM publisher_targets WHERE job_id = ? AND state IN ('queued','failed')")
+    .bind(job)
+    .all<{ platform: Platform }>();
+  const open = post.platforms.filter((platform) => results.some((result) => result.platform === platform));
+  if (!open.length) return false;
+  const edited = validatePost({
+    ...post,
+    title: edit.title,
+    caption: edit.caption,
+    tags: edit.tags,
+    short: edit.short,
+    zh:
+      post.zh && edit.zh && open.includes("xiaohongshu")
+        ? { ...post.zh, title: edit.zh.title, text: edit.zh.text, topics: edit.zh.topics }
+        : post.zh,
+    platforms: open,
+    metadata: { ...defaultMetadata(), ...post.metadata },
+    // Its times were checked when it was queued; moving one is a reschedule.
+    schedule: undefined,
+  });
+  const next = {
+    ...edited,
+    platforms: post.platforms,
+    variants: Object.fromEntries(
+      post.platforms.map((platform) => [
+        platform,
+        edited.variants?.[platform] ?? post.variants?.[platform] ?? renderVariant(platform, post),
+      ]),
+    ),
+    ...(post.schedule ? { schedule: post.schedule } : {}),
+  };
+  // Only over the version read, so two edits at once can't undo each other.
+  const result = await db
+    .prepare("UPDATE publisher_jobs SET payload = ? WHERE id = ? AND payload = ?")
+    .bind(JSON.stringify(next), job, row.payload)
+    .run();
+  if (!result.meta.changes) throw new PostError("The post changed in the meantime. Try again.");
+  return true;
+}
 /** Records a post the owner found on the platform, when publishing couldn't confirm it. */
 export async function markPublished(db: NewsletterDB, job: string, target: string, url: string): Promise<boolean> {
   const result = await db

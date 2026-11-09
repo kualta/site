@@ -10,6 +10,7 @@ import {
   postUploads,
   stopTarget,
   rescheduleTarget,
+  editPost,
   STOPPED_BEFORE,
   targetActive,
   claimTarget,
@@ -692,4 +693,49 @@ test("unlinking takes a linked post and its stats out, and leaves published ones
   expect(sqlite.query("SELECT COUNT(*) AS n FROM publisher_metric_checks WHERE target_id = ?").get(id)).toEqual({
     n: 0,
   });
+});
+
+test("a post's words change where it hasn't gone yet, and where it's out keeps the version it got", async () => {
+  const { db, sqlite } = database();
+  const queued = validatePost({
+    ...post(),
+    kind: "text",
+    title: "",
+    caption: "Old words",
+    alt: "",
+    media: [],
+    platforms: ["bluesky", "twitter", "farcaster"],
+  });
+  // Its times were checked when it was queued, and stay as they were.
+  sqlite
+    .query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, 0)")
+    .run(queued.id, JSON.stringify({ ...queued, schedule: { twitter: 1 } }));
+  const target = (platform: string, state: string) =>
+    sqlite
+      .query("INSERT INTO publisher_targets (id, job_id, platform, state) VALUES (?, ?, ?, ?)")
+      .run(crypto.randomUUID(), queued.id, platform, state);
+  target("bluesky", "succeeded");
+  target("twitter", "queued");
+  target("farcaster", "failed");
+  const edit = { title: "", caption: "New words", tags: ["film"], short: "" };
+  expect(await editPost(db, queued.id, edit)).toBe(true);
+  const read = () =>
+    JSON.parse(
+      (sqlite.query("SELECT payload FROM publisher_jobs WHERE id = ?").get(queued.id) as { payload: string }).payload,
+    );
+  const edited = read();
+  expect(edited.caption).toBe("New words");
+  expect(edited.tags).toEqual(["film"]);
+  expect(edited.platforms).toEqual(["bluesky", "twitter", "farcaster"]);
+  expect(edited.schedule).toEqual({ twitter: 1 });
+  expect(edited.variants.bluesky).toEqual(queued.variants?.bluesky);
+  expect(edited.variants.twitter.text).toBe("New words");
+  expect(edited.variants.farcaster.text).toStartWith("New words");
+  // Each destination still to go checks its own limits; Bluesky's are past caring.
+  await expect(editPost(db, queued.id, { ...edit, caption: "x".repeat(290) })).rejects.toThrow("X / Twitter");
+  expect(read().caption).toBe("New words");
+  // Out everywhere, there's nothing left to change.
+  sqlite.query("UPDATE publisher_targets SET state = 'succeeded'").run();
+  expect(await editPost(db, queued.id, edit)).toBe(false);
+  await expect(editPost(db, crypto.randomUUID(), edit)).rejects.toThrow("Invalid post");
 });

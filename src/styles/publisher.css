@@ -419,7 +419,13 @@
 /* Hovering a post lights it on every day it's on, and fades every other post back. */
 .publisher .publisher-calendar-post[data-related] { border-color:var(--publisher-edge); background:var(--publisher-hover); }
 .publisher-calendar-grid[data-hovered] .publisher-calendar-post:not([data-related]) { opacity:.35; }
-.publisher .publisher-calendar-post[aria-expanded="true"] { border-color:var(--publisher-ink); }
+/* A post with destinations still to go drags to another day: the days it can go to show while it's carried, and
+   the one under it stands out. */
+.publisher .publisher-calendar-post[draggable="true"] { cursor:grab; }
+.publisher .publisher-calendar-post[data-carried] { opacity:.4; }
+.publisher-calendar-day { transition:background-color 120ms, box-shadow 120ms; }
+.publisher-calendar-day[data-droppable] { background:var(--publisher-wash); }
+.publisher-calendar-day[data-drop] { box-shadow:inset 0 0 0 2px var(--publisher-ink); }
 .publisher-calendar-thumb { flex:none; display:grid; place-items:center; width:24px; height:32px; overflow:hidden; border-radius:5px; background:var(--publisher-wash); color:var(--publisher-muted); }
 .publisher-calendar-thumb img { width:100%; height:100%; object-fit:cover; }
 .publisher-calendar-text { display:flex; flex-direction:column; gap:3px; min-width:0; }
@@ -431,14 +437,27 @@
 .publisher-calendar-mark:is([data-state="scheduled"], [data-state="queued"]) { border-style:dashed; }
 .publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"]) { border-color:var(--publisher-muted); color:var(--publisher-muted); }
 .publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"])::after { content:""; position:absolute; left:-1px; right:-1px; top:calc(50% - 1px); height:2px; border-radius:1px; background:currentColor; box-shadow:0 0 0 1.5px var(--publisher-surface); transform:rotate(40deg); }
-.publisher-calendar-detail { display:flex; gap:16px; margin-top:24px; padding:16px; border:1px solid var(--publisher-edge); border-radius:14px; }
-.publisher-calendar-detail .publisher-calendar-thumb { width:56px; height:74px; border-radius:10px; }
-.publisher-calendar-detail h2 { margin:0 0 10px; font-size:16px; }
-.publisher-calendar-detail ul { margin:0 0 10px; padding:0; list-style:none; }
-.publisher-calendar-detail li { display:flex; justify-content:space-between; gap:16px; padding:4px 0; font-size:14px; }
-.publisher-calendar-detail li > span:first-child { display:inline-flex; align-items:center; gap:8px; }
-.publisher-calendar-detail li > span:last-child { color:var(--publisher-muted); text-align:right; }
-.publisher-calendar-detail li:is([data-state="failed"], [data-state="check"]) > span:last-child { color:var(--publisher-danger); }
+/* --- calendar editor: one post's destinations, their times, and its words --- */
+.publisher-calendar-editor { width:min(560px, calc(100vw - 32px)); max-height:calc(100dvh - 32px); margin:auto; padding:0; border:1px solid var(--publisher-edge); border-radius:16px; background:var(--publisher-page); color:var(--publisher-ink); overflow:auto; }
+.publisher-calendar-editor::backdrop { background:rgb(0 0 0 / 40%); }
+.publisher-calendar-editor form { padding:20px 24px 24px; }
+.publisher-calendar-editor-head { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.publisher-calendar-editor-head h2 { flex:1; min-width:0; margin:0; font-size:18px; overflow-wrap:anywhere; }
+.publisher .publisher-calendar-editor-head button { flex:none; padding:8px; border-color:transparent; background:transparent; }
+.publisher-calendar-editor .publisher-calendar-thumb { width:40px; height:52px; border-radius:8px; }
+.publisher-calendar-destinations { margin:0 0 24px; padding:0; list-style:none; }
+/* Each destination: its name, then its state or time field, then Cancel; on a phone the time takes a line of its own. */
+.publisher-calendar-destinations li { display:grid; grid-template-columns:112px minmax(0,1fr) auto; grid-template-areas:"name when action"; align-items:center; gap:8px 12px; min-height:52px; padding:8px 0; border-bottom:1px solid var(--publisher-line); font-size:14px; }
+.publisher-calendar-destinations li > span:first-child { grid-area:name; display:inline-flex; align-items:center; gap:8px; }
+.publisher-calendar-destinations li > :nth-child(2) { grid-area:when; min-width:0; color:var(--publisher-muted); }
+.publisher-calendar-destinations li > button { grid-area:action; }
+.publisher-calendar-destinations li:is([data-state="failed"], [data-state="check"]) > :nth-child(2) { color:var(--publisher-danger); }
+.publisher .publisher-calendar-destinations label { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:0; font-size:14px; }
+.publisher .publisher-calendar-destinations input { width:auto; margin:0; padding:6px 10px; font-size:14px; }
+.publisher .publisher-calendar-destinations button { padding:6px 12px; font-size:13px; }
+.publisher-calendar-editor-foot { position:sticky; bottom:0; margin:8px -24px -24px; padding:16px 24px 24px; border-top:1px solid var(--publisher-line); background:var(--publisher-page); }
+.publisher-calendar-editor-foot .publisher-note { margin:0 0 12px; }
+.publisher-calendar-editor-foot .publisher-note[data-problem] { color:var(--publisher-danger); }
 /* A phone gets the month as a list of its days with posts. */
 @media(max-width:700px) {
   .publisher-calendar-grid { display:block; border:0; }
@@ -447,4 +466,9 @@
   .publisher-calendar-weekname { display:inline; }
   .publisher-calendar-day > time { font-size:13px; }
   .publisher .publisher-calendar-post { font-size:14px; }
+  .publisher-calendar-editor form { padding:16px 16px 20px; }
+  .publisher-calendar-editor-foot { margin:8px -16px -20px; padding:12px 16px 16px; }
+  .publisher-calendar-destinations li { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"name action" "when when"; }
+  .publisher .publisher-calendar-destinations label { display:grid; gap:4px; }
+  .publisher .publisher-calendar-destinations input { width:100%; }
 }

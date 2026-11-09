@@ -75,6 +75,9 @@ test("the calendar shows each destination on the day it published or is schedule
   job(sqlite, "later", 9 * day, { title: "", caption: "Part 6 is here", kind: "video", media: ["m2"], cover: "c2" });
   target(sqlite, { job: "later", platform: "instagram", state: "queued", scheduled: 11 * day });
   target(sqlite, { job: "later", platform: "xiaohongshu", state: "queued", scheduled: 12 * day });
+  sqlite
+    .query("INSERT INTO publisher_media (id, kind, name, job_id, created_at) VALUES ('m2', 'video', 'v', 'later', ?)")
+    .run(9 * day - 60_000);
   // One from last month, outside the range.
   job(sqlite, "old", -20 * day, { title: "Old", caption: "", kind: "text", media: [] });
   target(sqlite, { job: "old", platform: "bluesky", started: -20 * day, finished: -20 * day });
@@ -88,8 +91,12 @@ test("the calendar shows each destination on the day it published or is schedule
     kind: "video",
     media: ["m1"],
     thumbnail: 77,
+    tags: [],
+    short: "",
+    expires: null,
     targets: [
       {
+        id: expect.any(String),
         platform: "youtube",
         state: "succeeded",
         url: "https://youtu.be/x",
@@ -99,6 +106,7 @@ test("the calendar shows each destination on the day it published or is schedule
         stopped: false,
       },
       {
+        id: expect.any(String),
         platform: "tiktok",
         state: "failed",
         url: null,
@@ -110,13 +118,15 @@ test("the calendar shows each destination on the day it published or is schedule
     ],
   });
   expect(posts[1].cover).toBe("c2");
+  // It goes out an hour before its upload's week is up, at the latest.
+  expect(posts[1].expires).toBe(16 * day - 60_000 - 3_600_000);
   expect(posts[1].targets.map((t) => [t.platform, t.at, t.scheduled])).toEqual([
     ["instagram", 11 * day, true],
     ["xiaohongshu", 12 * day, true],
   ]);
-  // A range holds only the destinations that fall in it.
+  // A post with a destination in the range brings the rest, so its editor lists every one.
   const twelfth = await calendarPosts(db, 12 * day, 13 * day, now);
-  expect(twelfth.map((post) => post.targets.map((t) => t.platform))).toEqual([["xiaohongshu"]]);
+  expect(twelfth.map((post) => post.targets.map((t) => t.platform))).toEqual([["instagram", "xiaohongshu"]]);
   sqlite.close();
 });
 

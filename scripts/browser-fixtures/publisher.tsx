@@ -241,6 +241,56 @@ const samples = [48, 24, 12, 1].flatMap((hours) => [
       ]
     : []),
 ]);
+// The month: a film out two days ago (TikTok failed), and the next part scheduled for tomorrow and the day after.
+const atHour = (days: number, hour: number) => {
+  const date = new Date();
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days, hour).getTime();
+};
+const calendarTarget = (platform: string, state: string, at: number, scheduled = false) => ({
+  id: crypto.randomUUID(),
+  platform,
+  state,
+  url: state === "succeeded" ? `https://example.test/${platform}` : null,
+  at,
+  scheduled,
+  deleted: false,
+  stopped: false,
+});
+const calendar = [
+  {
+    id: "00000000-0000-4000-8000-0000000c0001",
+    title: "Square windows",
+    caption: "Lorax wisdom, part 7",
+    kind: "video",
+    media: [],
+    thumbnail: null,
+    tags: [],
+    short: "",
+    expires: null,
+    targets: [
+      calendarTarget("youtube", "succeeded", atHour(-2, 16)),
+      calendarTarget("tiktok", "failed", atHour(-2, 18)),
+    ],
+  },
+  {
+    id: "00000000-0000-4000-8000-0000000c0002",
+    title: "Better schools",
+    caption: "Lorax wisdom, part 6",
+    kind: "video",
+    media: [],
+    thumbnail: null,
+    tags: ["lorax"],
+    short: "",
+    zh: { title: "更好的学校", text: "罗拉克斯的智慧，第六部分", topics: ["罗拉克斯"] },
+    // Its video went up yesterday, so it goes out within six days.
+    expires: atHour(5, 23),
+    targets: [
+      calendarTarget("instagram", "queued", atHour(1, 18), true),
+      calendarTarget("xiaohongshu", "queued", atHour(2, 7), true),
+    ],
+  },
+];
+const calendarTargets = () => calendar.flatMap((post) => post.targets);
 // Both drafts wait in Cloudflare: the plain one sent half an hour ago, the one with a Chinese version yesterday.
 let drafts = [
   { id: draft.id, title: draft.title, caption: draft.caption, video: draftVideo, chinese: false, created: minutes(30) },
@@ -319,48 +369,11 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "drafts") return json({ drafts });
   // Bluesky posted an hour ago, so its next free slot keeps its gap from that.
   if (path === "schedule") return json({ busy: { bluesky: [Date.now() - 3_600_000] } });
-  // The month: a film out two days ago (TikTok failed), and the next part scheduled for tomorrow and the day after.
+  // Every post with a destination in the range, with all its destinations.
   if (path === "calendar") {
     const from = Number(url.searchParams.get("from"));
     const to = Number(url.searchParams.get("to"));
-    const atHour = (days: number, hour: number) => {
-      const date = new Date();
-      return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days, hour).getTime();
-    };
-    const target = (platform: string, state: string, at: number, scheduled = false) => ({
-      platform,
-      state,
-      url: state === "succeeded" ? `https://example.test/${platform}` : null,
-      at,
-      scheduled,
-      deleted: false,
-    });
-    const posts = [
-      {
-        id: "00000000-0000-4000-8000-0000000c0001",
-        title: "Square windows",
-        caption: "Lorax wisdom, part 7",
-        kind: "video",
-        media: [],
-        thumbnail: null,
-        targets: [target("youtube", "succeeded", atHour(-2, 16)), target("tiktok", "failed", atHour(-2, 18))],
-      },
-      {
-        id: "00000000-0000-4000-8000-0000000c0002",
-        title: "Better schools",
-        caption: "Lorax wisdom, part 6",
-        kind: "video",
-        media: [],
-        thumbnail: null,
-        targets: [
-          target("instagram", "queued", atHour(1, 18), true),
-          target("xiaohongshu", "queued", atHour(2, 7), true),
-        ],
-      },
-    ]
-      .map((post) => ({ ...post, targets: post.targets.filter((t) => t.at >= from && t.at < to) }))
-      .filter((post) => post.targets.length);
-    return json({ posts });
+    return json({ posts: calendar.filter((post) => post.targets.some((t) => t.at >= from && t.at < to)) });
   }
   if (path === "analytics") {
     const kinds = url.searchParams.get("kinds")?.split(",");
@@ -372,13 +385,25 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "media") return json({ id: crypto.randomUUID() });
   if (/^jobs\/[^/]+\/thumbnail$/.test(path) && method === "PUT") return json({ ok: true });
   if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
+  // Stopped before publishing, a calendar destination can be scheduled again.
+  if (path === "stop")
+    for (const item of calendarTargets())
+      if (item.id === body.target && item.state === "queued")
+        Object.assign(item, { state: "failed", stopped: true, scheduled: false, at: Date.now() });
   if (path === "stop" || path === "mark-published" || path === "unlink") return json({ ok: true });
+  if (path === "edit") {
+    const { job, ...words } = body;
+    Object.assign(calendar.find((post) => post.id === job) ?? {}, words);
+    return json({ ok: true });
+  }
   // A new time puts the destination back in the queue, waiting for it.
   if (path === "reschedule") {
     const { target: id, at } = body as { target: string; at: number };
     for (const post of history.posts)
       for (const item of post.targets as Record<string, unknown>[])
         if (item.id === id) Object.assign(item, { state: "queued", scheduled_at: at, message: null, finished_at: null });
+    for (const item of calendarTargets())
+      if (item.id === id) Object.assign(item, { state: "queued", at, scheduled: true, stopped: false });
     return json({ ok: true });
   }
   if (path === "link") return json({ id: crypto.randomUUID(), platform: "tiktok" }, 201);
