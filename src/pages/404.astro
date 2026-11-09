@@ -2,9 +2,15 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 ---
 <BaseLayout title="404" description="This page does not exist." noindex>
-  <div class="flex flex-col w-full grow justify-center place-content-center font-bold select-none">
-    <div class="flex flex-col sm:flex-row items-center justify-center drop-shadow-glow">
-      <h1 class="text-2xl p-8 sm:p-0">You're looking for something that simply isn't there. 404.</h1>
+  <div class="flex w-full max-w-3xl grow flex-col justify-center px-6 select-none">
+    <div class="flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-10">
+      <div class="flex flex-col gap-3 text-center sm:text-left">
+        <p class="font-mono text-xs text-muted-foreground tabular-nums">404</p>
+        <h1 class="text-3xl leading-tight font-medium tracking-tighter text-balance">
+          You're looking for something that simply isn't there.
+        </h1>
+        <a href="/" class="self-center text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground sm:self-start">Back to the site</a>
+      </div>
       <img
         class="select-none"
         src="/404_image.png"

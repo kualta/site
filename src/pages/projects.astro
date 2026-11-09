@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import ProjectCard from "@/components/ProjectCard.astro";
+import { ProjectList } from "@/components/ProjectList.tsx";
 import type { Project } from "@/types";
 import projectsData from "@/data/projects.json";
 import { SITE_URL } from "@/lib/seo";
@@ -42,10 +42,8 @@ const schema = [
   description={`Projects by kualta. Latest: ${latest}`}
   schema={schema}
 >
-  <div class="max-w-xl w-full place-items-center justify-center mb-10">
+  <div class="mb-10 w-full max-w-xl px-4 pt-6">
     <h1 class="sr-only">projects</h1>
-    <div class="flex flex-col w-full gap-2 p-4">
-      {projects.map((project) => <ProjectCard project={project} />)}
-    </div>
+    <ProjectList client:visible projects={projects} />
   </div>
 </BaseLayout>

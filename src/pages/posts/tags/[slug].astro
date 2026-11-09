@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import PostCard from "@/components/PostCard.astro";
+import { PostList } from "@/components/PostList.tsx";
 import { getPostsMetadata } from "@/lib/posts";
 import { SITE_URL } from "@/lib/seo";
 
@@ -35,17 +35,12 @@ const schema = [
 ];
 ---
 <BaseLayout title={`tag: ${tagText}`} description={description} schema={schema}>
-  <div class="max-w-2xl min-h-[47rem]">
-    <div class="flex flex-col h-full place-items-center justify-center gap-4 mb-20">
-      <h1 class="sr-only">posts tagged {tagText}</h1>
-      <div class="flex place-content-center justify-center flex-row flex-wrap p-4">
-        <a href="/posts" aria-label={`all posts, currently filtered by ${tagText}`}>
-          <span class="select-none">•</span>
-          <span class="px-4">{tagText}</span>
-          <span class="select-none">•</span>
-        </a>
-      </div>
-      {postsForTag.map((post) => <PostCard {...post} />)}
-    </div>
+  <div class="mb-10 flex w-full max-w-xl grow flex-col gap-6 px-4 pt-6">
+    <h1 class="flex items-center gap-2 text-sm font-[550] tracking-wide text-muted-foreground">
+      <a href="/posts" class="hover:text-foreground" aria-label="all posts">posts</a>
+      <span aria-hidden="true">/</span>
+      <span class="text-foreground">{tagText}</span>
+    </h1>
+    <PostList posts={postsForTag} />
   </div>
 </BaseLayout>

@@ -324,13 +324,13 @@ function toChapters(headings: Heading[], title?: string): Chapter[] {
 
 /**
  * Whether the post says anything of its own before its first section. The
- * subtitle belongs to the title rather than to the writing, so it does not
- * count; a hero image or an opening paragraph does.
+ * subtitle and the date line belong to the title rather than to the writing,
+ * so they do not count; a hero image or an opening paragraph does.
  */
 function hasLead(title: HTMLElement, firstSection: HTMLElement): boolean {
   let node = title.nextElementSibling;
   while (node && node !== firstSection) {
-    if (!node.classList.contains("post-subtitle")) return true;
+    if (!node.classList.contains("post-subtitle") && !node.hasAttribute("data-post-meta")) return true;
     node = node.nextElementSibling;
   }
   return false;

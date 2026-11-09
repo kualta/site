@@ -45,7 +45,7 @@ export function LyricsPanel({ track, time, focus = true, onSeek }: Props) {
 
   if (!track.lyrics) {
     return (
-      <p className="font-mono text-xs text-secondary-text">
+      <p className="text-xs text-muted-foreground">
         {track.kind === "original"
           ? "instrumental"
           : track.originalArtist

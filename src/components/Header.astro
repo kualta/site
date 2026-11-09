@@ -1,6 +1,6 @@
 ---
-import { BackButton } from "./BackButton.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
+import LiveVisitors from "./LiveVisitors.astro";
 
 const links = [
   { href: "/projects", label: "projects" },
@@ -9,29 +9,45 @@ const links = [
 ];
 
 const path = Astro.url.pathname.replace(/\/$/, "") || "/";
+// a post or a record still belongs to its section, so the section stays marked
+const section = links.find(({ href }) => path === href || path.startsWith(`${href}/`))?.href;
+const home = path === "/" || path === "/feed";
 ---
-<div
-  class="site-header z-[100] flex flex-row place-items-center gap-3 sm:gap-4 text-xl md:text-2xl
-         tracking-wide max-w-full md:max-w-2xl w-full h-fit py-8 px-8"
+<header
+  data-slot="header"
+  class="site-header flow-product-header z-[100] flex items-center justify-between gap-2 sm:gap-4"
 >
-  <div class="hidden sm:flex shrink-0 w-0 h-0 sm:w-8 sm:h-8">
-    <BackButton path={path} client:load transition:persist />
+  <div class="flex min-w-0 items-center gap-2" data-slot="header-brand">
+    <!-- the home screen is the name set large, so the header keeps the place but not the word -->
+    <a
+      href="/"
+      class:list={[
+        "site-brand -m-0.5 rounded-sm border-2 border-transparent text-lg font-medium tracking-tighter text-foreground outline-none focus-visible:border-focus pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center",
+        home && "invisible",
+      ]}
+      aria-hidden={home ? "true" : undefined}
+      tabindex={home ? -1 : undefined}
+    >kualta</a>
+    <LiveVisitors />
   </div>
-  <nav class="nav-rail min-w-0 flex-1" data-nav-rail aria-label="Main">
-    <div class="nav-links">
-      {links.map(({ href, label }) => (
-        <a
-          class="active:text-secondary-text"
-          href={href}
-          aria-current={path === href ? "page" : undefined}
-        >{label}</a>
-      ))}
-    </div>
-  </nav>
-  <div class="hidden sm:flex shrink-0 w-0 h-0 sm:w-8 sm:h-8">
-    <ThemeToggle path={path} client:load transition:persist />
+  <div class="flex min-w-0 items-center gap-1" data-slot="header-actions">
+    <nav class="nav-rail min-w-0" data-nav-rail aria-label="Main">
+      <div class="nav-links">
+        {links.map(({ href, label }) => (
+          <a
+            class="inline-flex h-9 items-center rounded-md border-2 border-transparent px-2 text-sm sm:px-2.5 font-[450]
+                   tracking-wide text-muted-foreground outline-none transition-[color,background-color,border-color]
+                   duration-100 hover:bg-muted hover:text-foreground focus-visible:border-focus
+                   aria-[current]:text-foreground pointer-coarse:min-h-11 dark:hover:bg-muted/50"
+            href={href}
+            aria-current={path === href ? "page" : section === href ? "true" : undefined}
+          >{label}</a>
+        ))}
+      </div>
+    </nav>
+    <ThemeToggle client:load transition:persist />
   </div>
-</div>
+</header>
 
 <script>
   // the links only scroll when they no longer fit, and each edge fades only
@@ -48,14 +64,6 @@ const path = Astro.url.pathname.replace(/\/$/, "") || "/";
 
     rail.addEventListener("scroll", update, { passive: true });
     new ResizeObserver(update).observe(rail);
-
-    // a narrow screen should open on the page you are actually reading
-    const current = rail.querySelector<HTMLElement>('a[aria-current="page"]');
-    if (current) {
-      const offset = current.offsetLeft - (rail.clientWidth - current.offsetWidth) / 2;
-      rail.scrollLeft = Math.max(0, offset);
-    }
-
     update();
   }
 

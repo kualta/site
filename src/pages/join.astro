@@ -1,6 +1,5 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import CornersScope from "@/components/CornersScope.astro";
 import Sticker from "@/components/Sticker.astro";
 import { EmailSubscription } from "@/components/EmailSubscription.tsx";
 ---
@@ -10,12 +9,9 @@ import { EmailSubscription } from "@/components/EmailSubscription.tsx";
 >
   <div class="flex flex-col gap-4 w-full max-w-xl px-6">
     <div class="flex flex-col gap-4 py-10 px-4 sm:px-12 mb-32 relative">
-      <CornersScope top_left={false} bottom_right={false} />
-      <h1 class="text-3xl font-bold text-center">Subscribe</h1>
+      <h1 class="text-center text-4xl font-medium tracking-tighter">Subscribe</h1>
+      <p class="-mt-2 mb-2 text-center text-lg text-muted-foreground">Essays by email</p>
       <EmailSubscription client:load />
-      <p class="text-lg sm:text-xl text-center p-4 pt-0">
-        Essays by email
-      </p>
       <Sticker
         name="kurier"
         class="hidden sm:flex absolute w-32 h-32 md:w-48 md:h-48 -right-10 -bottom-10 md:-right-24 md:-bottom-24"

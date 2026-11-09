@@ -1039,7 +1039,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               {helperOnline ? "Laptop connected" : "Laptop offline"}
             </span>
           )}
-          <ThemeToggle path="/publish" showOnHome />
+          <ThemeToggle />
         </div>
       </header>
       {access !== "owner" ? (

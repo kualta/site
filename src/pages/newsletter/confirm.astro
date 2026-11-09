@@ -1,6 +1,7 @@
 ---
 import { env, waitUntil } from 'cloudflare:workers';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buttonVariants } from '@flow-industries/ui/components/button';
 import { confirm } from '@/lib/newsletter/subscriptions';
 export const prerender = false;
 Astro.response.headers.set('Cache-Control','no-store');
@@ -13,15 +14,16 @@ if (Astro.request.method === 'POST') {
   catch { failed = true; Astro.response.status = 503; }
 }
 const valid = /^[a-f0-9-]{72}$/.test(token);
+const confirmClass = buttonVariants({ size: "lg" });
 ---
 <BaseLayout title="Confirm subscription" noindex>
   <section class="max-w-md w-full px-6 pb-24 space-y-6 text-center">
-    <h1 class="text-3xl">{completed ? "You're subscribed." : 'Confirm your subscription'}</h1>
+    <h1 class="text-3xl font-medium tracking-tighter text-balance">{completed ? "You're subscribed." : 'Confirm your subscription'}</h1>
     {completed ? <p>You’ll receive new essays by email.</p> : failed || !valid ?
-      <p>This link has expired or has already been used. <a href="/join" class="underline">Request a new link</a>.</p> :
+      <p>This link has expired or has already been used. <a href="/join" class="underline underline-offset-4">Request a new link</a>.</p> :
       <form method="POST"><p class="mb-6">Confirm to receive essays by email.</p>
-        <button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80" type="submit">Confirm subscription</button>
+        <button class={confirmClass} type="submit">Confirm subscription</button>
       </form>}
-    <a href="/" class="inline-block underline">Back to the site</a>
+    <a href="/" class="inline-block text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Back to the site</a>
   </section>
 </BaseLayout>

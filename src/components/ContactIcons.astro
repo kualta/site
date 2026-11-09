@@ -1,18 +1,26 @@
 ---
+import { buttonVariants } from "@flow-industries/ui/components/button";
 import type { Contact } from "@/types";
 import ContactIcon from "./ContactIcon.astro";
+import IconTooltip from "./IconTooltip.astro";
 
 interface Props {
   contacts: Contact[];
   size?: number;
 }
 
-const { contacts, size = 20 } = Astro.props;
+const { contacts, size = 18 } = Astro.props;
+const linkClass = buttonVariants({
+  variant: "ghost",
+  size: "icon",
+  className: "text-muted-foreground hover:text-foreground",
+});
 ---
 {
   contacts.map((contact) => (
-    <div class="hover:scale-125 transition-all duration-100">
+    <IconTooltip label={contact.platform}>
       <a
+        class={linkClass}
         href={contact.link}
         target="_blank"
         rel="noreferrer noopener"
@@ -20,6 +28,6 @@ const { contacts, size = 20 } = Astro.props;
       >
         <ContactIcon platform={contact.platform} size={size} />
       </a>
-    </div>
+    </IconTooltip>
   ))
 }

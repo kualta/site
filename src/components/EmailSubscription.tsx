@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Button } from "@flow-industries/ui/components/button";
+import { Input } from "@flow-industries/ui/components/input";
 import { CheckIcon, ChevronRightIcon } from "@/components/icons";
 
 interface Props {
@@ -62,7 +64,7 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true, com
         Email address
       </label>
       <div className="newsletter-fields">
-        <input
+        <Input
           ref={inputRef}
           id={id}
           name="email"
@@ -75,7 +77,7 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true, com
           readOnly={state === "pending" || state === "success"}
           onInput={(event) => setHasEmail(event.currentTarget.value.length > 0)}
         />
-        <button
+        <Button
           type="submit"
           disabled={state === "pending" || state === "success"}
           aria-label={buttonLabel}
@@ -103,7 +105,7 @@ export function EmailSubscription({ focusOnMount = false, showHelper = true, com
               </span>
             ))
           )}
-        </button>
+        </Button>
       </div>
       <p
         id={`${id}-message`}
