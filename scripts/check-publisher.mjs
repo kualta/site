@@ -980,6 +980,17 @@ try {
       const days = page.getByRole("button", { name: /Better schools/ });
       assert.equal(await days.count(), inMonth(2) ? 2 : 1);
       assert.equal(await days.first().locator('[data-state="scheduled"]').getAttribute("data-platform"), "instagram");
+      // Hovering one day's entry lights the post on every day it's on and fades the other posts back.
+      await days.first().hover();
+      const lit = page.locator(".publisher-calendar-post[data-related]");
+      assert.deepEqual(await lit.allTextContents(), await days.allTextContents());
+      if (inMonth(-2)) {
+        const faded = page.locator(".publisher-calendar-post", { hasText: "Square windows" });
+        await page.waitForFunction((post) => Number(getComputedStyle(post).opacity) < 0.5, await faded.elementHandle());
+      }
+      if (shots) await page.screenshot({ path: path.join(shots, `calendar-hover-${name}.png`), fullPage: true });
+      await page.mouse.move(0, 0);
+      assert.equal(await lit.count(), 0);
     }
     if (shots) await page.screenshot({ path: path.join(shots, `calendar-${name}.png`), fullPage: true });
     // The month is in the address, so a reload or a link opens it again.
