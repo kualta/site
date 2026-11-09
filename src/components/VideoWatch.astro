@@ -61,13 +61,11 @@ const longDate = new Date(video.date).toLocaleDateString("en", { month: "short",
     </div>
   </article>
   {(next.length > 0 || shorts.length > 0) && (
-    <aside class="watch-sidebar" aria-labelledby="watch-next">
-      <h2 id="watch-next">up next</h2>
+    <aside class="watch-sidebar" aria-label="Up next">
       <div class="watch-next">
         {next.slice(0, 3).map((item) => <VideoCard video={item} layout="compact" now={now} />)}
         {shorts.length > 0 && (
-          <section class="watch-shorts" aria-labelledby="watch-shorts">
-            <h3 id="watch-shorts">shorts</h3>
+          <section class="watch-shorts" aria-label="Shorts">
             <div class="watch-shorts-grid">
               {shorts.map((item) => <VideoCard video={item} layout="short" now={now} />)}
             </div>

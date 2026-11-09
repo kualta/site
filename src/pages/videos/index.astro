@@ -15,15 +15,11 @@ try {
 const now = Date.now();
 const long = library?.videos.filter((video) => !isShort(video)) ?? [];
 const shorts = library?.videos.filter(isShort) ?? [];
-const profile = `https://bsky.app/profile/${library?.channel.handle ?? "kualta.dev"}`;
 Astro.response.headers.set("cache-control", library ? "public, max-age=60" : "no-store");
 ---
 <BaseLayout title="videos" description="Videos by kualta, published on Bluesky.">
   <section class="videos" aria-labelledby="videos-title">
-    <header class="videos-header">
-      <h1 id="videos-title">videos</h1>
-      <p>from <a href={profile} target="_blank" rel="noreferrer">Bluesky</a></p>
-    </header>
+    <h1 id="videos-title" class="sr-only">videos</h1>
     {!library && (
       <div class="videos-status" role="status">
         <p>Couldn’t load the videos.</p>
@@ -32,16 +28,14 @@ Astro.response.headers.set("cache-control", library ? "public, max-age=60" : "no
     )}
     {library && !library.videos.length && <p class="videos-status">No videos yet.</p>}
     {long.length > 0 && (
-      <section class="videos-section" aria-labelledby="videos-long">
-        <h2 id="videos-long">long form</h2>
+      <section class="videos-section" aria-label="Long form">
         <div class="videos-grid">
           {long.map((video, index) => <VideoCard video={video} now={now} eager={index < 6} />)}
         </div>
       </section>
     )}
     {shorts.length > 0 && (
-      <section class="videos-section" aria-labelledby="videos-shorts">
-        <h2 id="videos-shorts">shorts</h2>
+      <section class="videos-section" aria-label="Shorts">
         <div class="videos-grid videos-grid-shorts">
           {shorts.map((video) => <VideoCard video={video} layout="short" now={now} />)}
         </div>
