@@ -1,0 +1,11 @@
+---
+import type { VideoSegment } from "@/lib/videos";
+
+interface Props {
+  segments: VideoSegment[];
+}
+
+// rendered on one line: the text keeps its whitespace, so any indent here would show
+const { segments } = Astro.props;
+---
+{segments.map((segment) => segment.href ? <a href={segment.href} target="_blank" rel="noreferrer">{segment.text}</a> : segment.text)}

@@ -1,0 +1,87 @@
+---
+import RichText from "@/components/RichText.astro";
+import VideoCard from "@/components/VideoCard.astro";
+import VideoControls from "@/components/VideoControls.astro";
+import { ArrowUpRightIcon, HeartIcon } from "@/components/icons";
+import { isShort, timeAgo, upNext, type Video, type VideoLibrary } from "@/lib/videos";
+
+interface Props {
+  video: Video;
+  library: VideoLibrary;
+  now: number;
+}
+
+const { video, library, now } = Astro.props;
+const next = upNext(library.videos, video).filter((item) => !isShort(item));
+// shorts sit three to a row in their own shelf, so none of them needs letterboxing
+const shorts = library.videos.filter(isShort).slice(0, 6);
+const longDate = new Date(video.date).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
+---
+<div class="watch">
+  <article class="watch-main" aria-labelledby="watch-title">
+    <div
+      class="activity-video-player watch-player"
+      data-watch-player
+      data-src={video.playlist}
+      data-autoplay
+      data-paused="true"
+      style={`--video-ratio: ${video.width} / ${video.height}`}
+    >
+      <video playsinline preload="metadata" poster={video.thumbnail} aria-label={video.alt || video.title}></video>
+      <VideoControls />
+      <p class="watch-error" data-video-error role="status" hidden>
+        Unable to play this video. <a href={video.url} target="_blank" rel="noreferrer">Watch it on Bluesky</a>
+      </p>
+    </div>
+    <h1 id="watch-title" class="watch-title">{video.title}</h1>
+    <div class="watch-bar">
+      <a class="watch-channel" href={`https://bsky.app/profile/${library.channel.handle}`} target="_blank" rel="noreferrer">
+        {library.channel.avatar ? <img src={library.channel.avatar} alt="" width="40" height="40" /> : <span class="watch-avatar" />}
+        <span>
+          {library.channel.name}
+          <small>@{library.channel.handle}</small>
+        </span>
+      </a>
+      <div class="watch-actions">
+        <a class="watch-pill" href={video.url} target="_blank" rel="noreferrer" aria-label={`${video.likes} likes. Like on Bluesky`}>
+          <HeartIcon /> {video.likes}
+        </a>
+        <a class="watch-pill" href={video.url} target="_blank" rel="noreferrer">
+          Bluesky <ArrowUpRightIcon />
+        </a>
+      </div>
+    </div>
+    <div class="watch-description">
+      <p class="watch-stats">
+        <time datetime={video.date} title={longDate}>{timeAgo(video.date, now)}</time>
+        {video.replies > 0 && <span>{video.replies} {video.replies === 1 ? "reply" : "replies"}</span>}
+        {video.reposts > 0 && <span>{video.reposts} {video.reposts === 1 ? "repost" : "reposts"}</span>}
+      </p>
+      {video.description.length > 0 && <p class="watch-text"><RichText segments={video.description} /></p>}
+    </div>
+  </article>
+  {(next.length > 0 || shorts.length > 0) && (
+    <aside class="watch-sidebar" aria-labelledby="watch-next">
+      <h2 id="watch-next">up next</h2>
+      <div class="watch-next">
+        {next.slice(0, 3).map((item) => <VideoCard video={item} layout="compact" now={now} />)}
+        {shorts.length > 0 && (
+          <section class="watch-shorts" aria-labelledby="watch-shorts">
+            <h3 id="watch-shorts">shorts</h3>
+            <div class="watch-shorts-grid">
+              {shorts.map((item) => <VideoCard video={item} layout="short" now={now} />)}
+            </div>
+          </section>
+        )}
+        {next.slice(3).map((item) => <VideoCard video={item} layout="compact" now={now} />)}
+      </div>
+    </aside>
+  )}
+</div>
+
+<script>
+  import { mountOnEachPage } from "@/scripts/page-mount";
+  import { mountVideoPlayer } from "@/scripts/video-player";
+
+  mountOnEachPage("[data-watch-player]", mountVideoPlayer);
+</script>
