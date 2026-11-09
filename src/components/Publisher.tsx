@@ -192,7 +192,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   );
   const { base, tab } = readPath(address.pathname);
   // Where each tab was left, so switching back returns to it.
-  const tabSearch = useRef<Record<Tab, string>>({ compose: "", analytics: "", calendar: "" });
+  const tabSearch = useRef<Record<Tab, string>>({ compose: "", history: "", calendar: "", analytics: "" });
   useEffect(() => {
     const sync = () => setAddress(currentAddress());
     window.addEventListener("popstate", sync);
@@ -1027,7 +1027,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     publishLabel = `Loading ${which}…${percent}`;
   }
   return (
-    <main className="publisher" data-tab={access === "owner" ? tab : undefined}>
+    <main className="publisher">
       <header className="publisher-header">
         <a href="https://kualta.dev">
           kualta<span> / post</span>
@@ -1056,6 +1056,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
             <button aria-pressed={tab === "compose"} onClick={() => openTab("compose")}>
               Compose
             </button>
+            <button aria-pressed={tab === "history"} onClick={() => openTab("history")}>
+              History
+            </button>
             <button aria-pressed={tab === "calendar"} onClick={() => openTab("calendar")}>
               Calendar
             </button>
@@ -1063,6 +1066,16 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               Analytics
             </button>
           </nav>
+          {tab === "history" && (
+            <PublisherHistory
+              request={api}
+              onError={setError}
+              composer={tabPath(base, "compose")}
+              openDraft={openDraftId}
+              draftsVersion={draftsVersion}
+              postsVersion={postsVersion}
+            />
+          )}
           {tab === "analytics" && (
             <PublisherAnalytics
               request={api}
@@ -1770,13 +1783,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 )}
               </aside>
             </div>
-            <PublisherHistory
-              request={api}
-              onError={setError}
-              openDraft={openDraftId}
-              draftsVersion={draftsVersion}
-              postsVersion={postsVersion}
-            />
             <PublisherConnections
               online={helperOnline}
               connected={connectedPlatforms}

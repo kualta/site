@@ -16,13 +16,13 @@ const server = await createServer({
   resolve: { alias: [{ find: "@", replacement: path.join(root, "src") }] },
   esbuild: { jsx: "automatic" },
   server: { host: "127.0.0.1", port: 8797, fs: { allow: [root] } },
-  // The Analytics and Calendar tabs have their own paths, as on post.kualta.dev, so a reload opens them again.
+  // The other tabs have their own paths, as on post.kualta.dev, so a reload opens them again.
   plugins: [
     {
       name: "publisher-tabs",
       configureServer(vite) {
         vite.middlewares.use((request, _response, next) => {
-          request.url = request.url?.replace(/^\/publisher\.html\/(analytics|calendar)(?=\?|$)/, "/publisher.html");
+          request.url = request.url?.replace(/^\/publisher\.html\/(history|calendar|analytics)(?=\?|$)/, "/publisher.html");
           next();
         });
       },
@@ -69,7 +69,10 @@ const queued = (page) =>
     .then(() =>
       page.evaluate(() => {
         const job = window.publisherRequests.filter((r) => r.path === "jobs").at(-1).body;
+        // The post's thumbnail can follow it before this runs, so it stays for thumbnailKept.
+        const thumbnails = window.publisherRequests.filter((r) => r.path.endsWith("/thumbnail"));
         window.publisherRequests.length = 0;
+        window.publisherRequests.push(...thumbnails);
         return job;
       }),
     );
@@ -136,8 +139,11 @@ try {
       await page.screenshot({ path: path.join(shots, `${name}-${mobile ? "mobile" : "desktop"}.png`), fullPage: true });
     };
 
-    // History: posts grouped by day, one pill per destination, problems inline, actions behind Manage.
+    // History has its own tab: posts grouped by day, one pill per destination, problems inline, actions behind Manage.
     const history = page.getByRole("region", { name: "Posting history" });
+    assert.equal(await history.count(), 0);
+    await page.getByRole("button", { name: "History", exact: true }).click();
+    assert.equal(new URL(page.url()).pathname, "/publisher.html/history");
     await history.getByText("this, too, is modern art").waitFor();
     const days = await history.locator(".publisher-history-day").allTextContents();
     assert.deepEqual(days.slice(0, 3), ["Drafts", "Today", "Yesterday"]);
@@ -152,7 +158,7 @@ try {
     assert.equal(await draftRows.first().locator(".publisher-history-meta").innerText(), "Expires in 6 days");
     assert.equal(
       await draftRows.first().getByRole("link", { name: "Open" }).getAttribute("href"),
-      "?draft=00000000-0000-4000-8000-00000000d1af",
+      "/publisher.html?draft=00000000-0000-4000-8000-00000000d1af",
     );
     assert.equal(await draftRows.nth(1).locator(".publisher-history-meta").innerText(), "Expires in 5 days · Chinese version");
     // A draft can be deleted from the list once confirmed, which takes its uploads with it on the server.
@@ -312,6 +318,7 @@ try {
     const halloweenCrosspost = halloween.getByRole("group", { name: "Crosspost to" });
     assert.equal(await halloweenCrosspost.locator("label", { hasText: "TikTok" }).count(), 0);
     await halloween.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Compose", exact: true }).click();
 
     // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.
     assert.deepEqual(await pressed(), ["Text post"]);
@@ -737,11 +744,15 @@ try {
     "短片",
   );
   // The list marks the draft that's open rather than offering it again.
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const openRow = page.locator('[data-draft="00000000-0000-4000-8000-00000000d1af"]');
   await openRow.getByText("In the composer").waitFor();
   assert.equal(await openRow.getByRole("link", { name: "Open" }).count(), 0);
   // The open draft can't be deleted from under the composer.
   assert.equal(await openRow.getByRole("button", { name: /^Delete the draft/ }).count(), 0);
+  // Back in the composer the draft is still loading, and still in the address.
+  await page.getByRole("button", { name: "Compose", exact: true }).click();
+  assert.equal(new URL(page.url()).search, "?draft=00000000-0000-4000-8000-00000000d1af");
   releaseVideo();
   await page.locator(".publisher-previews video").waitFor();
   await page.getByRole("button", { name: "Queue post" }).waitFor();
@@ -890,7 +901,9 @@ try {
     const created = (await requests(`r.method === "POST" && r.path === "drafts"`)).at(-1).body;
     assert.equal(created.caption, "A new one for later");
     assert.equal((await requests(`r.path === "media" && r.method === "POST"`)).length, 1);
+    await page.getByRole("button", { name: "History", exact: true }).click();
     await page.locator(".publisher-history-item[data-draft]", { hasText: "A new one for later" }).waitFor();
+    await page.getByRole("button", { name: "Compose", exact: true }).click();
     assert.equal(await post.inputValue(), "");
     // Photos and text aren't drafts.
     const photo = { name: "p.png", mimeType: "image/png", buffer: png };
@@ -911,6 +924,15 @@ try {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("http://127.0.0.1:8797/publisher.html");
+    // The header and tabs stay put whichever tab is open, though the calendar is wider than the rest.
+    const chrome = () =>
+      page.evaluate(() =>
+        [".publisher-header", ".publisher-tabs"].map((selector) => {
+          const { x, y, width } = document.querySelector(selector).getBoundingClientRect();
+          return { selector, x, y, width };
+        }),
+      );
+    const composeChrome = await chrome();
     await page.getByRole("button", { name: "Calendar" }).click();
     const now = new Date();
     const monthName = now.toLocaleDateString(undefined, { month: "long", year: "numeric" });
@@ -949,6 +971,15 @@ try {
     await page.getByRole("button", { name: "Today" }).click();
     await page.getByRole("heading", { name: monthName }).waitFor();
     assert.equal(new URL(page.url()).search, "");
+    assert.deepEqual(await chrome(), composeChrome);
+    await page.getByRole("button", { name: "History", exact: true }).click();
+    await page.getByRole("region", { name: "Posting history" }).getByText("this, too, is modern art").waitFor();
+    assert.deepEqual(await chrome(), composeChrome);
+    if (shots) await page.screenshot({ path: path.join(shots, `history-tab-${name}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Analytics" }).click();
+    await page.locator(".publisher-analytics-posts > button").first().waitFor();
+    assert.deepEqual(await chrome(), composeChrome);
+    if (shots) await page.screenshot({ path: path.join(shots, `analytics-tab-${name}.png`), fullPage: true });
     assert.deepEqual(errors, []);
     await context.close();
   }

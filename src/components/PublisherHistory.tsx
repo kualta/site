@@ -57,6 +57,8 @@ type Page = { posts: Post[]; next: string | null };
 type Props = {
   request: (path: string, body?: unknown, method?: string) => Promise<any>;
   onError: (message: string) => void;
+  /** The composer's path, where a draft opens. */
+  composer: string;
   /** The draft open in the composer, if any. */
   openDraft?: string | null;
   /** Changes when a draft has been posted, so the list is read again. */
@@ -64,6 +66,8 @@ type Props = {
   /** Changes when the composer queues a post, so the list shows it at once. */
   postsVersion?: number;
 };
+/** What an action on one post in the list needs. */
+type PostActionProps = Pick<Props, "request" | "onError"> & { post: Post; onDone: () => Promise<void> };
 type Tone = "ok" | "busy" | "bad" | "warn" | "gone";
 
 /** Whether a destination was stopped before it published, so it can be scheduled again. */
@@ -184,7 +188,7 @@ function crosspostOptions(post: Post): Platform[] {
   return platforms.filter((p) => !post.targets.some((t) => t.platform === p && !t.earlier_sign_in));
 }
 /** Sends a post that already went out to destinations it hasn't reached yet. */
-function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onDone: () => Promise<void> }) {
+function Crosspost({ post, request, onDone, onError }: PostActionProps) {
   const [chosen, setChosen] = useState<Platform[]>([]);
   const [title, setTitle] = useState("");
   const [zh, setZh] = useState<ChineseDraft>({ title: "", text: "", topics: "" });
@@ -288,7 +292,7 @@ function Crosspost({ post, request, onDone, onError }: Props & { post: Post; onD
   );
 }
 /** Adds a post the owner published themselves, such as a repost on a new account, so its stats count toward this one. */
-function LinkPost({ post, request, onDone, onError }: Props & { post: Post; onDone: () => Promise<void> }) {
+function LinkPost({ post, request, onDone, onError }: PostActionProps) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const link = url.trim() ? publicationLink(url) : null;
@@ -329,7 +333,14 @@ function LinkPost({ post, request, onDone, onError }: Props & { post: Post; onDo
     </fieldset>
   );
 }
-export default function PublisherHistory({ request, onError, openDraft, draftsVersion, postsVersion }: Props) {
+export default function PublisherHistory({
+  request,
+  onError,
+  composer,
+  openDraft,
+  draftsVersion,
+  postsVersion,
+}: Props) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   // Sent from the terminal and waiting in Cloudflare to be opened and published.
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
@@ -730,7 +741,7 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
               {inComposer ? (
                 <span className="publisher-history-here">In the composer</span>
               ) : (
-                <a className="publisher-history-open" href={`?draft=${draft.id}`}>
+                <a className="publisher-history-open" href={`${composer}?draft=${draft.id}`}>
                   Open
                 </a>
               )}
@@ -758,8 +769,8 @@ export default function PublisherHistory({ request, onError, openDraft, draftsVe
     );
   }
   return (
-    <section className="publisher-history" id="history" aria-label="Posting history">
-      <h2>History</h2>
+    <section className="publisher-history" aria-label="Posting history">
+      <h1 className="publisher-hidden">History</h1>
       {cursors.length === 1 && !!drafts.length && (
         <section aria-label="Drafts">
           <h3 className="publisher-history-day">Drafts</h3>
