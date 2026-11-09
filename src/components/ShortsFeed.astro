@@ -1,0 +1,82 @@
+---
+import RichText from "@/components/RichText.astro";
+import {
+  ArrowUpRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CommentIcon,
+  HeartIcon,
+  PlayIcon,
+  VolumeIcon,
+  VolumeMuteIcon,
+} from "@/components/icons";
+import { pageTitle } from "@/lib/seo";
+import type { Video, VideoChannel } from "@/lib/videos";
+
+interface Props {
+  /** the short that was opened first, then the ones to scroll on to */
+  shorts: Video[];
+  channel: VideoChannel;
+}
+
+const { shorts, channel } = Astro.props;
+const profile = `https://bsky.app/profile/${channel.handle}`;
+---
+<div class="shorts" data-shorts data-muted="false" aria-label="Shorts">
+  {shorts.map((short, index) => (
+    <section
+      class="short"
+      data-short
+      data-src={short.playlist}
+      data-rkey={short.rkey}
+      data-title={pageTitle(short.title)}
+      aria-label={short.title}
+    >
+      <div class="short-frame" data-paused="true" style={`--video-ratio: ${short.width} / ${short.height}`}>
+        <video playsinline loop preload="none" poster={short.thumbnail} aria-label={short.alt || short.title}></video>
+        <span class="short-state" aria-hidden="true"><PlayIcon size={30} /></span>
+        <div class="short-overlay">
+          <div class="short-info">
+            <a class="short-channel" href={profile} target="_blank" rel="noreferrer">
+              {channel.avatar && <img src={channel.avatar} alt="" width="32" height="32" loading="lazy" />}
+              <span>@{channel.handle}</span>
+            </a>
+            {index === 0 ? <h1 class="short-title">{short.title}</h1> : <h2 class="short-title">{short.title}</h2>}
+            {short.description.length > 0 && <p class="short-text"><RichText segments={short.description} /></p>}
+          </div>
+          <div class="short-actions">
+            <a class="short-action" href={short.url} target="_blank" rel="noreferrer" aria-label={`${short.likes} likes. Like on Bluesky`}>
+              <span class="short-action-icon"><HeartIcon size={22} /></span>
+              <span aria-hidden="true">{short.likes}</span>
+            </a>
+            <a class="short-action" href={short.url} target="_blank" rel="noreferrer" aria-label={`${short.replies} replies. Reply on Bluesky`}>
+              <span class="short-action-icon"><CommentIcon size={22} /></span>
+              <span aria-hidden="true">{short.replies}</span>
+            </a>
+            <button type="button" class="short-action" data-short-mute aria-label="Mute">
+              <span class="short-action-icon">
+                <span data-volume-icon><VolumeIcon size={22} /></span>
+                <span data-muted-icon><VolumeMuteIcon size={22} /></span>
+              </span>
+            </button>
+            <a class="short-action" href={short.url} target="_blank" rel="noreferrer" aria-label="Open on Bluesky">
+              <span class="short-action-icon"><ArrowUpRightIcon size={22} /></span>
+            </a>
+          </div>
+        </div>
+        <input class="video-range short-seek" type="range" min="0" max="100" step="0.01" value="0" aria-label="Seek video" />
+      </div>
+    </section>
+  ))}
+  <div class="shorts-nav">
+    <button type="button" data-short-previous aria-label="Previous short" disabled><ChevronUpIcon size={22} /></button>
+    <button type="button" data-short-next aria-label="Next short" disabled={shorts.length < 2}><ChevronDownIcon size={22} /></button>
+  </div>
+</div>
+
+<script>
+  import { mountOnEachPage } from "@/scripts/page-mount";
+  import { mountShortsFeed } from "@/scripts/shorts-feed";
+
+  mountOnEachPage("[data-shorts]", mountShortsFeed);
+</script>

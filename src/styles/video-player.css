@@ -1,0 +1,68 @@
+/* The site's video player, shared by the feed's media viewer and the long-form watch page. */
+.activity-video-player { position: relative; aspect-ratio: var(--video-ratio); background: #111; color: #f4f1ed; }
+.activity-video-player [hidden] { display: none !important; }
+.activity-video-player:focus { outline: none; }
+.activity-video-player video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+.activity-video-player[data-idle] video { cursor: none; }
+.activity-video-player:fullscreen { display: grid; place-items: center; width: 100%; height: 100%; }
+.activity-video-player:fullscreen video { width: 100%; height: 100%; max-width: 100vw; max-height: 100dvh; }
+.video-toggle [data-play-icon] svg { transform: translateX(1px); }
+.video-controls {
+  position: absolute; inset: auto 0 0; padding: 2.5rem 1rem 0.65rem;
+  background: linear-gradient(transparent, rgb(0 0 0 / 75%));
+}
+.video-control-row { display: flex; align-items: center; gap: 0.5rem; }
+.video-control { display: grid; place-items: center; flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 50%; color: inherit; background: transparent; cursor: pointer; }
+.video-control:hover { background: rgb(255 255 255 / 12%); }
+.video-time { font-size: 0.75rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.video-volume { display: flex; align-items: center; gap: 0.25rem; margin-left: auto; }
+.video-range { --progress: 0%; display: block; appearance: none; height: 1.25rem; padding: 0; background: transparent; cursor: pointer; accent-color: #f4f1ed; }
+.video-seek { width: 100%; }
+.video-volume-range { width: 4rem; --progress: 100%; }
+.video-quality {
+  flex-shrink: 0; height: 2.5rem; padding: 0 0.625rem; border: 0; border-radius: 999px;
+  appearance: none; color: inherit; background: transparent; color-scheme: dark;
+  font-size: 0.75rem; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.video-quality:hover { background: rgb(255 255 255 / 12%); }
+.video-quality:focus-visible { outline: 2px solid #f4f1ed; outline-offset: -4px; }
+/* played, then what has already downloaded, then the rest */
+.video-range::-webkit-slider-runnable-track {
+  height: 3px; border-radius: 4px;
+  background: linear-gradient(to right,
+    #f4f1ed var(--progress),
+    rgb(255 255 255 / 50%) var(--progress) var(--buffered, var(--progress)),
+    rgb(255 255 255 / 28%) var(--buffered, var(--progress)));
+}
+.video-range::-moz-range-track {
+  height: 3px; border-radius: 4px;
+  background: linear-gradient(to right, rgb(255 255 255 / 50%) var(--buffered, 0%), rgb(255 255 255 / 28%) var(--buffered, 0%));
+}
+.video-range::-moz-range-progress { height: 3px; background: #f4f1ed; }
+.video-range::-webkit-slider-thumb { appearance: none; width: 10px; height: 10px; margin-top: -3.5px; border-radius: 50%; background: #f4f1ed; }
+.video-range::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: #f4f1ed; }
+.video-range:focus-visible { outline: 1px solid #f4f1ed; outline-offset: 2px; border-radius: 4px; }
+.video-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 0.5rem 0.875rem; border-radius: 999px; background: rgb(0 0 0 / 60%); font-size: 0.875rem; }
+@media (max-width: 480px) {
+  .video-controls { padding-inline: 0.5rem; }
+  .video-control-row { gap: 0.125rem; }
+  .video-volume-range { display: none; }
+  .video-control { width: 2rem; height: 2rem; }
+  .video-quality { height: 2rem; padding-inline: 0.5rem; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .activity-video-player .video-controls {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+  /* Up while paused or pointed at, down once the pointer rests on a playing video.
+     The quality menu opens outside the player, so its focus keeps them up too. */
+  .activity-video-player:is([data-paused="true"], :hover:not([data-idle]), :has(:focus-visible), :has(.video-quality:focus)) .video-controls {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-video-player .video-controls { transition: none; }
+}

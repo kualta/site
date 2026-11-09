@@ -1,5 +1,7 @@
 ---
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, MaximizeIcon, MinimizeIcon, PauseIcon, PlayIcon, VolumeIcon, VolumeMuteIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlayIcon, VolumeMuteIcon } from "@/components/icons";
+import VideoControls from "@/components/VideoControls.astro";
+import "@/styles/video-player.css";
 ---
 <dialog class="activity-media-viewer" aria-label="Media viewer">
   <button type="button" class="viewer-round viewer-close" data-media-close autofocus aria-label="Close media viewer"><CloseIcon size={20} /></button>
@@ -15,20 +17,7 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, MaximizeIcon, MinimizeIco
 
 <template id="activity-video-player">
   <div class="activity-video-player" data-paused="true">
-    <span class="video-loading" role="status" hidden>Loading…</span>
-    <div class="video-controls" role="group" aria-label="Video controls">
-      <input class="video-range video-seek" type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek video" disabled />
-      <div class="video-control-row">
-        <button type="button" class="video-control video-toggle" aria-label="Play"><span data-play-icon><PlayIcon size={16} /></span><span data-pause-icon hidden><PauseIcon size={19} /></span></button>
-        <span class="video-time" aria-label="Playback time">0:00 / 0:00</span>
-        <div class="video-volume">
-          <button type="button" class="video-control video-mute" aria-label="Mute"><span data-volume-icon><VolumeIcon size={18} /></span><span data-muted-icon hidden><VolumeMuteIcon size={18} /></span></button>
-          <input class="video-range video-volume-range" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume" />
-        </div>
-        <select class="video-quality" aria-label="Video quality" hidden></select>
-        <button type="button" class="video-control video-fullscreen" aria-label="Enter fullscreen"><span data-expand-icon><MaximizeIcon size={18} /></span><span data-collapse-icon hidden><MinimizeIcon size={18} /></span></button>
-      </div>
-    </div>
+    <VideoControls />
   </div>
 </template>
 
@@ -49,7 +38,7 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, MaximizeIcon, MinimizeIco
     background: rgb(28 28 28 / 60%); color: #f4f1ed;
     backdrop-filter: blur(8px);
   }
-  .site-bluesky-card .play-button svg, .video-toggle [data-play-icon] svg { transform: translateX(1px); }
+  .site-bluesky-card .play-button svg { transform: translateX(1px); }
   .site-bluesky-card button[data-media-open]:hover .play-button { background: rgb(45 45 45 / 80%); }
   /* The feed video plays itself over its own thumbnail, and hands the frame back if it stalls. */
   .activity-video-preview {
@@ -96,66 +85,16 @@ import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, MaximizeIcon, MinimizeIco
   .viewer-next { right: 0.75rem; }
   .viewer-round:disabled { opacity: 0.3; cursor: default; }
   .activity-media-viewer button:focus-visible { outline: 2px solid #f4f1ed; outline-offset: -4px; }
-  [data-media-content] > img, .activity-video-player video {
+  [data-media-content] > img {
     display: block; width: auto; height: auto;
     max-width: min(72rem, calc(100vw - 8rem - 2px)); max-height: calc(100dvh - 8rem - 2px); object-fit: contain;
   }
-  .activity-video-player {
-    position: relative; background: #111;
+  .activity-media-viewer .activity-video-player:not(:fullscreen) {
     width: min(72rem, calc(100vw - 8rem - 2px), calc((100dvh - 8rem - 2px) * var(--video-ratio)));
-    aspect-ratio: var(--video-ratio);
   }
-  .activity-video-player video { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
-  .activity-video-player:fullscreen { display: grid; place-items: center; width: 100%; height: 100%; }
-  .activity-video-player:fullscreen video { width: 100%; height: 100%; max-width: 100vw; max-height: 100dvh; }
-  .video-controls {
-    position: absolute; inset: auto 0 0; padding: 2.5rem 1rem 0.65rem;
-    background: linear-gradient(transparent, rgb(0 0 0 / 75%));
-  }
-  .video-control-row { display: flex; align-items: center; gap: 0.5rem; }
-  .video-control { display: grid; place-items: center; flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 50%; color: inherit; background: transparent; cursor: pointer; }
-  .video-control:hover { background: rgb(255 255 255 / 12%); }
-  .video-time { font-size: 0.75rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .video-volume { display: flex; align-items: center; gap: 0.25rem; margin-left: auto; }
-  .video-range { --progress: 0%; display: block; appearance: none; height: 1.25rem; padding: 0; background: transparent; cursor: pointer; accent-color: #f4f1ed; }
-  .video-seek { width: 100%; }
-  .video-volume-range { width: 4rem; --progress: 100%; }
-  .video-quality {
-    flex-shrink: 0; height: 2.5rem; padding: 0 0.625rem; border: 0; border-radius: 999px;
-    appearance: none; color: inherit; background: transparent; color-scheme: dark;
-    font-size: 0.75rem; font-variant-numeric: tabular-nums; cursor: pointer;
-  }
-  .video-quality:hover { background: rgb(255 255 255 / 12%); }
-  .video-quality:focus-visible { outline: 2px solid #f4f1ed; outline-offset: -4px; }
-  .video-range::-webkit-slider-runnable-track { height: 3px; border-radius: 4px; background: linear-gradient(to right, #f4f1ed var(--progress), rgb(255 255 255 / 28%) var(--progress)); }
-  .video-range::-moz-range-track { height: 3px; border-radius: 4px; background: rgb(255 255 255 / 28%); }
-  .video-range::-moz-range-progress { height: 3px; background: #f4f1ed; }
-  .video-range::-webkit-slider-thumb { appearance: none; width: 10px; height: 10px; margin-top: -3.5px; border-radius: 50%; background: #f4f1ed; }
-  .video-range::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: #f4f1ed; }
-  .video-range:focus-visible { outline: 1px solid #f4f1ed; outline-offset: 2px; border-radius: 4px; }
-  .video-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 0.5rem 0.875rem; border-radius: 999px; background: rgb(0 0 0 / 60%); font-size: 0.875rem; }
   [data-media-error] { position: absolute; inset: auto 0 5rem; padding: 0.75rem; background: rgb(0 0 0 / 75%); font-size: 0.875rem; text-align: center; }
-  @media (max-width: 480px) {
-    .video-controls { padding-inline: 0.5rem; }
-    .video-control-row { gap: 0.125rem; }
-    .video-volume-range { display: none; }
-    .video-control { width: 2rem; height: 2rem; }
-    .video-quality { height: 2rem; padding-inline: 0.5rem; }
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .activity-media-viewer:has(video) .video-controls {
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 180ms ease;
-    }
-    /* The quality menu opens outside the player, so keep controls up while it has focus. */
-    .activity-video-player:is(:hover, :has(:focus-visible), :has(.video-quality:focus)) .video-controls {
-      opacity: 1;
-      pointer-events: auto;
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
-    .viewer-round, .activity-media-viewer:has(video) .video-controls { transition: none; }
+    .viewer-round { transition: none; }
     .activity-video-preview, .preview-muted, .site-bluesky-card .bluesky-post-container .play-button { transition: none; }
   }
 </style>

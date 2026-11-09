@@ -1,11 +1,11 @@
 ---
 import { env, waitUntil } from "cloudflare:workers";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import HlsVideo from "@/components/HlsVideo";
-import VideoCard from "@/components/VideoCard.astro";
-import { ArrowUpRightIcon, HeartIcon } from "@/components/icons";
+import ShortsFeed from "@/components/ShortsFeed.astro";
+import VideoWatch from "@/components/VideoWatch.astro";
 import { SITE_URL } from "@/lib/seo";
-import { getWatchVideo, timeAgo, upNext } from "@/lib/videos";
+import { getWatchVideo, isShort, upNext } from "@/lib/videos";
+import "@/styles/video-player.css";
 import "@/styles/videos.css";
 export const prerender = false;
 
@@ -14,10 +14,9 @@ const result = await getWatchVideo(rkey, { cache: env.ACTIVITY_CACHE, waitUntil 
 const video = result.status === 200 ? result.video : undefined;
 const library = result.status === 200 ? result.library : undefined;
 const now = Date.now();
-const next = video && library ? upNext(library.videos, video) : [];
+// a short opens the shorts feed on itself, with the rest to scroll on to
+const shorts = video && library && isShort(video) ? [video, ...upNext(library.videos.filter(isShort), video)] : [];
 const summary = video?.description.map((segment) => segment.text).join("").trim() ?? "";
-const date = video && new Date(video.date);
-const longDate = date?.toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
 const iso = (seconds: number) => `PT${Math.max(1, Math.round(seconds))}S`;
 const schema = video
   ? [
@@ -50,58 +49,9 @@ Astro.response.headers.set("cache-control", video ? "public, max-age=60" : "no-s
   noindex={!video}
   schema={schema}
 >
-  {video && library ? (
-    <div class="watch">
-      <article class="watch-main" aria-labelledby="watch-title">
-        <div class="watch-player" style={`--ratio: ${video.width} / ${video.height}`}>
-          <HlsVideo
-            client:load
-            src={video.playlist}
-            poster={video.thumbnail}
-            label={video.alt || video.title}
-            autoPlay
-          />
-        </div>
-        <h1 id="watch-title" class="watch-title">{video.title}</h1>
-        <div class="watch-bar">
-          <a class="watch-channel" href={`https://bsky.app/profile/${library.channel.handle}`} target="_blank" rel="noreferrer">
-            {library.channel.avatar ? <img src={library.channel.avatar} alt="" width="40" height="40" /> : <span class="watch-avatar" />}
-            <span>
-              {library.channel.name}
-              <small>@{library.channel.handle}</small>
-            </span>
-          </a>
-          <div class="watch-actions">
-            <a class="watch-pill" href={video.url} target="_blank" rel="noreferrer" aria-label={`${video.likes} likes. Like on Bluesky`}>
-              <HeartIcon /> {video.likes}
-            </a>
-            <a class="watch-pill" href={video.url} target="_blank" rel="noreferrer">
-              Bluesky <ArrowUpRightIcon />
-            </a>
-          </div>
-        </div>
-        <div class="watch-description">
-          <p class="watch-stats">
-            <time datetime={video.date} title={longDate}>{timeAgo(video.date, now)}</time>
-            {video.replies > 0 && <span>{video.replies} {video.replies === 1 ? "reply" : "replies"}</span>}
-            {video.reposts > 0 && <span>{video.reposts} {video.reposts === 1 ? "repost" : "reposts"}</span>}
-          </p>
-          {/* one line: the paragraph keeps whitespace, so any indent here would show */}
-          {video.description.length > 0 && (
-            <p class="watch-text">{video.description.map((segment) => segment.href ? <a href={segment.href} target="_blank" rel="noreferrer">{segment.text}</a> : segment.text)}</p>
-          )}
-        </div>
-      </article>
-      {next.length > 0 && (
-        <aside class="watch-sidebar" aria-labelledby="watch-next">
-          <h2 id="watch-next">up next</h2>
-          <div class="watch-next">
-            {next.map((item) => <VideoCard video={item} layout="compact" now={now} />)}
-          </div>
-        </aside>
-      )}
-    </div>
-  ) : (
+  {video && library && shorts.length > 0 && <ShortsFeed shorts={shorts} channel={library.channel} />}
+  {video && library && !shorts.length && <VideoWatch video={video} library={library} now={now} />}
+  {!(video && library) && (
     <section class="videos videos-status" aria-labelledby="watch-missing">
       <h1 id="watch-missing">{result.status === 404 ? "Video not found" : "Video temporarily unavailable"}</h1>
       <p>

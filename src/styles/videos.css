@@ -17,8 +17,6 @@
 .video-thumb { position: relative; flex: none; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; background: var(--videos-surface); }
 .video-card-short .video-thumb { aspect-ratio: 9 / 16; }
 .video-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; transition: opacity 150ms; }
-.video-thumb-pillarbox { background: #000; }
-.video-thumb-pillarbox img { object-fit: contain; }
 .video-card:hover .video-thumb img { opacity: .85; }
 .video-duration { position: absolute; right: 6px; bottom: 6px; padding: 1px 5px; border-radius: 4px; background: rgb(0 0 0 / 75%); color: #fff; font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
 .video-info { min-width: 0; }
@@ -30,9 +28,10 @@
 .video-card-compact .video-meta { font-size: 12px; }
 
 .watch { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
-.watch-player { position: relative; width: 100%; aspect-ratio: var(--ratio, 16 / 9); max-height: calc(100svh - 180px); overflow: hidden; border-radius: 12px; background: #000; }
-.watch-player video { display: block; width: 100%; height: 100%; object-fit: contain; }
-.watch-player p { position: absolute; inset: auto 0 0; margin: 0; padding: 12px; text-align: center; font-size: 14px; color: #fff; background: rgb(0 0 0 / 60%); }
+.watch-player { width: 100%; max-height: calc(100svh - 180px); overflow: hidden; border-radius: 12px; background: #000; }
+.watch-player:fullscreen { max-height: none; border-radius: 0; }
+.watch-error { position: absolute; inset: auto 0 4.5rem; margin: 0; padding: 12px; text-align: center; font-size: 14px; background: rgb(0 0 0 / 70%); }
+.watch-error a { text-decoration: underline; text-underline-offset: 2px; }
 .watch-title { margin: 14px 0 12px; font-size: 22px; line-height: 1.35; font-weight: 400; overflow-wrap: anywhere; }
 .watch-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
 .watch-channel { display: flex; align-items: center; gap: 12px; min-width: 0; color: inherit; }
@@ -50,6 +49,43 @@
 .watch-text a { text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--secondary-text); }
 .watch-sidebar h2 { margin: 0 0 12px; font-size: 14px; font-weight: 400; color: var(--secondary-text); }
 .watch-next { display: flex; flex-direction: column; gap: 10px; }
+.watch-shorts { margin: 10px 0 14px; }
+.watch-shorts h3 { margin: 0 0 10px; font-size: 14px; font-weight: 400; color: var(--secondary-text); }
+.watch-shorts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px 8px; }
+.watch-shorts .video-card { gap: 8px; }
+.watch-shorts .video-thumb { border-radius: 8px; }
+.watch-shorts .video-title { font-size: 13px; }
+.watch-shorts .video-meta { font-size: 12px; }
+
+/* shorts: one to a screen, snapping, the way short feeds scroll */
+/* the feed takes the screen below the header; the script measures where that is */
+body:has(.newsletter-dock):not([data-music-page]) > main:has(> .shorts) { padding-bottom: 0; }
+.shorts { position: relative; width: 100%; height: calc(100svh - var(--shorts-top, 6rem)); overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y mandatory; scrollbar-width: none; }
+.shorts::-webkit-scrollbar { display: none; }
+.short { box-sizing: border-box; display: grid; place-items: center; height: 100%; padding: 6px 16px; scroll-snap-align: start; scroll-snap-stop: always; }
+.short-frame { position: relative; height: 100%; max-width: 100%; aspect-ratio: var(--video-ratio); overflow: hidden; border-radius: 12px; background: #000; color: #f4f1ed; }
+.short-frame video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+.short-state { position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgb(0 0 0 / 45%); opacity: 0; transform: translate(-50%, -50%); transition: opacity 150ms; pointer-events: none; }
+.short-state svg { transform: translateX(2px); }
+.short-frame[data-paused="true"] .short-state { opacity: 1; }
+.short-overlay { position: absolute; inset: auto 0 0; display: flex; align-items: flex-end; gap: 12px; padding: 72px 12px 22px 16px; background: linear-gradient(transparent, rgb(0 0 0 / 65%)); pointer-events: none; }
+.short-overlay a, .short-overlay button { pointer-events: auto; }
+.short-info { flex: 1; min-width: 0; text-shadow: 0 1px 2px rgb(0 0 0 / 40%); }
+.short-channel { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: inherit; }
+.short-channel img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.short-title { margin: 8px 0 0; font-size: 16px; line-height: 1.35; font-weight: 400; overflow-wrap: anywhere; }
+.short-text { margin: 4px 0 0; font-size: 13px; line-height: 1.45; opacity: .85; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.short-text a { text-decoration: underline; text-underline-offset: 2px; }
+.short-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.short-action { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.short-action-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgb(255 255 255 / 14%); backdrop-filter: blur(8px); transition: background 150ms; }
+.short-action:hover .short-action-icon { background: rgb(255 255 255 / 26%); }
+.shorts[data-muted="true"] [data-volume-icon], .shorts:not([data-muted="true"]) [data-muted-icon] { display: none; }
+.short-seek { position: absolute; inset: auto 0 0; width: 100%; height: 12px; margin: 0; }
+.shorts-nav { position: fixed; top: 50%; right: 32px; display: flex; flex-direction: column; gap: 12px; transform: translateY(-50%); }
+.shorts-nav button { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--videos-surface, rgb(128 128 128 / 14%)); color: inherit; cursor: pointer; transition: background 150ms; }
+.shorts-nav button:hover:not(:disabled) { background: rgb(128 128 128 / 24%); }
+.shorts-nav button:disabled { opacity: .3; cursor: default; }
 
 @media (max-width: 1100px) {
   .watch { grid-template-columns: minmax(0, 1fr); }
@@ -64,5 +100,11 @@
   .watch-player { width: calc(100% + 32px); margin: 0 -16px; border-radius: 0; }
   .watch-title { font-size: 18px; }
   .video-card-compact .video-thumb { width: 150px; }
+  /* a phone gives the short the whole width, the way reels fill the screen */
+  .short { padding: 0; }
+  .short-frame { width: 100%; border-radius: 0; }
+  .shorts-nav { display: none; }
+  /* the short fills the screen, so the bell would sit on its caption */
+  body:has(.shorts) .newsletter-dock { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .video-thumb img, .watch-pill { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .video-thumb img, .watch-pill, .short-state, .short-action-icon, .shorts-nav button { transition: none; } }
