@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grade</title>
+<link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+<header class="bar">
+  <span class="brand">Grade</span>
+  <label class="shoot-pick"><span class="label">Shoot</span><select id="shoot" aria-label="Shoot"></select></label>
+  <div class="camera">
+    <button id="camera" class="ghost" type="button" hidden aria-expanded="false" aria-controls="camera-pop"></button>
+    <div class="pop" id="camera-pop" hidden></div>
+  </div>
+  <p class="status" id="status" role="status"></p>
+  <button id="export" class="primary" type="button" disabled>All exported</button>
+</header>
+
+<main class="work">
+  <aside class="clips" aria-label="Clips">
+    <div class="clips-head">
+      <label class="check"><input type="checkbox" id="select-all"> Select all</label>
+      <span id="clip-count" class="mono dim"></span>
+    </div>
+    <ol id="clip-list" class="clip-list"></ol>
+  </aside>
+
+  <section class="stage" aria-label="Preview">
+    <div class="frame" id="frame">
+      <canvas id="canvas"></canvas>
+      <p class="empty" id="empty">Pick a clip.</p>
+      <span class="split-line" id="split-line" hidden></span>
+      <span class="tag tag-left" id="tag-left" hidden>As shot</span>
+      <span class="tag tag-right" id="tag-right" hidden>Graded</span>
+    </div>
+    <div class="transport">
+      <button id="play" type="button" class="ctl">Play</button>
+      <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Position in clip">
+      <span id="time" class="mono dim time">0.0 / 0.0</span>
+      <div class="seg" role="group" aria-label="Compare" id="mode">
+        <button type="button" data-mode="0" aria-pressed="true">Graded</button><button type="button" data-mode="2" aria-pressed="false">Split</button><button type="button" data-mode="1" aria-pressed="false">As shot</button>
+      </div>
+      <button id="mute" type="button" class="ctl" aria-pressed="false">Sound on</button>
+    </div>
+    <video id="video" playsinline loop preload="auto"></video>
+  </section>
+
+  <aside class="panel" aria-label="Grade">
+    <div class="panel-head">
+      <p class="eyebrow" id="editing">Nothing selected</p>
+      <h2 id="clip-title">—</h2>
+      <p class="meta mono dim" id="clip-meta"></p>
+    </div>
+    <label class="field look"><span class="label">Look</span><select id="base"></select></label>
+    <div id="controls" class="controls"></div>
+    <div class="actions">
+      <button id="copy" type="button" class="ctl">Copy grade</button>
+      <button id="paste" type="button" class="ctl" disabled>Paste</button>
+      <button id="reset" type="button" class="ctl">Reset</button>
+    </div>
+    <button id="export-selected" type="button" class="ctl wide">Export selected</button>
+    <p class="hint">Space plays · hold B for the original · ↑ ↓ change clip · ⌘ or shift-click to grade several clips at once; a change then sets that control on all of them.</p>
+  </aside>
+</main>
+<script type="module" src="/ui/app.mjs"></script>
+</body>
+</html>
