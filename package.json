@@ -25,6 +25,7 @@
     "atproto:verify": "node scripts/publish-atproto.mjs --verify",
     "music:publish": "node scripts/publish-music.mjs",
     "publisher": "node scripts/publisher/cli.mjs",
+    "grade": "node scripts/grade/server.mjs --open",
     "publisher:setup": "sh scripts/publisher/setup.sh"
   },
   "dependencies": {
