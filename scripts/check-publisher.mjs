@@ -970,10 +970,13 @@ try {
       assert.equal(await film.locator('[data-state="failed"]').getAttribute("data-platform"), "tiktok");
       // Each platform is its icon, named for screen readers.
       await film.getByRole("img", { name: /^YouTube: Published / }).waitFor();
+      // Clicked, a post opens: where it went, with a link to each one that's out.
       await film.click();
-      const detail = page.getByRole("region", { name: "Square windows" });
+      const detail = page.getByRole("dialog", { name: "Square windows" });
       assert.equal(await detail.getByRole("link", { name: "Open" }).getAttribute("href"), "https://example.test/youtube");
       await detail.getByText(/^Failed /).waitFor();
+      await detail.getByRole("button", { name: "Close" }).click();
+      await detail.waitFor({ state: "hidden" });
     }
     if (inMonth(1)) {
       // Scheduled across two days, the next part shows on each with that day's platforms.
@@ -991,6 +994,59 @@ try {
       if (shots) await page.screenshot({ path: path.join(shots, `calendar-hover-${name}.png`), fullPage: true });
       await page.mouse.move(0, 0);
       assert.equal(await lit.count(), 0);
+    }
+    // Dragged to another day, what's still to go out moves there at the same time of day. A day in the past, or after
+    // the post's uploads expire, takes nothing.
+    if (width > 700 && [-1, 1, 2, 3, 4, 5, 6].every(inMonth)) {
+      const pad = (n) => String(n).padStart(2, "0");
+      const key = (days) => {
+        const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      };
+      const cell = (days) => page.locator(`.publisher-calendar-day:has(> time[datetime="${key(days)}"])`);
+      const part6 = (days) => cell(days).getByRole("button", { name: /Better schools/ });
+      const goal = await cell(3).boundingBox();
+      await part6(1).hover();
+      await page.mouse.down();
+      await page.mouse.move(goal.x + 10, goal.y + 10, { steps: 4 });
+      await page.mouse.move(goal.x + goal.width / 2, goal.y + goal.height / 2, { steps: 4 });
+      assert.equal(await cell(3).getAttribute("data-drop"), "true");
+      assert.equal(await cell(5).getAttribute("data-droppable"), "true");
+      for (const days of [-1, 1, 6]) assert.equal(await cell(days).getAttribute("data-droppable"), null, `day ${days}`);
+      // Once the days have faded in.
+      if (shots) await page.waitForTimeout(300);
+      if (shots) await page.screenshot({ path: path.join(shots, `calendar-drag-${name}.png`) });
+      await page.mouse.up();
+      await part6(3).getByRole("img", { name: /^Instagram: Scheduled for / }).waitFor();
+      await part6(1).waitFor({ state: "detached" });
+      // Clicked, it opens to edit: its words, for the destinations still to publish, and each one's time.
+      await part6(3).click();
+      const editor = page.getByRole("dialog", { name: "Better schools" });
+      const caption = editor.getByLabel("Caption");
+      assert.equal(await caption.inputValue(), "Lorax wisdom, part 6");
+      const save = editor.getByRole("button", { name: "Save" });
+      assert.ok(await save.isDisabled());
+      await editor.getByRole("group", { name: /^Chinese/ }).waitFor();
+      // Each destination's limits hold, as in the composer.
+      await caption.fill("x".repeat(2300));
+      await editor.getByText(/Instagram: caption is \d+\/2200/).waitFor();
+      assert.ok(await save.isDisabled());
+      if (shots) await page.screenshot({ path: path.join(shots, `calendar-editor-${name}.png`) });
+      await caption.fill("Lorax wisdom, part six");
+      await editor.getByLabel("Time for Instagram").fill(`${key(4)}T09:00`);
+      await save.click();
+      await editor.waitFor({ state: "hidden" });
+      const nine = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 4, 9);
+      const clock = nine.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      await part6(4).getByRole("img", { name: `Instagram: Scheduled for ${clock}` }).waitFor();
+      await part6(4).click();
+      assert.equal(await caption.inputValue(), "Lorax wisdom, part six");
+      // A destination still waiting can be cancelled; stopped, it can take a time again.
+      await editor.getByRole("button", { name: "Cancel publishing to Xiaohongshu" }).click();
+      await editor.getByText("Stopped", { exact: true }).waitFor();
+      assert.equal(await editor.getByLabel("Time for Xiaohongshu").inputValue(), "");
+      await page.keyboard.press("Escape");
+      await editor.waitFor({ state: "hidden" });
     }
     if (shots) await page.screenshot({ path: path.join(shots, `calendar-${name}.png`), fullPage: true });
     // The month is in the address, so a reload or a link opens it again.

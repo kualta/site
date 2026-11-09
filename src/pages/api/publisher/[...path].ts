@@ -20,6 +20,8 @@ import {
   PostError,
   stopTarget,
   rescheduleTarget,
+  editPost,
+  type PostEdit,
   markPublished,
   postUploads,
   targetActive,
@@ -501,6 +503,13 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!validId(data.job) || !validId(data.target)) return json({ error: "Invalid post" }, 400);
       if (!(await rescheduleTarget(db, data.job, data.target, data.at)))
         return json({ error: "It's publishing or done by now, so its time can't change." }, 409);
+      return json({ ok: true });
+    }
+    if (path === "edit" && request.method === "POST") {
+      const data = (await request.json()) as PostEdit & { job: string };
+      if (!validId(data?.job)) return json({ error: "Invalid post" }, 400);
+      if (!(await editPost(db, data.job, data)))
+        return json({ error: "It's out everywhere by now, so its words can't change." }, 409);
       return json({ ok: true });
     }
     if (path === "mark-published" && request.method === "POST") {
