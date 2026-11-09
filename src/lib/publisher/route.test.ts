@@ -14,6 +14,9 @@ test("the path says which tab is open, on the publisher's own host and under /pu
   expect(readPath("/publish/calendar")).toEqual({ base: "/publish", tab: "calendar" });
   expect(tabPath("", "calendar")).toBe("/calendar");
   expect(tabPath("/publish", "calendar")).toBe("/publish/calendar");
+  expect(readPath("/history")).toEqual({ base: "", tab: "history" });
+  expect(readPath("/publish/history")).toEqual({ base: "/publish", tab: "history" });
+  expect(tabPath("", "history")).toBe("/history");
 });
 test("the calendar's month comes from its address, else this month", () => {
   const now = new Date(2026, 10, 8);

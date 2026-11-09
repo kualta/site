@@ -303,7 +303,7 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
               ))}
             </ul>
             <p className="publisher-note">
-              Change a scheduled time, or cancel it, from the post's History entry on the Compose tab.
+              Change a scheduled time, or cancel it, from the post's entry in History.
             </p>
           </div>
         </div>

@@ -8,10 +8,11 @@ import { publisherSession } from "@/lib/publisher/auth";
 import { platforms, type Platform } from "@/lib/publisher/presets";
 import "@/styles/globals.css";
 export const prerender = false;
-// The composer, or with /analytics or /calendar another tab; the tab then keeps its own place in the query.
+// The composer, or with /history, /calendar or /analytics another tab; the tab then keeps its own place in the query.
+const tabs = ["history", "calendar", "analytics"] as const;
 const { tab } = Astro.params;
-if (tab && tab !== "analytics" && tab !== "calendar") return new Response("Not found", { status: 404 });
-const initialTab = tab === "analytics" || tab === "calendar" ? tab : "compose";
+const initialTab = tabs.find((name) => name === tab) ?? "compose";
+if (tab && initialTab === "compose") return new Response("Not found", { status: 404 });
 Astro.response.headers.set("Cache-Control", "no-store");
 // Check access while rendering, so the page opens straight into the composer or the sign-in prompt.
 let access: "owner" | "signin" | "denied" | undefined;

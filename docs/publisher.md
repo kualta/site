@@ -273,9 +273,10 @@ necessary before relying on the browser upload adapters, and on Farcaster and Le
 
 ## History and deleting publications
 
-History shows posts sent through this app, with saved title/caption, photo/video previews,
-links and outcomes for each destination. Older pages remain available after upload expiry;
-previews become unavailable after the seven-day media retention window.
+History, its own tab at post.kualta.dev/history, shows posts sent through this app, with
+saved title/caption, photo/video previews, links and outcomes for each destination. Older
+pages remain available after upload expiry; previews become unavailable after the seven-day
+media retention window.
 
 Deleting from Farcaster or Lens removes the post but not its media: Grove answers "could
 not find resource" when asked to delete recent uploads, so photos and videos stay at their

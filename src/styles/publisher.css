@@ -9,7 +9,10 @@
 .dark .publisher-page { color-scheme:dark; }
 
 /* --- page --- */
-.publisher { width:100%; max-width:1200px; margin:0 auto; padding:40px 48px 120px; font-size:16px; line-height:1.5; }
+.publisher { width:100%; padding:40px 48px 120px; font-size:16px; line-height:1.5; }
+/* Everything keeps to one centred column whichever tab is open, so switching tabs never moves the header or the
+   tabs. Only the calendar's month leaves it, to take the whole width of the window. */
+:where(.publisher > :not(.publisher-calendar, .publisher-toasts), .publisher-calendar > :not(.publisher-calendar-grid)) { max-width:1104px; margin-inline:auto; }
 .publisher,.publisher * { box-sizing:border-box; }
 .publisher a { color:inherit; text-decoration:none; }
 .publisher-note, .publisher small, .publisher time, .publisher-for { color:var(--publisher-muted); }
@@ -32,7 +35,7 @@
 .helper-status { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--publisher-muted); }
 .helper-status i { width:7px; height:7px; border-radius:50%; background:var(--publisher-muted); }
 .helper-status i[data-online=true] { background:var(--publisher-success); }
-.publisher-tabs { display:flex; gap:28px; margin-bottom:40px; border-bottom:1px solid var(--publisher-line); }
+.publisher-tabs { display:flex; gap:clamp(16px, 5vw, 28px); margin-bottom:40px; border-bottom:1px solid var(--publisher-line); }
 .publisher .publisher-tabs button { margin-bottom:-1px; padding:10px 0 12px; border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--publisher-muted); font-size:15px; }
 .publisher .publisher-tabs button:hover:not(:disabled) { background:none; color:var(--publisher-ink); }
 .publisher .publisher-tabs button[aria-pressed="true"] { color:var(--publisher-ink); border-bottom-color:currentColor; }
@@ -176,9 +179,8 @@
 .publisher-error { margin:0 0 24px; padding:12px 14px; border-radius:12px; background:color-mix(in srgb, var(--publisher-danger) 10%, transparent); color:var(--publisher-danger); overflow-wrap:anywhere; }
 
 /* --- history --- */
-.publisher-history { margin-top:80px; }
-.publisher-history > h2 { margin-bottom:8px; }
 .publisher .publisher-history-day { margin:28px 0 0; font-size:13px; color:var(--publisher-muted); }
+.publisher .publisher-history > section:first-of-type > .publisher-history-day { margin-top:0; }
 .publisher-history-list { list-style:none; margin:0; padding:0; }
 .publisher-history-item { display:flex; gap:16px; padding:18px 0; border-bottom:1px solid var(--publisher-line); }
 .publisher-history-item[data-deleted="true"] .publisher-history-thumb, .publisher-history-item[data-deleted="true"] .publisher-history-head, .publisher-history-item[data-deleted="true"] .publisher-history-caption { opacity:.5; }
@@ -383,7 +385,7 @@
   .publisher-tabs { margin-bottom:28px; }
   .publisher h1 { font-size:26px; }
   .publisher-compose { grid-template-columns:minmax(0,1fr); gap:44px; }
-  .publisher-history, .publisher-accounts { margin-top:64px; }
+  .publisher-accounts { margin-top:64px; }
   /* Below 16px, phones zoom in on the field when it's tapped. */
   .publisher :is(input:not([type=checkbox]):not([type=file]):not([type=range]), textarea, select) { font-size:16px; }
 }
@@ -399,12 +401,10 @@
 }
 
 /* --- calendar: posts on the days they published or are scheduled to --- */
-/* The month takes the whole width of the window. */
-.publisher[data-tab="calendar"] { max-width:none; }
 .publisher-calendar-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:8px; }
 .publisher-calendar-head h1 { margin:0; }
 .publisher-calendar-head .publisher-actions { flex:none; flex-wrap:nowrap; }
-.publisher-calendar > .publisher-note { margin:0 0 20px; }
+.publisher-calendar > .publisher-note { margin-top:0; margin-bottom:20px; }
 .publisher-calendar[data-loading] .publisher-calendar-grid { opacity:.6; }
 .publisher-calendar-grid { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); border-top:1px solid var(--publisher-line); border-left:1px solid var(--publisher-line); transition:opacity 160ms; }
 .publisher-calendar-weekday { padding:8px; border-right:1px solid var(--publisher-line); border-bottom:1px solid var(--publisher-line); color:var(--publisher-muted); font-size:12px; }
