@@ -1,10 +1,10 @@
 import type { Metric } from "./metrics";
 import type { PostKind } from "./presets";
 
-export type Tab = "compose" | "history" | "calendar" | "analytics";
-const TAB = /\/(history|calendar|analytics)\/?$/;
+export type Tab = "compose" | "history" | "calendar" | "analytics" | "accounts";
+const TAB = /\/(history|calendar|analytics|accounts)\/?$/;
 /**
- * Which tab a path opens, and the composer's own path: `/`, `/history`, `/calendar` and `/analytics` on
+ * Which tab a path opens, and the composer's own path: `/` or another tab's own, such as `/history`, on
  * post.kualta.dev, `/publish…` locally.
  */
 export function readPath(pathname: string): { base: string; tab: Tab } {

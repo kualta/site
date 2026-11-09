@@ -35,8 +35,9 @@
 .helper-status { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--publisher-muted); }
 .helper-status i { width:7px; height:7px; border-radius:50%; background:var(--publisher-muted); }
 .helper-status i[data-online=true] { background:var(--publisher-success); }
-.publisher-tabs { display:flex; gap:clamp(16px, 5vw, 28px); margin-bottom:40px; border-bottom:1px solid var(--publisher-line); }
-.publisher .publisher-tabs button { margin-bottom:-1px; padding:10px 0 12px; border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--publisher-muted); font-size:15px; }
+/* The line is a shadow rather than a border so a phone's scrolling tabs don't clip the underline drawn over it. */
+.publisher-tabs { display:flex; gap:28px; margin-bottom:40px; box-shadow:inset 0 -1px 0 var(--publisher-line); }
+.publisher .publisher-tabs button { padding:10px 0 12px; border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--publisher-muted); font-size:15px; }
 .publisher .publisher-tabs button:hover:not(:disabled) { background:none; color:var(--publisher-ink); }
 .publisher .publisher-tabs button[aria-pressed="true"] { color:var(--publisher-ink); border-bottom-color:currentColor; }
 
@@ -245,8 +246,6 @@
 .publisher-history-empty { padding:40px 0; border-top:1px solid var(--publisher-line); color:var(--publisher-muted); }
 
 /* --- accounts and the laptop --- */
-.publisher-accounts { margin-top:80px; }
-.publisher-accounts > h2 { margin-bottom:8px; }
 .publisher-account { padding:12px 0; border-top:1px solid var(--publisher-line); }
 .publisher-account-row { display:flex; align-items:center; gap:12px; }
 .publisher-account-row > span:first-child { flex:1; font-size:15px; }
@@ -256,8 +255,8 @@
 .publisher-account-actions p { flex-basis:100%; margin:0; overflow-wrap:anywhere; }
 .publisher-account-actions a { text-decoration:underline; text-underline-offset:3px; }
 .publisher-account > .publisher-problem { margin:8px 0 0; }
-@media(min-width:900px) { .publisher-accounts { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); column-gap:56px; align-items:start; } .publisher-accounts > h2 { grid-column:1 / -1; } }
-.publisher .publisher-connection { margin:56px 0 0; padding-bottom:0; }
+@media(min-width:900px) { .publisher-accounts { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); column-gap:56px; align-items:start; } }
+.publisher .publisher-connection { margin-top:56px; margin-bottom:0; padding-bottom:0; }
 .publisher-connection p { margin:0 0 12px; font-size:14px; color:var(--publisher-muted); }
 .publisher-connection code { padding:1px 6px; border:1px solid var(--publisher-line); border-radius:6px; background:var(--publisher-surface); color:var(--publisher-ink); font-size:13px; }
 .publisher-connection button { margin:0 8px 8px 0; }
@@ -385,12 +384,15 @@
   .publisher-tabs { margin-bottom:28px; }
   .publisher h1 { font-size:26px; }
   .publisher-compose { grid-template-columns:minmax(0,1fr); gap:44px; }
-  .publisher-accounts { margin-top:64px; }
   /* Below 16px, phones zoom in on the field when it's tapped. */
   .publisher :is(input:not([type=checkbox]):not([type=file]):not([type=range]), textarea, select) { font-size:16px; }
 }
 @media (max-width:520px) {
   .publisher-header { flex-wrap:wrap; }
+  /* Five tabs fit from a 375px phone up; a narrower one scrolls them sideways. */
+  .publisher-tabs { gap:12px; overflow-x:auto; scrollbar-width:none; }
+  .publisher .publisher-tabs button { font-size:14px; }
+  .publisher-tabs::-webkit-scrollbar { display:none; }
   .publisher-header-tools { gap:12px; }
   .publisher-header a { font-size:22px; }
   .publisher-account-row { flex-wrap:wrap; gap:8px; }

@@ -1,0 +1,7 @@
+---
+// post.kualta.dev/accounts is the composer's Accounts tab: the middleware rewrites it to /publish/accounts before
+// this renders. It needs a page of its own because a path no page matches is answered with the prerendered 404, which
+// never reaches the middleware. On any other host there's nothing here.
+export const prerender = false;
+return new Response("Not found", { status: 404 });
+---

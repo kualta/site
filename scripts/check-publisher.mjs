@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpeg from "ffmpeg-static";
@@ -15,14 +15,15 @@ const server = await createServer({
   root: path.join(root, "scripts/browser-fixtures"),
   resolve: { alias: [{ find: "@", replacement: path.join(root, "src") }] },
   esbuild: { jsx: "automatic" },
-  server: { host: "127.0.0.1", port: 8797, fs: { allow: [root] } },
+  // node_modules by its real path too, so a worktree that links the main checkout's still serves the fonts.
+  server: { host: "127.0.0.1", port: 8797, fs: { allow: [root, realpathSync(path.join(root, "node_modules"))] } },
   // The other tabs have their own paths, as on post.kualta.dev, so a reload opens them again.
   plugins: [
     {
       name: "publisher-tabs",
       configureServer(vite) {
         vite.middlewares.use((request, _response, next) => {
-          request.url = request.url?.replace(/^\/publisher\.html\/(history|calendar|analytics)(?=\?|$)/, "/publisher.html");
+          request.url = request.url?.replace(/^\/publisher\.html\/(history|calendar|analytics|accounts)(?=\?|$)/, "/publisher.html");
           next();
         });
       },
@@ -793,7 +794,8 @@ try {
   assert.deepEqual(errors, []);
 
   // Farcaster and Lens can be chosen, say when they can't take a post, and wait for their accounts like the rest.
-  await page.goto("http://127.0.0.1:8797/publisher.html?connecting=lens");
+  // Accounts have a tab of their own.
+  await page.goto("http://127.0.0.1:8797/publisher.html/accounts?connecting=lens");
   const accounts = page.getByRole("region", { name: "Publishing accounts" });
   const lensAccount = accounts.locator(".publisher-account", { hasText: "Lens" });
   await lensAccount.getByText("Connecting…").waitFor();
@@ -805,10 +807,28 @@ try {
   await lensAccount.getByRole("button", { name: "Cancel" }).waitFor();
   assert.equal(await lensAccount.getByRole("button", { name: "Finish sign-in" }).count(), 0);
   if (shots) await page.screenshot({ path: path.join(shots, "lens-connecting.png"), fullPage: true });
-  await page.goto("http://127.0.0.1:8797/publisher.html?connecting=farcaster");
+  // On a phone too narrow for every tab they scroll sideways, with the open one in view and the page still fitting.
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("http://127.0.0.1:8797/publisher.html/accounts?connecting=farcaster");
   const farcasterAccount = accounts.locator(".publisher-account", { hasText: "Farcaster" });
   await farcasterAccount.getByText("Approve the posting key in the Chrome window").waitFor();
   assert.equal(await farcasterAccount.getByRole("button", { name: "Finish sign-in" }).count(), 0);
+  assert.deepEqual(
+    await page.evaluate(() => {
+      const bar = document.querySelector(".publisher-tabs");
+      const shown = bar.getBoundingClientRect();
+      const open = bar.querySelector('[aria-pressed="true"]').getBoundingClientRect();
+      return {
+        open: document.querySelector('.publisher-tabs [aria-pressed="true"]').textContent,
+        inView: open.left >= shown.left && open.right <= shown.right + 0.5,
+        scrolls: bar.scrollWidth > bar.clientWidth,
+        pageFits: document.documentElement.scrollWidth <= innerWidth,
+      };
+    }),
+    { open: "Accounts", inView: true, scrolls: true, pageFits: true },
+  );
+  if (shots) await page.screenshot({ path: path.join(shots, "accounts-320.png"), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.goto("http://127.0.0.1:8797/publisher.html");
   const destination = (name) => page.locator(".publisher-destinations label", { hasText: name });
@@ -932,6 +952,7 @@ try {
           return { selector, x, y, width };
         }),
       );
+    await page.getByRole("navigation", { name: "Publisher sections" }).waitFor();
     const composeChrome = await chrome();
     await page.getByRole("button", { name: "Calendar" }).click();
     const now = new Date();
@@ -980,6 +1001,12 @@ try {
     await page.locator(".publisher-analytics-posts > button").first().waitFor();
     assert.deepEqual(await chrome(), composeChrome);
     if (shots) await page.screenshot({ path: path.join(shots, `analytics-tab-${name}.png`), fullPage: true });
+    await page.getByRole("button", { name: "Accounts", exact: true }).click();
+    await page.getByRole("region", { name: "Publishing accounts" }).waitFor();
+    assert.deepEqual(await chrome(), composeChrome);
+    // Every tab fits a 390px phone, without scrolling.
+    assert.ok(await page.locator(".publisher-tabs").evaluate((bar) => bar.scrollWidth <= bar.clientWidth));
+    if (shots) await page.screenshot({ path: path.join(shots, `accounts-tab-${name}.png`), fullPage: true });
     assert.deepEqual(errors, []);
     await context.close();
   }
