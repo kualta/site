@@ -139,6 +139,9 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
   const [posts, setPosts] = useState<CalendarPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<{ post: string; day: string } | null>(null);
+  // The post under the pointer or keyboard focus: its entries on every day stand out, the rest fade back.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const leave = (id: string) => setHovered((current) => (current === id ? null : current));
   const from = days[0].getTime();
   // The midnight after the grid's last day; a fixed 24 hours would be off by one across a daylight-saving change.
   const last = days[days.length - 1];
@@ -204,7 +207,7 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
       <p className="publisher-note">
         Filled: published. Outlined: scheduled. Struck through: failed or deleted. Times are yours.
       </p>
-      <div className="publisher-calendar-grid">
+      <div className="publisher-calendar-grid" data-hovered={hovered !== null || undefined}>
         {weekdays.map((name) => (
           <div key={name} className="publisher-calendar-weekday" aria-hidden="true">
             {name}
@@ -233,6 +236,12 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
                   key={post.id}
                   className="publisher-calendar-post"
                   aria-expanded={open?.post === post.id && open.day === key}
+                  data-related={hovered === post.id || undefined}
+                  // A tap would only flash it, so touch leaves it out; a click's focus doesn't hold it either.
+                  onPointerEnter={(event) => event.pointerType !== "touch" && setHovered(post.id)}
+                  onPointerLeave={() => leave(post.id)}
+                  onFocus={(event) => event.currentTarget.matches(":focus-visible") && setHovered(post.id)}
+                  onBlur={() => leave(post.id)}
                   onClick={() =>
                     setOpen(open?.post === post.id && open.day === key ? null : { post: post.id, day: key })
                   }
