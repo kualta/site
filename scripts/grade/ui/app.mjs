@@ -35,27 +35,51 @@ async function api(path, { method = "GET", json, keepalive } = {}) {
 }
 
 const PROFILE_NAMES = { dlog2: "D-Log2", dlog: "D-Log", hlg: "HLG", rec709: "Rec.709" };
-function formatTint(v) {
-  if (v > 0) return `+${v} magenta`;
-  if (v < 0) return `${-v} green`;
-  return "0";
+const cameraK = (clip) => clip.cameraKelvin ?? 5600;
+function tintUnit(v) {
+  if (v > 0) return "magenta";
+  if (v < 0) return "green";
+  return "";
 }
+/**
+ * The grade controls. `neutral` is where a rail's fill starts (a bipolar control fills from it); `rail` names a
+ * coloured rail instead of a fill; `tick` marks a reference point (the camera's own white balance).
+ */
 const CONTROLS = [
-  { field: "exposure", label: "Exposure", min: -3, max: 3, step: 0.05, reset: 0, fmt: (v) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)} EV` },
+  { field: "exposure", group: "light", label: "Exposure", min: -3, max: 3, step: 0.05, reset: 0, neutral: 0, digits: 2, signed: true, unit: () => "EV" },
+  { field: "contrast", group: "light", label: "Contrast", min: 0.5, max: 1.6, step: 0.01, reset: 1, neutral: 1, digits: 2, unit: () => "×" },
   {
     field: "kelvin",
+    group: "color",
     label: "Temperature",
     min: 2000,
     max: 12000,
     step: 50,
     reset: null,
-    get: (g, clip) => g.kelvin ?? clip.cameraKelvin ?? 5600,
-    fmt: (v, clip) => `${Math.round(v)} K${v === (clip.cameraKelvin ?? 5600) ? " · camera" : ""}`,
+    digits: 0,
+    rail: "temp",
+    unit: () => "K",
+    get: (g, clip) => g.kelvin ?? cameraK(clip),
+    tick: (clip) => cameraK(clip),
+    tickTitle: (clip) => `Camera: ${cameraK(clip)} K`,
   },
-  { field: "tint", label: "Tint", min: -100, max: 100, step: 1, reset: 0, fmt: formatTint },
-  { field: "contrast", label: "Contrast", min: 0.5, max: 1.6, step: 0.01, reset: 1, fmt: (v) => `×${v.toFixed(2)}` },
-  { field: "saturation", label: "Saturation", min: 0, max: 2, step: 0.01, reset: 1, fmt: (v) => `×${v.toFixed(2)}` },
+  { field: "tint", group: "color", label: "Tint", min: -100, max: 100, step: 1, reset: 0, neutral: 0, digits: 0, signed: true, rail: "tint", unit: tintUnit },
+  { field: "saturation", group: "color", label: "Saturation", min: 0, max: 2, step: 0.01, reset: 1, neutral: 1, digits: 2, unit: () => "×" },
 ];
+const controlValue = (c, g, clip) => (c.get ? c.get(g, clip) : g[c.field]);
+// Rounded to the step's own precision, so 0.05 steps save as 0.6, not 0.6000000000000001.
+const snap = (c, v) => Math.min(c.max, Math.max(c.min, Number((Math.round(v / c.step) * c.step).toFixed(6))));
+const pct = (c, v) => `${((v - c.min) / (c.max - c.min)) * 100}%`;
+function formatValue(c, v) {
+  const text = Math.abs(v).toFixed(c.digits);
+  if (Number(text) === 0) return text;
+  if (v < 0) return `−${text}`;
+  return c.signed ? `+${text}` : text;
+}
+function parseValue(text) {
+  const n = Number.parseFloat(String(text).replace(/[−–]/g, "-").replace(/[^\d.+-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
 
 const state = {
   library: null,
@@ -289,10 +313,11 @@ function renderList() {
     b.dataset.name = clip.name;
     const { title, time } = label(clip);
     b.innerHTML =
-      '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><b></b><span class="mono when"></span><span class="chips"><span class="chip profile"></span><span class="chip state"></span></span></span><span class="bar-progress" hidden><i></i></span>';
+      '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span></span><span class="sub-row"><span class="profile"></span><span class="state"></span></span></span><span class="progress" hidden><i></i></span>';
     b.querySelector("b").textContent = title;
-    b.querySelector(".when").textContent = [time, `${clip.duration.toFixed(1)} s`, `${clip.width}×${clip.height}`].filter(Boolean).join(" · ");
+    b.querySelector(".when").textContent = [time, `${clip.duration.toFixed(1)} s`].filter(Boolean).join(" · ");
     b.querySelector(".profile").textContent = PROFILE_NAMES[clip.profile];
+    b.title = `${clip.name} · ${clip.width}×${clip.height}`;
     li.append(b);
     list.append(li);
     scheduleThumb(clip);
@@ -308,28 +333,26 @@ function updateRows() {
     b.classList.toggle("primary-clip", clip.name === state.primary && state.selected.size > 1);
     const chip = b.querySelector(".state");
     let text = "exported";
-    let on = true;
-    if (clip.proxy === "failed") [text, on] = ["preview failed", false];
-    else if (clip.proxy !== "ready") [text, on] = ["preparing", false];
-    else if (exporting(clip)) [text, on] = [`exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, false];
-    else if (queued(clip)) [text, on] = ["queued", false];
-    else if (!clip.exported) [text, on] = ["not exported", false];
-    else if (stale(clip)) [text, on] = ["changed", false];
+    let kind = "ok";
+    if (clip.proxy === "failed") [text, kind] = ["preview failed", "bad"];
+    else if (clip.proxy !== "ready") [text, kind] = ["preparing", "busy"];
+    else if (exporting(clip)) [text, kind] = [`exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
+    else if (queued(clip)) [text, kind] = ["queued", "busy"];
+    else if (!clip.exported) [text, kind] = ["not exported", ""];
+    else if (stale(clip)) [text, kind] = ["changed", "changed"];
     chip.textContent = text;
-    chip.classList.toggle("on", on);
-    const bar = b.querySelector(".bar-progress");
+    chip.className = `state ${kind}`.trim();
+    const bar = b.querySelector(".progress");
     bar.hidden = !exporting(clip);
     if (!bar.hidden) bar.firstElementChild.style.width = `${(state.jobs.export.current.progress ?? 0) * 100}%`;
   }
   const n = state.selected.size;
-  $("clip-count").textContent = `${n} of ${state.clips.length}`;
-  const all = $("select-all");
-  all.checked = n > 0 && n === state.clips.length;
-  all.indeterminate = n > 0 && n < state.clips.length;
+  $("clip-count").textContent = n > 1 ? `${n} of ${state.clips.length}` : String(state.clips.length);
+  $("select-all").textContent = n === state.clips.length && n > 1 ? "Select one" : "Select all";
   const changed = state.clips.filter((c) => stale(c) && !exporting(c) && !queued(c)).length;
   const btn = $("export");
   btn.disabled = changed === 0;
-  btn.textContent = changed ? `Export ${changed} clip${changed === 1 ? "" : "s"}` : "All exported";
+  $("export-label").textContent = changed ? `Export ${changed} clip${changed === 1 ? "" : "s"}` : "All exported";
   $("export-selected").textContent = n > 1 ? `Export ${n} selected` : "Export this clip";
   $("export-selected").disabled = n === 0;
 }
@@ -353,8 +376,9 @@ $("clip-list").addEventListener("click", (e) => {
   setPrimary(name);
 });
 
-$("select-all").addEventListener("change", (e) => {
-  state.selected = e.target.checked ? new Set(state.clips.map((c) => c.name)) : new Set(state.primary ? [state.primary] : []);
+$("select-all").addEventListener("click", () => {
+  const all = state.selected.size === state.clips.length && state.clips.length > 1;
+  state.selected = all ? new Set(state.primary ? [state.primary] : []) : new Set(state.clips.map((c) => c.name));
   afterSelection();
 });
 
@@ -450,18 +474,38 @@ $("canvas").addEventListener("pointerup", () => {
 
 const togglePlay = () => (video.paused ? video.play().catch(() => {}) : video.pause());
 $("play").addEventListener("click", togglePlay);
-video.addEventListener("play", () => {
-  $("play").textContent = "Pause";
-});
-video.addEventListener("pause", () => {
-  $("play").textContent = "Play";
-});
-const showTime = () => {
+function setIcon(button, id, text) {
+  button.querySelector("use").setAttribute("href", `#${id}`);
+  button.setAttribute("aria-label", text);
+  button.title = text;
+}
+video.addEventListener("play", () => setIcon($("play"), "i-pause", "Pause"));
+video.addEventListener("pause", () => setIcon($("play"), "i-play", "Play"));
+
+/** Timecode HH:MM:SS:FF at the clip's frame rate (23.976 counts as 24, non-drop). */
+function timecode(seconds) {
+  const rate = primaryClip()?.fps || 24;
+  const fps = Math.max(1, Math.round(rate));
+  const frames = Math.round((seconds || 0) * rate);
+  const f = frames % fps;
+  const s = Math.floor(frames / fps);
+  const two = (n) => String(n).padStart(2, "0");
+  return `${two(Math.floor(s / 3600))}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}:${two(f)}`;
+}
+function showTime() {
   const d = video.duration || 0;
-  if (!scrubbing) $("scrub").value = d ? video.currentTime / d : 0;
-  $("time").textContent = `${video.currentTime.toFixed(1)} / ${d.toFixed(1)}`;
-};
+  const at = d ? video.currentTime / d : 0;
+  if (!scrubbing) $("scrub").value = at;
+  $("scrub-rail").style.setProperty("--b", `${at * 100}%`);
+  $("tc-now").textContent = timecode(video.currentTime);
+  $("tc-dur").textContent = timecode(d);
+}
 for (const ev of ["timeupdate", "loadedmetadata", "seeked", "emptied"]) video.addEventListener(ev, showTime);
+video.addEventListener("play", function tick() {
+  if (video.paused) return;
+  showTime();
+  requestAnimationFrame(tick);
+});
 let scrubbing = false;
 $("scrub").addEventListener("pointerdown", () => {
   scrubbing = true;
@@ -471,28 +515,110 @@ $("scrub").addEventListener("pointerup", () => {
 });
 $("scrub").addEventListener("input", () => {
   if (video.duration) video.currentTime = Number($("scrub").value) * video.duration;
+  showTime();
 });
 $("mute").addEventListener("click", () => {
   video.muted = !video.muted;
-  $("mute").textContent = video.muted ? "Sound off" : "Sound on";
-  $("mute").setAttribute("aria-pressed", String(video.muted));
+  setIcon($("mute"), video.muted ? "i-muted" : "i-sound", video.muted ? "Unmute" : "Mute");
+  $("mute").setAttribute("aria-pressed", String(!video.muted));
+});
+$("loop").addEventListener("click", () => {
+  video.loop = !video.loop;
+  $("loop").setAttribute("aria-pressed", String(video.loop));
 });
 
 // ---- grade panel --------------------------------------------------------------------------------------------------
 
+/** Arrow-key steps: ⇧ moves ten steps, ⌥ a tenth of one. */
+function stepMultiplier(e) {
+  if (e.shiftKey) return 10;
+  if (e.altKey) return 0.1;
+  return 1;
+}
+
+/** The primary clip's current value for a control. */
+function currentValue(c) {
+  const clip = primaryClip();
+  return clip ? controlValue(c, gradeOf(clip), clip) : c.neutral ?? c.min;
+}
+
 function buildControls() {
-  const box = $("controls");
   for (const c of CONTROLS) {
     const row = document.createElement("div");
-    row.className = "row";
+    row.className = "ctl";
     row.dataset.field = c.field;
-    row.innerHTML = `<label class="label" for="c-${c.field}"></label><span class="value"></span><button type="button" class="reset" aria-label="Reset ${c.label}" title="Reset">↺</button><input type="range" id="c-${c.field}" min="${c.min}" max="${c.max}" step="${c.step}">`;
-    row.querySelector("label").textContent = c.label;
-    const input = row.querySelector("input");
-    input.addEventListener("input", () => setField(c.field, Number(input.value)));
-    input.addEventListener("dblclick", () => setField(c.field, c.reset));
-    row.querySelector(".reset").addEventListener("click", () => setField(c.field, c.reset));
-    box.append(row);
+    row.innerHTML =
+      `<label class="ctl-label" for="n-${c.field}"><span class="name"></span><span class="mixed" hidden>Mixed</span></label>` +
+      `<span class="value"><input class="num" id="n-${c.field}" inputmode="decimal" spellcheck="false" autocomplete="off"><span class="unit"></span></span>` +
+      `<span class="rail${c.rail ? ` ${c.rail}` : ""}"><span class="tick" hidden></span><input type="range" id="c-${c.field}" min="${c.min}" max="${c.max}" step="${c.step}"></span>`;
+    row.querySelector(".name").textContent = c.label;
+    row.querySelector("input[type=range]").setAttribute("aria-label", c.label);
+    row.querySelector(".num").setAttribute("aria-label", `${c.label} value`);
+    document.querySelector(`.controls[data-group="${c.group}"]`).append(row);
+
+    const range = row.querySelector("input[type=range]");
+    range.addEventListener("input", () => setField(c.field, Number(range.value)));
+    range.addEventListener("dblclick", () => setField(c.field, c.reset));
+
+    // The number: type a value, Enter or leave to apply, Escape to undo, arrows to step (⇧ ×10, ⌥ ÷10).
+    const num = row.querySelector(".num");
+    const commit = () => {
+      const v = parseValue(num.value);
+      if (v === null || snap(c, v) === currentValue(c)) return updatePanel();
+      setField(c.field, snap(c, v));
+    };
+    num.addEventListener("focus", () => num.select());
+    num.addEventListener("blur", commit);
+    num.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") num.blur();
+      else if (e.key === "Escape") {
+        updatePanel();
+        num.blur();
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const v = snap(c, currentValue(c) + (e.key === "ArrowUp" ? 1 : -1) * c.step * stepMultiplier(e));
+        setField(c.field, v);
+        num.value = formatValue(c, v);
+        num.select();
+      }
+    });
+
+    // The name: drag sideways to scrub the value (⇧ for fine), double-click to reset, click to type.
+    const name = row.querySelector(".ctl-label");
+    let moved = false;
+    name.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      const start = e.clientX;
+      const from = currentValue(c);
+      moved = false;
+      name.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const dx = ev.clientX - start;
+        if (!moved && Math.abs(dx) < 3) return;
+        moved = true;
+        setField(c.field, snap(c, from + (dx * (c.max - c.min) * (ev.shiftKey ? 0.2 : 1)) / 320));
+      };
+      const up = () => {
+        name.removeEventListener("pointermove", move);
+        name.removeEventListener("pointerup", up);
+        name.removeEventListener("pointercancel", up);
+      };
+      name.addEventListener("pointermove", move);
+      name.addEventListener("pointerup", up);
+      name.addEventListener("pointercancel", up);
+    });
+    name.addEventListener("click", (e) => {
+      if (moved) e.preventDefault();
+    });
+    name.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      setField(c.field, c.reset);
+    });
+  }
+  for (const b of document.querySelectorAll("[data-reset-group]")) {
+    b.addEventListener("click", () => {
+      for (const c of CONTROLS.filter((x) => x.group === b.dataset.resetGroup)) setField(c.field, c.reset);
+    });
   }
 }
 
@@ -500,28 +626,34 @@ function updatePanel() {
   const clip = primaryClip();
   const n = state.selected.size;
   const disabled = !clip;
-  for (const el of document.querySelectorAll(".panel input, .panel select, #copy, #reset")) el.disabled = disabled;
+  for (const el of document.querySelectorAll(".panel input, .panel select, #copy, #reset, [data-reset-group]")) el.disabled = disabled;
   $("paste").disabled = disabled || !state.clipboard;
   if (!clip) {
     $("editing").textContent = "Nothing selected";
     $("clip-title").textContent = "—";
-    $("clip-meta").textContent = "";
+    $("clip-meta").replaceChildren();
     return;
   }
   const g = gradeOf(clip);
   const { title, time } = label(clip);
-  $("editing").textContent = n > 1 ? `Editing ${n} clips · showing ${title}` : "Editing";
+  $("editing").textContent = n > 1 ? `${n} clips selected · showing` : "Selected clip";
   $("clip-title").textContent = `${title}${time ? ` · ${time}` : ""}`;
-  $("clip-meta").textContent = [
-    PROFILE_NAMES[clip.profile],
-    clip.iso && `ISO ${clip.iso}`,
-    clip.cameraKelvin && `${clip.cameraKelvin} K`,
-    `${clip.width}×${clip.height}`,
-    `${clip.fps.toFixed(2)} fps`,
-    `${clip.duration.toFixed(1)} s`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  $("clip-meta").replaceChildren(
+    ...[
+      PROFILE_NAMES[clip.profile],
+      clip.iso && `ISO ${clip.iso}`,
+      clip.cameraKelvin && `${clip.cameraKelvin} K`,
+      `${clip.width}×${clip.height}`,
+      `${clip.fps.toFixed(2)} fps`,
+      `${clip.duration.toFixed(1)} s`,
+    ]
+      .filter(Boolean)
+      .map((text) => {
+        const s = document.createElement("span");
+        s.textContent = text;
+        return s;
+      }),
+  );
 
   const sel = $("base");
   const groups = new Map();
@@ -546,15 +678,27 @@ function updatePanel() {
 
   const others = [...state.selected].filter((x) => x !== clip.name).map((x) => state.byName.get(x));
   for (const c of CONTROLS) {
-    const row = document.querySelector(`.row[data-field="${c.field}"]`);
-    const value = c.get ? c.get(g, clip) : g[c.field];
-    row.querySelector("input").value = value;
-    const mixed = others.some((o) => {
-      const og = gradeOf(o);
-      return (c.get ? c.get(og, o) : og[c.field]) !== value;
-    });
-    row.classList.toggle("mixed", mixed);
-    row.querySelector(".value").textContent = c.fmt(value, clip) + (mixed ? " · mixed" : "");
+    const row = document.querySelector(`.ctl[data-field="${c.field}"]`);
+    const value = controlValue(c, g, clip);
+    row.querySelector("input[type=range]").value = value;
+    const num = row.querySelector(".num");
+    if (document.activeElement !== num) num.value = formatValue(c, value);
+    row.querySelector(".unit").textContent = c.unit(value);
+    const mixed = others.some((o) => controlValue(c, gradeOf(o), o) !== value);
+    row.querySelector(".mixed").hidden = !mixed;
+    const reference = c.tick ? c.tick(clip) : c.neutral;
+    row.classList.toggle("changed", value !== reference);
+    const rail = row.querySelector(".rail");
+    if (!c.rail) {
+      rail.style.setProperty("--a", pct(c, Math.min(c.neutral, value)));
+      rail.style.setProperty("--b", pct(c, Math.max(c.neutral, value)));
+    }
+    const tick = rail.querySelector(".tick");
+    tick.hidden = reference === undefined;
+    if (reference !== undefined) {
+      tick.style.left = pct(c, reference);
+      tick.title = c.tickTitle ? c.tickTitle(clip) : "";
+    }
   }
 }
 
@@ -704,23 +848,28 @@ function renderCamera() {
   btn.hidden = !cam?.mounted;
   if (!cam?.mounted) return;
   const running = state.jobs?.import.running;
-  if (running) btn.textContent = `Camera · importing ${state.jobs.import.done}/${state.jobs.import.total}`;
-  else if (cam.newClips) btn.textContent = `Camera · ${cam.newClips} new`;
-  else btn.textContent = "Camera · all imported";
+  const badge = $("camera-badge");
+  badge.hidden = running || !cam.newClips;
+  badge.textContent = String(cam.newClips);
+  if (running) $("camera-label").textContent = `Importing ${state.jobs.import.done} of ${state.jobs.import.total}`;
+  else $("camera-label").textContent = cam.newClips ? "Camera" : "Camera · all imported";
   const pop = $("camera-pop");
   pop.replaceChildren();
   const intro = document.createElement("p");
-  intro.textContent = cam.newClips ? "New clips on the camera, by shoot day. Import copies them into the library and checks each copy." : "Everything on the camera is in the library.";
+  intro.textContent = cam.newClips ? "New clips on the camera, by shoot day. Import copies a day into the library and checks each copy." : "Everything on the camera is in the library.";
   pop.append(intro);
   for (const s of cam.shoots) {
     const row = document.createElement("div");
-    row.className = "row";
-    const text = document.createElement("span");
-    text.className = "mono";
-    text.textContent = `${s.shoot} · ${s.clips} clip${s.clips === 1 ? "" : "s"} · ${(s.bytes / 1e9).toFixed(1)} GB`;
+    row.className = "pop-row";
+    const text = document.createElement("div");
+    const day = document.createElement("b");
+    day.textContent = s.shoot;
+    const detail = document.createElement("span");
+    detail.textContent = `${s.clips} clip${s.clips === 1 ? "" : "s"} · ${(s.bytes / 1e9).toFixed(1)} GB`;
+    text.append(day, detail);
     const go = document.createElement("button");
     go.type = "button";
-    go.className = "ctl";
+    go.className = "btn";
     go.textContent = "Import";
     go.disabled = Boolean(running);
     go.addEventListener("click", async () => {
