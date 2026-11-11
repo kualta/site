@@ -29,6 +29,9 @@ execFileSync(ffmpeg, [
   "-c:a", "aac", "-metadata", "com.dji.camera.ColorGammaSxS=D-Log2", "-metadata", "com.dji.camera.WhiteBalanceKelvin=5600",
   "-movflags", "use_metadata_tags", path.join(shoot, "originals", name),
 ]);
+// A second, never-graded clip: "Re-export N changed" must leave it alone.
+const other = "DJI_20260101120500_0002_D.MP4";
+execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-i", path.join(shoot, "originals", name), "-c", "copy", "-map_metadata", "0", "-movflags", "use_metadata_tags", path.join(shoot, "originals", other)]);
 
 // A smooth non-linear base look standing in for the ACES conversion.
 const size = 33;
@@ -127,6 +130,19 @@ try {
   const p95 = diffs[Math.floor(diffs.length * 0.95)];
   console.log(`preview vs export over ${diffs.length} patch channels: mean ${mean.toFixed(2)}, 95% within ${p95.toFixed(2)}, worst ${diffs.at(-1).toFixed(2)} of 255`);
   assert.ok(mean <= 1.5 && p95 <= 4, "the preview matches the export");
+
+  // Change the exported clip's grade: the top button re-exports that one clip and nothing else.
+  await setRange("c-exposure", 0.5);
+  await page.getByRole("button", { name: "Re-export 1 changed" }).waitFor({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Re-export 1 changed" }).click();
+  const queued = await page.evaluate(async () => {
+    const j = (await (await fetch("/api/jobs")).json()).export;
+    return [j.current?.name, ...j.queue.map((q) => q.name)].filter(Boolean);
+  });
+  assert.deepEqual(queued.length ? queued : [name], [name], `only the changed clip is re-exported (queued: ${queued.join(", ")})`);
+  await row.getByText("graded", { exact: true }).waitFor({ timeout: 120_000 });
+  assert.ok(!existsSync(path.join(shoot, "graded", "DJI_20260101120500_0002_D.mp4")), "the never-graded clip was left alone");
+  assert.equal(JSON.parse(readFileSync(path.join(shoot, "graded", "DJI_20260101120000_0001_D.grade.json"), "utf8")).grade.exposure, 0.5);
   assert.deepEqual(errors, []);
   console.log("grade check passed");
 } finally {

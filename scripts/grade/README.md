@@ -53,7 +53,9 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
   **Full screen** (or **F**) gives the viewer and its transport the whole screen.
 - **Export this clip / Export N selected** bakes the selection; **Re-export N changed** bakes every graded clip whose
   grade moved since its export. Exports come from the 10-bit originals (off the card, for a camera day) at 16-bit
-  precision, not from the preview. A camera day can't export while the camera is unplugged.
+  precision, not from the preview. A camera day can't export while the camera is unplugged. Exporting more than ten
+  clips at once asks for a second click; **Stop exporting** (top bar, while anything exports) drops the queue and
+  stops the clip in progress, which leaves its previous export, LUT and record as they were.
 
 ## Base looks (`luts/`)
 

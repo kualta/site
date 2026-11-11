@@ -45,9 +45,10 @@ export async function probe(file) {
   };
 }
 
-function run(args, { onProgress, duration } = {}) {
+/** Run ffmpeg; `signal` stops it (the promise then rejects, and writeAtomically removes the half-written file). */
+function run(args, { onProgress, duration, signal } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(FFMPEG, ["-hide_banner", "-loglevel", "error", "-y", ...args, ...(onProgress ? ["-progress", "pipe:1", "-nostats"] : [])]);
+    const child = spawn(FFMPEG, ["-hide_banner", "-loglevel", "error", "-y", ...args, ...(onProgress ? ["-progress", "pipe:1", "-nostats"] : [])], { signal });
     let err = "";
     let buf = "";
     child.stderr.on("data", (c) => {
@@ -145,7 +146,7 @@ export async function makeThumb(src, dst, { still = null, at = 1 } = {}) {
  * Bake a grade into a graded copy, from the 10-bit original at 16-bit precision: the clip's LUT through ffmpeg's
  * tetrahedral lut3d, out as 8-bit H.264 BT.709 near-lossless with a key frame every quarter second, sound copied.
  */
-export async function exportClip({ src, dst, cube, matrix = "bt709", duration, onProgress }) {
+export async function exportClip({ src, dst, cube, matrix = "bt709", duration, onProgress, signal }) {
   await writeAtomically(dst, (tmp) =>
     run(
       [
@@ -155,7 +156,7 @@ export async function exportClip({ src, dst, cube, matrix = "bt709", duration, o
         "-c:v", "libx264", "-preset", "medium", "-crf", "12", "-force_key_frames", "expr:gte(t,n_forced*0.25)",
         "-c:a", "copy", "-movflags", "+faststart", tmp,
       ],
-      { onProgress, duration },
+      { onProgress, duration, signal },
     ),
   );
 }

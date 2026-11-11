@@ -22,15 +22,20 @@ const day = "2026-02-05";
 const camId = `camera:${day}`;
 const withStill = "DJI_20260205090000_0001_D.MP4";
 const noStill = "DJI_20260205090100_0002_D.MP4";
+const slow = "2026-02-07";
+const slowClips = ["DJI_20260207100000_0001_D.MP4", "DJI_20260207100100_0002_D.MP4"];
 let server;
 
-function clip(dst, gamma, { still = false } = {}) {
+// A flat colour by default (the inversion check needs a flat patch); `busy` is a moving pattern that takes a while to
+// export, for stopping one midway.
+function clip(dst, gamma, { still = false, busy = false } = {}) {
   const plain = `${dst}.plain.mp4`;
+  const seconds = busy ? 20 : 1;
   execFileSync(ffmpeg, [
     "-hide_banner", "-loglevel", "error", "-y",
-    "-f", "lavfi", "-i", "color=c=0x507090:s=320x180:r=24:d=1",
-    "-f", "lavfi", "-i", "sine=d=1",
-    "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+    "-f", "lavfi", "-i", busy ? "testsrc2=s=1280x720:r=24:d=20" : "color=c=0x507090:s=320x180:r=24:d=1",
+    "-f", "lavfi", "-i", `sine=d=${seconds}`,
+    "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac",
     "-metadata", `com.dji.camera.ColorGammaSxS=${gamma}`, "-metadata", "com.dji.camera.WhiteBalanceKelvin=5180",
     "-movflags", "use_metadata_tags", still ? plain : dst,
   ]);
@@ -70,6 +75,8 @@ beforeAll(async () => {
   clip(join(lib, folder, "originals", name), "D-Log2");
   clip(join(camera, "DJI_001", withStill), "Rec.709", { still: true });
   clip(join(camera, "DJI_001", noStill), "D-Log2");
+  mkdirSync(join(lib, slow, "originals"), { recursive: true });
+  for (const n of slowClips) clip(join(lib, slow, "originals", n), "D-Log2", { busy: true });
   // An inverting stand-in for the D-Log2 ACES conversion, easy to recognise in an export.
   const data = new Float32Array(2 ** 3 * 3);
   for (let b = 0, i = 0; b < 2; b++) for (let g = 0; g < 2; g++) for (let r = 0; r < 2; r++) data.set([1 - r, 1 - g, 1 - b], i++ * 3);
@@ -79,7 +86,7 @@ beforeAll(async () => {
     stdio: ["ignore", "pipe", "inherit"],
   });
   await new Promise((resolve) => server.stdout.on("data", (c) => String(c).includes("grade:") && resolve()));
-});
+}, 120_000);
 
 afterAll(() => {
   server?.kill();
@@ -89,7 +96,10 @@ afterAll(() => {
 test.if(usable)("lists the camera's clips by shoot day and the Mac's folders", async () => {
   const library = await json("/api/library");
   expect(library.camera).toMatchObject({ mounted: true, days: [{ id: camId, label: day, clips: 2, graded: 0 }] });
-  expect(library.folders).toEqual([{ id: folder, label: folder, clips: 1, graded: 0 }]);
+  expect(library.folders).toEqual([
+    { id: slow, label: slow, clips: 2, graded: 0 },
+    { id: folder, label: folder, clips: 1, graded: 0 },
+  ]);
   const bases = await json("/api/bases");
   expect(bases.dlog2.map((b) => b.id)).toEqual(["none", "aces"]);
   expect(bases.rec709.map((b) => b.id)).toEqual(["none"]);
@@ -166,6 +176,22 @@ test.if(usable)("counts a graded file made outside the app as graded", async () 
   expect(s.clips[1].exported).toMatchObject({ key: null });
   expect((await json("/api/library")).camera.days[0].graded).toBe(2);
 });
+
+test.if(usable)("stops exporting: drops the queue, and the clip in progress leaves nothing behind", async () => {
+  expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: slow, names: slowClips }) })).status).toBe(200);
+  await until(async () => (await json("/api/jobs")).export.current?.name === slowClips[0]);
+  const { stopped } = await (await api("/api/export/stop", { method: "POST" })).json();
+  expect(stopped).toBe(2);
+  await until(async () => !(await json("/api/jobs")).export.current);
+  const jobs = await json("/api/jobs");
+  expect(jobs.export.queue).toEqual([]);
+  expect(jobs.export.failed.filter((f) => f.id === slow)).toEqual([]);
+  expect(jobs.export.stopped.count).toBe(2);
+  const graded = join(lib, slow, "graded");
+  const left = existsSync(graded) ? readdirSync(graded, { recursive: true }).map(String) : [];
+  expect(left.filter((f) => /\.(mp4|json|cube)$/.test(f))).toEqual([]);
+  expect((await json(`/api/sources/${slow}`)).clips.map((c) => c.exported)).toEqual([null, null]);
+}, 120_000);
 
 test.if(usable)("refuses other origins' requests, unknown clips, missing days and paths out of the library", async () => {
   expect((await fetch(url(`/api/sources/${folder}/grades`), { method: "PUT", body: "{}" })).status).toBe(403);

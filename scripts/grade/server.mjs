@@ -6,7 +6,7 @@
 // card and the same clip in a Mac folder share one grade and one export. Listens on 127.0.0.1 only.
 import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
@@ -181,7 +181,7 @@ async function metas(src, names) {
 const jobs = {
   thumb: { queue: [], busy: 0, failed: {} },
   proxy: { queue: [], current: null, failed: {} },
-  export: { queue: [], current: null, done: [], failed: [] },
+  export: { queue: [], current: null, done: [], failed: [], stopped: null },
 };
 const key = (id, name) => `${id}/${name}`;
 const jobOf = (src, name, meta) => ({ k: key(src.id, name), id: src.id, name, path: src.paths.get(name), dir: src.dir, meta });
@@ -237,28 +237,49 @@ async function pumpProxies() {
 }
 
 let exportBusy = false;
+let exportAbort = null;
 async function pumpExports() {
   if (exportBusy) return;
   exportBusy = true;
   while (jobs.export.queue.length) {
     const job = jobs.export.queue.shift();
     jobs.export.current = { ...job, progress: 0 };
+    exportAbort = new AbortController();
     try {
-      await exportOne(job.id, job.name, (p) => {
-        jobs.export.current.progress = p;
-      });
+      await exportOne(
+        job.id,
+        job.name,
+        (p) => {
+          jobs.export.current.progress = p;
+        },
+        exportAbort.signal,
+      );
       jobs.export.done.unshift({ ...job, at: new Date().toISOString() });
       jobs.export.done.length = Math.min(jobs.export.done.length, 100);
     } catch (e) {
-      jobs.export.failed.unshift({ ...job, error: String(e.message || e) });
+      if (!exportAbort.signal.aborted) jobs.export.failed.unshift({ ...job, error: String(e.message || e) });
     }
+    exportAbort = null;
     jobs.export.current = null;
   }
   exportBusy = false;
 }
 
-/** Bake one clip's grade from its original, wherever that is, and write only the graded copy and its record. */
-async function exportOne(id, name, onProgress) {
+/** Stop exporting: drop the queue and stop the clip in progress (its half-written file is removed). */
+function stopExports() {
+  const count = jobs.export.queue.length + (jobs.export.current ? 1 : 0);
+  jobs.export.queue = [];
+  exportAbort?.abort();
+  jobs.export.stopped = { at: new Date().toISOString(), count };
+  return count;
+}
+
+/**
+ * Bake one clip's grade from its original, wherever that is, and write only the graded copy and its record. The LUT
+ * is written beside its final name and moved into place only once the export has worked, so a failed or stopped
+ * re-export leaves the previous export, its LUT and its record as they were.
+ */
+async function exportOne(id, name, onProgress, signal) {
   const src = await source(id);
   if (!src.paths.has(name)) throw new Error(`${name} isn't in ${src.label} anymore`);
   const meta = (await metas(src, [name]))[name];
@@ -268,9 +289,16 @@ async function exportOne(id, name, onProgress) {
   const lut = composeLut({ profile: meta.profile, grade, shotK: meta.cameraKelvin, base: base.file ? await loadCube(base.file) : null, size: EXPORT_LUT_SIZE });
   const stem = stemOf(name);
   const cube = join(src.dir, "graded/luts", `${stem}.cube`);
+  const pending = join(src.dir, "graded/luts", `.${stem}.part.cube`);
   await mkdir(dirname(cube), { recursive: true });
-  await writeFile(cube, writeCube(EXPORT_LUT_SIZE, lut, `${stem} · ${base.name} · grade app`));
-  await exportClip({ src: src.paths.get(name), dst: gradedFile(src, name), cube, matrix: meta.matrix, duration: meta.duration, onProgress });
+  await writeFile(pending, writeCube(EXPORT_LUT_SIZE, lut, `${stem} · ${base.name} · grade app`));
+  try {
+    await exportClip({ src: src.paths.get(name), dst: gradedFile(src, name), cube: pending, matrix: meta.matrix, duration: meta.duration, onProgress, signal });
+  } catch (e) {
+    await rm(pending, { force: true });
+    throw e;
+  }
+  await rename(pending, cube);
   await writeJson(sidecarFile(src, name), {
     source: src.kind === "camera" ? `${CAMERA_NAME}: ${relative(dirname(CAMERA), src.paths.get(name))}` : `originals/${name}`,
     graded: `graded/${stem}.mp4`,
@@ -468,6 +496,8 @@ async function route(req, res) {
     pumpExports();
     return send(res, 200, { queued: jobs.export.queue.length });
   }
+
+  if (p === "/api/export/stop" && req.method === "POST") return send(res, 200, { stopped: stopExports() });
 
   if (p === "/api/jobs" && req.method === "GET")
     return send(res, 200, {
