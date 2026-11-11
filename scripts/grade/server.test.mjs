@@ -35,7 +35,7 @@ function clip(dst, gamma, { still = false, busy = false } = {}) {
     "-hide_banner", "-loglevel", "error", "-y",
     "-f", "lavfi", "-i", busy ? "testsrc2=s=1280x720:r=24:d=20" : "color=c=0x507090:s=320x180:r=24:d=1",
     "-f", "lavfi", "-i", `sine=d=${seconds}`,
-    "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+    "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac",
     "-metadata", `com.dji.camera.ColorGammaSxS=${gamma}`, "-metadata", "com.dji.camera.WhiteBalanceKelvin=5180",
     "-movflags", "use_metadata_tags", still ? plain : dst,
   ]);
@@ -86,7 +86,7 @@ beforeAll(async () => {
     stdio: ["ignore", "pipe", "inherit"],
   });
   await new Promise((resolve) => server.stdout.on("data", (c) => String(c).includes("grade:") && resolve()));
-});
+}, 120_000);
 
 afterAll(() => {
   server?.kill();
