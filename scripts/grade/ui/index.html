@@ -16,6 +16,8 @@
   <symbol id="i-camera" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M2 5.5A1.5 1.5 0 0 1 3.5 4h1.3l1-1.5h4.4l1 1.5h1.3A1.5 1.5 0 0 1 14 5.5v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5Z"/><circle cx="8" cy="8.4" r="2.4" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
   <symbol id="i-export" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M8 10.5V2.5M5 5.5l3-3 3 3M3 9.5v3a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-3"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="m4.5 6 3.5 3.5L11.5 6"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></symbol>
+  <symbol id="i-shrink" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5"/></symbol>
   <symbol id="i-reset" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 8a5 5 0 1 0 1.6-3.7M3 2.8v2.7h2.7"/></symbol>
 </svg>
 
@@ -44,7 +46,7 @@
     <ol id="clip-list" class="clip-list"></ol>
   </aside>
 
-  <section class="stage" aria-label="Preview">
+  <section class="stage" id="stage" aria-label="Preview">
     <div class="frame" id="frame">
       <canvas id="canvas"></canvas>
       <p class="empty" id="empty">Pick a clip.</p>
@@ -60,8 +62,10 @@
       <div class="seg" role="group" aria-label="Compare" id="mode">
         <button type="button" data-mode="0" aria-pressed="true">Graded</button><button type="button" data-mode="2" aria-pressed="false">Split</button><button type="button" data-mode="1" aria-pressed="false">Original</button>
       </div>
+      <button id="quality" type="button" class="quality" aria-pressed="false" aria-label="Full quality">Full quality</button>
       <button id="loop" type="button" class="icon-btn" aria-pressed="true" aria-label="Loop" title="Loop"><svg><use href="#i-loop"/></svg></button>
       <button id="mute" type="button" class="icon-btn" aria-pressed="true" aria-label="Mute" title="Mute"><svg><use href="#i-sound"/></svg></button>
+      <button id="fullscreen" type="button" class="icon-btn" aria-label="Full screen" title="Full screen (F)"><svg><use href="#i-expand"/></svg></button>
     </div>
     <video id="video" playsinline loop preload="auto"></video>
   </section>
@@ -101,6 +105,7 @@
       <dl>
         <dt>Play, pause</dt><dd><kbd>Space</kbd></dd>
         <dt>Show the original</dt><dd><kbd>B</kbd> hold</dd>
+        <dt>Full screen</dt><dd><kbd>F</kbd></dd>
         <dt>Previous, next clip</dt><dd><kbd>↑</kbd><kbd>↓</kbd></dd>
         <dt>Grade several at once</dt><dd><kbd>⌘</kbd> or <kbd>⇧</kbd> click</dd>
         <dt>Copy, paste grade</dt><dd><kbd>⌘C</kbd><kbd>⌘V</kbd></dd>

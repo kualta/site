@@ -47,6 +47,10 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
 - Select several clips (⌘-click, shift-click, Select all) and a change sets that control on all of them. Copy grade /
   Paste copies a whole grade.
 - **Split** and **Original** compare against the flat original; hold **B** to flash it. Space plays, ↑ ↓ change clip.
+- **Full quality** plays the original itself at full resolution (streamed off the card) instead of the 1280 px preview
+  copy, to judge focus and detail; colour is the same either way. It is still 8-bit on screen, because Chrome hands
+  video to WebGL at 8 bits even from a 10-bit file, so judge banding on an export. HLG clips keep the preview copy.
+  **Full screen** (or **F**) gives the viewer and its transport the whole screen.
 - **Export this clip / Export N selected** bakes the selection; **Re-export N changed** bakes every graded clip whose
   grade moved since its export. Exports come from the 10-bit originals (off the card, for a camera day) at 16-bit
   precision, not from the preview. A camera day can't export while the camera is unplugged.

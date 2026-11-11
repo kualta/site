@@ -97,6 +97,7 @@ const state = {
   error: null,
   input: null,
   filter: ["all", "graded", "ungraded"].includes(store.get("grade.filter")) ? store.get("grade.filter") : "all",
+  fullQuality: store.get("grade.fullQuality") === true,
 };
 
 const viewer = new Viewer($("canvas"));
@@ -198,11 +199,13 @@ async function refreshPreview() {
   const v = ++previewVersion;
   clearTimeout(fineTimer);
   try {
-    const coarse = await lutFor(clip, 33, state.input);
+    // The decoder correction is measured on the proxy's path; the original takes the Mac's own decoder instead.
+    const input = playsOriginal(clip) ? null : state.input;
+    const coarse = await lutFor(clip, 33, input);
     if (v !== previewVersion) return;
     viewer.setLut(33, coarse);
     fineTimer = setTimeout(async () => {
-      const fine = await lutFor(clip, 65, state.input);
+      const fine = await lutFor(clip, 65, input);
       if (v === previewVersion) viewer.setLut(65, fine);
     }, 250);
   } catch (e) {
@@ -348,7 +351,7 @@ async function refreshSource() {
     const thumbReady = !clip.thumb && fresh.thumb;
     Object.assign(clip, fresh);
     if (thumbReady) scheduleThumb(clip);
-    if (proxyReady && clip.name === state.primary) loadVideo(clip);
+    if (proxyReady && clip.name === state.primary && !playsOriginal(clip)) loadVideo(clip);
   }
 }
 
@@ -357,7 +360,10 @@ let prepareTimer = null;
 function prepareSelection() {
   clearTimeout(prepareTimer);
   prepareTimer = setTimeout(async () => {
-    const names = [state.primary, ...[...state.selected].filter((n) => n !== state.primary)].filter((n) => n && state.byName.get(n)?.proxy !== "ready");
+    // Full quality plays originals, so only clips that fall back (HLG) still need a proxy made.
+    const names = [state.primary, ...[...state.selected].filter((n) => n !== state.primary)].filter(
+      (n) => n && state.byName.get(n)?.proxy !== "ready" && !playsOriginal(state.byName.get(n)),
+    );
     if (!names.length || !state.source) return;
     try {
       await api(`/api/sources/${encodeURIComponent(state.source)}/prepare`, { method: "POST", json: { names } });
@@ -492,9 +498,38 @@ function setPrimary(name) {
 
 // ---- video and viewer ---------------------------------------------------------------------------------------------
 
-function loadVideo(clip) {
+/**
+ * Full quality plays the original itself at full size, decoded by the Mac (still 8-bit on the GPU: Chrome hands video
+ * to WebGL at 8 bits, so judge banding on the export).
+ * HLG keeps the proxy: its HDR transfer tag invites the browser to tone-map it, which would bend what the grade sees.
+ */
+const playsOriginal = (clip) => state.fullQuality && clip?.profile !== "hlg";
+
+/** After switching between proxy and original, carry on from the same moment. */
+function seekWhenLoaded(at) {
+  video.addEventListener(
+    "loadedmetadata",
+    () => {
+      video.currentTime = at;
+    },
+    { once: true },
+  );
+}
+
+function loadVideo(clip, { keepTime = false } = {}) {
   const playing = !video.paused;
+  const at = video.currentTime;
   viewer.hasFrame = false;
+  if (clip && playsOriginal(clip)) {
+    $("empty").hidden = true;
+    $("canvas").hidden = false;
+    video.src = `/media/${encodeURIComponent(state.source)}/original/${encodeURIComponent(clip.name)}`;
+    if (keepTime) seekWhenLoaded(at);
+    if (playing) video.play().catch(() => {});
+    showQuality(clip);
+    return;
+  }
+  showQuality(clip);
   if (!clip || clip.proxy !== "ready") {
     video.removeAttribute("src");
     video.load();
@@ -509,8 +544,42 @@ function loadVideo(clip) {
   $("empty").hidden = true;
   $("canvas").hidden = false;
   video.src = `/media/${encodeURIComponent(state.source)}/proxy/${encodeURIComponent(clip.stem)}.mp4`;
+  if (keepTime) seekWhenLoaded(at);
   if (playing) video.play().catch(() => {});
 }
+
+/** The quality toggle's state, and why a clip falls back to the standard preview when it does. */
+function showQuality(clip) {
+  const b = $("quality");
+  b.setAttribute("aria-pressed", String(state.fullQuality));
+  const fallback = state.fullQuality && clip?.profile === "hlg";
+  b.classList.toggle("fallback", fallback);
+  if (fallback) b.title = "Full quality isn't available for HLG clips; showing the standard preview";
+  else if (state.fullQuality) b.title = "Full quality: the original clip at full resolution, no preview compression (still 8-bit, so check banding on the export)";
+  else b.title = "Standard preview: a light 1280 px copy (turn on to see the original at full resolution)";
+}
+
+function setFullQuality(on) {
+  state.fullQuality = on;
+  store.set("grade.fullQuality", on);
+  const clip = primaryClip();
+  loadVideo(clip, { keepTime: true });
+  refreshPreview();
+  if (!on) prepareSelection();
+}
+$("quality").addEventListener("click", () => setFullQuality(!state.fullQuality));
+
+// Fullscreen: the viewer and its transport fill the screen; Esc or F leaves.
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else $("stage").requestFullscreen().catch(() => setStatus("The browser didn't allow full screen; click the button or press F to try again"));
+}
+$("fullscreen").addEventListener("click", toggleFullscreen);
+document.addEventListener("fullscreenchange", () => {
+  const on = Boolean(document.fullscreenElement);
+  setIcon($("fullscreen"), on ? "i-shrink" : "i-expand", on ? "Exit full screen" : "Full screen");
+  requestAnimationFrame(placeOverlays);
+});
 
 function placeOverlays() {
   const canvas = $("canvas");
@@ -954,6 +1023,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === " " && !(t instanceof HTMLButtonElement)) {
     e.preventDefault();
     togglePlay();
+  } else if ((e.key === "f" || e.key === "F") && !e.repeat && !e.metaKey && !e.ctrlKey) {
+    toggleFullscreen();
   } else if ((e.key === "b" || e.key === "B") && !e.repeat && !e.metaKey && !e.ctrlKey) {
     heldMode = state.mode;
     setMode(1);
