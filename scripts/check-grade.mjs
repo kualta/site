@@ -59,7 +59,9 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${port}/`);
   const row = page.getByRole("button", { name: /0001/ });
-  await row.getByText("not exported").waitFor({ timeout: 30_000 });
+  await row.getByText("not graded").waitFor({ timeout: 30_000 });
+  // Previews are made on request: wait for this one to arrive and draw.
+  await page.waitForFunction(() => document.getElementById("empty").hidden, null, { timeout: 60_000 });
   await page.waitForTimeout(1200);
   if (shots) await page.screenshot({ path: path.join(shots, "grade-1-opened.png") });
 
@@ -92,7 +94,7 @@ try {
   assert.equal(grades.clips[name].exposure, 0.75, "the grade is saved");
 
   await page.getByRole("button", { name: "Export this clip" }).click();
-  await row.getByText("exported", { exact: true }).waitFor({ timeout: 120_000 });
+  await row.getByText("graded", { exact: true }).waitFor({ timeout: 120_000 });
   if (shots) await page.screenshot({ path: path.join(shots, "grade-3-exported.png") });
 
   const sidecar = JSON.parse(readFileSync(path.join(shoot, "graded", "DJI_20260101120000_0001_D.grade.json"), "utf8"));

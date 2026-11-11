@@ -1,8 +1,7 @@
-// ffmpeg and file work for the grade app: reading a clip's camera metadata, making the small proxy the browser
-// previews, baking a grade into a graded copy, and importing clips off the camera.
+// ffmpeg and file work for the grade app: reading a clip's camera metadata, its thumbnail and the small proxy the
+// browser previews, baking a grade into a graded copy, and finding clips on the camera's card.
 import { execFile, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { copyFile, mkdir, open, readdir, rename, rm, stat, utimes } from "node:fs/promises";
+import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import ffmpegStatic from "ffmpeg-static";
@@ -23,6 +22,8 @@ export async function probe(file) {
   const info = JSON.parse(stdout);
   const v = info.streams.find((s) => s.codec_type === "video" && s.disposition?.attached_pic !== 1);
   if (!v) throw new Error(`${basename(file)} has no video`);
+  // DJI files carry a small JPEG of the clip; reading it is far cheaper than decoding a frame off the card.
+  const still = info.streams.find((s) => s.disposition?.attached_pic === 1 && /mjpeg|png/.test(s.codec_name));
   const tags = info.format.tags ?? {};
   const [n, d] = String(v.avg_frame_rate || "0/1").split("/").map(Number);
   const kelvin = Number(tags["com.dji.camera.WhiteBalanceKelvin"]);
@@ -40,6 +41,7 @@ export async function probe(file) {
     lens: tags["com.dji.camera.LensType"] || null,
     created: tags.creation_time || null,
     audio: info.streams.some((s) => s.codec_type === "audio"),
+    still: still ? still.index : null,
   };
 }
 
@@ -129,11 +131,14 @@ export async function makeCalibration(dst) {
   return blockMeans(raw, 3);
 }
 
-/** A small still from the proxy for the clip list (ungraded; the browser grades it). */
-export async function makeThumb(proxy, dst, at = 1) {
-  await writeAtomically(dst, (tmp) =>
-    run(["-ss", String(at), "-i", proxy, "-frames:v", "1", "-vf", "scale='if(gt(iw,ih),320,-2)':'if(gt(iw,ih),-2,320)'", "-q:v", "3", tmp]),
-  );
+/**
+ * A small ungraded still for the clip list (the browser grades it): the file's own embedded JPEG when it has one
+ * (`still`, a stream index), else a frame decoded `at` seconds in.
+ */
+export async function makeThumb(src, dst, { still = null, at = 1 } = {}) {
+  const scale = "scale='if(gt(iw,ih),320,-2)':'if(gt(iw,ih),-2,320)'";
+  const input = still === null ? ["-ss", String(at), "-i", src, "-map", "0:v:0"] : ["-i", src, "-map", `0:${still}`];
+  await writeAtomically(dst, (tmp) => run([...input, "-frames:v", "1", "-vf", scale, "-q:v", "3", tmp]));
 }
 
 /**
@@ -155,59 +160,28 @@ export async function exportClip({ src, dst, cube, matrix = "bt709", duration, o
   );
 }
 
-async function headTail(file, size) {
-  const h = createHash("sha256");
-  const fd = await open(file, "r");
-  try {
-    const n = Math.min(size, 4 * 1024 * 1024);
-    for (const pos of [0, Math.max(0, size - n)]) {
-      const b = Buffer.alloc(n);
-      await fd.read(b, 0, n, pos);
-      h.update(b);
-    }
-  } finally {
-    await fd.close();
-  }
-  return h.digest("hex");
-}
-
-/** Camera clips not yet in the library: DJI_YYYYMMDD…, into <root>/<YYYY-MM-DD>/originals. */
-export async function cameraClips(cameraDir, root) {
+/**
+ * Every clip on the camera's card, by shoot day: DJI names start with the recording time (DJI_YYYYMMDDhhmmss_…),
+ * so a day is the clips recorded on it. Null when the camera isn't mounted. Read only: nothing is written to the card.
+ */
+export async function cameraDays(cameraDir) {
   let folders;
   try {
-    folders = (await readdir(cameraDir, { withFileTypes: true })).filter((d) => d.isDirectory());
+    folders = (await readdir(cameraDir, { withFileTypes: true })).filter((d) => d.isDirectory() && !d.name.startsWith("."));
   } catch {
     return null;
   }
-  const out = [];
+  const days = new Map();
   for (const f of folders) {
-    for (const name of await readdir(join(cameraDir, f.name))) {
+    const names = await readdir(join(cameraDir, f.name)).catch(() => []);
+    for (const name of names) {
       const m = /^DJI_(\d{4})(\d{2})(\d{2})\d{6}_.+\.(mp4|mov)$/i.exec(name);
       if (!m) continue;
-      const src = join(cameraDir, f.name, name);
-      const shoot = `${m[1]}-${m[2]}-${m[3]}`;
-      const dst = join(root, shoot, "originals", name);
-      const { size } = await stat(src);
-      const have = await stat(dst).then((s) => s.size === size, () => false);
-      if (!have) out.push({ src, dst, name, shoot, size });
+      const day = `${m[1]}-${m[2]}-${m[3]}`;
+      if (!days.has(day)) days.set(day, []);
+      days.get(day).push({ name, path: join(cameraDir, f.name, name), folder: f.name });
     }
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** Copy one camera clip in, then check the copy's size and its first and last 4 MB against the card. */
-export async function importClip({ src, dst, size }) {
-  await mkdir(dirname(dst), { recursive: true });
-  const tmp = join(dirname(dst), `.${basename(dst)}.part`);
-  try {
-    await copyFile(src, tmp);
-    const s = await stat(tmp);
-    if (s.size !== size || (await headTail(tmp, size)) !== (await headTail(src, size))) throw new Error(`${basename(src)} copied wrong`);
-    const card = await stat(src);
-    await utimes(tmp, card.atime, card.mtime);
-    await rename(tmp, dst);
-  } catch (e) {
-    await rm(tmp, { force: true });
-    throw e;
-  }
+  for (const list of days.values()) list.sort((a, b) => a.name.localeCompare(b.name));
+  return days;
 }

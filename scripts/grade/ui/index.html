@@ -22,23 +22,24 @@
 <header class="bar">
   <div class="brand"><span class="logo" aria-hidden="true"></span>Grade</div>
   <div class="bar-field">
-    <label for="shoot" class="cap">Shoot</label>
+    <label for="shoot" class="cap">Clips from</label>
     <span class="select"><select id="shoot"></select><svg><use href="#i-chevron"/></svg></span>
   </div>
-  <div class="camera">
-    <button id="camera" class="btn" type="button" hidden aria-expanded="false" aria-controls="camera-pop"><svg><use href="#i-camera"/></svg><span id="camera-label">Camera</span><span class="badge" id="camera-badge" hidden></span></button>
-    <div class="pop" id="camera-pop" hidden></div>
-  </div>
   <p class="status" id="status" role="status"></p>
-  <button id="export" class="btn primary" type="button" disabled><svg><use href="#i-export"/></svg><span id="export-label">All exported</span></button>
+  <button id="export" class="btn primary" type="button" disabled title="Export again every graded clip whose grade changed since its export"><svg><use href="#i-export"/></svg><span id="export-label">All up to date</span></button>
 </header>
 
 <main class="work">
   <aside class="bin" aria-label="Clips">
     <div class="bin-head">
-      <span class="cap">Clips</span>
-      <span id="clip-count" class="count"></span>
-      <button id="select-all" class="link" type="button">Select all</button>
+      <div class="bin-row">
+        <span class="cap">Clips</span>
+        <span id="clip-count" class="count"></span>
+        <button id="select-all" class="link" type="button">Select all</button>
+      </div>
+      <div class="seg small" role="group" aria-label="Show" id="filter">
+        <button type="button" data-filter="all" aria-pressed="true">All</button><button type="button" data-filter="graded" aria-pressed="false">Graded</button><button type="button" data-filter="ungraded" aria-pressed="false">Not graded</button>
+      </div>
     </div>
     <ol id="clip-list" class="clip-list"></ol>
   </aside>

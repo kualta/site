@@ -84,7 +84,7 @@ function parseValue(text) {
 const state = {
   library: null,
   bases: {},
-  shoot: null,
+  source: null,
   clips: [],
   byName: new Map(),
   grades: {},
@@ -96,6 +96,7 @@ const state = {
   jobs: null,
   error: null,
   input: null,
+  filter: ["all", "graded", "ungraded"].includes(store.get("grade.filter")) ? store.get("grade.filter") : "all",
 };
 
 const viewer = new Viewer($("canvas"));
@@ -111,9 +112,15 @@ const label = (clip) => {
   return m ? { title: m[3], time: `${m[1]}:${m[2]}` } : { title: clip.stem, time: "" };
 };
 const primaryClip = () => state.byName.get(state.primary);
-const exporting = (clip) => state.jobs?.export.current?.id === state.shoot && state.jobs.export.current.name === clip.name;
-const queued = (clip) => state.jobs?.export.queue.some((j) => j.id === state.shoot && j.name === clip.name);
-const stale = (clip) => !clip.exported || clip.exported.key !== gradeKey(gradeOf(clip));
+const exporting = (clip) => state.jobs?.export.current?.id === state.source && state.jobs.export.current.name === clip.name;
+const queued = (clip) => state.jobs?.export.queue.some((j) => j.id === state.source && j.name === clip.name);
+/** Whether a clip needs exporting: never graded, or graded with a different grade than it has now. */
+function stale(clip) {
+  if (!clip.exported) return true;
+  // A graded file made outside the app has no recorded grade: it counts as graded until you grade the clip here.
+  if (clip.exported.key === null) return clip.name in state.grades;
+  return clip.exported.key !== gradeKey(gradeOf(clip));
+}
 
 // ---- base looks and LUTs ------------------------------------------------------------------------------------------
 
@@ -206,7 +213,7 @@ async function refreshPreview() {
 // Clip-list thumbnails: the ungraded still through the clip's own grade, on the CPU.
 const thumbImages = new Map();
 function thumbImage(clip) {
-  const k = `${state.shoot}/${clip.stem}`;
+  const k = `${state.source}/${clip.stem}`;
   if (!thumbImages.has(k))
     thumbImages.set(
       k,
@@ -217,18 +224,39 @@ function thumbImage(clip) {
           thumbImages.delete(k);
           reject(new Error("thumbnail failed"));
         };
-        img.src = `/media/${encodeURIComponent(state.shoot)}/thumb/${encodeURIComponent(clip.stem)}.jpg`;
+        img.src = `/media/${encodeURIComponent(state.source)}/thumb/${encodeURIComponent(clip.stem)}.jpg`;
       }),
     );
   return thumbImages.get(k);
 }
+// A day can hold hundreds of clips, so thumbnails are graded only once their row scrolls into view.
 const thumbTimers = new Map();
+const visibleRows = new Set();
+const pendingThumbs = new Set();
+const rowObserver = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      const name = entry.target.dataset.name;
+      if (entry.isIntersecting) {
+        visibleRows.add(name);
+        if (pendingThumbs.has(name)) scheduleThumb(state.byName.get(name));
+      } else visibleRows.delete(name);
+    }
+  },
+  { root: $("clip-list").parentElement, rootMargin: "200px" },
+);
 function scheduleThumb(clip) {
+  if (!clip) return;
+  if (!visibleRows.has(clip.name)) {
+    pendingThumbs.add(clip.name);
+    return;
+  }
+  pendingThumbs.delete(clip.name);
   clearTimeout(thumbTimers.get(clip.name));
   thumbTimers.set(clip.name, setTimeout(() => drawThumb(clip).catch(() => {}), 120));
 }
 async function drawThumb(clip) {
-  if (clip.proxy !== "ready") return;
+  if (!clip.thumb) return;
   const img = await thumbImage(clip);
   const data = await lutFor(clip, 17);
   const canvas = document.querySelector(`.clip[data-name="${CSS.escape(clip.name)}"] canvas`);
@@ -249,31 +277,56 @@ async function drawThumb(clip) {
   ctx.putImageData(px, 0, 0);
 }
 
-// ---- library and shoots -------------------------------------------------------------------------------------------
+// ---- library and sources ------------------------------------------------------------------------------------------
+
+/** Every source the picker can open: the camera's days (when it's plugged in), then folders on this Mac. */
+const allSources = () => [...(state.library?.camera.days ?? []), ...(state.library?.folders ?? [])];
+const sourceInfo = (id) => allSources().find((s) => s.id === id);
+const sourceLabel = (s) => `${s.label} · ${s.clips} clip${s.clips === 1 ? "" : "s"}${s.graded ? ` · ${s.graded} graded` : ""}`;
+
+function renderPicker() {
+  const { camera, folders } = state.library;
+  const sel = $("shoot");
+  const group = (labelText, items) => {
+    const og = document.createElement("optgroup");
+    og.label = labelText;
+    for (const s of items) {
+      const o = document.createElement("option");
+      o.value = s.id;
+      o.textContent = sourceLabel(s);
+      og.append(o);
+    }
+    return og;
+  };
+  const groups = [];
+  if (camera.mounted) groups.push(group(camera.name, camera.days));
+  else if (state.source?.startsWith("camera:")) {
+    // Keep the open day listed while the camera is away, so the picker doesn't jump to another folder.
+    const og = group(`${camera.name} · not connected`, []);
+    const o = document.createElement("option");
+    o.value = state.source;
+    o.textContent = state.source.slice("camera:".length);
+    og.append(o);
+    groups.push(og);
+  }
+  if (folders.length) groups.push(group("On this Mac", folders));
+  sel.replaceChildren(...groups);
+  if (state.source) sel.value = state.source;
+}
 
 async function loadLibrary() {
   const [library, bases] = await Promise.all([api("/api/library").then((r) => r.json()), api("/api/bases").then((r) => r.json())]);
   state.library = library;
   state.bases = bases;
-  const sel = $("shoot");
-  sel.replaceChildren(
-    ...library.shoots.map((s) => {
-      const o = document.createElement("option");
-      o.value = s.id;
-      o.textContent = `${s.id} · ${s.clips} clip${s.clips === 1 ? "" : "s"}`;
-      return o;
-    }),
-  );
-  if (state.shoot) sel.value = state.shoot;
-  renderCamera();
+  renderPicker();
 }
 
-async function openShoot(id) {
+async function openSource(id) {
   await save();
-  state.shoot = id;
+  state.source = id;
   $("shoot").value = id;
-  store.set("grade.shoot", id);
-  const payload = await (await api(`/api/shoots/${encodeURIComponent(id)}`)).json();
+  store.set("grade.source", id);
+  const payload = await (await api(`/api/sources/${encodeURIComponent(id)}`)).json();
   state.clips = payload.clips;
   state.byName = new Map(state.clips.map((c) => [c.name, c]));
   state.grades = payload.grades ?? {};
@@ -284,26 +337,52 @@ async function openShoot(id) {
   setPrimary([...state.selected].pop() ?? null);
 }
 
-/** Pick up proxies that finished and exports that landed, keeping grades edited here. */
-async function refreshShoot() {
-  if (!state.shoot) return;
-  const payload = await (await api(`/api/shoots/${encodeURIComponent(state.shoot)}`)).json();
+/** Pick up thumbnails and previews that finished and exports that landed, keeping grades edited here. */
+async function refreshSource() {
+  if (!state.source) return;
+  const payload = await (await api(`/api/sources/${encodeURIComponent(state.source)}`)).json();
   for (const fresh of payload.clips) {
     const clip = state.byName.get(fresh.name);
     if (!clip) continue;
-    const becameReady = clip.proxy !== "ready" && fresh.proxy === "ready";
+    const proxyReady = clip.proxy !== "ready" && fresh.proxy === "ready";
+    const thumbReady = !clip.thumb && fresh.thumb;
     Object.assign(clip, fresh);
-    if (becameReady) {
-      scheduleThumb(clip);
-      if (clip.name === state.primary) loadVideo(clip);
-    }
+    if (thumbReady) scheduleThumb(clip);
+    if (proxyReady && clip.name === state.primary) loadVideo(clip);
   }
+}
+
+/** Ask for previews of the clips you're looking at, the one shown first. They're made off the card on request. */
+let prepareTimer = null;
+function prepareSelection() {
+  clearTimeout(prepareTimer);
+  prepareTimer = setTimeout(async () => {
+    const names = [state.primary, ...[...state.selected].filter((n) => n !== state.primary)].filter((n) => n && state.byName.get(n)?.proxy !== "ready");
+    if (!names.length || !state.source) return;
+    try {
+      await api(`/api/sources/${encodeURIComponent(state.source)}/prepare`, { method: "POST", json: { names } });
+      for (const n of names) if (state.byName.get(n).proxy === "none") state.byName.get(n).proxy = "queued";
+      poll();
+    } catch (e) {
+      showError(e);
+    }
+  }, 150);
 }
 
 // ---- clip list ----------------------------------------------------------------------------------------------------
 
+/** The clip list's filter: everything, only clips with a graded copy, or only clips without one. */
+const shown = (clip) => {
+  if (state.filter === "graded") return Boolean(clip.exported);
+  if (state.filter === "ungraded") return !clip.exported;
+  return true;
+};
+const visibleClips = () => state.clips.filter(shown);
+
 function renderList() {
   const list = $("clip-list");
+  rowObserver.disconnect();
+  visibleRows.clear();
   list.replaceChildren();
   for (const clip of state.clips) {
     const li = document.createElement("li");
@@ -320,7 +399,8 @@ function renderList() {
     b.title = `${clip.name} · ${clip.width}×${clip.height}`;
     li.append(b);
     list.append(li);
-    scheduleThumb(clip);
+    rowObserver.observe(b);
+    pendingThumbs.add(clip.name);
   }
   updateRows();
 }
@@ -331,15 +411,14 @@ function updateRows() {
     if (!clip) continue;
     b.setAttribute("aria-pressed", String(state.selected.has(clip.name)));
     b.classList.toggle("primary-clip", clip.name === state.primary && state.selected.size > 1);
+    b.parentElement.hidden = !shown(clip);
     const chip = b.querySelector(".state");
-    let text = "exported";
+    let text = "graded";
     let kind = "ok";
-    if (clip.proxy === "failed") [text, kind] = ["preview failed", "bad"];
-    else if (clip.proxy !== "ready") [text, kind] = ["preparing", "busy"];
-    else if (exporting(clip)) [text, kind] = [`exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
-    else if (queued(clip)) [text, kind] = ["queued", "busy"];
-    else if (!clip.exported) [text, kind] = ["not exported", ""];
-    else if (stale(clip)) [text, kind] = ["changed", "changed"];
+    if (exporting(clip)) [text, kind] = [`exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
+    else if (queued(clip)) [text, kind] = ["export queued", "busy"];
+    else if (!clip.exported) [text, kind] = ["not graded", ""];
+    else if (stale(clip)) [text, kind] = ["changed since export", "changed"];
     chip.textContent = text;
     chip.className = `state ${kind}`.trim();
     const bar = b.querySelector(".progress");
@@ -347,14 +426,18 @@ function updateRows() {
     if (!bar.hidden) bar.firstElementChild.style.width = `${(state.jobs.export.current.progress ?? 0) * 100}%`;
   }
   const n = state.selected.size;
-  $("clip-count").textContent = n > 1 ? `${n} of ${state.clips.length}` : String(state.clips.length);
-  $("select-all").textContent = n === state.clips.length && n > 1 ? "Select one" : "Select all";
-  const changed = state.clips.filter((c) => stale(c) && !exporting(c) && !queued(c)).length;
+  const graded = state.clips.filter((c) => c.exported).length;
+  $("clip-count").textContent = n > 1 ? `${n} selected` : `${graded} of ${state.clips.length} graded`;
+  $("select-all").textContent = n === visibleClips().length && n > 1 ? "Select one" : "Select all";
+  for (const b of document.querySelectorAll("#filter button")) b.setAttribute("aria-pressed", String(b.dataset.filter === state.filter));
+  // Graded clips that changed since their export; ungraded ones are exported by selecting them.
+  const changed = state.clips.filter((c) => c.exported && stale(c) && !exporting(c) && !queued(c)).length;
+  const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted !== false;
   const btn = $("export");
-  btn.disabled = changed === 0;
-  $("export-label").textContent = changed ? `Export ${changed} clip${changed === 1 ? "" : "s"}` : "All exported";
+  btn.disabled = changed === 0 || !reachable;
+  $("export-label").textContent = changed ? `Re-export ${changed} changed` : "All up to date";
   $("export-selected").textContent = n > 1 ? `Export ${n} selected` : "Export this clip";
-  $("export-selected").disabled = n === 0;
+  $("export-selected").disabled = n === 0 || !reachable;
 }
 
 $("clip-list").addEventListener("click", (e) => {
@@ -362,9 +445,9 @@ $("clip-list").addEventListener("click", (e) => {
   if (!b) return;
   const name = b.dataset.name;
   if (e.shiftKey && state.primary) {
-    const names = state.clips.map((c) => c.name);
+    const names = visibleClips().map((c) => c.name);
     const [a, z] = [names.indexOf(state.primary), names.indexOf(name)].sort((x, y) => x - y);
-    for (const n of names.slice(a, z + 1)) state.selected.add(n);
+    if (a >= 0) for (const n of names.slice(a, z + 1)) state.selected.add(n);
   } else if (e.metaKey || e.ctrlKey) {
     if (state.selected.has(name) && state.selected.size > 1) {
       state.selected.delete(name);
@@ -377,15 +460,25 @@ $("clip-list").addEventListener("click", (e) => {
 });
 
 $("select-all").addEventListener("click", () => {
-  const all = state.selected.size === state.clips.length && state.clips.length > 1;
-  state.selected = all ? new Set(state.primary ? [state.primary] : []) : new Set(state.clips.map((c) => c.name));
+  const visible = visibleClips();
+  const all = state.selected.size === visible.length && visible.length > 1;
+  state.selected = all ? new Set(state.primary ? [state.primary] : []) : new Set(visible.map((c) => c.name));
   afterSelection();
 });
 
+$("filter").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-filter]");
+  if (!b) return;
+  state.filter = b.dataset.filter;
+  store.set("grade.filter", state.filter);
+  updateRows();
+});
+
 function afterSelection() {
-  store.set(`grade.selection.${state.shoot}`, [...state.selected]);
+  store.set(`grade.selection.${state.source}`, [...state.selected]);
   updateRows();
   updatePanel();
+  prepareSelection();
 }
 
 function setPrimary(name) {
@@ -415,7 +508,7 @@ function loadVideo(clip) {
   }
   $("empty").hidden = true;
   $("canvas").hidden = false;
-  video.src = `/media/${encodeURIComponent(state.shoot)}/proxy/${encodeURIComponent(clip.stem)}.mp4`;
+  video.src = `/media/${encodeURIComponent(state.source)}/proxy/${encodeURIComponent(clip.stem)}.mp4`;
   if (playing) video.play().catch(() => {});
 }
 
@@ -731,12 +824,12 @@ function setField(field, value) {
 
 async function save({ keepalive = false } = {}) {
   clearTimeout(saveTimer);
-  if (!dirty.size || !state.shoot) return;
+  if (!dirty.size || !state.source) return;
   const names = [...dirty];
   dirty.clear();
   const clips = Object.fromEntries(names.map((n) => [n, state.grades[n]]));
   try {
-    await api(`/api/shoots/${encodeURIComponent(state.shoot)}/grades`, { method: "PUT", json: { clips }, keepalive });
+    await api(`/api/sources/${encodeURIComponent(state.source)}/grades`, { method: "PUT", json: { clips }, keepalive });
   } catch (e) {
     for (const n of names) dirty.add(n);
     showError(e);
@@ -769,7 +862,7 @@ async function exportNames(names) {
   if (!names.length) return;
   await save();
   try {
-    await api("/api/export", { method: "POST", json: { shoot: state.shoot, names } });
+    await api("/api/export", { method: "POST", json: { source: state.source, names } });
   } catch (e) {
     return showError(e);
   }
@@ -796,15 +889,17 @@ function showError(e) {
 function renderStatus() {
   const j = state.jobs;
   const parts = [];
-  if (j?.import.running) parts.push(`Importing ${j.import.done} of ${j.import.total} from the camera`);
+  if (state.source?.startsWith("camera:") && state.library && !state.library.camera.mounted)
+    parts.push(`${state.library.camera.name} disconnected: plug it in to preview and export; graded copies stay on the Mac`);
   if (j?.export.current) {
     const c = state.byName.get(j.export.current.name);
-    const who = c && j.export.current.id === state.shoot ? label(c).title : j.export.current.name;
+    const who = c && j.export.current.id === state.source ? label(c).title : j.export.current.name;
     parts.push(`Exporting ${who} · ${Math.round((j.export.current.progress ?? 0) * 100)}%${j.export.queue.length ? ` · ${j.export.queue.length} queued` : ""}`);
   }
   const preparing = state.clips.filter((c) => c.proxy === "queued" || c.proxy === "working").length;
-  if (preparing) parts.push(`Making previews · ${preparing} left`);
-  const failed = j?.export.failed.filter((f) => f.id === state.shoot) ?? [];
+  if (preparing) parts.push(`Making preview${preparing === 1 ? "" : "s"} · ${preparing} left`);
+  if (j?.thumbs) parts.push(`Reading thumbnails · ${j.thumbs} left`);
+  const failed = j?.export.failed.filter((f) => f.id === state.source) ?? [];
   if (failed.length) parts.push(`${failed.length} export${failed.length === 1 ? "" : "s"} failed: ${failed[0].error}`);
   if (state.error) parts.push(state.error);
   if (!parts.length && statusNote) parts.push(statusNote);
@@ -813,94 +908,42 @@ function renderStatus() {
 }
 
 let pollTimer = null;
-let wasImporting = false;
 let lastDone = 0;
+let libraryAt = 0;
 async function poll() {
   clearTimeout(pollTimer);
   try {
     const jobs = await (await api("/api/jobs")).json();
     state.jobs = jobs;
     const done = jobs.export.done.length;
-    const preparing = state.clips.some((c) => c.proxy === "queued" || c.proxy === "working");
-    if (done !== lastDone || preparing) await refreshShoot();
-    lastDone = done;
-    if (wasImporting && !jobs.import.running) {
-      const shoot = jobs.import.shoot;
-      await loadLibrary();
-      if (shoot && state.library.shoots.some((s) => s.id === shoot)) await openShoot(shoot);
-      setStatus(`Imported ${jobs.import.done - jobs.import.failed.length} clip${jobs.import.done === 1 ? "" : "s"}${jobs.import.failed.length ? `, ${jobs.import.failed.length} failed` : ""}`);
+    const waiting = jobs.thumbs > 0 || state.clips.some((c) => c.proxy === "queued" || c.proxy === "working");
+    // The library is re-read every few seconds, so the camera appears when it's plugged in and graded counts update.
+    if (Date.now() - libraryAt > 4000 || done !== lastDone) {
+      libraryAt = Date.now();
+      const wasMounted = state.library?.camera.mounted;
+      state.library = await (await api("/api/library")).json();
+      renderPicker();
+      if (!state.source && allSources().length) await openSource(defaultSource());
+      else if (state.source?.startsWith("camera:") && state.library.camera.mounted && !wasMounted && sourceInfo(state.source)) await openSource(state.source);
     }
-    wasImporting = jobs.import.running;
-    renderCamera();
+    const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted;
+    if (reachable && (done !== lastDone || waiting)) await refreshSource();
+    lastDone = done;
     renderStatus();
     updateRows();
-    const active = jobs.export.current || jobs.export.queue.length || jobs.import.running || state.clips.some((c) => c.proxy === "queued" || c.proxy === "working");
-    pollTimer = setTimeout(poll, active ? 700 : 5000);
+    const active = jobs.export.current || jobs.export.queue.length || waiting;
+    pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {
     showError(e);
     pollTimer = setTimeout(poll, 3000);
   }
 }
 
-function renderCamera() {
-  const cam = state.library?.camera;
-  const btn = $("camera");
-  btn.hidden = !cam?.mounted;
-  if (!cam?.mounted) return;
-  const running = state.jobs?.import.running;
-  const badge = $("camera-badge");
-  badge.hidden = running || !cam.newClips;
-  badge.textContent = String(cam.newClips);
-  if (running) $("camera-label").textContent = `Importing ${state.jobs.import.done} of ${state.jobs.import.total}`;
-  else $("camera-label").textContent = cam.newClips ? "Camera" : "Camera · all imported";
-  const pop = $("camera-pop");
-  pop.replaceChildren();
-  const intro = document.createElement("p");
-  intro.textContent = cam.newClips ? "New clips on the camera, by shoot day. Import copies a day into the library and checks each copy." : "Everything on the camera is in the library.";
-  pop.append(intro);
-  for (const s of cam.shoots) {
-    const row = document.createElement("div");
-    row.className = "pop-row";
-    const text = document.createElement("div");
-    const day = document.createElement("b");
-    day.textContent = s.shoot;
-    const detail = document.createElement("span");
-    detail.textContent = `${s.clips} clip${s.clips === 1 ? "" : "s"} · ${(s.bytes / 1e9).toFixed(1)} GB`;
-    text.append(day, detail);
-    const go = document.createElement("button");
-    go.type = "button";
-    go.className = "btn";
-    go.textContent = "Import";
-    go.disabled = Boolean(running);
-    go.addEventListener("click", async () => {
-      try {
-        await api("/api/import", { method: "POST", json: { shoot: s.shoot } });
-        wasImporting = true;
-        togglePop(false);
-        poll();
-      } catch (e) {
-        showError(e);
-      }
-    });
-    row.append(text, go);
-    pop.append(row);
-  }
+/** The source to open: the last one used if it's still there, else the camera's newest day, else a Mac folder. */
+function defaultSource() {
+  const last = store.get("grade.source");
+  return sourceInfo(last) ? last : allSources()[0]?.id;
 }
-function togglePop(open) {
-  $("camera-pop").hidden = !open;
-  $("camera").setAttribute("aria-expanded", String(open));
-}
-$("camera").addEventListener("click", async () => {
-  const open = $("camera-pop").hidden;
-  if (open) {
-    state.library = await (await api("/api/library")).json();
-    renderCamera();
-  }
-  togglePop(open);
-});
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".camera")) togglePop(false);
-});
 
 // ---- keyboard -----------------------------------------------------------------------------------------------------
 
@@ -916,7 +959,7 @@ document.addEventListener("keydown", (e) => {
     setMode(1);
   } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !(t instanceof HTMLInputElement)) {
     e.preventDefault();
-    const names = state.clips.map((c) => c.name);
+    const names = visibleClips().map((c) => c.name);
     const i = names.indexOf(state.primary) + (e.key === "ArrowDown" ? 1 : -1);
     if (i >= 0 && i < names.length) {
       state.selected = new Set([names[i]]);
@@ -933,7 +976,7 @@ document.addEventListener("keyup", (e) => {
   }
 });
 
-$("shoot").addEventListener("change", (e) => openShoot(e.target.value));
+$("shoot").addEventListener("change", (e) => openSource(e.target.value));
 
 // ---- start --------------------------------------------------------------------------------------------------------
 
@@ -941,12 +984,11 @@ buildControls();
 try {
   await calibrate();
   await loadLibrary();
-  const ids = state.library.shoots.map((s) => s.id);
-  const last = store.get("grade.shoot");
-  const id = ids.includes(last) ? last : ids[0];
-  if (id) await openShoot(id);
+  libraryAt = Date.now();
+  const id = defaultSource();
+  if (id) await openSource(id);
   else {
-    $("empty").textContent = `No shoots yet. Put clips in ${state.library.root}/<shoot>/originals, or import them from the camera.`;
+    $("empty").textContent = `Plug in the ${state.library.camera.name}, or put clips in ${state.library.root}/<folder>/originals.`;
     updatePanel();
   }
 } catch (e) {
