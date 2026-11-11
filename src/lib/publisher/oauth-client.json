@@ -1,0 +1,26 @@
+{
+  "client_id": "https://kualta.dev/publisher-oauth-client-metadata.json",
+  "client_name": "kualta.dev publisher",
+  "client_uri": "https://kualta.dev",
+  "redirect_uris": ["https://kualta.dev/auth/publisher"],
+  "scope": "atproto repo:app.bsky.feed.post?action=create&action=delete repo:social.grain.gallery?action=create&action=delete repo:social.grain.photo?action=create&action=delete repo:social.grain.photo.exif?action=create&action=delete repo:social.grain.gallery.item?action=create&action=delete blob:image/jpeg blob:video/mp4 rpc:com.atproto.repo.uploadBlob?aud=*",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "application_type": "web",
+  "token_endpoint_auth_method": "private_key_jwt",
+  "token_endpoint_auth_signing_alg": "ES256",
+  "dpop_bound_access_tokens": true,
+  "jwks": {
+    "keys": [
+      {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "pNeyjF70o2ZTs6RugHIv03uXhSCJEqLzEBOEvJ8vKtQ",
+        "y": "hy2KFJetIQ3ZZfAipwjWdhAqCkEUBJP-4NHjpoCExqk",
+        "kid": "publisher-2026-11-11",
+        "alg": "ES256",
+        "use": "sig"
+      }
+    ]
+  }
+}

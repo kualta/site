@@ -13,7 +13,7 @@ import { deletePublication } from "./delete.mjs";
 import { createDraft } from "./draft.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
-import { createOAuth } from "./oauth.mjs";
+import { createOAuth, ensureClientKey } from "./oauth.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
 const exec = promisify(execFile);
@@ -212,4 +212,14 @@ if (command === "connect") {
     console.error(error.message);
     process.exitCode = 1;
   }
-} else console.log("Usage: bun run publisher connect | start | install | uninstall | draft <post.json>");
+} else if (command === "oauth-key") {
+  const file = join(stateDir, "oauth/client-key.json");
+  const { created, jwk } = await ensureClientKey(file, `publisher-${new Date().toISOString().slice(0, 10)}`);
+  console.log(
+    created
+      ? `Made a signing key at ${file}. Put its public half below in jwks.keys of src/lib/publisher/oauth-client.json, deploy the site, restart the helper, then connect Grain / Bluesky again.`
+      : `${file} already holds this key; jwks.keys in src/lib/publisher/oauth-client.json must list it:`,
+  );
+  console.log(JSON.stringify(jwk));
+} else
+  console.log("Usage: bun run publisher connect | start | install | uninstall | draft <post.json> | oauth-key");

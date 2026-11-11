@@ -1,23 +1,75 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile, rename, rm, readdir } from "node:fs/promises";
 import { createServer } from "node:http";
-import { join } from "node:path";
-import { NodeOAuthClient } from "@atproto/oauth-client-node";
+import { dirname, join } from "node:path";
+import {
+  JoseKey,
+  NodeOAuthClient,
+  TokenInvalidError,
+  TokenRefreshError,
+  TokenRevokedError,
+} from "@atproto/oauth-client-node";
 import { Agent } from "@atproto/api";
 import { openProfile } from "./browser.mjs";
 
 export const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
-export const scope = [
-  "atproto",
-  "repo:app.bsky.feed.post?action=create&action=delete",
-  "repo:social.grain.gallery?action=create&action=delete",
-  "repo:social.grain.photo?action=create&action=delete",
-  "repo:social.grain.photo.exif?action=create&action=delete",
-  "repo:social.grain.gallery.item?action=create&action=delete",
-  "blob:image/jpeg",
-  "blob:video/mp4",
-  "rpc:com.atproto.repo.uploadBlob?aud=*",
-].join(" ");
+/* The site serves this at its client_id (src/pages/publisher-oauth-client-metadata.json.ts). A client that signs its
+   token requests with a key of its own is confidential: its session has no fixed end, and each refresh token lasts
+   180 days and is replaced on use, where a loopback client's session ends two weeks after sign-in. */
+export const clientMetadata = JSON.parse(
+  await readFile(new URL("../../src/lib/publisher/oauth-client.json", import.meta.url), "utf8"),
+);
+export const scope = clientMetadata.scope;
+/* The sign-in returns to kualta.dev/auth/publisher, which sends the browser on to this port. */
+export const callbackPort = 43827;
+
+/**
+ * The signing key at `file`, made with `kid` when there is none, and never over one already there: replacing it
+ * would end the session bound to it. The published metadata lists its public half.
+ */
+export async function ensureClientKey(file, kid) {
+  try {
+    return { created: false, jwk: publishedJwk(await readKey(file)) };
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const key = await JoseKey.generate(["ES256"], kid);
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+  await writeFile(file, JSON.stringify({ ...key.privateJwk, alg: "ES256", key_ops: ["sign"] }), {
+    mode: 0o600,
+    flag: "wx",
+  });
+  return { created: true, jwk: publishedJwk(key) };
+}
+
+async function readKey(file) {
+  return JoseKey.fromJWK(await readFile(file, "utf8"));
+}
+
+/** What the metadata's jwks lists for a key: its public half, for signing only. */
+function publishedJwk(key) {
+  const { kty, crv, x, y, kid } = key.publicJwk;
+  return { kty, crv, x, y, kid, alg: "ES256", use: "sig" };
+}
+
+/** The signing key the metadata lists, or why there is none. */
+async function clientKey(file, metadata) {
+  let key;
+  try {
+    key = await readKey(file);
+  } catch (error) {
+    if (error.code === "ENOENT")
+      return { problem: `Bluesky needs the publisher's signing key at ${file}. Run bun run publisher oauth-key.` };
+    return { problem: `The publisher's signing key at ${file} cannot be read: ${error.message}` };
+  }
+  const published = metadata.jwks?.keys?.find((k) => k.kid === key.kid);
+  const own = key.publicJwk;
+  if (!published || ["kty", "crv", "x", "y"].some((field) => published[field] !== own[field]))
+    return {
+      problem: `The publisher's signing key ${key.kid} is not the one in src/lib/publisher/oauth-client.json. Run bun run publisher oauth-key and publish its key.`,
+    };
+  return { key };
+}
 
 export async function fileStore(directory, ttl = Infinity) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -50,13 +102,18 @@ export async function fileStore(directory, ttl = Infinity) {
 export async function createOAuth(
   stateDir,
   {
-    port = 43827,
+    port = callbackPort,
     open = openProfile,
     clientFactory = (options) => new NodeOAuthClient(options),
+    metadata = clientMetadata,
+    keyFile = join(stateDir, "oauth/client-key.json"),
   } = {},
 ) {
-  const sessions = await fileStore(join(stateDir, "oauth/publishing-v3/sessions"));
-  const states = await fileStore(join(stateDir, "oauth/publishing-v3/states"), 10 * 60_000);
+  // v3 sessions belonged to the loopback client; a session cannot move to another client.
+  const sessions = await fileStore(join(stateDir, "oauth/publishing-v4/sessions"));
+  const states = await fileStore(join(stateDir, "oauth/publishing-v4/states"), 10 * 60_000);
+  // Without its key only Bluesky and Grain stop; the helper still posts everywhere else.
+  const { key, problem } = await clientKey(keyFile, metadata);
   let pending;
   let client;
   let callbackBusy = false;
@@ -111,21 +168,12 @@ export async function createOAuth(
     server.once("error", reject);
     server.listen(port, "127.0.0.1", resolve);
   });
-  const redirect = `http://127.0.0.1:${server.address().port}/oauth/callback`;
-  const params = new URLSearchParams({ redirect_uri: redirect, scope });
+  const callback = `http://127.0.0.1:${server.address().port}/oauth/callback`;
   const locks = new Map();
   try {
-    client = clientFactory({
-      clientMetadata: {
-        client_id: `http://localhost?${params}`,
-        redirect_uris: [redirect],
-        scope,
-        response_types: ["code"],
-        grant_types: ["authorization_code", "refresh_token"],
-        token_endpoint_auth_method: "none",
-        application_type: "native",
-        dpop_bound_access_tokens: true,
-      },
+    client = key && clientFactory({
+      clientMetadata: metadata,
+      keyset: [key],
       stateStore: states,
       sessionStore: sessions,
       async requestLock(name, fn) {
@@ -143,9 +191,14 @@ export async function createOAuth(
     server.close();
     throw error;
   }
+  const usable = () => {
+    if (!client) throw new Error(problem);
+    return client;
+  };
   return {
-    redirect,
+    callback,
     async connect(active) {
+      usable();
       if (pending) throw new Error("A sign-in is already in progress");
       let browser;
       let timer;
@@ -199,7 +252,7 @@ export async function createOAuth(
     },
     async disconnect() {
       try {
-        await client.revoke(owner);
+        await usable().revoke(owner);
       } catch {
         console.warn("Remote revocation unavailable; removing the local OAuth session.");
       } finally {
@@ -207,8 +260,24 @@ export async function createOAuth(
       }
     },
     async agent() {
-      const session = await client.restore(owner);
-      const info = await session.getTokenInfo();
+      usable();
+      const signedOut = "Grain / Bluesky is signed out. Connect it again in Accounts, then retry.";
+      // Without this the SDK reports a missing session as "deleted by another process".
+      if (!(await sessions.get(owner))) throw new Error(signedOut);
+      let session, info;
+      try {
+        session = await client.restore(owner);
+        info = await session.getTokenInfo();
+      } catch (error) {
+        // Bluesky ended the sign-in; the SDK has already removed it.
+        if (
+          error instanceof TokenRefreshError ||
+          error instanceof TokenRevokedError ||
+          error instanceof TokenInvalidError
+        )
+          throw new Error(`${signedOut} (${error.message})`);
+        throw error;
+      }
       if (session.did !== owner) throw new Error("Use kualta’s AT Protocol account");
       return { agent: new Agent(session), pdsUrl: new URL(info.aud) };
     },
