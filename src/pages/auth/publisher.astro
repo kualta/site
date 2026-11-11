@@ -1,0 +1,22 @@
+---
+// Bluesky returns the laptop publisher's sign-in here (redirect_uris in src/lib/publisher/oauth-client.json), and the
+// browser goes on to the helper's callback on the same laptop (callbackPort in scripts/publisher/oauth.mjs). Only the
+// helper can use the code: it holds the PKCE verifier, the DPoP key and the client's signing key. A bare page, so no
+// analytics or referrer sees the code.
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Publisher sign-in</title>
+    <script is:inline>
+      location.replace("http://127.0.0.1:43827/oauth/callback" + location.search);
+    </script>
+  </head>
+  <body>
+    <p>Returning to the publisher on your laptop…</p>
+  </body>
+</html>
