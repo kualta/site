@@ -2,6 +2,7 @@ import PublisherAnalytics from "./PublisherAnalytics";
 import PublisherCalendar from "./PublisherCalendar";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
+import PlatformIcon from "./PlatformIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AlertIcon, CheckIcon, CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -596,6 +597,35 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     }
     void openDraft(id);
   }, [access]);
+  // Photos and videos pasted anywhere on Compose attach like the buttons do, and text pasted outside any field goes
+  // into the post. Read through a ref so the listener always sees what's attached now.
+  const paste = useRef<(event: ClipboardEvent) => void>(undefined);
+  paste.current = (event) => {
+    if (tab !== "compose" || busy || submitted) return;
+    const pasted = Array.from(event.clipboardData?.files ?? []);
+    if (pasted.length) {
+      event.preventDefault();
+      void chooseFiles(pasted);
+      return;
+    }
+    const text = event.clipboardData?.getData("text/plain");
+    const post = document.getElementById("publisher-post");
+    if (!text || !(post instanceof HTMLTextAreaElement)) return;
+    if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]")) return;
+    event.preventDefault();
+    post.focus();
+    // Inserted as typing, so it lands at the cursor and undo takes it back out.
+    if (!document.execCommand("insertText", false, text)) {
+      setCaption((current) => (current + text).slice(0, 5000));
+      submission.current = null;
+    }
+  };
+  useEffect(() => {
+    if (access !== "owner") return;
+    const listener = (event: ClipboardEvent) => paste.current?.(event);
+    document.addEventListener("paste", listener);
+    return () => document.removeEventListener("paste", listener);
+  }, [access]);
   async function signIn() {
     setError("");
     try {
@@ -960,13 +990,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     return videoFormat(p, video);
   };
   const formatLabel = (p: Platform) => (kind === "video" ? videoLabel(p) : postFormat(p, kind, files.length));
-  // What a destination's row says under its name: what the post becomes there, or the limit it's over. One that never
-  // takes this kind of post is only dimmed, since the attachments already say why; a mixed post's reasons aren't obvious.
-  const destinationNote = (p: Platform) => {
-    let note = formatLabel(p);
-    if (reasons[p]) note = support[p].includes(kind) || kind === "mixed" ? reasons[p] : null;
-    return note && <small>{note}</small>;
-  };
+  // A destination's toggle names what the post becomes there. One it can't take is dimmed, and when the preset wanted
+  // it the limit it's over is said under the row, unless the attachments already say why; a mixed post's never do.
+  const overLimit = platforms.filter(
+    (p) => reasons[p] && preset.platforms.includes(p) && (support[p].includes(kind) || kind === "mixed"),
+  );
   // One text for everyone; X, Bluesky and Farcaster may take a short version, Xiaohongshu its Chinese one.
   const text = {
     title: needsTitle ? title : "",
@@ -1159,387 +1187,133 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           <div hidden={tab !== "compose"}>
             <h1 className="publisher-hidden">New post</h1>
             <div className="publisher-compose">
-              <section>
-                {/* Files can also be dropped anywhere on the composer. */}
-                <div
-                  className="publisher-composer"
-                  data-dragging={dragging}
-                  onDragOver={(event) => {
-                    if (!event.dataTransfer.types.includes("Files")) return;
-                    event.preventDefault();
-                    setDragging(true);
+              {/* Files can also be dropped anywhere on the composer, or pasted anywhere on Compose. */}
+              <div
+                className="publisher-composer"
+                data-dragging={dragging}
+                onDragOver={(event) => {
+                  if (!event.dataTransfer.types.includes("Files")) return;
+                  event.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false);
+                }}
+                onDrop={(event) => {
+                  if (!event.dataTransfer.files.length) return;
+                  event.preventDefault();
+                  setDragging(false);
+                  if (!busy && !submitted) void chooseFiles(Array.from(event.dataTransfer.files));
+                }}
+              >
+                <textarea
+                  id="publisher-post"
+                  aria-label="Post"
+                  value={caption}
+                  maxLength={5000}
+                  disabled={busy || submitted}
+                  onChange={(e) => {
+                    setCaption(e.target.value);
+                    submission.current = null;
                   }}
-                  onDragLeave={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false);
-                  }}
-                  onDrop={(event) => {
-                    if (!event.dataTransfer.files.length) return;
-                    event.preventDefault();
-                    setDragging(false);
-                    if (!busy && !submitted) void chooseFiles(Array.from(event.dataTransfer.files));
-                  }}
-                >
-                  <textarea
-                    id="publisher-post"
-                    aria-label="Post"
-                    value={caption}
-                    maxLength={5000}
+                  placeholder={openingDraft ? "Opening draft…" : "What's happening?"}
+                  rows={5}
+                />
+                <div className="publisher-composer-tools">
+                  <MediaButton
+                    accept="image/*"
+                    multiple
+                    label="Photos"
+                    hint={`Up to ${MAX_PHOTOS} photos, 30 MB each`}
+                    Icon={ImageIcon}
                     disabled={busy || submitted}
-                    onChange={(e) => {
-                      setCaption(e.target.value);
-                      submission.current = null;
-                    }}
-                    placeholder={openingDraft ? "Opening draft…" : "What's happening?"}
-                    rows={5}
+                    onFiles={(next) => void chooseFiles(next)}
                   />
-                  <div className="publisher-composer-tools">
-                    <MediaButton
-                      accept="image/*"
-                      multiple
-                      label="Photos"
-                      hint={`Up to ${MAX_PHOTOS} photos, 30 MB each`}
-                      Icon={ImageIcon}
-                      disabled={busy || submitted}
-                      onFiles={(next) => void chooseFiles(next)}
-                    />
-                    <MediaButton
-                      accept="video/*"
-                      multiple
-                      label="Video"
-                      hint="Videos up to 90 MB each"
-                      Icon={VideoIcon}
-                      disabled={busy || submitted}
-                      onFiles={(next) => void chooseFiles(next)}
-                    />
-                    {!!files.length && (
-                      <button type="button" disabled={busy || submitted} onClick={clearMedia}>
-                        <CloseIcon size={16} />
-                        Remove media
-                      </button>
-                    )}
-                    {counted && (
-                      <small className="publisher-count" data-over={counted.used > counted.limit}>
-                        {counted.used} / {counted.limit} · {platformNames[counted.platform]}
-                      </small>
-                    )}
-                  </div>
-                </div>
-                {openingDraft && (
-                  <div className="publisher-draft-loading" role="status" aria-live="polite">
-                    <p>
-                      Opening draft
-                      {draftLoad && draftLoad.videos > 1 && (
-                        <span>
-                          {" "}
-                          · Video {draftLoad.video} of {draftLoad.videos}
-                        </span>
-                      )}
-                    </p>
-                    <progress
-                      value={draftLoad?.total ? draftLoad.loaded : undefined}
-                      max={draftLoad?.total}
-                      aria-label="Draft video downloaded"
-                    />
-                    <small>
-                      {draftLoad ? describeProgress(draftLoad.loaded, draftLoad.total) : "Reading the draft…"}
-                    </small>
-                  </div>
-                )}
-                {!!previews.length && (
-                  <div className="publisher-previews" data-single-video={kind === "video" || undefined}>
-                    {previews.map((url, i) => (
-                      <figure key={url}>
-                        {files[i]?.type.startsWith("video/") ? (
-                          <video src={url} controls={kind === "video"} muted={kind !== "video"} playsInline />
-                        ) : (
-                          <img src={url} alt={files[i]?.name || "Selected photo"} />
-                        )}
-                        <button
-                          type="button"
-                          aria-label={`Remove ${files[i]?.name || "media"}`}
-                          disabled={busy || submitted}
-                          onClick={() => removeFile(i)}
-                        >
-                          <CloseIcon aria-hidden="true" />
-                        </button>
-                      </figure>
-                    ))}
-                  </div>
-                )}
-                {kind === "mixed" && (
-                  <div className="publisher-carousel">
-                    <label className="publisher-option">
-                      Post as one carousel
-                      <input
-                        type="checkbox"
-                        checked={asCarousel}
-                        disabled={busy || submitted}
-                        onChange={(e) => {
-                          setAsCarousel(e.target.checked);
-                          submission.current = null;
-                        }}
-                      />
-                    </label>
-                  </div>
-                )}
-                {kind === "video" && (
-                  <label>
-                    Video description<span className="publisher-for"> · Bluesky, Lens</span>
-                    <input
-                      value={alt}
-                      maxLength={1000}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setAlt(e.target.value);
-                        submission.current = null;
-                      }}
-                    />
-                  </label>
-                )}
-                {needsTitle && (
-                  <label>
-                    Title<span className="publisher-for"> · {titledNames}</span>
-                    <input
-                      value={title}
-                      maxLength={100}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setTitle(e.target.value);
-                        submission.current = null;
-                      }}
-                    />
-                  </label>
-                )}
-                <label>
-                  Tags
-                  <input
-                    value={tagsText}
-                    maxLength={1000}
+                  <MediaButton
+                    accept="video/*"
+                    multiple
+                    label="Video"
+                    hint="Videos up to 90 MB each"
+                    Icon={VideoIcon}
                     disabled={busy || submitted}
-                    onChange={(e) => {
-                      setTagsText(e.target.value);
-                      submission.current = null;
-                    }}
-                    placeholder="#travel #bogota"
+                    onFiles={(next) => void chooseFiles(next)}
                   />
-                </label>
-                {!!locationTargets.length && (
-                  <label>
-                    Location<span className="publisher-for"> · {namesOf(locationTargets)}</span>
-                    <input
-                      value={place}
-                      maxLength={MAX_LOCATION}
-                      list="publisher-places"
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setPlace(e.target.value);
-                        submission.current = null;
-                      }}
-                      placeholder="Bogotá, Colombia"
-                    />
-                    <datalist id="publisher-places">
-                      {recentPlaces.map((recent) => (
-                        <option key={recent} value={recent} />
-                      ))}
-                    </datalist>
-                  </label>
-                )}
-                {needsShort && (
-                  <label>
-                    Short version<span className="publisher-for"> · {namesOf(brief)}</span>
-                    <textarea
-                      value={short}
-                      maxLength={1000}
-                      rows={3}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setShort(e.target.value);
-                        submission.current = null;
-                      }}
-                    />
-                  </label>
-                )}
-                {kind === "photo" && !!describedFor.length && (
-                  <fieldset className="publisher-photo-details publisher-group">
-                    <legend>
-                      Photos<span className="publisher-for"> · {namesOf(describedFor)}</span>
-                    </legend>
-                    {files.map((file, index) => (
-                      <div key={`${file.name}-${index}`} className="publisher-photo" data-dated={dated || undefined}>
-                        <img src={previews[index]} alt="" />
-                        <input
-                          aria-label={`Description of ${file.name}`}
-                          placeholder="Description"
-                          value={alts[index] || ""}
-                          maxLength={1000}
-                          disabled={busy || submitted}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            setAlts((list) => list.map((item, i) => (i === index ? value : item)));
-                            submission.current = null;
-                          }}
-                        />
-                        {dated && (
-                          <input
-                            type="datetime-local"
-                            step="1"
-                            aria-label={`Date taken for ${file.name}`}
-                            title="Date taken"
-                            disabled={busy || submitted || readingDates}
-                            value={datesTaken[index] || ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setDatesTaken((dates) => dates.map((date, i) => (i === index ? value : date)));
-                              submission.current = null;
-                            }}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </fieldset>
-                )}
-                {kind === "video" && files[0] && !!coverTargets.length && (
-                  <PublisherCover
-                    video={files[0]}
-                    value={cover}
-                    onChange={(next) => {
-                      setCover(next);
-                      submission.current = null;
-                    }}
-                    platforms={namesOf(coverTargets)}
-                    disabled={busy || submitted}
-                    onError={setError}
-                  />
-                )}
-                {kind === "video" && !files[0] && pendingDraft?.cover && !!coverTargets.length && (
-                  <fieldset className="publisher-cover publisher-group">
-                    <legend>
-                      Cover<span className="publisher-for"> · {namesOf(coverTargets)}</span>
-                    </legend>
-                    <p className="publisher-note">Loading the draft's cover…</p>
-                  </fieldset>
-                )}
-                {rednote && (
-                  <PublisherChinese
-                    value={{ title: zhTitle, text: zhText, topics: zhTopicsText }}
-                    onChange={(zh) => {
-                      setZhTitle(zh.title);
-                      setZhText(zh.text);
-                      setZhTopicsText(zh.topics);
-                      submission.current = null;
-                    }}
-                    onTranslate={() => void translate()}
-                    translating={translating}
-                    canTranslate={Boolean(title.trim() || caption.trim())}
-                    disabled={busy || submitted}
-                    place={
-                      locationTargets.includes("xiaohongshu") && (
-                        <label>
-                          Location
-                          <input
-                            value={zhPlace}
-                            maxLength={MAX_LOCATION}
-                            disabled={busy || submitted}
-                            onChange={(e) => {
-                              setZhPlace(e.target.value);
-                              submission.current = null;
-                            }}
-                            placeholder="波哥大"
-                          />
-                        </label>
-                      )
-                    }
-                  >
-                    {kind === "video" && (
-                      <div className="publisher-zh-video">
-                        {chineseVideo && (
-                          <div className="publisher-previews" data-single-video>
-                            <figure>
-                              <video src={chinesePreview} controls playsInline />
-                              <button
-                                type="button"
-                                aria-label="Remove the Chinese version"
-                                disabled={busy || submitted}
-                                onClick={() => {
-                                  setChineseVideo(undefined);
-                                  submission.current = null;
-                                }}
-                              >
-                                <CloseIcon aria-hidden="true" />
-                              </button>
-                            </figure>
-                          </div>
-                        )}
-                        {!chineseVideo && pendingDraft?.zhVideo && (
-                          <p className="publisher-note">Loading the Chinese version…</p>
-                        )}
-                        {!chineseVideo && !pendingDraft?.zhVideo && (
-                          <MediaButton
-                            accept="video/*"
-                            label="Chinese version"
-                            hint="The same video made for Chinese audiences, up to 90 MB"
-                            Icon={VideoIcon}
-                            disabled={busy || submitted}
-                            onFiles={([file]) => file && chooseChineseVideo(file)}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </PublisherChinese>
-                )}
-                {!!versions.length && (
-                  <details className="publisher-variants">
-                    <summary>What each platform gets</summary>
-                    {versions.map(({ platform, variant, issue }) => (
-                      <section key={platform}>
-                        <h3>
-                          {platformNames[platform]}
-                          {issue && <small> · {issue}</small>}
-                        </h3>
-                        {variant.title && <strong>{variant.title}</strong>}
-                        <p>{variant.text || "—"}</p>
-                        {platform === "xiaohongshu" && sentChineseVideo && <small>Video: the Chinese version</small>}
-                        {sentCover && coverTargets.includes(platform) && (
-                          <small>
-                            Cover:{" "}
-                            {platform === "xiaohongshu" && sendsZhCover
-                              ? "the same moment of the Chinese version"
-                              : "the one chosen above"}
-                          </small>
-                        )}
-                        {sentLocation && locationTargets.includes(platform) && <small>Location: {sentLocation}</small>}
-                        {!!variant.tags.length && (
-                          <small>
-                            {platform === "bluesky" || platform === "lens" ? "Hidden tags" : "Topics"}:{" "}
-                            {variant.tags.map((tag) => `#${tag}`).join(" ")}
-                          </small>
-                        )}
-                      </section>
-                    ))}
-                  </details>
-                )}
-              </section>
-              <aside aria-labelledby="publisher-share-to">
-                <h2 id="publisher-share-to">Share to</h2>
-                <nav className="publisher-presets" aria-label="Presets">
-                  {preferences.presets.map((p) => (
-                    <button
-                      key={p.id}
-                      aria-pressed={p.id === preset.id}
-                      disabled={busy || submitted}
-                      onClick={() => selectPreset(p.id)}
-                    >
-                      {p.name}
+                  {!!files.length && (
+                    <button type="button" disabled={busy || submitted} onClick={clearMedia}>
+                      <CloseIcon size={16} />
+                      Remove media
                     </button>
-                  ))}
-                </nav>
-                <div className="publisher-destinations">
-                  {platforms.map((p) => (
-                    <label key={p} data-unavailable={Boolean(reasons[p])} title={reasons[p] ?? undefined}>
+                  )}
+                  {counted && (
+                    <small className="publisher-count" data-over={counted.used > counted.limit}>
+                      {counted.used} / {counted.limit} · {platformNames[counted.platform]}
+                    </small>
+                  )}
+                </div>
+              </div>
+              {openingDraft && (
+                <div className="publisher-draft-loading" role="status" aria-live="polite">
+                  <p>
+                    Opening draft
+                    {draftLoad && draftLoad.videos > 1 && (
                       <span>
-                        {platformNames[p]}
-                        {destinationNote(p)}
+                        {" "}
+                        · Video {draftLoad.video} of {draftLoad.videos}
                       </span>
+                    )}
+                  </p>
+                  <progress
+                    value={draftLoad?.total ? draftLoad.loaded : undefined}
+                    max={draftLoad?.total}
+                    aria-label="Draft video downloaded"
+                  />
+                  <small>
+                    {draftLoad ? describeProgress(draftLoad.loaded, draftLoad.total) : "Reading the draft…"}
+                  </small>
+                </div>
+              )}
+              {!!previews.length && (
+                <div className="publisher-previews" data-single-video={kind === "video" || undefined}>
+                  {previews.map((url, i) => (
+                    <figure key={url}>
+                      {files[i]?.type.startsWith("video/") ? (
+                        <video src={url} controls={kind === "video"} muted={kind !== "video"} playsInline />
+                      ) : (
+                        <img src={url} alt={files[i]?.name || "Selected photo"} />
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${files[i]?.name || "media"}`}
+                        disabled={busy || submitted}
+                        onClick={() => removeFile(i)}
+                      >
+                        <CloseIcon aria-hidden="true" />
+                      </button>
+                    </figure>
+                  ))}
+                </div>
+              )}
+              {kind === "mixed" && (
+                <div className="publisher-carousel">
+                  <label className="publisher-option">
+                    Post as one carousel
+                    <input
+                      type="checkbox"
+                      checked={asCarousel}
+                      disabled={busy || submitted}
+                      onChange={(e) => {
+                        setAsCarousel(e.target.checked);
+                        submission.current = null;
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+              <div className="publisher-destinations" role="group" aria-label="Share to">
+                {platforms.map((p) => {
+                  const format = !reasons[p] && formatLabel(p);
+                  return (
+                    <label key={p} data-unavailable={Boolean(reasons[p])} title={reasons[p] ?? undefined}>
                       <input
                         type="checkbox"
                         checked={preset.platforms.includes(p) && !reasons[p]}
@@ -1553,9 +1327,288 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                           });
                         }}
                       />
+                      <PlatformIcon platform={p} size={15} />
+                      {platformNames[p]}
+                      {format && (
+                        <>
+                          {" "}
+                          <small>{format}</small>
+                        </>
+                      )}
                     </label>
-                  ))}
+                  );
+                })}
+                <div className="publisher-send-actions">
+                  {kind === "video" && (
+                    <button
+                      type="button"
+                      className="publisher-save"
+                      disabled={busy || submitted || files.length !== 1}
+                      onClick={saveToDrafts}
+                    >
+                      {saving ? "Saving…" : "Save draft"}
+                    </button>
+                  )}
+                  <button
+                    className="publish-button"
+                    disabled={
+                      busy ||
+                      !destinations.length ||
+                      (kind === "text" && !caption.trim()) ||
+                      (kind === "mixed" && !asCarousel)
+                    }
+                    onClick={submit}
+                  >
+                    {publishLabel}
+                  </button>
                 </div>
+              </div>
+              <div className="publisher-send-notes">
+                {openDraftId && !openingDraft && draftNote && (
+                  <p className="publisher-note" role="status">
+                    {draftNote}
+                  </p>
+                )}
+                {!destinations.length && (
+                  <p className="publisher-note">None of the selected destinations take {unavailableFor[kind]}.</p>
+                )}
+                {overLimit.map((p) => (
+                  <p key={p} className="publisher-note">
+                    {platformNames[p]} {reasons[p]}.
+                  </p>
+                ))}
+                {issues.map(({ platform, issue }) => (
+                  <p key={platform} className="publisher-problem">
+                    {platformNames[platform]}: {issue}
+                  </p>
+                ))}
+                {!!missingPlatforms.length && (
+                  <p className="publisher-note">
+                    Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.
+                  </p>
+                )}
+              </div>
+              {kind === "video" && (
+                <label>
+                  Video description<span className="publisher-for"> · Bluesky, Lens</span>
+                  <input
+                    value={alt}
+                    maxLength={1000}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setAlt(e.target.value);
+                      submission.current = null;
+                    }}
+                  />
+                </label>
+              )}
+              {needsTitle && (
+                <label>
+                  Title<span className="publisher-for"> · {titledNames}</span>
+                  <input
+                    value={title}
+                    maxLength={100}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      submission.current = null;
+                    }}
+                  />
+                </label>
+              )}
+              <label>
+                Tags
+                <input
+                  value={tagsText}
+                  maxLength={1000}
+                  disabled={busy || submitted}
+                  onChange={(e) => {
+                    setTagsText(e.target.value);
+                    submission.current = null;
+                  }}
+                  placeholder="#travel #bogota"
+                />
+              </label>
+              {!!locationTargets.length && (
+                <label>
+                  Location<span className="publisher-for"> · {namesOf(locationTargets)}</span>
+                  <input
+                    value={place}
+                    maxLength={MAX_LOCATION}
+                    list="publisher-places"
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setPlace(e.target.value);
+                      submission.current = null;
+                    }}
+                    placeholder="Bogotá, Colombia"
+                  />
+                  <datalist id="publisher-places">
+                    {recentPlaces.map((recent) => (
+                      <option key={recent} value={recent} />
+                    ))}
+                  </datalist>
+                </label>
+              )}
+              {needsShort && (
+                <label>
+                  Short version<span className="publisher-for"> · {namesOf(brief)}</span>
+                  <textarea
+                    value={short}
+                    maxLength={1000}
+                    rows={3}
+                    disabled={busy || submitted}
+                    onChange={(e) => {
+                      setShort(e.target.value);
+                      submission.current = null;
+                    }}
+                  />
+                </label>
+              )}
+              {kind === "photo" && !!describedFor.length && (
+                <fieldset className="publisher-photo-details publisher-group">
+                  <legend>
+                    Photos<span className="publisher-for"> · {namesOf(describedFor)}</span>
+                  </legend>
+                  {files.map((file, index) => (
+                    <div key={`${file.name}-${index}`} className="publisher-photo" data-dated={dated || undefined}>
+                      <img src={previews[index]} alt="" />
+                      <input
+                        aria-label={`Description of ${file.name}`}
+                        placeholder="Description"
+                        value={alts[index] || ""}
+                        maxLength={1000}
+                        disabled={busy || submitted}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setAlts((list) => list.map((item, i) => (i === index ? value : item)));
+                          submission.current = null;
+                        }}
+                      />
+                      {dated && (
+                        <input
+                          type="datetime-local"
+                          step="1"
+                          aria-label={`Date taken for ${file.name}`}
+                          title="Date taken"
+                          disabled={busy || submitted || readingDates}
+                          value={datesTaken[index] || ""}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setDatesTaken((dates) => dates.map((date, i) => (i === index ? value : date)));
+                            submission.current = null;
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </fieldset>
+              )}
+              {kind === "video" && files[0] && !!coverTargets.length && (
+                <PublisherCover
+                  video={files[0]}
+                  value={cover}
+                  onChange={(next) => {
+                    setCover(next);
+                    submission.current = null;
+                  }}
+                  platforms={namesOf(coverTargets)}
+                  disabled={busy || submitted}
+                  onError={setError}
+                />
+              )}
+              {kind === "video" && !files[0] && pendingDraft?.cover && !!coverTargets.length && (
+                <fieldset className="publisher-cover publisher-group">
+                  <legend>
+                    Cover<span className="publisher-for"> · {namesOf(coverTargets)}</span>
+                  </legend>
+                  <p className="publisher-note">Loading the draft's cover…</p>
+                </fieldset>
+              )}
+              {rednote && (
+                <PublisherChinese
+                  value={{ title: zhTitle, text: zhText, topics: zhTopicsText }}
+                  onChange={(zh) => {
+                    setZhTitle(zh.title);
+                    setZhText(zh.text);
+                    setZhTopicsText(zh.topics);
+                    submission.current = null;
+                  }}
+                  onTranslate={() => void translate()}
+                  translating={translating}
+                  canTranslate={Boolean(title.trim() || caption.trim())}
+                  disabled={busy || submitted}
+                  place={
+                    locationTargets.includes("xiaohongshu") && (
+                      <label>
+                        Location
+                        <input
+                          value={zhPlace}
+                          maxLength={MAX_LOCATION}
+                          disabled={busy || submitted}
+                          onChange={(e) => {
+                            setZhPlace(e.target.value);
+                            submission.current = null;
+                          }}
+                          placeholder="波哥大"
+                        />
+                      </label>
+                    )
+                  }
+                >
+                  {kind === "video" && (
+                    <div className="publisher-zh-video">
+                      {chineseVideo && (
+                        <div className="publisher-previews" data-single-video>
+                          <figure>
+                            <video src={chinesePreview} controls playsInline />
+                            <button
+                              type="button"
+                              aria-label="Remove the Chinese version"
+                              disabled={busy || submitted}
+                              onClick={() => {
+                                setChineseVideo(undefined);
+                                submission.current = null;
+                              }}
+                            >
+                              <CloseIcon aria-hidden="true" />
+                            </button>
+                          </figure>
+                        </div>
+                      )}
+                      {!chineseVideo && pendingDraft?.zhVideo && (
+                        <p className="publisher-note">Loading the Chinese version…</p>
+                      )}
+                      {!chineseVideo && !pendingDraft?.zhVideo && (
+                        <MediaButton
+                          accept="video/*"
+                          label="Chinese version"
+                          hint="The same video made for Chinese audiences, up to 90 MB"
+                          Icon={VideoIcon}
+                          disabled={busy || submitted}
+                          onFiles={([file]) => file && chooseChineseVideo(file)}
+                        />
+                      )}
+                    </div>
+                  )}
+                </PublisherChinese>
+              )}
+              <div className="publisher-options">
+                <span id="publisher-presets" className="publisher-field-name">
+                  Presets
+                </span>
+                <nav className="publisher-presets" aria-labelledby="publisher-presets">
+                  {preferences.presets.map((p) => (
+                    <button
+                      key={p.id}
+                      aria-pressed={p.id === preset.id}
+                      disabled={busy || submitted}
+                      onClick={() => selectPreset(p.id)}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </nav>
                 {destinations.includes("youtube") && (
                   <label>
                     YouTube visibility
@@ -1804,47 +1857,38 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                     </button>
                   </div>
                 </details>
-                <button
-                  className="publish-button"
-                  disabled={
-                    busy ||
-                    !destinations.length ||
-                    (kind === "text" && !caption.trim()) ||
-                    (kind === "mixed" && !asCarousel)
-                  }
-                  onClick={submit}
-                >
-                  {publishLabel}
-                </button>
-                {kind === "video" && (
-                  <button
-                    type="button"
-                    className="publisher-save"
-                    disabled={busy || submitted || files.length !== 1}
-                    onClick={saveToDrafts}
-                  >
-                    {saving ? "Saving…" : "Save draft"}
-                  </button>
-                )}
-                {openDraftId && !openingDraft && draftNote && (
-                  <p className="publisher-note" role="status">
-                    {draftNote}
-                  </p>
-                )}
-                {!destinations.length && (
-                  <p className="publisher-note">None of the selected destinations take {unavailableFor[kind]}.</p>
-                )}
-                {issues.map(({ platform, issue }) => (
-                  <p key={platform} className="publisher-problem">
-                    {platformNames[platform]}: {issue}
-                  </p>
-                ))}
-                {!!missingPlatforms.length && (
-                  <p className="publisher-note">
-                    Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.
-                  </p>
-                )}
-              </aside>
+              </div>
+              {!!versions.length && (
+                <details className="publisher-variants">
+                  <summary>What each platform gets</summary>
+                  {versions.map(({ platform, variant, issue }) => (
+                    <section key={platform}>
+                      <h3>
+                        {platformNames[platform]}
+                        {issue && <small> · {issue}</small>}
+                      </h3>
+                      {variant.title && <strong>{variant.title}</strong>}
+                      <p>{variant.text || "—"}</p>
+                      {platform === "xiaohongshu" && sentChineseVideo && <small>Video: the Chinese version</small>}
+                      {sentCover && coverTargets.includes(platform) && (
+                        <small>
+                          Cover:{" "}
+                          {platform === "xiaohongshu" && sendsZhCover
+                            ? "the same moment of the Chinese version"
+                            : "the one chosen above"}
+                        </small>
+                      )}
+                      {sentLocation && locationTargets.includes(platform) && <small>Location: {sentLocation}</small>}
+                      {!!variant.tags.length && (
+                        <small>
+                          {platform === "bluesky" || platform === "lens" ? "Hidden tags" : "Topics"}:{" "}
+                          {variant.tags.map((tag) => `#${tag}`).join(" ")}
+                        </small>
+                      )}
+                    </section>
+                  ))}
+                </details>
+              )}
             </div>
           </div>
         </>
