@@ -1,22 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  BlueskyIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CloseIcon,
-  CommentIcon,
-  FarcasterIcon,
-  GrainIcon,
-  ImageIcon,
-  InstagramIcon,
-  LensIcon,
-  TiktokIcon,
-  VideoIcon,
-  XiaohongshuIcon,
-  XLogoIcon,
-  YoutubeIcon,
-  type IconComponent,
-} from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CommentIcon, ImageIcon, VideoIcon } from "@/components/icons";
+import PlatformIcon from "./PlatformIcon";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
 import type { CalendarPost, CalendarTarget } from "@/lib/publisher/calendar";
 import { needsTitle, platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
@@ -35,22 +19,6 @@ type Props = {
   postsVersion: number;
 };
 
-/** Each platform's mark, small enough for a day's cell. */
-const platformIcons: Record<Platform, IconComponent> = {
-  grain: GrainIcon,
-  instagram: InstagramIcon,
-  bluesky: BlueskyIcon,
-  twitter: XLogoIcon,
-  farcaster: FarcasterIcon,
-  lens: LensIcon,
-  xiaohongshu: XiaohongshuIcon,
-  youtube: YoutubeIcon,
-  tiktok: TiktokIcon,
-};
-function PlatformIcon({ platform, size }: { platform: Platform; size: number }) {
-  const Icon = platformIcons[platform];
-  return <Icon size={size} />;
-}
 const kindIcons = { text: CommentIcon, photo: ImageIcon, video: VideoIcon, mixed: VideoIcon };
 
 /** A destination's state in a word: what the calendar marks it with. */
@@ -255,7 +223,12 @@ function PostEditor({
   }
 
   return (
-    <dialog ref={dialog} className="publisher-calendar-editor" aria-labelledby="publisher-editor-title" onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="publisher-calendar-editor"
+      aria-labelledby="publisher-editor-title"
+      onClose={onClose}
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault();

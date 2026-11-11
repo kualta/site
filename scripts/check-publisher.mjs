@@ -95,7 +95,7 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     // Dark is the page default; mobile covers the light theme.
     await page.goto(`http://127.0.0.1:8797/publisher.html?theme=${mobile ? "light" : "dark"}`);
-    const shareTo = page.getByRole("complementary", { name: "Share to" });
+    const shareTo = page.locator(".publisher-compose");
     const presets = shareTo.getByRole("navigation", { name: "Presets" });
     await presets.getByRole("button", { name: "Text post", exact: true }).waitFor();
     assert.deepEqual(await presets.getByRole("button").allTextContents(), [
@@ -115,14 +115,15 @@ try {
         "0s",
       );
     const pressed = () => presets.locator('[aria-pressed="true"]').allTextContents();
+    const destinations = page.getByRole("group", { name: "Share to" });
     const checked = () =>
-      page
-        .locator(".publisher-destinations label")
+      destinations
+        .locator("label")
         .filter({ has: page.locator("input:checked") })
         .allTextContents();
-    const reason = (name) =>
-      page.locator(".publisher-destinations label", { hasText: name }).locator("small").textContent();
-    // A destination that never takes this kind of post is only dimmed; its tooltip says why.
+    // What the post becomes on a destination, named on its toggle.
+    const format = (name) => destinations.locator("label", { hasText: name }).locator("small").textContent();
+    // A destination that can't take this post is dimmed; its tooltip says why.
     const why = (name) => page.locator(".publisher-destinations label", { hasText: name }).getAttribute("title");
     // Each toolbar button has its own picker; a lone video goes through the video one.
     const attach = (files) => {
@@ -348,7 +349,9 @@ try {
     ]);
     assert.equal(chooser.isMultiple(), true);
     await chooser.setFiles(photos(5));
-    assert.equal(await reason("X / Twitter"), "takes up to 4 photos");
+    assert.equal(await why("X / Twitter"), "takes up to 4 photos");
+    // The preset wanted X, so the limit is said under the row too.
+    await page.getByText("X / Twitter takes up to 4 photos.", { exact: true }).waitFor();
     const descriptions = page.getByRole("textbox", { name: /^Description of / });
     assert.equal(await descriptions.count(), 5);
     for (let i = 0; i < 5; i++) await descriptions.nth(i).fill(`Photo ${i + 1} described`);
@@ -385,7 +388,7 @@ try {
     assert.deepEqual(await pressed(), ["Long video"]);
     assert.equal(await page.getByRole("textbox", { name: "Post" }).inputValue(), "Two photo caption");
     // Photos make a YouTube post, which everyone sees: the preset's Private visibility holds it back.
-    assert.deepEqual(await checked(), ["YouTubePost"]);
+    assert.deepEqual(await checked(), ["YouTube Post"]);
     const publicIssue = "YouTube: shows photo posts to everyone: set YouTube visibility to Public";
     await shareTo.getByText(publicIssue).waitFor();
     await page.locator(".publish-button").click();
@@ -402,7 +405,7 @@ try {
       await page.locator(".publisher-previews img").evaluateAll((imgs) => imgs.map((img) => img.src)),
       previewURLs,
     );
-    assert.deepEqual(await checked(), ["Grain", "InstagramCarousel"]);
+    assert.deepEqual(await checked(), ["Grain", "Instagram Carousel"]);
     await page.keyboard.press("Tab");
     assert.equal(
       await presets
@@ -443,12 +446,12 @@ try {
     const asShort = shareTo.getByRole("checkbox", { name: "Post as a Short" });
     assert.equal(await asShort.count(), 0); // this browser can't read its shape
     assert.equal(await why("Grain"), "needs photos");
-    assert.equal(await reason("Instagram"), "Reel");
-    assert.deepEqual(await checked(), ["InstagramReel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
+    assert.equal(await format("Instagram"), "Reel");
+    assert.deepEqual(await checked(), ["Instagram Reel", "Bluesky", "X / Twitter", "Xiaohongshu", "YouTube", "TikTok"]);
     await page.getByRole("textbox", { name: "Video description · Bluesky, Lens" }).fill("A short clip");
     await title.fill("A clip");
     await presets.getByRole("button", { name: "Photo", exact: true }).click();
-    assert.deepEqual(await checked(), ["InstagramReel"]);
+    assert.deepEqual(await checked(), ["Instagram Reel"]);
     await presets.getByRole("button", { name: "Long video", exact: true }).click();
     assert.deepEqual(await checked(), ["YouTube"]);
     assert.equal(await title.inputValue(), "A clip");
@@ -558,7 +561,7 @@ try {
     await shortForm.click();
     await tooLong.waitFor();
     assert.equal(await asShort.count(), 0);
-    assert.equal(await reason("Bluesky"), "takes videos up to 3 minutes");
+    assert.equal(await why("Bluesky"), "takes videos up to 3 minutes");
     await shot("short-too-long");
     await youtubeRow.getByRole("checkbox").uncheck();
     await youtubeRow.getByRole("checkbox").check();
@@ -583,9 +586,9 @@ try {
     assert.equal(await descriptions.nth(0).inputValue(), "Kept as more media is added");
     await attach(video);
     await attached(3);
-    assert.equal(await reason("Bluesky"), "takes photos or one video");
-    assert.equal(await reason("YouTube"), "takes photos or one video");
-    assert.deepEqual(await checked(), ["InstagramCarousel", "X / Twitter"]);
+    assert.equal(await why("Bluesky"), "takes photos or one video");
+    assert.equal(await why("YouTube"), "takes photos or one video");
+    assert.deepEqual(await checked(), ["Instagram Carousel", "X / Twitter"]);
     await attach(photos(18));
     await page.getByText("Attach up to 20 photos and videos: photos up to 30 MB, videos up to 90 MB.").waitFor();
     await attached(3);
@@ -628,6 +631,38 @@ try {
     await page.locator(".publisher-composer").dispatchEvent("drop", { dataTransfer: dropped });
     await page.getByRole("textbox", { name: /^Description of / }).waitFor();
     await page.getByRole("button", { name: "Remove media" }).click();
+
+    // Media pasted into the post, or anywhere on Compose, attaches the same way; the post's text stays as it was.
+    const paste = (selector, contents) =>
+      page.evaluate(
+        ([selector, contents]) => {
+          const data = new DataTransfer();
+          if (contents.text) data.setData("text/plain", contents.text);
+          for (const name of contents.files ?? []) data.items.add(new File(["x"], name, { type: "image/png" }));
+          const target = document.querySelector(selector);
+          if (target instanceof HTMLElement) target.focus();
+          // Whether the composer took the paste, rather than leaving it to the field.
+          return !target.dispatchEvent(
+            new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+          );
+        },
+        [selector, contents],
+      );
+    const post = page.getByRole("textbox", { name: "Post" });
+    await post.fill("Pasted");
+    await paste("#publisher-post", { files: ["pasted.png"] });
+    await page.getByRole("button", { name: "Remove pasted.png" }).waitFor();
+    await paste("body", { files: ["pasted-2.png"] });
+    await page.getByRole("button", { name: "Remove pasted-2.png" }).waitFor();
+    assert.equal(await post.inputValue(), "Pasted");
+    await page.getByRole("button", { name: "Remove media" }).click();
+    // Text pasted with no field focused goes into the post, at its cursor.
+    await paste("body", { text: " from the clipboard" });
+    assert.equal(await post.inputValue(), "Pasted from the clipboard");
+    assert.equal(await post.evaluate((el) => el === document.activeElement), true);
+    // Text pasted into another field is left to it.
+    assert.equal(await paste('input[placeholder="#travel #bogota"]', { text: "#pasted" }), false);
+    assert.equal(await post.inputValue(), "Pasted from the clipboard");
     // Custom presets remain editable and survive a reload, alongside the active draft.
     await presets.getByRole("button", { name: "Text post", exact: true }).click();
     await shareTo.getByText("Preset settings", { exact: true }).click();
@@ -840,7 +875,8 @@ try {
   await page.getByText("Waiting for Farcaster, Lens sign-in.").waitFor();
   const threePhotos = Array.from({ length: 3 }, (_, i) => ({ name: `p${i}.png`, mimeType: "image/png", buffer: png }));
   await page.locator('input[type="file"][accept="image/*"]').setInputFiles(threePhotos);
-  assert.equal(await destination("Farcaster").locator("small").textContent(), "takes up to 2 photos");
+  assert.equal(await destination("Farcaster").getAttribute("title"), "takes up to 2 photos");
+  await page.getByText("Farcaster takes up to 2 photos.", { exact: true }).waitFor();
   assert.equal(await destination("Lens").locator("input").isChecked(), true);
   await page.getByRole("button", { name: "Remove media" }).click();
   assert.equal(await destination("Farcaster").locator("input").isChecked(), true);

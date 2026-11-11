@@ -67,13 +67,13 @@
 .publisher .publish-button:hover:not(:disabled), .publisher .publisher-login button:hover:not(:disabled) { background:var(--publisher-ink); opacity:.85; }
 .publisher-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .publisher button .publisher-spinner { margin-right:0; }
-@media (pointer:coarse) { .publisher :is(.publisher-actions, .publisher-account-row, .publisher-account-actions, .publisher-history-pagination, .publisher-composer-tools, .publisher-presets, .publisher-zh, .publisher-zh-video) button { min-height:44px; } }
+@media (pointer:coarse) { .publisher :is(.publisher-actions, .publisher-account-row, .publisher-account-actions, .publisher-history-pagination, .publisher-composer-tools, .publisher-presets, .publisher-send-actions, .publisher-zh, .publisher-zh-video) button, .publisher .publisher-destinations label { min-height:44px; } }
 
 /* --- compose --- */
-.publisher-compose { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:56px; }
-@media(min-width:1000px) { .publisher-compose { grid-template-columns:minmax(0,1fr) 320px; gap:72px; } }
-.publisher-compose > *, .publisher-account-row > * { min-width:0; }
-.publisher-composer { margin-bottom:24px; border:1px solid var(--publisher-edge); border-radius:14px; background:var(--publisher-surface); transition:border-color 160ms, box-shadow 160ms; }
+/* One centred column: the post, where it goes and the button that sends it, then what only some destinations need. */
+.publisher-compose { max-width:680px; margin-inline:auto; }
+.publisher-account-row > * { min-width:0; }
+.publisher-composer { margin-bottom:16px; border:1px solid var(--publisher-edge); border-radius:14px; background:var(--publisher-surface); transition:border-color 160ms, box-shadow 160ms; }
 .publisher-composer:focus-within, .publisher-composer[data-dragging="true"] { border-color:var(--publisher-ink); box-shadow:0 0 0 1px var(--publisher-ink); }
 .publisher .publisher-composer textarea, .publisher .publisher-composer textarea:focus-visible { margin:0; padding:14px 16px; border:0; border-radius:14px 14px 0 0; background:transparent; box-shadow:none; font-size:16px; }
 .publisher-composer-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 10px; border-top:1px solid var(--publisher-line); }
@@ -132,15 +132,25 @@
 .publisher-variants p { margin:2px 0 4px; white-space:pre-wrap; overflow-wrap:anywhere; }
 .publisher-variants section > small { display:block; font-size:13px; }
 
-/* --- share to --- */
+/* --- share to: a toggle per destination, with the post's buttons at the end of the row's last line --- */
+.publisher-destinations { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.publisher .publisher-destinations label { position:relative; display:inline-flex; align-items:center; gap:6px; margin:0; padding:6px 13px 6px 11px; border:1px solid var(--publisher-line); border-radius:999px; color:var(--publisher-muted); font-size:14px; line-height:1.4; cursor:pointer; transition:background-color 160ms, border-color 160ms, color 160ms; }
+.publisher .publisher-destinations label:hover:not([data-unavailable="true"]) { border-color:var(--publisher-edge); color:var(--publisher-ink); }
+.publisher .publisher-destinations label:has(input:checked) { border-color:var(--publisher-ink); background:var(--publisher-surface); color:var(--publisher-ink); }
+.publisher .publisher-destinations label:has(input:focus-visible) { outline:2px solid var(--publisher-ink); outline-offset:2px; }
+/* The checkbox covers its toggle unseen, so the toggle clicks, focuses and reads as one. */
+.publisher .publisher-destinations input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:inherit; }
+.publisher-destinations label small { color:var(--publisher-muted); font-size:12px; }
+.publisher .publisher-destinations label[data-unavailable="true"] { opacity:.45; cursor:default; }
+.publisher-send-actions { display:flex; gap:8px; margin-left:auto; padding-left:8px; }
+.publisher .publisher-send-actions button { justify-content:center; width:auto; padding:9px 20px; border-radius:999px; font-size:15px; }
+.publisher-send-notes { margin:0 0 32px; }
+.publisher-send-notes > p { margin:12px 0 0; }
+.publisher-options { margin:36px 0 0; padding:20px 0 0; border-top:1px solid var(--publisher-line); }
+.publisher-field-name { display:block; margin:0 0 8px; font-size:14px; }
 .publisher-presets { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 20px; }
 .publisher .publisher-presets button { max-width:100%; padding:7px 14px; border-radius:999px; overflow-wrap:anywhere; }
 .publisher .publisher-presets button[aria-pressed="true"], .publisher .publisher-presets button[aria-pressed="true"]:hover:not(:disabled) { background:var(--publisher-ink); border-color:var(--publisher-ink); color:var(--publisher-on-ink); }
-.publisher-destinations { margin-bottom:24px; }
-.publisher .publisher-destinations label { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0; padding:9px 0; font-size:15px; cursor:pointer; }
-.publisher-destinations label small { display:block; font-size:12px; }
-.publisher .publisher-destinations label[data-unavailable="true"] { cursor:default; }
-.publisher-destinations label[data-unavailable="true"] > span { color:var(--publisher-muted); }
 .publisher label.publisher-option { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .publisher-carousel { margin:0 0 16px; }
 .publisher .publisher-carousel .publisher-option { margin:0; }
@@ -149,8 +159,6 @@
 .publisher summary:hover, .publisher details[open] > summary { color:var(--publisher-ink); }
 .publisher details[open] > summary { margin-bottom:16px; }
 .publisher summary:focus-visible { outline:2px solid var(--publisher-ink); outline-offset:3px; border-radius:4px; }
-.publisher-compose aside > .publisher-note { margin:12px 0 0; }
-.publisher .publisher-save { justify-content:center; width:100%; margin-top:8px; padding:11px 16px; }
 
 /* --- scheduling: each destination's time, and each platform's posting times --- */
 .publisher-schedule, .publisher-posting-times, .publisher-metadata { min-width:0; margin:0 0 20px; padding:0; border:0; }
@@ -383,7 +391,8 @@
   .publisher-header { margin-bottom:28px; }
   .publisher-tabs { margin-bottom:28px; }
   .publisher h1 { font-size:26px; }
-  .publisher-compose { grid-template-columns:minmax(0,1fr); gap:44px; }
+  .publisher-send-actions { flex:1 1 100%; padding-left:0; margin-top:4px; }
+  .publisher .publisher-send-actions button { flex:1; }
   /* Below 16px, phones zoom in on the field when it's tapped. */
   .publisher :is(input:not([type=checkbox]):not([type=file]):not([type=range]), textarea, select) { font-size:16px; }
 }
@@ -398,7 +407,7 @@
   .publisher-account-row { flex-wrap:wrap; gap:8px; }
 }
 @media (prefers-reduced-motion:reduce) {
-  .publisher button, .publisher a, .publisher-composer, .publisher summary, .publisher :is(input, textarea, select), .publisher-history-panel, .publisher-history-manage svg, .publisher-history-panel-row { transition:none; }
+  .publisher button, .publisher a, .publisher-composer, .publisher .publisher-destinations label, .publisher summary, .publisher :is(input, textarea, select), .publisher-history-panel, .publisher-history-manage svg, .publisher-history-panel-row { transition:none; }
   .publisher-history-pill[data-tone="busy"]::before, .publisher-account-status[data-tone="busy"]::before, .publisher-skeleton, .publisher-spinner, .publisher-toast { animation:none; }
 }
 
