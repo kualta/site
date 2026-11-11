@@ -8,22 +8,33 @@ looks right.
 bun run grade          # http://127.0.0.1:4777, opens in the browser
 ```
 
-## Library
+## Where clips come from
+
+**Clips from** (top bar) lists two kinds of folder:
+
+- **Pocket 4P**: the camera's card while it's plugged in (`/Volumes/Pocket4P/DCIM`, `GRADE_CAMERA`), one folder per
+  shoot day, read from the date in each DJI file name. Clips stay on the card: nothing is copied off it, and nothing
+  is written to it. Thumbnails come from the still each DJI file carries; a clip's preview is made from the card
+  when you select it.
+- **On this Mac**: any `<root>/<folder>/originals/` with video in it, for clips that aren't on the camera.
+
+Each folder shows how many of its clips have a graded copy, and the clip list can show only graded or ungraded clips.
+
+## What the app writes
 
 ```
 ~/Movies/Pocket4P/                  GRADE_ROOT
   luts/                             GRADE_LUTS: base looks (below)
-  2026-11-08/                       a shoot
-    originals/DJI_…_0234_D.MP4      camera files, never changed
+  2026-11-08/                       a shoot day (or a Mac folder's name)
     grades.json                     each clip's grade, saved as you work
     graded/DJI_…_0234_D.mp4         the export: 8-bit H.264 BT.709, near lossless, sound copied
-    graded/DJI_…_0234_D.grade.json  what was applied: base, grade, key, LUT, camera white balance
+    graded/DJI_…_0234_D.grade.json  what was applied: source, base, grade, key, LUT, camera white balance
     graded/luts/DJI_…_0234_D.cube   the exact LUT the export used
     .grade/                         the app's cache: preview proxies, thumbnails, probed metadata
 ```
 
-**Camera** (top bar) lists clips on the Pocket 4P (`/Volumes/Pocket4P/DCIM`, `GRADE_CAMERA`) that aren't in the
-library yet, by shoot day, and imports a day into `<root>/<YYYY-MM-DD>/originals`, checking each copy.
+A camera day and a Mac folder with the same name share this folder, so a clip graded off the card and the same
+clip copied to the Mac share one grade and one export. A graded file put in `graded/` by hand counts as graded too.
 
 ## Grading
 
@@ -35,9 +46,10 @@ library yet, by shoot day, and imports a day into `<root>/<YYYY-MM-DD>/originals
   linear light before the look.
 - Select several clips (⌘-click, shift-click, Select all) and a change sets that control on all of them. Copy grade /
   Paste copies a whole grade.
-- **Split** and **As shot** compare against the flat original; hold **B** to flash it. Space plays, ↑ ↓ change clip.
-- **Export N clips** bakes every clip whose grade changed since its last export; **Export selected** bakes the
-  selection. Exports come from the 10-bit originals at 16-bit precision, not from the preview.
+- **Split** and **Original** compare against the flat original; hold **B** to flash it. Space plays, ↑ ↓ change clip.
+- **Export this clip / Export N selected** bakes the selection; **Re-export N changed** bakes every graded clip whose
+  grade moved since its export. Exports come from the 10-bit originals (off the card, for a camera day) at 16-bit
+  precision, not from the preview. A camera day can't export while the camera is unplugged.
 
 ## Base looks (`luts/`)
 
@@ -61,6 +73,7 @@ the preview: mean 0.8 of 255, 95% within 2.4.
 
 ## Into OpenFilm
 
-Edit with the files in `graded/`. Each `.grade.json` says what was applied; a clip is current when its `key` matches
-`gradeKey(resolveGrade(grades.json's entry))`, which the app shows as "exported" and otherwise as "changed".
-Regrading and exporting again replaces the file under the same name, so trims and captions in a film stay valid.
+Edit with the files in `~/Movies/Pocket4P/<day>/graded/`: the originals may only exist on the camera. Each
+`.grade.json` says what was applied; a clip is current when its `key` matches `gradeKey(resolveGrade(grades.json's
+entry))`, which the app shows as "graded" and otherwise as "changed since export". Regrading and exporting again
+replaces the file under the same name, so trims and captions in a film stay valid.

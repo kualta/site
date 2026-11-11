@@ -1,21 +1,24 @@
 #!/usr/bin/env node
-// The grade app's local server: a library of shoots (<root>/<shoot>/originals/*.MP4), a preview proxy per clip, each
-// shoot's grades in <shoot>/grades.json, and exports baked from the originals into <shoot>/graded/ with a
-// .grade.json beside each file saying exactly what was applied. Listens on 127.0.0.1 only.
+// The grade app's local server. Clips come from sources: the camera's card, by shoot day ("camera:2026-11-08", read
+// only, nothing is copied off it), and folders on this Mac (<root>/<folder>/originals). Whatever a source is, what the
+// app makes for it lives in <root>/<day or folder>/: grades.json, the .grade/ cache (metadata, thumbnails, preview
+// proxies), and graded/ with each export and a .grade.json saying exactly what was applied. So a clip graded off the
+// card and the same clip in a Mac folder share one grade and one export. Listens on 127.0.0.1 only.
+import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFile } from "node:child_process";
 import { composeLut, gradeKey, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
-import { cameraClips, exportClip, importClip, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
+import { cameraDays, exportClip, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.GRADE_ROOT || join(homedir(), "Movies/Pocket4P");
 const LUTS = process.env.GRADE_LUTS || join(ROOT, "luts");
 const CAMERA = process.env.GRADE_CAMERA || "/Volumes/Pocket4P/DCIM";
+const CAMERA_NAME = process.env.GRADE_CAMERA_NAME || "Pocket 4P";
 const PORT = Number(process.env.GRADE_PORT || 4777);
 const EXPORT_LUT_SIZE = 65;
 
@@ -62,22 +65,10 @@ async function loadCube(file) {
   return lut;
 }
 
-// ---- library ------------------------------------------------------------------------------------------------------
+// ---- sources ------------------------------------------------------------------------------------------------------
 
-const stemOf = (name) => name.slice(0, name.length - extname(name).length);
-function shootDir(id) {
-  if (!/^[A-Za-z0-9_-][\w.-]*$/.test(id) || id.includes("..")) throw httpError(400, "bad shoot name");
-  return join(ROOT, id);
-}
-
-async function shoots() {
-  const dirs = (await readdir(ROOT, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory() && !d.name.startsWith("."));
-  const out = [];
-  for (const d of dirs) {
-    const files = await readdir(join(ROOT, d.name, "originals")).catch(() => null);
-    if (files) out.push({ id: d.name, clips: files.filter((f) => VIDEO.test(f) && !f.startsWith(".")).length });
-  }
-  return out.sort((a, b) => b.id.localeCompare(a.id));
+function httpError(status, message) {
+  return Object.assign(new Error(message), { status });
 }
 
 async function readJson(path, fallback) {
@@ -95,53 +86,136 @@ async function writeJson(path, data) {
   await rename(tmp, path);
 }
 
-async function clipNames(id) {
-  const files = await readdir(join(shootDir(id), "originals")).catch(() => {
-    throw httpError(404, "no such shoot");
-  });
-  return files.filter((f) => VIDEO.test(f) && !f.startsWith(".")).sort();
+const stemOf = (name) => name.slice(0, name.length - extname(name).length);
+const isVideo = (f) => VIDEO.test(f) && !f.startsWith(".");
+const CAMERA_ID = /^camera:(\d{4}-\d{2}-\d{2})$/;
+const FOLDER_ID = /^[A-Za-z0-9_-][\w.-]*$/;
+
+// The card's listing, read at most every few seconds so polling stays cheap and a plugged-in camera shows up quickly.
+let cardCache = null;
+async function card() {
+  if (cardCache && Date.now() - cardCache.at < 3000) return cardCache.days;
+  const days = await cameraDays(CAMERA);
+  cardCache = { at: Date.now(), days };
+  return days;
 }
 
-/** Camera metadata per clip, probed once and kept in <shoot>/.grade/meta.json by size and modification time. */
-async function metas(id, names) {
-  const file = join(shootDir(id), ".grade/meta.json");
+/**
+ * A source by id: where its clips are (`paths`, name → file) and where everything the app makes for it goes (`dir`).
+ * A camera day that isn't on the card (unplugged) is a 404.
+ */
+async function source(id) {
+  const cam = CAMERA_ID.exec(id);
+  if (cam) {
+    const list = (await card())?.get(cam[1]);
+    if (!list) throw httpError(404, `${CAMERA_NAME} isn't connected, or has no clips from ${cam[1]}`);
+    return { id, kind: "camera", label: cam[1], dir: join(ROOT, cam[1]), paths: new Map(list.map((c) => [c.name, c.path])) };
+  }
+  if (!FOLDER_ID.test(id) || id.includes("..")) throw httpError(400, "bad folder name");
+  const files = await readdir(join(ROOT, id, "originals")).catch(() => {
+    throw httpError(404, "no such folder");
+  });
+  const names = files.filter(isVideo).sort();
+  return { id, kind: "folder", label: id, dir: join(ROOT, id), paths: new Map(names.map((n) => [n, join(ROOT, id, "originals", n)])) };
+}
+
+const gradesFile = (src) => join(src.dir, "grades.json");
+const proxyFile = (src, name) => join(src.dir, ".grade/proxies", `${stemOf(name)}.mp4`);
+const thumbFile = (src, name) => join(src.dir, ".grade/thumbs", `${stemOf(name)}.jpg`);
+const gradedFile = (src, name) => join(src.dir, "graded", `${stemOf(name)}.mp4`);
+const sidecarFile = (src, name) => join(src.dir, "graded", `${stemOf(name)}.grade.json`);
+
+/** Clip stems with a graded file in a day's or folder's graded/ (with or without the app's .grade.json beside it). */
+async function gradedStems(dir) {
+  const files = await readdir(join(dir, "graded")).catch(() => []);
+  return new Set(files.filter((f) => f.endsWith(".mp4") && !f.startsWith(".")).map(stemOf));
+}
+
+/** Everything the picker lists: the camera's days, then the folders on this Mac, each with how many are graded. */
+async function library() {
+  const days = await card();
+  const camera = { name: CAMERA_NAME, path: CAMERA, mounted: Boolean(days), days: [] };
+  for (const [day, list] of [...(days ?? new Map())].sort((a, b) => b[0].localeCompare(a[0]))) {
+    const graded = await gradedStems(join(ROOT, day));
+    camera.days.push({ id: `camera:${day}`, label: day, clips: list.length, graded: list.filter((c) => graded.has(stemOf(c.name))).length });
+  }
+  const folders = [];
+  const dirs = (await readdir(ROOT, { withFileTypes: true }).catch(() => [])).filter((d) => d.isDirectory() && !d.name.startsWith("."));
+  for (const d of dirs) {
+    const files = await readdir(join(ROOT, d.name, "originals")).catch(() => null);
+    if (!files) continue;
+    const names = files.filter(isVideo);
+    const graded = await gradedStems(join(ROOT, d.name));
+    folders.push({ id: d.name, label: d.name, clips: names.length, graded: names.filter((n) => graded.has(stemOf(n))).length });
+  }
+  folders.sort((a, b) => b.id.localeCompare(a.id));
+  return { root: ROOT, luts: LUTS, camera, folders };
+}
+
+/** Camera metadata per clip, probed once (eight at a time) and kept in .grade/meta.json by size and modification time. */
+async function metas(src, names) {
+  const file = join(src.dir, ".grade/meta.json");
   const cache = await readJson(file, {});
   let changed = false;
   const out = {};
-  for (const name of names) {
-    const s = await stat(join(shootDir(id), "originals", name));
-    const hit = cache[name];
-    if (hit && hit.size === s.size && hit.mtimeMs === s.mtimeMs) out[name] = hit.meta;
-    else {
-      const meta = await probe(join(shootDir(id), "originals", name));
-      cache[name] = { size: s.size, mtimeMs: s.mtimeMs, meta };
-      out[name] = meta;
-      changed = true;
+  const todo = [...names];
+  async function worker() {
+    for (let name = todo.shift(); name !== undefined; name = todo.shift()) {
+      const s = await stat(src.paths.get(name));
+      const hit = cache[name];
+      if (hit && hit.size === s.size && hit.mtimeMs === s.mtimeMs && "still" in hit.meta) out[name] = hit.meta;
+      else {
+        out[name] = await probe(src.paths.get(name));
+        cache[name] = { size: s.size, mtimeMs: s.mtimeMs, meta: out[name] };
+        changed = true;
+      }
     }
   }
+  await Promise.all(Array.from({ length: 8 }, worker));
   if (changed) await writeJson(file, cache);
   return out;
 }
 
-const gradesFile = (id) => join(shootDir(id), "grades.json");
-const proxyFile = (id, name) => join(shootDir(id), ".grade/proxies", `${stemOf(name)}.mp4`);
-const thumbFile = (id, name) => join(shootDir(id), ".grade/thumbs", `${stemOf(name)}.jpg`);
-const gradedFile = (id, name) => join(shootDir(id), "graded", `${stemOf(name)}.mp4`);
-const sidecarFile = (id, name) => join(shootDir(id), "graded", `${stemOf(name)}.grade.json`);
-
-// ---- background jobs: proxies, exports, imports --------------------------------------------------------------------
+// ---- background jobs: thumbnails (automatic), previews (on request), exports ---------------------------------------
 
 const jobs = {
+  thumb: { queue: [], busy: 0, failed: {} },
   proxy: { queue: [], current: null, failed: {} },
   export: { queue: [], current: null, done: [], failed: [] },
-  import: { running: false, total: 0, done: 0, current: null, failed: [] },
 };
 const key = (id, name) => `${id}/${name}`;
+const jobOf = (src, name, meta) => ({ k: key(src.id, name), id: src.id, name, path: src.paths.get(name), dir: src.dir, meta });
 
-function queueProxy(id, name, meta) {
-  const k = key(id, name);
-  if (jobs.proxy.current?.k === k || jobs.proxy.queue.some((j) => j.k === k) || jobs.proxy.failed[k]) return;
-  jobs.proxy.queue.push({ k, id, name, meta });
+function queueThumb(src, name, meta) {
+  const job = jobOf(src, name, meta);
+  if (jobs.thumb.failed[job.k] || jobs.thumb.queue.some((j) => j.k === job.k)) return;
+  jobs.thumb.queue.push(job);
+  pumpThumbs();
+}
+function pumpThumbs() {
+  while (jobs.thumb.busy < 4 && jobs.thumb.queue.length) {
+    const job = jobs.thumb.queue.shift();
+    jobs.thumb.busy++;
+    makeThumb(job.path, join(job.dir, ".grade/thumbs", `${stemOf(job.name)}.jpg`), { still: job.meta.still, at: Math.min(1, job.meta.duration / 2) })
+      .catch((e) => {
+        jobs.thumb.failed[job.k] = String(e.message || e);
+      })
+      .finally(() => {
+        jobs.thumb.busy--;
+        pumpThumbs();
+      });
+  }
+}
+
+/** Ask for previews: they're made one at a time, the latest request first, so the clip you just picked comes next. */
+function queueProxies(src, names, meta) {
+  for (const name of [...names].reverse()) {
+    const job = jobOf(src, name, meta[name]);
+    if (jobs.proxy.current?.k === job.k) continue;
+    delete jobs.proxy.failed[job.k];
+    jobs.proxy.queue = jobs.proxy.queue.filter((j) => j.k !== job.k);
+    jobs.proxy.queue.unshift(job);
+  }
   pumpProxies();
 }
 let proxyBusy = false;
@@ -151,10 +225,9 @@ async function pumpProxies() {
   while (jobs.proxy.queue.length) {
     const job = jobs.proxy.queue.shift();
     jobs.proxy.current = job;
+    const dst = join(job.dir, ".grade/proxies", `${stemOf(job.name)}.mp4`);
     try {
-      const proxy = proxyFile(job.id, job.name);
-      await makeProxy(join(shootDir(job.id), "originals", job.name), proxy, job.meta);
-      await makeThumb(proxy, thumbFile(job.id, job.name), Math.min(1, job.meta.duration / 2));
+      if (!(await exists(dst))) await makeProxy(job.path, dst, job.meta);
     } catch (e) {
       jobs.proxy.failed[job.k] = String(e.message || e);
     }
@@ -184,25 +257,22 @@ async function pumpExports() {
   exportBusy = false;
 }
 
+/** Bake one clip's grade from its original, wherever that is, and write only the graded copy and its record. */
 async function exportOne(id, name, onProgress) {
-  const meta = (await metas(id, [name]))[name];
+  const src = await source(id);
+  if (!src.paths.has(name)) throw new Error(`${name} isn't in ${src.label} anymore`);
+  const meta = (await metas(src, [name]))[name];
   const available = (await bases())[meta.profile];
-  const grade = resolveGrade((await readJson(gradesFile(id), { clips: {} })).clips?.[name], available.map((b) => b.id));
+  const grade = resolveGrade((await readJson(gradesFile(src), { clips: {} })).clips?.[name], available.map((b) => b.id));
   const base = available.find((b) => b.id === grade.base);
-  const lut = composeLut({
-    profile: meta.profile,
-    grade,
-    shotK: meta.cameraKelvin,
-    base: base.file ? await loadCube(base.file) : null,
-    size: EXPORT_LUT_SIZE,
-  });
+  const lut = composeLut({ profile: meta.profile, grade, shotK: meta.cameraKelvin, base: base.file ? await loadCube(base.file) : null, size: EXPORT_LUT_SIZE });
   const stem = stemOf(name);
-  const cube = join(shootDir(id), "graded/luts", `${stem}.cube`);
+  const cube = join(src.dir, "graded/luts", `${stem}.cube`);
   await mkdir(dirname(cube), { recursive: true });
   await writeFile(cube, writeCube(EXPORT_LUT_SIZE, lut, `${stem} · ${base.name} · grade app`));
-  await exportClip({ src: join(shootDir(id), "originals", name), dst: gradedFile(id, name), cube, matrix: meta.matrix, duration: meta.duration, onProgress });
-  await writeJson(sidecarFile(id, name), {
-    source: `originals/${name}`,
+  await exportClip({ src: src.paths.get(name), dst: gradedFile(src, name), cube, matrix: meta.matrix, duration: meta.duration, onProgress });
+  await writeJson(sidecarFile(src, name), {
+    source: src.kind === "camera" ? `${CAMERA_NAME}: ${relative(dirname(CAMERA), src.paths.get(name))}` : `originals/${name}`,
     graded: `graded/${stem}.mp4`,
     lut: `graded/luts/${stem}.cube`,
     profile: meta.profile,
@@ -213,48 +283,6 @@ async function exportOne(id, name, onProgress) {
     exportedAt: new Date().toISOString(),
     tool: "scripts/grade",
   });
-}
-
-/** Import one shoot day's new clips off the camera. Marked running at once, so a poll right after sees it. */
-async function runImport(shoot) {
-  const j = jobs.import;
-  if (j.running) return;
-  Object.assign(j, { running: true, shoot, total: 0, done: 0, current: null, failed: [] });
-  try {
-    const list = ((await cameraClips(CAMERA, ROOT)) ?? []).filter((c) => c.shoot === shoot);
-    j.total = list.length;
-    for (const clip of list) {
-      j.current = clip.name;
-      try {
-        await importClip(clip);
-      } catch (e) {
-        j.failed.push({ name: clip.name, error: String(e.message || e) });
-      }
-      j.done++;
-    }
-  } catch (e) {
-    j.failed.push({ name: shoot, error: String(e.message || e) });
-  } finally {
-    Object.assign(j, { running: false, current: null });
-    cameraCache = null;
-  }
-}
-
-let cameraCache = null;
-async function cameraStatus() {
-  if (cameraCache && Date.now() - cameraCache.at < 5000) return cameraCache.value;
-  const list = await cameraClips(CAMERA, ROOT).catch(() => null);
-  const byShoot = {};
-  for (const c of list ?? []) {
-    byShoot[c.shoot] ??= { shoot: c.shoot, clips: 0, bytes: 0 };
-    byShoot[c.shoot].clips++;
-    byShoot[c.shoot].bytes += c.size;
-  }
-  const value = list
-    ? { mounted: true, newClips: list.length, shoots: Object.values(byShoot).sort((a, b) => b.shoot.localeCompare(a.shoot)) }
-    : { mounted: false, newClips: 0, shoots: [] };
-  cameraCache = { at: Date.now(), value };
-  return value;
 }
 
 // The decoder calibration clip and what ffmpeg reads from it, made once per library (version bumps remake it).
@@ -279,9 +307,6 @@ function calibrationData() {
 
 // ---- HTTP -----------------------------------------------------------------------------------------------------------
 
-function httpError(status, message) {
-  return Object.assign(new Error(message), { status });
-}
 function send(res, status, body, type = "application/json") {
   const data = type === "application/json" ? JSON.stringify(body) : body;
   res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
@@ -323,33 +348,43 @@ async function serveFile(req, res, path, cache = "no-cache") {
   createReadStream(path).pipe(res);
 }
 
+/** A clip's preview: ready, being made, waiting, failed, or not asked for yet. */
 function proxyState(k, ready) {
   if (ready) return "ready";
   if (jobs.proxy.failed[k]) return "failed";
   if (jobs.proxy.current?.k === k) return "working";
-  return "queued";
+  if (jobs.proxy.queue.some((j) => j.k === k)) return "queued";
+  return "none";
 }
 
-async function shootPayload(id) {
-  const names = await clipNames(id);
-  const meta = await metas(id, names);
-  const grades = (await readJson(gradesFile(id), { clips: {} })).clips ?? {};
+async function sourcePayload(id) {
+  const src = await source(id);
+  const names = [...src.paths.keys()];
+  const meta = await metas(src, names);
+  const grades = (await readJson(gradesFile(src), { clips: {} })).clips ?? {};
+  const graded = await gradedStems(src.dir);
   const clips = [];
   for (const name of names) {
     const k = key(id, name);
-    const ready = await exists(thumbFile(id, name));
-    if (!ready) queueProxy(id, name, meta[name]);
-    const sidecar = await readJson(sidecarFile(id, name), null);
+    const thumb = await exists(thumbFile(src, name));
+    if (!thumb) queueThumb(src, name, meta[name]);
+    let exported = null;
+    if (graded.has(stemOf(name))) {
+      // A graded file without the app's record (made by hand) counts as graded; its grade just isn't known.
+      const sidecar = await readJson(sidecarFile(src, name), null);
+      exported = sidecar ? { key: sidecar.key, at: sidecar.exportedAt } : { key: null, at: (await stat(gradedFile(src, name))).mtime.toISOString() };
+    }
     clips.push({
       name,
       stem: stemOf(name),
       ...meta[name],
-      proxy: proxyState(k, ready),
+      thumb,
+      proxy: proxyState(k, await exists(proxyFile(src, name))),
       proxyError: jobs.proxy.failed[k] ?? null,
-      exported: sidecar && (await exists(gradedFile(id, name))) ? { key: sidecar.key, at: sidecar.exportedAt } : null,
+      exported,
     });
   }
-  return { id, clips, grades };
+  return { id, kind: src.kind, label: src.label, clips, grades };
 }
 
 async function route(req, res) {
@@ -363,7 +398,7 @@ async function route(req, res) {
   if (p === "/color.mjs") return serveFile(req, res, join(here, "color.mjs"));
   if (/^\/ui\/\w[\w.-]*$/.test(p)) return serveFile(req, res, join(here, p));
 
-  if (p === "/api/library" && req.method === "GET") return send(res, 200, { root: ROOT, luts: LUTS, shoots: await shoots(), camera: await cameraStatus() });
+  if (p === "/api/library" && req.method === "GET") return send(res, 200, await library());
   if (p === "/api/bases" && req.method === "GET") return send(res, 200, await bases());
   if (p === "/api/calibration" && req.method === "GET") {
     const { expected } = await calibrationData();
@@ -374,24 +409,31 @@ async function route(req, res) {
     return serveFile(req, res, calibrationVideo);
   }
 
-  let m = /^\/api\/shoots\/([^/]+)$/.exec(p);
-  if (m && req.method === "GET") return send(res, 200, await shootPayload(m[1]));
+  let m = /^\/api\/sources\/([^/]+)$/.exec(p);
+  if (m && req.method === "GET") return send(res, 200, await sourcePayload(m[1]));
 
-  m = /^\/api\/shoots\/([^/]+)\/grades$/.exec(p);
+  m = /^\/api\/sources\/([^/]+)\/grades$/.exec(p);
   if (m && req.method === "PUT") {
-    const id = m[1];
-    const names = await clipNames(id);
+    const src = await source(m[1]);
     const incoming = (await body(req)).clips ?? {};
-    const file = await readJson(gradesFile(id), { version: 1, clips: {} });
+    const file = await readJson(gradesFile(src), { version: 1, clips: {} });
     file.version = 1;
     file.clips ??= {};
     for (const [name, grade] of Object.entries(incoming)) {
-      if (!names.includes(name)) throw httpError(400, `unknown clip ${name}`);
+      if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
       file.clips[name] = grade;
     }
     file.updatedAt = new Date().toISOString();
-    await writeJson(gradesFile(id), file);
+    await writeJson(gradesFile(src), file);
     return send(res, 200, { ok: true });
+  }
+
+  m = /^\/api\/sources\/([^/]+)\/prepare$/.exec(p);
+  if (m && req.method === "POST") {
+    const src = await source(m[1]);
+    const names = ((await body(req)).names ?? []).filter((n) => src.paths.has(n)).slice(0, 50);
+    queueProxies(src, names, await metas(src, names));
+    return send(res, 200, { queued: names.length });
   }
 
   m = /^\/api\/lut\/(\w+)\/([^/]+)$/.exec(p);
@@ -406,37 +448,30 @@ async function route(req, res) {
   m = /^\/media\/([^/]+)\/(proxy|thumb)\/([^/]+)$/.exec(p);
   if (m) {
     const [, id, kind, file] = m;
-    const name = (await clipNames(id)).find((n) => stemOf(n) === stemOf(file));
+    const src = await source(id);
+    const name = [...src.paths.keys()].find((n) => stemOf(n) === stemOf(file));
     if (!name) throw httpError(404, "no such clip");
-    return serveFile(req, res, kind === "proxy" ? proxyFile(id, name) : thumbFile(id, name));
+    return serveFile(req, res, kind === "proxy" ? proxyFile(src, name) : thumbFile(src, name));
   }
 
   if (p === "/api/export" && req.method === "POST") {
-    const { shoot, names } = await body(req);
-    const all = await clipNames(shoot);
+    const { source: id, names } = await body(req);
+    const src = await source(String(id));
     for (const name of names ?? []) {
-      if (!all.includes(name)) throw httpError(400, `unknown clip ${name}`);
-      if (jobs.export.current?.id === shoot && jobs.export.current?.name === name) continue;
-      if (!jobs.export.queue.some((j) => j.id === shoot && j.name === name)) jobs.export.queue.push({ id: shoot, name });
+      if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
+      if (jobs.export.current?.id === src.id && jobs.export.current?.name === name) continue;
+      if (!jobs.export.queue.some((j) => j.id === src.id && j.name === name)) jobs.export.queue.push({ id: src.id, name });
     }
-    jobs.export.failed = jobs.export.failed.filter((f) => !(f.id === shoot && (names ?? []).includes(f.name)));
+    jobs.export.failed = jobs.export.failed.filter((f) => !(f.id === src.id && (names ?? []).includes(f.name)));
     pumpExports();
     return send(res, 200, { queued: jobs.export.queue.length });
   }
 
-  if (p === "/api/import" && req.method === "POST") {
-    const { shoot } = await body(req);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(shoot))) throw httpError(400, "pick a shoot day to import");
-    if (jobs.import.running) throw httpError(409, "an import is already running");
-    runImport(shoot);
-    return send(res, 200, { started: true });
-  }
-
   if (p === "/api/jobs" && req.method === "GET")
     return send(res, 200, {
+      thumbs: jobs.thumb.queue.length + jobs.thumb.busy,
       proxy: { queued: jobs.proxy.queue.length, current: jobs.proxy.current && { id: jobs.proxy.current.id, name: jobs.proxy.current.name } },
       export: jobs.export,
-      import: jobs.import,
     });
 
   throw httpError(404, "not found");
@@ -457,6 +492,6 @@ const server = createServer(async (req, res) => {
 await mkdir(ROOT, { recursive: true });
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;
-  console.log(`grade: ${address}  (library ${ROOT}, LUTs ${LUTS})`);
+  console.log(`grade: ${address}  (library ${ROOT}, camera ${CAMERA}, LUTs ${LUTS})`);
   if (process.argv.includes("--open")) execFile("open", [address], () => {});
 });
