@@ -150,6 +150,8 @@ export class Viewer {
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    // 8-bit even for a 10-bit original: Chrome hands video to WebGL at 8 bits whatever the texture format (measured:
+    // a half-float upload of a 10-bit HEVC frame shows exactly the 8-bit upload's levels).
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
     this.hasFrame = true;
   }

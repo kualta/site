@@ -323,7 +323,7 @@ async function body(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
-const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css", ".mp4": "video/mp4", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css", ".mp4": "video/mp4", ".mov": "video/quicktime", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
 
 /** A file, with single-range support so the browser can seek video. */
 async function serveFile(req, res, path, cache = "no-cache") {
@@ -445,13 +445,15 @@ async function route(req, res) {
     return res.end(Buffer.from(lut.data.buffer, lut.data.byteOffset, lut.data.byteLength));
   }
 
-  m = /^\/media\/([^/]+)\/(proxy|thumb)\/([^/]+)$/.exec(p);
+  // A clip's preview proxy, its thumbnail, or the original itself (full-quality preview, streamed off the card).
+  m = /^\/media\/([^/]+)\/(proxy|thumb|original)\/([^/]+)$/.exec(p);
   if (m) {
     const [, id, kind, file] = m;
     const src = await source(id);
     const name = [...src.paths.keys()].find((n) => stemOf(n) === stemOf(file));
     if (!name) throw httpError(404, "no such clip");
-    return serveFile(req, res, kind === "proxy" ? proxyFile(src, name) : thumbFile(src, name));
+    const path = { proxy: () => proxyFile(src, name), thumb: () => thumbFile(src, name), original: () => src.paths.get(name) }[kind]();
+    return serveFile(req, res, path);
   }
 
   if (p === "/api/export" && req.method === "POST") {

@@ -108,6 +108,10 @@ test.if(usable)("reads a camera day straight off the card: metadata, thumbnails 
   expect(px[0]).toBeGreaterThan(200);
   expect(px[2]).toBeLessThan(60);
   expect(readdirSync(join(camera, "DJI_001")).sort()).toEqual([withStill, noStill].sort());
+  // Full-quality preview streams the original straight off the card, seekable.
+  const original = await fetch(url(`/media/${encodeURIComponent(camId)}/original/${noStill}`), { headers: { Range: "bytes=10-109" } });
+  expect(original.status).toBe(206);
+  expect(Buffer.from(await original.arrayBuffer())).toEqual(readFileSync(join(camera, "DJI_001", noStill)).subarray(10, 110));
 });
 
 test.if(usable)("makes previews only on request", async () => {
