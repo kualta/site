@@ -366,15 +366,17 @@ async function refreshSource() {
   }
 }
 
-/** Ask for previews of the clips you're looking at, the one shown first. They're made off the card on request. */
+/**
+ * Ask for a preview of the clip on screen, made off the card on request. Only that one: selecting a whole day to grade
+ * it at once must not set off hundreds of previews read off the card.
+ */
 let prepareTimer = null;
 function prepareSelection() {
   clearTimeout(prepareTimer);
   prepareTimer = setTimeout(async () => {
-    // Full quality plays originals, so only clips that fall back (HLG) still need a proxy made.
-    const names = [state.primary, ...[...state.selected].filter((n) => n !== state.primary)].filter(
-      (n) => n && state.byName.get(n)?.proxy !== "ready" && !playsOriginal(state.byName.get(n)),
-    );
+    // Full quality plays originals, so only a clip that falls back (HLG) still needs a proxy made.
+    const clip = primaryClip();
+    const names = clip && clip.proxy !== "ready" && !playsOriginal(clip) ? [clip.name] : [];
     if (!names.length || !state.source) return;
     try {
       await api(`/api/sources/${encodeURIComponent(state.source)}/prepare`, { method: "POST", json: { names } });
@@ -940,21 +942,26 @@ function pasteGrade() {
 
 // More than this many clips at once asks for a second click: a day on the card can hold hundreds.
 const CONFIRM_OVER = 10;
+
+/** Ask for a second click on `button` within four seconds before exporting `count` clips. */
+function arm(button, count) {
+  disarm();
+  (button.querySelector("span") ?? button).textContent = `Click again to export ${count} clips`;
+  armed = { button, timer: setTimeout(disarm, 4000) };
+}
+
+/** Drop a pending confirmation; the buttons get their own labels back. */
+function disarm() {
+  if (!armed) return;
+  clearTimeout(armed.timer);
+  armed = null;
+  updateRows();
+}
+
 async function exportNames(names, button) {
   if (!names.length) return;
-  if (names.length > CONFIRM_OVER && armed?.button !== button) {
-    clearTimeout(armed?.timer);
-    const label = button.querySelector("span") ?? button;
-    const text = label.textContent;
-    label.textContent = `Click again to export ${names.length} clips`;
-    armed = { button, timer: setTimeout(() => {
-      label.textContent = text;
-      armed = null;
-    }, 4000) };
-    return;
-  }
-  clearTimeout(armed?.timer);
-  armed = null;
+  if (names.length > CONFIRM_OVER && armed?.button !== button) return arm(button, names.length);
+  disarm();
   await save();
   try {
     await api("/api/export", { method: "POST", json: { source: state.source, names } });
