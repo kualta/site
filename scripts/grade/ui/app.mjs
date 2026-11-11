@@ -115,6 +115,17 @@ const label = (clip) => {
 const primaryClip = () => state.byName.get(state.primary);
 const exporting = (clip) => state.jobs?.export.current?.id === state.source && state.jobs.export.current.name === clip.name;
 const queued = (clip) => state.jobs?.export.queue.some((j) => j.id === state.source && j.name === clip.name);
+/** An export button waiting for its confirming second click ({ button, timer }), or null. */
+let armed = null;
+
+/**
+ * What "Re-export N changed" exports, and what it counts: clips that already have a graded copy whose grade has
+ * moved since. Never-graded clips are left out (a camera day can hold hundreds); they're exported by selecting them.
+ */
+function needsReexport(clip) {
+  return Boolean(clip.exported) && stale(clip) && !exporting(clip) && !queued(clip);
+}
+
 /** Whether a clip needs exporting: never graded, or graded with a different grade than it has now. */
 function stale(clip) {
   if (!clip.exported) return true;
@@ -436,13 +447,13 @@ function updateRows() {
   $("clip-count").textContent = n > 1 ? `${n} selected` : `${graded} of ${state.clips.length} graded`;
   $("select-all").textContent = n === visibleClips().length && n > 1 ? "Select one" : "Select all";
   for (const b of document.querySelectorAll("#filter button")) b.setAttribute("aria-pressed", String(b.dataset.filter === state.filter));
-  // Graded clips that changed since their export; ungraded ones are exported by selecting them.
-  const changed = state.clips.filter((c) => c.exported && stale(c) && !exporting(c) && !queued(c)).length;
+  const changed = state.clips.filter(needsReexport).length;
   const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted !== false;
   const btn = $("export");
   btn.disabled = changed === 0 || !reachable;
-  $("export-label").textContent = changed ? `Re-export ${changed} changed` : "All up to date";
-  $("export-selected").textContent = n > 1 ? `Export ${n} selected` : "Export this clip";
+  // A button waiting for its confirming second click keeps its prompt.
+  if (armed?.button !== $("export")) $("export-label").textContent = changed ? `Re-export ${changed} changed` : "All up to date";
+  if (armed?.button !== $("export-selected")) $("export-selected").textContent = n > 1 ? `Export ${n} selected` : "Export this clip";
   $("export-selected").disabled = n === 0 || !reachable;
 }
 
@@ -927,18 +938,43 @@ function pasteGrade() {
 
 // ---- export, jobs, camera -----------------------------------------------------------------------------------------
 
-async function exportNames(names) {
+// More than this many clips at once asks for a second click: a day on the card can hold hundreds.
+const CONFIRM_OVER = 10;
+async function exportNames(names, button) {
   if (!names.length) return;
+  if (names.length > CONFIRM_OVER && armed?.button !== button) {
+    clearTimeout(armed?.timer);
+    const label = button.querySelector("span") ?? button;
+    const text = label.textContent;
+    label.textContent = `Click again to export ${names.length} clips`;
+    armed = { button, timer: setTimeout(() => {
+      label.textContent = text;
+      armed = null;
+    }, 4000) };
+    return;
+  }
+  clearTimeout(armed?.timer);
+  armed = null;
   await save();
   try {
     await api("/api/export", { method: "POST", json: { source: state.source, names } });
   } catch (e) {
     return showError(e);
   }
+  updateRows();
   poll();
 }
-$("export").addEventListener("click", () => exportNames(state.clips.filter((c) => stale(c) && !exporting(c) && !queued(c)).map((c) => c.name)));
-$("export-selected").addEventListener("click", () => exportNames([...state.selected]));
+$("export").addEventListener("click", () => exportNames(state.clips.filter(needsReexport).map((c) => c.name), $("export")));
+$("export-selected").addEventListener("click", () => exportNames([...state.selected], $("export-selected")));
+$("stop-export").addEventListener("click", async () => {
+  try {
+    const { stopped } = await (await api("/api/export/stop", { method: "POST" })).json();
+    setStatus(`Stopped exporting: ${stopped} clip${stopped === 1 ? "" : "s"} not exported`);
+  } catch (e) {
+    showError(e);
+  }
+  poll();
+});
 
 let statusNote = "";
 let statusTimer = null;
@@ -958,6 +994,7 @@ function showError(e) {
 function renderStatus() {
   const j = state.jobs;
   const parts = [];
+  $("stop-export").hidden = !(j?.export.current || j?.export.queue.length);
   if (state.source?.startsWith("camera:") && state.library && !state.library.camera.mounted)
     parts.push(`${state.library.camera.name} disconnected: plug it in to preview and export; graded copies stay on the Mac`);
   if (j?.export.current) {
