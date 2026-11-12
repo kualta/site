@@ -763,7 +763,7 @@ function updatePanel() {
   const clip = primaryClip();
   const n = state.selected.size;
   const disabled = !clip;
-  for (const el of document.querySelectorAll(".panel input, .panel select, #copy, #reset, [data-reset-group]")) el.disabled = disabled;
+  for (const el of document.querySelectorAll(".panel input, .panel select, .look-step, #copy, #reset, [data-reset-group]")) el.disabled = disabled;
   $("paste").disabled = disabled || !state.clipboard;
   if (!clip) {
     $("editing").textContent = "Nothing selected";
@@ -840,6 +840,17 @@ function updatePanel() {
 }
 
 $("base").addEventListener("change", (e) => setField("base", e.target.value));
+
+/** Move the look `delta` places through the picker's own order, wrapping at the ends. */
+function stepLook(delta) {
+  const sel = $("base");
+  const ids = [...sel.options].map((o) => o.value);
+  if (!ids.length) return;
+  const i = Math.max(0, ids.indexOf(sel.value));
+  setField("base", ids[(i + delta + ids.length) % ids.length]);
+}
+$("base-prev").addEventListener("click", () => stepLook(-1));
+$("base-next").addEventListener("click", () => stepLook(1));
 
 const dirty = new Set();
 let saveTimer = null;

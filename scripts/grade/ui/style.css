@@ -75,6 +75,10 @@ svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
 .select select:hover { background: var(--hover); }
 .select svg { position: absolute; right: 8px; width: 14px; height: 14px; pointer-events: none; color: var(--ink-2); }
 .select.wide { display: flex; width: 100%; }
+.look-pick { display: flex; gap: 6px; }
+.look-pick .select { flex: 1; min-width: 0; }
+.btn.look-step { width: var(--h); padding: 0; flex: none; color: var(--ink-2); }
+.btn.look-step:hover:not(:disabled) { color: var(--ink); }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
 kbd {
   font-family: var(--ui); font-size: 11px; min-width: 20px; height: 19px; padding: 0 5px; display: inline-grid; place-items: center;
