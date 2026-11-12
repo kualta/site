@@ -97,6 +97,8 @@ const state = {
   error: null,
   input: null,
   filter: ["all", "graded", "ungraded"].includes(store.get("grade.filter")) ? store.get("grade.filter") : "all",
+  // Export quality in percent, 100 (near lossless) each time the app opens.
+  quality: 100,
 };
 
 const viewer = new Viewer($("canvas"));
@@ -463,12 +465,16 @@ function updateRows() {
   for (const b of document.querySelectorAll("#filter button")) b.setAttribute("aria-pressed", String(b.dataset.filter === state.filter));
   const changed = state.clips.filter(needsReexport).length;
   const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted !== false;
-  const btn = $("export");
-  btn.disabled = changed === 0 || !reachable;
+  const exportButton = $("export");
+  exportButton.disabled = n === 0 || !reachable;
+  exportButton.title = n > 1 ? `Export the ${n} selected clips` : "Export this clip";
+  const again = $("export-changed");
+  again.disabled = changed === 0 || !reachable;
   // A button waiting for its confirming second click keeps its prompt.
-  if (armed?.button !== $("export")) $("export-label").textContent = changed ? `Re-export ${changed} changed` : "All up to date";
-  if (armed?.button !== $("export-selected")) $("export-selected").textContent = n > 1 ? `Export ${n} selected` : "Export this clip";
-  $("export-selected").disabled = n === 0 || !reachable;
+  if (armed?.button !== exportButton) $("export-label").textContent = "Export";
+  if (armed?.button !== again) again.textContent = changed ? `Re-export ${changed} changed` : "All up to date";
+  $("export-frame").disabled = !primaryClip() || !reachable;
+  if (!$("export-menu").hidden) renderQuality();
 }
 
 $("clip-list").addEventListener("click", (e) => {
@@ -950,15 +956,73 @@ async function exportNames(names, button) {
   disarm();
   await save();
   try {
-    await api("/api/export", { method: "POST", json: { source: state.source, names } });
+    await api("/api/export", { method: "POST", json: { source: state.source, names, quality: state.quality } });
   } catch (e) {
     return showError(e);
   }
   updateRows();
   poll();
 }
-$("export").addEventListener("click", () => exportNames(state.clips.filter(needsReexport).map((c) => c.name), $("export")));
-$("export-selected").addEventListener("click", () => exportNames([...state.selected], $("export-selected")));
+
+/** Save the frame on screen, graded, as a full-size PNG beside the clip's export. */
+async function exportFrame() {
+  const clip = primaryClip();
+  if (!clip || !state.source) return;
+  const frame = Math.floor(video.currentTime * clip.fps + 1e-3);
+  await save();
+  setStatus(`Exporting frame ${frame} of ${label(clip).title}…`, { first: true });
+  try {
+    const res = await api("/api/export-frame", { method: "POST", json: { source: state.source, name: clip.name, frame } });
+    const { file } = await res.json();
+    setStatus(`Saved frame ${frame} of ${label(clip).title} as ${file}`, { first: true });
+  } catch (e) {
+    showError(e);
+  }
+}
+
+/** What exporting the selection at the menu's quality comes to: its size below 100%, and a badge on Export. */
+function renderQuality() {
+  const q = state.quality;
+  $("quality-out").textContent = `${q}%`;
+  $("quality-rail").style.setProperty("--b", `${((q - 10) / 90) * 100}%`);
+  $("export-quality").hidden = q === 100;
+  $("export-quality").textContent = `${q}%`;
+  if (q === 100) {
+    $("quality-size").textContent = "Near lossless";
+    return;
+  }
+  const clips = [...state.selected].map((n) => state.byName.get(n)).filter(Boolean);
+  // Below 100% the video gets q% of the original's bitrate and the sound is copied, so the size is known.
+  const bitsPerSecond = (c) => ((c.videoBitrate ?? 0) * q) / 100 + (c.audioBitrate ?? 0);
+  const bytes = clips.reduce((sum, c) => sum + (bitsPerSecond(c) * c.duration) / 8, 0);
+  const which = clips.length === 1 ? "this clip" : `the ${clips.length} selected`;
+  $("quality-size").textContent = clips.length ? `≈ ${fileSize(bytes)} for ${which}` : "";
+}
+
+const exportMenu = $("export-menu");
+function setExportMenu(open) {
+  exportMenu.hidden = !open;
+  $("export-more").setAttribute("aria-expanded", String(open));
+  if (open) renderQuality();
+}
+$("export-more").addEventListener("click", () => setExportMenu(exportMenu.hidden));
+document.addEventListener("pointerdown", (e) => {
+  if (!exportMenu.hidden && !e.target.closest("#export-group")) setExportMenu(false);
+});
+$("export").addEventListener("click", () => exportNames([...state.selected], $("export")));
+$("export-changed").addEventListener("click", async () => {
+  await exportNames(state.clips.filter(needsReexport).map((c) => c.name), $("export-changed"));
+  // A long list waits for its second click with the menu still open.
+  if (armed?.button !== $("export-changed")) setExportMenu(false);
+});
+$("export-frame").addEventListener("click", () => {
+  setExportMenu(false);
+  exportFrame();
+});
+$("quality").addEventListener("input", (e) => {
+  state.quality = Number(e.target.value);
+  renderQuality();
+});
 $("stop-export").addEventListener("click", async () => {
   try {
     const { stopped } = await (await api("/api/export/stop", { method: "POST" })).json();
@@ -1098,7 +1162,10 @@ let heldMode = null;
 document.addEventListener("keydown", (e) => {
   const t = e.target;
   if (t.matches?.("select, textarea, input:not([type=range]):not([type=checkbox])")) return;
-  if (e.key === " " && !(t instanceof HTMLButtonElement)) {
+  if (e.key === "Escape" && !exportMenu.hidden) {
+    setExportMenu(false);
+    $("export-more").focus();
+  } else if (e.key === " " && !(t instanceof HTMLButtonElement)) {
     e.preventDefault();
     togglePlay();
   } else if ((e.key === "f" || e.key === "F") && !e.repeat && !e.metaKey && !e.ctrlKey) {

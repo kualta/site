@@ -28,13 +28,13 @@ const slowClips = ["DJI_20260207100000_0001_D.MP4", "DJI_20260207100100_0002_D.M
 let server;
 
 // A flat colour by default (the inversion check needs a flat patch); `busy` is a moving pattern that takes a while to
-// export, for stopping one midway.
-function clip(dst, gamma, { still = false, busy = false } = {}) {
+// export (20 s, or `seconds`), for stopping one midway.
+function clip(dst, gamma, { still = false, busy = false, seconds: busySeconds = 20 } = {}) {
   const plain = `${dst}.plain.mp4`;
-  const seconds = busy ? 20 : 1;
+  const seconds = busy ? busySeconds : 1;
   execFileSync(ffmpeg, [
     "-hide_banner", "-loglevel", "error", "-y",
-    "-f", "lavfi", "-i", busy ? "testsrc2=s=1280x720:r=24:d=20" : "color=c=0x507090:s=320x180:r=24:d=1",
+    "-f", "lavfi", "-i", busy ? `testsrc2=s=1280x720:r=24:d=${seconds}` : "color=c=0x507090:s=320x180:r=24:d=1",
     "-f", "lavfi", "-i", `sine=d=${seconds}`,
     "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac",
     "-metadata", `com.dji.camera.ColorGammaSxS=${gamma}`, "-metadata", "com.dji.camera.WhiteBalanceKelvin=5180",
@@ -149,7 +149,7 @@ test.if(usable)("exports a Mac folder's clip with a record of what was applied",
     return body.clips[0].exported && body;
   });
   const sidecar = JSON.parse(readFileSync(join(lib, folder, "graded/DJI_20260203101500_0007_D.grade.json"), "utf8"));
-  expect(sidecar).toMatchObject({ source: `originals/${name}`, key: gradeKey(grade) });
+  expect(sidecar).toMatchObject({ source: `originals/${name}`, key: gradeKey(grade), quality: 100 });
   expect(s.clips[0].exported.key).toBe(sidecar.key);
   expect(existsSync(join(lib, folder, sidecar.lut))).toBe(true);
   const graded = join(lib, folder, sidecar.graded);
@@ -247,3 +247,39 @@ test.if(usable)("trashes a card clip the cached listing still has after its MP4 
   expect((await res.json()).trashed).toEqual([lrf]);
   expect(readdirSync(dir)).toEqual([withStill]);
 });
+
+// A short moving clip of its own, for frames and sizes; its base is the inverting stand-in.
+const moving = "2026-02-13";
+const movingClip = "DJI_20260213100000_0001_D.MP4";
+const movingFile = () => join(lib, moving, "originals", movingClip);
+/** Frame `k` of a file as small RGB, read the way the export reads it (BT.709, limited range). */
+const frameAt = (file, k) =>
+  execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", file, "-vf", `select=eq(n\\,${k}),scale=160:90:flags=area:in_color_matrix=bt709:in_range=tv,format=rgb24`, "-frames:v", "1", "-f", "rawvideo", "-"]);
+const meanDiff = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0) / a.length;
+
+test.if(usable)("exports the frame on screen as a graded PNG: that very frame, through the clip's grade", async () => {
+  mkdirSync(join(lib, moving, "originals"), { recursive: true });
+  clip(movingFile(), "D-Log2", { busy: true, seconds: 3 });
+  const res = await api("/api/export-frame", { method: "POST", body: JSON.stringify({ source: moving, name: movingClip, frame: 12 }) });
+  expect(res.status).toBe(200);
+  const { file } = await res.json();
+  expect(file).toBe("graded/frames/DJI_20260213100000_0001_D_f0012.png");
+  const png = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", join(lib, moving, file), "-vf", "scale=160:90:flags=area,format=rgb24", "-f", "rawvideo", "-"]);
+  const inverted = (k) => frameAt(movingFile(), k).map((v) => 255 - v);
+  const [before, at, after] = [11, 12, 13].map((k) => meanDiff(png, inverted(k)));
+  expect(at).toBeLessThan(4);
+  expect(at).toBeLessThan(before);
+  expect(at).toBeLessThan(after);
+  expect((await api("/api/export-frame", { method: "POST", body: JSON.stringify({ source: moving, name: movingClip, frame: -1 }) })).status).toBe(400);
+});
+
+test.if(usable)("exports below full quality at the share of the original's bitrate it promises", async () => {
+  expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: moving, names: [movingClip], quality: 20 }) })).status).toBe(200);
+  await until(async () => (await json(`/api/sources/${moving}`)).clips[0].exported, 120_000);
+  const sidecar = JSON.parse(readFileSync(join(lib, moving, "graded/DJI_20260213100000_0001_D.grade.json"), "utf8"));
+  expect(sidecar.quality).toBe(20);
+  // The whole file against what the menu shows: a fifth of the original's video bitrate, plus its sound as is.
+  const [c] = (await json(`/api/sources/${moving}`)).clips;
+  const rate = (statSync(join(lib, moving, sidecar.graded)).size * 8) / c.duration;
+  expect(Math.abs(rate / (c.videoBitrate * 0.2 + c.audioBitrate) - 1)).toBeLessThan(0.3);
+}, 180_000);

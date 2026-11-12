@@ -13,7 +13,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { composeLut, gradeKey, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
-import { cameraDays, exportClip, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
+import { cameraDays, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = process.env.GRADE_ROOT || join(homedir(), "Movies/Pocket4P");
@@ -184,7 +184,7 @@ async function metas(src, names) {
     for (let name = todo.shift(); name !== undefined; name = todo.shift()) {
       const s = await stat(src.paths.get(name));
       const hit = cache[name];
-      if (hit && hit.size === s.size && hit.mtimeMs === s.mtimeMs && "still" in hit.meta) out[name] = hit.meta;
+      if (hit && hit.size === s.size && hit.mtimeMs === s.mtimeMs && "videoBitrate" in hit.meta) out[name] = hit.meta;
       else {
         out[name] = await probe(src.paths.get(name));
         cache[name] = { size: s.size, mtimeMs: s.mtimeMs, meta: out[name] };
@@ -271,6 +271,7 @@ async function pumpExports() {
       await exportOne(
         job.id,
         job.name,
+        job.quality,
         (p) => {
           jobs.export.current.progress = p;
         },
@@ -363,21 +364,40 @@ async function trashNow(src, names) {
  * is written beside its final name and moved into place only once the export has worked, so a failed or stopped
  * re-export leaves the previous export, its LUT and its record as they were.
  */
-async function exportOne(id, name, onProgress, signal) {
-  const src = await source(id);
-  if (!src.paths.has(name)) throw new Error(`${name} isn't in ${src.label} anymore`);
+/** A clip's saved grade as it will be applied, and the one LUT that bakes it (what the preview shows). */
+async function clipLut(src, name) {
   const meta = (await metas(src, [name]))[name];
   const available = (await bases())[meta.profile];
   const grade = resolveGrade((await readJson(gradesFile(src), { clips: {} })).clips?.[name], available.map((b) => b.id));
   const base = available.find((b) => b.id === grade.base);
   const lut = composeLut({ profile: meta.profile, grade, shotK: meta.cameraKelvin, base: base.file ? await loadCube(base.file) : null, size: EXPORT_LUT_SIZE });
+  return { meta, grade, base, cube: writeCube(EXPORT_LUT_SIZE, lut, `${stemOf(name)} · ${base.name} · grade app`) };
+}
+
+/** Export quality, a whole percent from 10 to 100 (full, near lossless). */
+const exportQuality = (q) => Math.min(100, Math.max(10, Math.round(Number(q) || 100)));
+
+async function exportOne(id, name, quality, onProgress, signal) {
+  const src = await source(id);
+  if (!src.paths.has(name)) throw new Error(`${name} isn't in ${src.label} anymore`);
+  const { meta, grade, base, cube: lut } = await clipLut(src, name);
   const stem = stemOf(name);
   const cube = join(src.dir, "graded/luts", `${stem}.cube`);
   const pending = join(src.dir, "graded/luts", `.${stem}.part.cube`);
   await mkdir(dirname(cube), { recursive: true });
-  await writeFile(pending, writeCube(EXPORT_LUT_SIZE, lut, `${stem} · ${base.name} · grade app`));
+  await writeFile(pending, lut);
   try {
-    await exportClip({ src: src.paths.get(name), dst: gradedFile(src, name), cube: pending, matrix: meta.matrix, duration: meta.duration, onProgress, signal });
+    await exportClip({
+      src: src.paths.get(name),
+      dst: gradedFile(src, name),
+      cube: pending,
+      matrix: meta.matrix,
+      duration: meta.duration,
+      quality,
+      videoBitrate: meta.videoBitrate,
+      onProgress,
+      signal,
+    });
   } catch (e) {
     await rm(pending, { force: true });
     throw e;
@@ -392,9 +412,30 @@ async function exportOne(id, name, onProgress, signal) {
     base: { id: base.id, name: base.name, file: base.file },
     grade,
     key: gradeKey(grade),
+    quality,
     exportedAt: new Date().toISOString(),
     tool: "scripts/grade",
   });
+}
+
+/**
+ * One frame of a clip, graded with its saved grade, as graded/frames/<clip>_f<frame>.png at full size. `frame` counts
+ * from 0; the seek lands a quarter frame early so ffmpeg keeps exactly that frame.
+ */
+async function frameOne(src, name, frame) {
+  const { meta, cube } = await clipLut(src, name);
+  const stem = stemOf(name);
+  const lut = join(src.dir, ".grade", `${stem}.frame.cube`);
+  const file = `graded/frames/${stem}_f${String(frame).padStart(4, "0")}.png`;
+  await mkdir(dirname(lut), { recursive: true });
+  await writeFile(lut, cube);
+  try {
+    const time = Math.max(0, (frame - 0.25) / (meta.fps || 24));
+    await exportFrame({ src: src.paths.get(name), dst: join(src.dir, file), cube: lut, matrix: meta.matrix, time });
+  } finally {
+    await rm(lut, { force: true });
+  }
+  return file;
 }
 
 // The decoder calibration clip and what ffmpeg reads from it, made once per library (version bumps remake it).
@@ -577,12 +618,15 @@ async function route(req, res) {
   }
 
   if (p === "/api/export" && req.method === "POST") {
-    const { source: id, names } = await body(req);
+    const { source: id, names, quality: q } = await body(req);
     const src = await source(String(id));
+    const quality = exportQuality(q);
     for (const name of names ?? []) {
       if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
       if (jobs.export.current?.id === src.id && jobs.export.current?.name === name) continue;
-      if (!jobs.export.queue.some((j) => j.id === src.id && j.name === name)) jobs.export.queue.push({ id: src.id, name });
+      const queued = jobs.export.queue.find((j) => j.id === src.id && j.name === name);
+      if (queued) queued.quality = quality;
+      else jobs.export.queue.push({ id: src.id, name, quality });
     }
     jobs.export.failed = jobs.export.failed.filter((f) => !(f.id === src.id && (names ?? []).includes(f.name)));
     pumpExports();
@@ -590,6 +634,14 @@ async function route(req, res) {
   }
 
   if (p === "/api/export/stop" && req.method === "POST") return send(res, 200, { stopped: stopExports() });
+
+  if (p === "/api/export-frame" && req.method === "POST") {
+    const { source: id, name, frame } = await body(req);
+    const src = await source(String(id));
+    if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
+    if (!Number.isInteger(frame) || frame < 0) throw httpError(400, "frame must be a whole number from 0");
+    return send(res, 200, { file: await frameOne(src, name, frame) });
+  }
 
   if (p === "/api/jobs" && req.method === "GET")
     return send(res, 200, {
