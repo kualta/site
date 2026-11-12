@@ -15,9 +15,9 @@ const ffmpeg = process.env.FFMPEG_PATH || ffmpegStatic;
 const shots = process.env.SCREENSHOT_DIR;
 const port = 8798;
 const root = mkdtempSync(path.join(tmpdir(), "grade-check-"));
-const videos = path.join(root, "Videos");
-const original = path.join(videos, "Original");
-const exported = path.join(videos, "Exported");
+const movies = path.join(root, "Movies");
+const original = path.join(movies, "Original");
+const exported = path.join(movies, "Exported");
 const data = path.join(root, "data");
 const name = "DJI_20260101120000_0001_D.MP4";
 mkdirSync(original, { recursive: true });
@@ -50,7 +50,7 @@ for (let b = 0, i = 0; b < size; b++)
 writeFileSync(path.join(data, "luts/dlog2-to-rec709-aces2.cube"), writeCube(size, base, "check base"));
 
 const server = spawn(process.execPath, ["scripts/grade/server.mjs"], {
-  env: { ...process.env, GRADE_ROOT: videos, GRADE_DATA: data, GRADE_CACHE: path.join(root, "cache"), GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port) },
+  env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: path.join(root, "cache"), GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port) },
   stdio: ["ignore", "pipe", "inherit"],
 });
 await new Promise((resolve, reject) => {
@@ -109,7 +109,7 @@ try {
   assert.deepEqual(readdirSync(exported), ["DJI_20260101120000_0001_D.mp4"], "Exported holds the export and nothing else");
 
   const frame = execFileSync(ffmpeg, [
-    "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", path.join(videos, record().file), "-frames:v", "1",
+    "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", path.join(movies, record().file), "-frames:v", "1",
     // accurate_rnd: swscale's default 8-bit YUV→RGB path reads limited range about 2 levels low.
     "-vf", `scale=${preview.w}:${preview.h}:in_color_matrix=bt709:in_range=tv:flags=accurate_rnd+full_chroma_int,format=rgb24`, "-f", "rawvideo", "-",
   ], { maxBuffer: 64 * 1024 * 1024 });
