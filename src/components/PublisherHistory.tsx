@@ -555,7 +555,7 @@ export default function PublisherHistory({
               const described = `${name}: ${label}`;
               const icon = <PlatformIcon platform={target.platform} size={16} />;
               return (
-                <li key={target.id} className="publisher-history-pill" data-tone={tone} data-platform={target.platform}>
+                <li key={target.id} className="publisher-history-pill" data-tone={tone}>
                   {tone === "ok" && target.url ? (
                     <a
                       href={target.url}
