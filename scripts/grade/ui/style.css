@@ -87,8 +87,6 @@ kbd {
 
 /* ---- top bar --------------------------------------------------------------------------------------------- */
 .bar { display: flex; align-items: center; gap: 14px; height: 48px; padding: 0 14px; border-bottom: 1px solid var(--line); background: var(--surface); min-width: 0; }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; letter-spacing: -0.01em; padding-right: 6px; }
-.logo { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(from 210deg, var(--cool), var(--green), var(--warm), var(--magenta), var(--cool)); box-shadow: inset 0 0 0 4px var(--surface); outline: 1px solid var(--line-2); }
 .bar-field { display: flex; align-items: center; gap: 8px; }
 .bar-field .select select { min-width: 170px; }
 .status { margin: 0 0 0 auto; color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -122,15 +120,13 @@ kbd {
 .title-row span { color: var(--ink-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .profile { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 4px; background: var(--line-2); color: var(--ink-2); white-space: nowrap; }
-.state { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .size { margin-left: auto; flex: none; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink-4); flex: none; }
-.state.ok { color: var(--ink-2); }
+/* A clip's state: a dot at the top right of its row (the words are its tooltip), padded so it's easy to hover. */
+.state { margin: -4px -4px -4px auto; padding: 4px; flex: none; align-self: center; display: inline-flex; }
+.state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink-4); }
 .state.ok::before { background: var(--ok); box-shadow: none; }
 .state.changed::before { background: var(--warn); box-shadow: none; }
 .state.busy::before { background: var(--mark); box-shadow: none; }
-.state.bad { color: var(--bad); }
-.state.bad::before { background: var(--bad); box-shadow: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .progress { position: absolute; left: 8px; right: 8px; bottom: 3px; height: 2px; border-radius: 1px; background: var(--line-2); overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--mark); transition: width .3s; }

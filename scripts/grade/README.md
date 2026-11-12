@@ -45,7 +45,7 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
 - **Exposure** in stops, **Temperature** in Kelvin (as if the camera had been set to it; it starts at the camera's
   own), **Tint** (+ magenta, − green), **Contrast** around 18% grey, **Saturation**. All of it happens in scene
   linear light before the look.
-- Select several clips (⌘-click, shift-click, Select all) and a change sets that control on all of them. Copy grade /
+- Select several clips (⌘-click, shift-click, Select all or ⌘A) and a change sets that control on all of them. Copy grade /
   Paste copies a whole grade.
 - **Split** and **Original** compare against the flat original; hold **B** to flash it. Space plays, ↑ ↓ change clip.
 - The preview plays the original itself at full resolution (streamed off the card), so focus and detail are as shot.
