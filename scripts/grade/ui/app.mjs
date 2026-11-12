@@ -111,6 +111,13 @@ const label = (clip) => {
   const m = /^DJI_\d{8}(\d{2})(\d{2})\d{2}_(\d+)/.exec(clip.stem);
   return m ? { title: m[3], time: `${m[1]}:${m[2]}` } : { title: clip.stem, time: "" };
 };
+/** A file size as Finder shows it (decimal units): 980 KB, 8.4 MB, 104 MB, 1.2 GB. */
+function fileSize(bytes) {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  if (bytes >= 1e7) return `${Math.round(bytes / 1e6)} MB`;
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
+}
 const primaryClip = () => state.byName.get(state.primary);
 const exporting = (clip) => state.jobs?.export.current?.id === state.source && state.jobs.export.current.name === clip.name;
 const queued = (clip) => state.jobs?.export.queue.some((j) => j.id === state.source && j.name === clip.name);
@@ -410,9 +417,10 @@ function renderList() {
     b.dataset.name = clip.name;
     const { title, time } = label(clip);
     b.innerHTML =
-      '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span></span><span class="sub-row"><span class="profile"></span><span class="state"></span></span></span><span class="progress" hidden><i></i></span>';
+      '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span></span><span class="sub-row"><span class="profile"></span><span class="state"></span><span class="size"></span></span></span><span class="progress" hidden><i></i></span>';
     b.querySelector("b").textContent = title;
     b.querySelector(".when").textContent = [time, `${clip.duration.toFixed(1)} s`].filter(Boolean).join(" · ");
+    b.querySelector(".size").textContent = clip.bytes ? fileSize(clip.bytes) : "";
     b.querySelector(".profile").textContent = PROFILE_NAMES[clip.profile];
     b.title = `${clip.name} · ${clip.width}×${clip.height}`;
     li.append(b);
@@ -435,10 +443,18 @@ function updateRows() {
     let kind = "ok";
     if (exporting(clip)) [text, kind] = [`exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
     else if (queued(clip)) [text, kind] = ["export queued", "busy"];
-    else if (!clip.exported) [text, kind] = ["not graded", ""];
+    else if (!clip.exported) [text, kind] = ["not graded", "none"];
     else if (stale(clip)) [text, kind] = ["changed since export", "changed"];
-    chip.textContent = text;
-    chip.className = `state ${kind}`.trim();
+    // Not graded is just its hollow ring; the words stay for screen readers and as a tooltip.
+    const iconOnly = kind === "none";
+    chip.className = `state ${kind}`;
+    chip.title = iconOnly ? "Not graded" : "";
+    if (iconOnly) {
+      const words = document.createElement("span");
+      words.className = "sr-only";
+      words.textContent = text;
+      chip.replaceChildren(words);
+    } else chip.textContent = text;
     const bar = b.querySelector(".progress");
     bar.hidden = !exporting(clip);
     if (!bar.hidden) bar.firstElementChild.style.width = `${(state.jobs.export.current.progress ?? 0) * 100}%`;

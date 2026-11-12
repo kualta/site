@@ -170,7 +170,10 @@ async function library() {
   return { root: ROOT, luts: LUTS, camera, folders };
 }
 
-/** Camera metadata per clip, probed once (eight at a time) and kept in .grade/meta.json by size and modification time. */
+/**
+ * Camera metadata per clip, probed once (eight at a time) and kept in .grade/meta.json by size and modification time,
+ * plus the file's size (`bytes`).
+ */
 async function metas(src, names) {
   const file = join(src.dir, ".grade/meta.json");
   const cache = await readJson(file, {});
@@ -187,6 +190,7 @@ async function metas(src, names) {
         cache[name] = { size: s.size, mtimeMs: s.mtimeMs, meta: out[name] };
         changed = true;
       }
+      out[name] = { ...out[name], bytes: s.size };
     }
   }
   await Promise.all(Array.from({ length: 8 }, worker));
