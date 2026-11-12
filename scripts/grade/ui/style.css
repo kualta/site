@@ -89,6 +89,27 @@ kbd {
 .bar { display: flex; align-items: center; gap: 14px; height: 48px; padding: 0 14px; border-bottom: 1px solid var(--line); background: var(--surface); min-width: 0; }
 .bar-field { display: flex; align-items: center; gap: 8px; }
 .bar-field .select select { min-width: 170px; }
+/* Export and its menu, joined as one split button at the right of the bar. */
+.split { position: relative; display: flex; flex: none; }
+.split > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#export-more { width: 28px; padding: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid rgba(0,0,0,.25); }
+#export:disabled + #export-more { background: var(--raised); color: var(--ink-2); border-color: var(--line-2); }
+#export:disabled + #export-more:hover { background: var(--hover); }
+.badge { font-size: 11px; font-weight: 600; padding: 0 5px; border-radius: 4px; background: rgba(0,0,0,.14); font-variant-numeric: tabular-nums; }
+.menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 264px; padding: 6px; display: grid; gap: 2px;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.menu-item {
+  display: grid; gap: 2px; padding: 7px 10px; border: 0; border-radius: var(--r); background: transparent; text-align: left;
+  font-size: 12.5px; cursor: pointer;
+}
+.menu-item:hover:not(:disabled) { background: var(--hover); }
+.menu-item:disabled { color: var(--ink-3); cursor: default; }
+.menu-note { margin: 0; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.menu-quality { display: grid; gap: 6px; margin-top: 4px; padding: 10px 10px 6px; border-top: 1px solid var(--line); }
+.menu-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 12.5px; }
+.menu-row output { color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .status { margin: 0 0 0 auto; color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ---- layout ---------------------------------------------------------------------------------------------- */

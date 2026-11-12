@@ -31,7 +31,19 @@
   </div>
   <p class="status" id="status" role="status"></p>
   <button id="stop-export" class="btn" type="button" hidden>Stop exporting</button>
-  <button id="export" class="btn primary" type="button" disabled title="Export again every graded clip whose grade changed since its export"><svg><use href="#i-export"/></svg><span id="export-label">All up to date</span></button>
+  <div class="split" id="export-group">
+    <button id="export" class="btn primary" type="button" disabled><svg><use href="#i-export"/></svg><span id="export-label">Export</span><span id="export-quality" class="badge" hidden></span></button>
+    <button id="export-more" class="btn primary" type="button" aria-label="More ways to export" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu"><svg><use href="#i-chevron"/></svg></button>
+    <div class="menu" id="export-menu" hidden>
+      <button id="export-frame" class="menu-item" type="button">Export frame<span class="menu-note">PNG of the frame on screen</span></button>
+      <button id="export-changed" class="menu-item" type="button" title="Export again every graded clip whose grade changed since its export">All up to date</button>
+      <div class="menu-quality">
+        <div class="menu-row"><label for="quality">Quality</label><output id="quality-out" for="quality">100%</output></div>
+        <span class="rail" id="quality-rail"><input type="range" id="quality" min="10" max="100" step="5" value="100"></span>
+        <p id="quality-size" class="menu-note">Near lossless</p>
+      </div>
+    </div>
+  </div>
 </header>
 
 <main class="work">
@@ -104,7 +116,6 @@
         <button id="paste" type="button" class="btn" disabled>Paste</button>
         <button id="reset" type="button" class="btn" title="Reset the whole grade"><svg><use href="#i-reset"/></svg>Reset</button>
       </div>
-      <button id="export-selected" type="button" class="btn wide">Export this clip</button>
     </section>
 
     <section class="group keys" aria-label="Shortcuts">

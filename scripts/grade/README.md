@@ -27,9 +27,10 @@ Each folder shows how many of its clips have a graded copy, and the clip list ca
   luts/                             GRADE_LUTS: base looks (below)
   2026-11-08/                       a shoot day (or a Mac folder's name)
     grades.json                     each clip's grade, saved as you work
-    graded/DJI_…_0234_D.mp4         the export: 8-bit H.264 BT.709, near lossless, sound copied
-    graded/DJI_…_0234_D.grade.json  what was applied: source, base, grade, key, LUT, camera white balance
+    graded/DJI_…_0234_D.mp4         the export: 8-bit H.264 BT.709, near lossless (or at the quality chosen), sound copied
+    graded/DJI_…_0234_D.grade.json  what was applied: source, base, grade, key, quality, LUT, camera white balance
     graded/luts/DJI_…_0234_D.cube   the exact LUT the export used
+    graded/frames/DJI_…_0234_D_f0102.png  Export frame: frame 102, graded, full size
     .grade/                         the app's cache: preview proxies, thumbnails, probed metadata
 ```
 
@@ -52,8 +53,11 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
   It is still 8-bit on screen, because Chrome hands video to WebGL at 8 bits even from a 10-bit file, so judge banding
   on an export. HLG clips play a 1280 px preview copy instead, so the browser can't tone-map them.
   **Full screen** (or **F**) gives the viewer and its transport the whole screen.
-- **Export this clip / Export N selected** bakes the selection; **Re-export N changed** bakes every graded clip whose
-  grade moved since its export. Exports come from the 10-bit originals (off the card, for a camera day) at 16-bit
+- **Export** (top right) bakes the selected clips. Its ∨ menu has **Export frame** (the frame on screen, graded, as a
+  full-size PNG in `graded/frames/`), **Re-export N changed** (every graded clip whose grade moved since its export)
+  and **Quality**: 100% (each time the app opens) is near lossless, whatever size that takes; below it the video gets
+  that share of the original's bitrate, so the menu can say the size first (50% ≈ half the original file), and
+  Export shows the percentage. Exports come from the 10-bit originals (off the card, for a camera day) at 16-bit
   precision, not from the preview. A camera day can't export while the camera is unplugged. Exporting more than ten
   clips at once asks for a second click; **Stop exporting** (top bar, while anything exports) drops the queue and
   stops the clip in progress, which leaves its previous export, LUT and record as they were.
@@ -98,8 +102,8 @@ P4P Neutral shares the D-Log2 tone curve exactly.
 both, sampled live on the GPU over a small proxy of the clip's own code values, and baked by ffmpeg from the
 original. On startup the browser decodes a grey ramp encoded like the proxies and compares it with ffmpeg; a decoder
 that lands more than 1.5 levels off gets corrected. `node scripts/check-grade.mjs` (not in CI; it needs WebGL; pass
-`CHROMIUM_PATH` and optionally `SCREENSHOT_DIR`) grades a synthetic clip, exports it, and checks the export against
-the preview: mean 0.8 of 255, 95% within 2.4.
+`CHROMIUM_PATH` and optionally `SCREENSHOT_DIR`) grades a synthetic clip, exports it and a frame of it, and checks
+both against the preview: mean 0.6 and 0.5 of 255, 95% within 2.
 
 ## Into OpenFilm
 

@@ -27,6 +27,8 @@ export async function probe(file) {
   const tags = info.format.tags ?? {};
   const [n, d] = String(v.avg_frame_rate || "0/1").split("/").map(Number);
   const kelvin = Number(tags["com.dji.camera.WhiteBalanceKelvin"]);
+  const a = info.streams.find((s) => s.codec_type === "audio");
+  const audioBitrate = Number(a?.bit_rate) || 0;
   return {
     width: v.width,
     height: v.height,
@@ -40,8 +42,11 @@ export async function probe(file) {
     iso: Number(tags["com.dji.camera.ExposureIndexAsa"]) || null,
     lens: tags["com.dji.camera.LensType"] || null,
     created: tags.creation_time || null,
-    audio: info.streams.some((s) => s.codec_type === "audio"),
+    audio: Boolean(a),
     still: still ? still.index : null,
+    // Bits per second, for exporting below full quality at a known size.
+    videoBitrate: Number(v.bit_rate) || Math.max(0, (Number(info.format.bit_rate) || 0) - audioBitrate),
+    audioBitrate,
   };
 }
 
@@ -144,20 +149,41 @@ export async function makeThumb(src, dst, { still = null, at = 1 } = {}) {
 
 /**
  * Bake a grade into a graded copy, from the 10-bit original at 16-bit precision: the clip's LUT through ffmpeg's
- * tetrahedral lut3d, out as 8-bit H.264 BT.709 near-lossless with a key frame every quarter second, sound copied.
+ * tetrahedral lut3d, out as 8-bit H.264 BT.709 with a key frame every quarter second, sound copied: near lossless at
+ * full `quality`, or a known share of the original's `videoBitrate` below it (exportRate).
  */
-export async function exportClip({ src, dst, cube, matrix = "bt709", duration, onProgress, signal }) {
+export async function exportClip({ src, dst, cube, matrix = "bt709", duration, quality = 100, videoBitrate = 0, onProgress, signal }) {
   await writeAtomically(dst, (tmp) =>
     run(
       [
         "-i", src,
         "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0",
-        "-vf", `scale=in_color_matrix=${matrix}:in_range=tv,format=gbrp16le,lut3d=file='${filterPath(cube)}':interp=tetrahedral,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv`,
-        "-c:v", "libx264", "-preset", "medium", "-crf", "12", "-force_key_frames", "expr:gte(t,n_forced*0.25)",
+        "-vf", `${gradeFilter(matrix, cube)},scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv`,
+        "-c:v", "libx264", "-preset", "medium", ...exportRate(quality, videoBitrate), "-force_key_frames", "expr:gte(t,n_forced*0.25)",
         "-c:a", "copy", "-movflags", "+faststart", tmp,
       ],
       { onProgress, duration, signal },
     ),
+  );
+}
+
+/** The original's code values, read as limited range at 16 bits, through a clip's grade LUT. */
+const gradeFilter = (matrix, cube) => `scale=in_color_matrix=${matrix}:in_range=tv,format=gbrp16le,lut3d=file='${filterPath(cube)}':interp=tetrahedral`;
+
+/**
+ * x264's rate for an export. Full quality (100) is near lossless, CRF 12, whatever size that takes; below it the video
+ * gets that share of the original's bitrate, so the file's size is known before it's made (50 ≈ half the original).
+ */
+export function exportRate(quality, videoBitrate) {
+  if (quality >= 100 || !videoBitrate) return ["-crf", "12"];
+  const rate = Math.round((videoBitrate * quality) / 100);
+  return ["-b:v", String(rate), "-maxrate", String(Math.round(rate * 1.5)), "-bufsize", String(rate * 2)];
+}
+
+/** One frame of a clip, graded, as a full-size 8-bit PNG: `time` in seconds lands on the frame it's in. */
+export async function exportFrame({ src, dst, cube, matrix = "bt709", time }) {
+  await writeAtomically(dst, (tmp) =>
+    run(["-ss", time.toFixed(6), "-i", src, "-map", "0:v:0", "-frames:v", "1", "-vf", `${gradeFilter(matrix, cube)},format=rgb24`, tmp]),
   );
 }
 
