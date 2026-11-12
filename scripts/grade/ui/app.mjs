@@ -301,7 +301,7 @@ async function drawThumb(clip) {
 
 // ---- library and sources ------------------------------------------------------------------------------------------
 
-/** Every source the picker can open: the camera's days (when it's plugged in), then the days in Videos/Original. */
+/** Every source the picker can open: the camera's days (when it's plugged in), then the days in Movies/Original. */
 const allSources = () => [...(state.library?.camera.days ?? []), ...(state.library?.folders ?? [])];
 const sourceInfo = (id) => allSources().find((s) => s.id === id);
 const sourceLabel = (s) => `${s.label} · ${s.clips} clip${s.clips === 1 ? "" : "s"}${s.graded ? ` · ${s.graded} graded` : ""}`;

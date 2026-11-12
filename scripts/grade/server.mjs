@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The grade app's local server. Clips come from sources, each a shoot day: the camera's card ("camera:2026-11-08",
-// read only, nothing is copied off it; ⌘⌫ only moves clips to the card's Trash) and ~/Videos/Original on this Mac
-// ("mac:2026-11-08"). Exports go to ~/Videos/Exported, which holds nothing else. The app's own files live apart: each
+// read only, nothing is copied off it; ⌘⌫ only moves clips to the card's Trash) and ~/Movies/Original on this Mac
+// ("mac:2026-11-08"). Exports go to ~/Movies/Exported, which holds nothing else. The app's own files live apart: each
 // clip's grade in one grades.json and what each export was made with in one exports.json (Application Support), the
 // metadata, thumbnails and previews it can remake in Caches. Clips are known by file name, so a clip graded off the
 // card and the same clip copied into Original share one grade and one export. Listens on 127.0.0.1 only.
@@ -16,9 +16,9 @@ import { composeLut, gradeKey, parseCube, PROFILES, resolveGrade, writeCube } fr
 import { cameraDays, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const VIDEOS = process.env.GRADE_ROOT || join(homedir(), "Videos");
-const ORIGINAL = join(VIDEOS, "Original");
-const EXPORTED = join(VIDEOS, "Exported");
+const MOVIES = process.env.GRADE_ROOT || join(homedir(), "Movies");
+const ORIGINAL = join(MOVIES, "Original");
+const EXPORTED = join(MOVIES, "Exported");
 const DATA = process.env.GRADE_DATA || join(homedir(), "Library/Application Support/Grade");
 const CACHE = process.env.GRADE_CACHE || join(homedir(), "Library/Caches/Grade");
 const LUTS = process.env.GRADE_LUTS || join(DATA, "luts");
@@ -131,7 +131,7 @@ const CAMERA_ID = /^camera:(\d{4}-\d{2}-\d{2})$/;
 const MAC_ID = /^mac:(\d{4}-\d{2}-\d{2})$/;
 const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-/** The clips in Videos/Original by shoot day: the recording date in a DJI name, or else the file's own date. */
+/** The clips in Movies/Original by shoot day: the recording date in a DJI name, or else the file's own date. */
 async function originalDays() {
   const days = new Map();
   for (const name of (await readdir(ORIGINAL).catch(() => [])).filter(isVideo).sort()) {
@@ -154,7 +154,7 @@ async function card() {
 }
 
 /**
- * A source by id: a shoot day on the card or in Videos/Original, and where its clips are (`paths`, name → file).
+ * A source by id: a shoot day on the card or in Movies/Original, and where its clips are (`paths`, name → file).
  * A camera day that isn't on the card (unplugged) is a 404.
  */
 async function source(id) {
@@ -175,13 +175,13 @@ const proxyFile = (name) => join(CACHE, "proxies", `${stemOf(name)}.mp4`);
 const thumbFile = (name) => join(CACHE, "thumbs", `${stemOf(name)}.jpg`);
 const exportedFile = (name) => join(EXPORTED, `${stemOf(name)}.mp4`);
 
-/** Clip names (without extension) that have an export in Videos/Exported, made here or put there by hand. */
+/** Clip names (without extension) that have an export in Movies/Exported, made here or put there by hand. */
 async function exportedStems() {
   const files = await readdir(EXPORTED).catch(() => []);
   return new Set(files.filter((f) => f.endsWith(".mp4") && !f.startsWith(".")).map(stemOf));
 }
 
-/** Everything the picker lists: the camera's days, then the days in Videos/Original, each with how many are graded. */
+/** Everything the picker lists: the camera's days, then the days in Movies/Original, each with how many are graded. */
 async function library() {
   const exported = await exportedStems();
   const listed = (prefix, days) =>
@@ -413,7 +413,7 @@ async function withLutFile(name, cube, use) {
 }
 
 /**
- * Bake one clip's grade from its original, wherever that is, into Videos/Exported/<clip>.mp4, and record what it was
+ * Bake one clip's grade from its original, wherever that is, into Movies/Exported/<clip>.mp4, and record what it was
  * made with in exports.json. The file is written under a temporary name and moved into place only once the export
  * has worked, so a failed or stopped re-export leaves the previous export and its record as they were.
  */
@@ -437,8 +437,8 @@ async function exportOne(id, name, quality, onProgress, signal) {
   );
   await updateClips(EXPORTS, (clips) => {
     clips[name] = {
-      source: src.kind === "camera" ? `${CAMERA_NAME}: ${relative(dirname(CAMERA), path)}` : relative(VIDEOS, path),
-      file: relative(VIDEOS, exportedFile(name)),
+      source: src.kind === "camera" ? `${CAMERA_NAME}: ${relative(dirname(CAMERA), path)}` : relative(MOVIES, path),
+      file: relative(MOVIES, exportedFile(name)),
       profile: meta.profile,
       cameraKelvin: meta.cameraKelvin,
       base: { id: base.id, name: base.name, file: base.file },
@@ -452,7 +452,7 @@ async function exportOne(id, name, quality, onProgress, signal) {
 }
 
 /**
- * One frame of a clip, graded with its saved grade, as Videos/Exported/<clip>_f<frame>.png at full size. `frame`
+ * One frame of a clip, graded with its saved grade, as Movies/Exported/<clip>_f<frame>.png at full size. `frame`
  * counts from 0; the seek lands a quarter frame early so ffmpeg keeps exactly that frame.
  */
 async function frameOne(src, name, frame) {
@@ -460,7 +460,7 @@ async function frameOne(src, name, frame) {
   const dst = join(EXPORTED, `${stemOf(name)}_f${String(frame).padStart(4, "0")}.png`);
   const time = Math.max(0, (frame - 0.25) / (meta.fps || 24));
   await withLutFile(name, cube, (lut) => exportFrame({ src: src.paths.get(name), dst, cube: lut, matrix: meta.matrix, time }));
-  return relative(VIDEOS, dst);
+  return relative(MOVIES, dst);
 }
 
 // The decoder calibration clip and what ffmpeg reads from it, made once per library (version bumps remake it).
@@ -687,6 +687,6 @@ const server = createServer(async (req, res) => {
 for (const dir of [ORIGINAL, EXPORTED, DATA, CACHE]) await mkdir(dir, { recursive: true });
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;
-  console.log(`grade: ${address}  (videos ${VIDEOS}, camera ${CAMERA}, data ${DATA}, LUTs ${LUTS})`);
+  console.log(`grade: ${address}  (movies ${MOVIES}, camera ${CAMERA}, data ${DATA}, LUTs ${LUTS})`);
   if (process.argv.includes("--open")) execFile("open", [address], () => {});
 });

@@ -16,7 +16,7 @@ bun run grade          # http://127.0.0.1:4777, opens in the browser
   each DJI file name. Clips stay on the card: nothing is copied off it, and nothing is written to it except by ⌘⌫
   (below). Thumbnails come from the still each DJI file carries; a clip's preview is made from the card when you
   select it.
-- **On this Mac**: the video in `~/Videos/Original/`, for clips that aren't on the camera, by the date in a DJI name
+- **On this Mac**: the video in `~/Movies/Original/`, for clips that aren't on the camera, by the date in a DJI name
   or else the file's own date.
 
 Each day shows how many of its clips have an export, and the clip list can show only graded or ungraded clips.
@@ -24,7 +24,7 @@ Each day shows how many of its clips have an export, and the clip list can show 
 ## What the app writes
 
 ```
-~/Videos/                                 GRADE_ROOT
+~/Movies/                                 GRADE_ROOT
   Original/                               clips on this Mac (above)
   Exported/                               exports and nothing else:
     DJI_…_0234_D.mp4                        8-bit H.264 BT.709, near lossless (or at the quality chosen), sound copied
@@ -109,7 +109,7 @@ both against the preview: mean 0.6 and 0.5 of 255, 95% within 2.
 
 ## Into OpenFilm
 
-Edit with the files in `~/Videos/Exported/`: the originals may only exist on the camera. `exports.json` says what
+Edit with the files in `~/Movies/Exported/`: the originals may only exist on the camera. `exports.json` says what
 each was made with; a clip is current when its record's `key` matches `gradeKey(resolveGrade(grades.json's entry))`,
 which the app shows as "graded" and otherwise as "changed since export". Regrading and exporting again replaces the
 file under the same name, so trims and captions in a film stay valid.
