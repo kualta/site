@@ -62,7 +62,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${port}/`);
   const row = page.getByRole("button", { name: /0001/ });
-  await row.getByText("not graded").waitFor({ timeout: 30_000 });
+  await row.getByText("Not graded").waitFor({ timeout: 30_000 });
   // Previews are made on request: wait for this one to arrive and draw.
   await page.waitForFunction(() => document.getElementById("empty").hidden, null, { timeout: 60_000 });
   await page.waitForTimeout(1200);
@@ -97,7 +97,7 @@ try {
   assert.equal(grades.clips[name].exposure, 0.75, "the grade is saved");
 
   await page.getByRole("button", { name: "Export this clip" }).click();
-  await row.getByText("graded", { exact: true }).waitFor({ timeout: 120_000 });
+  await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
   if (shots) await page.screenshot({ path: path.join(shots, "grade-3-exported.png") });
 
   const sidecar = JSON.parse(readFileSync(path.join(shoot, "graded", "DJI_20260101120000_0001_D.grade.json"), "utf8"));
@@ -140,7 +140,7 @@ try {
     return [j.current?.name, ...j.queue.map((q) => q.name)].filter(Boolean);
   });
   assert.deepEqual(queued.length ? queued : [name], [name], `only the changed clip is re-exported (queued: ${queued.join(", ")})`);
-  await row.getByText("graded", { exact: true }).waitFor({ timeout: 120_000 });
+  await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
   assert.ok(!existsSync(path.join(shoot, "graded", "DJI_20260101120500_0002_D.mp4")), "the never-graded clip was left alone");
   assert.equal(JSON.parse(readFileSync(path.join(shoot, "graded", "DJI_20260101120000_0001_D.grade.json"), "utf8")).grade.exposure, 0.5);
   assert.deepEqual(errors, []);

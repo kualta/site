@@ -417,7 +417,7 @@ function renderList() {
     b.dataset.name = clip.name;
     const { title, time } = label(clip);
     b.innerHTML =
-      '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span></span><span class="sub-row"><span class="profile"></span><span class="state"></span><span class="size"></span></span></span><span class="progress" hidden><i></i></span>';
+      '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span><span class="state"></span></span><span class="sub-row"><span class="profile"></span><span class="size"></span></span></span><span class="progress" hidden><i></i></span>';
     b.querySelector("b").textContent = title;
     b.querySelector(".when").textContent = [time, `${clip.duration.toFixed(1)} s`].filter(Boolean).join(" · ");
     b.querySelector(".size").textContent = clip.bytes ? fileSize(clip.bytes) : "";
@@ -439,22 +439,19 @@ function updateRows() {
     b.classList.toggle("primary-clip", clip.name === state.primary && state.selected.size > 1);
     b.parentElement.hidden = !shown(clip);
     const chip = b.querySelector(".state");
-    let text = "graded";
+    let text = "Graded";
     let kind = "ok";
-    if (exporting(clip)) [text, kind] = [`exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
-    else if (queued(clip)) [text, kind] = ["export queued", "busy"];
-    else if (!clip.exported) [text, kind] = ["not graded", "none"];
-    else if (stale(clip)) [text, kind] = ["changed since export", "changed"];
-    // Not graded is just its hollow ring; the words stay for screen readers and as a tooltip.
-    const iconOnly = kind === "none";
+    if (exporting(clip)) [text, kind] = [`Exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
+    else if (queued(clip)) [text, kind] = ["Export queued", "busy"];
+    else if (!clip.exported) [text, kind] = ["Not graded", "none"];
+    else if (stale(clip)) [text, kind] = ["Changed since export", "changed"];
+    // Just the dot; the words stay for screen readers and as its tooltip.
     chip.className = `state ${kind}`;
-    chip.title = iconOnly ? "Not graded" : "";
-    if (iconOnly) {
-      const words = document.createElement("span");
-      words.className = "sr-only";
-      words.textContent = text;
-      chip.replaceChildren(words);
-    } else chip.textContent = text;
+    chip.title = text;
+    const words = document.createElement("span");
+    words.className = "sr-only";
+    words.textContent = text;
+    chip.replaceChildren(words);
     const bar = b.querySelector(".progress");
     bar.hidden = !exporting(clip);
     if (!bar.hidden) bar.firstElementChild.style.width = `${(state.jobs.export.current.progress ?? 0) * 100}%`;
@@ -1121,6 +1118,10 @@ document.addEventListener("keydown", (e) => {
   } else if (e.metaKey && (e.key === "Backspace" || e.key === "Delete") && !e.repeat) {
     e.preventDefault();
     trashSelected();
+  } else if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+    e.preventDefault();
+    state.selected = new Set(visibleClips().map((c) => c.name));
+    afterSelection();
   } else if ((e.metaKey || e.ctrlKey) && e.key === "c" && !window.getSelection()?.toString()) copyGrade();
   else if ((e.metaKey || e.ctrlKey) && e.key === "v") pasteGrade();
 });
