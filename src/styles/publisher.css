@@ -203,16 +203,36 @@
 .publisher-history-text { -webkit-line-clamp:3; }
 .publisher-history-caption { -webkit-line-clamp:2; margin-top:2px; font-size:14px; color:var(--publisher-muted); }
 .publisher-history-pills { display:flex; flex-wrap:wrap; align-items:center; gap:6px; list-style:none; margin:12px 0 0; padding:0; }
-.publisher-history-pill { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border:1px solid var(--publisher-edge); border-radius:999px; font-size:12px; line-height:20px; }
-.publisher-history-pill::before, .publisher-account-status::before { content:""; flex:none; width:6px; height:6px; border-radius:50%; background:var(--publisher-muted); }
-:is(.publisher-history-pill, .publisher-account-status)[data-tone="ok"]::before { background:var(--publisher-success); }
-.publisher-history-pill[data-tone="bad"]::before { background:var(--publisher-danger); }
-.publisher-history-pill[data-tone="warn"]::before { background:var(--publisher-warning); }
-:is(.publisher-history-pill, .publisher-account-status)[data-tone="busy"]::before { animation:publisher-pulse 1.2s ease-in-out infinite; }
-.publisher-history-pill[data-tone="gone"] { color:var(--publisher-muted); }
-.publisher-history-pill a::after { content:" ↗"; color:var(--publisher-muted); }
-.publisher-history-pill a:hover { text-decoration:underline; text-underline-offset:3px; }
-.publisher-history-pill small { font-size:12px; }
+/* Each destination is its platform's mark in the platform's color, so a row reads at a glance; the chip carries the state. */
+.publisher [data-platform] { --platform:var(--publisher-ink); }
+.publisher [data-platform="instagram"] { --platform:#e4405f; }
+.publisher [data-platform="bluesky"] { --platform:#1185fe; }
+.publisher [data-platform="xiaohongshu"] { --platform:#ff2442; }
+.publisher [data-platform="youtube"] { --platform:#ff0000; }
+.publisher [data-platform="farcaster"] { --platform:#8a63d2; }
+.publisher [data-platform="lens"] { --platform:#00501e; }
+.publisher [data-platform="grain"] { --platform:#a8741a; }
+.dark .publisher [data-platform="farcaster"] { --platform:#a68ae6; }
+.dark .publisher [data-platform="lens"] { --platform:#abfe2c; }
+.dark .publisher [data-platform="grain"] { --platform:#e0b252; }
+.publisher-history-pill { position:relative; display:inline-flex; }
+.publisher-history-pill > :is(a, span) { position:relative; display:grid; place-items:center; width:34px; height:28px; border:1px solid var(--publisher-edge); border-radius:8px; color:var(--platform); transition:background 160ms, border-color 160ms; }
+.publisher-history-pill > a:hover { background:var(--publisher-wash); border-color:var(--platform); }
+.publisher-history-pill > a:focus-visible { outline:2px solid var(--publisher-ink); outline-offset:2px; }
+/* TikTok's mark is ink with its cyan and red offset behind it. */
+.publisher-history-pill[data-platform="tiktok"] svg { filter:drop-shadow(-1px -1px 0 #25f4ee) drop-shadow(1px 1px 0 #fe2c55); }
+/* Queued, scheduled or publishing: dashed, and breathing gently so the mark stays legible at its faintest. */
+.publisher-history-pill[data-tone="busy"] > span { border-style:dashed; animation:publisher-breathe 1.6s ease-in-out infinite; }
+@keyframes publisher-breathe { 50% { opacity:.6; } }
+.publisher-history-pill:is([data-tone="bad"], [data-tone="warn"])::after { content:""; position:absolute; top:-3px; right:-3px; width:9px; height:9px; border-radius:50%; background:var(--publisher-danger); box-shadow:0 0 0 2px var(--publisher-page); }
+.publisher-history-pill[data-tone="warn"]::after { background:var(--publisher-warning); }
+/* Stopped or deleted: never there or no longer, so grey and struck through like the calendar's marks. */
+.publisher-history-pill[data-tone="gone"] > span { color:var(--publisher-muted); }
+.publisher-history-pill[data-tone="gone"] svg { filter:none; }
+.publisher-history-pill[data-tone="gone"] > span::after { content:""; position:absolute; left:7px; right:7px; top:calc(50% - 1px); height:2px; border-radius:1px; background:currentColor; box-shadow:0 0 0 1.5px var(--publisher-page); transform:rotate(-40deg); }
+.publisher-account-status::before { content:""; flex:none; width:6px; height:6px; border-radius:50%; background:var(--publisher-muted); }
+.publisher-account-status[data-tone="ok"]::before { background:var(--publisher-success); }
+.publisher-account-status[data-tone="busy"]::before { animation:publisher-pulse 1.2s ease-in-out infinite; }
 /* A draft's one action: an ink chip beside its status, so it reads as the way in. */
 .publisher a.publisher-history-open { display:inline-flex; align-items:center; padding:2px 12px; border-radius:999px; background:var(--publisher-ink); color:var(--publisher-on-ink); font-size:12px; line-height:20px; transition:opacity 160ms; }
 .publisher a.publisher-history-open:hover { opacity:.85; }
@@ -408,7 +428,7 @@
 }
 @media (prefers-reduced-motion:reduce) {
   .publisher button, .publisher a, .publisher-composer, .publisher .publisher-destinations label, .publisher summary, .publisher :is(input, textarea, select), .publisher-history-panel, .publisher-history-manage svg, .publisher-history-panel-row { transition:none; }
-  .publisher-history-pill[data-tone="busy"]::before, .publisher-account-status[data-tone="busy"]::before, .publisher-skeleton, .publisher-spinner, .publisher-toast { animation:none; }
+  .publisher-history-pill[data-tone="busy"] > span, .publisher-account-status[data-tone="busy"]::before, .publisher-skeleton, .publisher-spinner, .publisher-toast { animation:none; }
 }
 
 /* --- calendar: posts on the days they published or are scheduled to --- */

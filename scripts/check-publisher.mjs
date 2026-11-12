@@ -178,7 +178,7 @@ try {
       await art.locator(".publisher-history-pills").getByRole("link", { name: "Grain" }).getAttribute("href"),
       "https://example.invalid/grain/post",
     );
-    assert.equal(await art.locator('[data-tone="gone"]').textContent(), "BlueskyDeleted");
+    assert.equal(await art.locator('[data-tone="gone"] [role="img"]').getAttribute("aria-label"), "Bluesky: Deleted");
     await art.getByText("Instagram: Instagram asked to confirm the login", { exact: false }).waitFor();
     assert.equal(await art.locator(".publisher-history-thumb small").textContent(), "2");
     assert.equal(

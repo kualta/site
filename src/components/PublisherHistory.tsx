@@ -15,6 +15,7 @@ import { localInput } from "@/lib/publisher/schedule";
 import { STOPPED_BEFORE } from "@/lib/publisher/server";
 import { parseTags } from "@/lib/publisher/variants";
 import type { DraftSummary } from "@/lib/publisher/drafts";
+import PlatformIcon from "./PlatformIcon";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
 
 type Target = {
@@ -550,16 +551,26 @@ export default function PublisherHistory({
             {post.targets.map((target) => {
               const { label, tone } = status(target);
               const name = platformNames[target.platform];
+              // Only the mark shows, so its name and state are what's read out and shown on hover.
+              const described = `${name}: ${label}`;
+              const icon = <PlatformIcon platform={target.platform} size={16} />;
               return (
-                <li key={target.id} className="publisher-history-pill" data-tone={tone}>
+                <li key={target.id} className="publisher-history-pill" data-tone={tone} data-platform={target.platform}>
                   {tone === "ok" && target.url ? (
-                    <a href={target.url} target="_blank" rel="noreferrer" title={`View on ${name}`}>
-                      {name}
+                    <a
+                      href={target.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={described}
+                      title={`View on ${name}`}
+                    >
+                      {icon}
                     </a>
                   ) : (
-                    <span>{name}</span>
+                    <span role="img" aria-label={described} title={described}>
+                      {icon}
+                    </span>
                   )}
-                  {tone !== "ok" && <small>{label}</small>}
                 </li>
               );
             })}
