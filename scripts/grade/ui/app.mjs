@@ -956,10 +956,53 @@ $("stop-export").addEventListener("click", async () => {
   poll();
 });
 
+// ---- moving clips to the Trash (⌘⌫) -------------------------------------------------------------------------------
+
+/** When a pending ⌘⌫ for more than CONFIRM_OVER clips stops waiting for its confirming second press. */
+let trashArmedUntil = 0;
+
+/**
+ * Move the selected clips in the list, each with the files the camera wrote beside it (the .LRF), to the Trash: the
+ * card's own for a camera day, so Finder can put them back. Their grades and graded copies stay.
+ */
+async function trashSelected() {
+  if (!state.source) return;
+  const names = visibleClips().filter((c) => state.selected.has(c.name)).map((c) => c.name);
+  if (!names.length) return;
+  if (names.length > CONFIRM_OVER && Date.now() > trashArmedUntil) {
+    trashArmedUntil = Date.now() + 3000;
+    return setStatus(`Press ⌘⌫ again to move ${names.length} clips to the Trash`, { first: true });
+  }
+  trashArmedUntil = 0;
+  // Land on the clip after the one on screen, or the one before it at the end of the list.
+  const order = visibleClips().map((c) => c.name).filter((n) => n === state.primary || !names.includes(n));
+  const at = order.indexOf(state.primary);
+  const land = order[at + 1] ?? order[at - 1] ?? null;
+  const one = names.length === 1;
+  const what = one ? label(state.byName.get(names[0])).title : `${names.length} clips`;
+  await save();
+  try {
+    const res = await api(`/api/sources/${encodeURIComponent(state.source)}/trash`, { method: "POST", json: { clips: names } });
+    const { trashed } = await res.json();
+    store.set(`grade.selection.${state.source}`, land ? [land] : []);
+    await loadLibrary();
+    // A camera day whose last clip went is no longer a source.
+    const id = sourceInfo(state.source) ? state.source : defaultSource();
+    if (id) await openSource(id);
+    const files = one ? trashed.join(", ") : `${trashed.length} files`;
+    setStatus(`Moved ${what} to the Trash: ${files}`, { first: true });
+  } catch (e) {
+    showError(e);
+  }
+}
+
 let statusNote = "";
+let statusFirst = false;
 let statusTimer = null;
-function setStatus(text) {
+/** A note in the status line for three seconds. `first` shows it ahead of exports and previews in progress. */
+function setStatus(text, { first = false } = {}) {
   statusNote = text;
+  statusFirst = first;
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => {
     statusNote = "";
@@ -988,7 +1031,7 @@ function renderStatus() {
   const failed = j?.export.failed.filter((f) => f.id === state.source) ?? [];
   if (failed.length) parts.push(`${failed.length} export${failed.length === 1 ? "" : "s"} failed: ${failed[0].error}`);
   if (state.error) parts.push(state.error);
-  if (!parts.length && statusNote) parts.push(statusNote);
+  if (statusNote && (statusFirst || !parts.length)) parts.unshift(statusNote);
   $("status").textContent = parts.join(" · ");
   $("status").title = $("status").textContent;
 }
@@ -1054,6 +1097,9 @@ document.addEventListener("keydown", (e) => {
       setPrimary(names[i]);
       document.querySelector(`.clip[data-name="${CSS.escape(names[i])}"]`)?.scrollIntoView({ block: "nearest" });
     }
+  } else if (e.metaKey && (e.key === "Backspace" || e.key === "Delete") && !e.repeat) {
+    e.preventDefault();
+    trashSelected();
   } else if ((e.metaKey || e.ctrlKey) && e.key === "c" && !window.getSelection()?.toString()) copyGrade();
   else if ((e.metaKey || e.ctrlKey) && e.key === "v") pasteGrade();
 });

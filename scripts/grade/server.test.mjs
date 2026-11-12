@@ -15,6 +15,7 @@ const port = 8900 + Math.floor(Math.random() * 90);
 const url = (p) => `http://127.0.0.1:${port}${p}`;
 const root = mkdtempSync(join(tmpdir(), "grade-test-"));
 const lib = join(root, "lib");
+const trash = join(root, "trash");
 const camera = join(root, "card/DCIM");
 const folder = "2026-02-03";
 const name = "DJI_20260203101500_0007_D.MP4";
@@ -84,7 +85,7 @@ beforeAll(async () => {
   mkdirSync(join(lib, "luts/agx"), { recursive: true });
   writeFileSync(join(lib, "luts/agx/dlog2-punchy.cube"), writeCube(2, data, "agx stand-in"));
   server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
-    env: { ...process.env, GRADE_ROOT: lib, GRADE_CAMERA: camera, GRADE_PORT: String(port) },
+    env: { ...process.env, GRADE_ROOT: lib, GRADE_CAMERA: camera, GRADE_PORT: String(port), GRADE_TRASH: trash },
     stdio: ["ignore", "pipe", "inherit"],
   });
   await new Promise((resolve) => server.stdout.on("data", (c) => String(c).includes("grade:") && resolve()));
@@ -205,3 +206,30 @@ test.if(usable)("refuses other origins' requests, unknown clips, missing days an
   expect((await fetch(url("/api/sources/.hidden"))).status).toBe(400);
   expect((await fetch(url(`/media/${folder}/proxy/..%2Fgrades.json`))).status).toBe(404);
 });
+
+test.if(usable)("moves a clip and its .LRF to the Trash, keeps its grade, and won't trash one that's exporting", async () => {
+  const dir = join(lib, slow, "originals");
+  const [gone, kept] = slowClips;
+  const lrf = gone.replace(".MP4", ".LRF");
+  writeFileSync(join(dir, lrf), "the camera's low-res proxy");
+  const grade = { base: "aces", exposure: 1, kelvin: null, tint: 0, contrast: 1, saturation: 1 };
+  expect((await api(`/api/sources/${slow}/grades`, { method: "PUT", body: JSON.stringify({ clips: { [gone]: grade } }) })).status).toBe(200);
+  const trashOf = (clips) => api(`/api/sources/${slow}/trash`, { method: "POST", body: JSON.stringify({ clips }) });
+
+  expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: slow, names: [kept] }) })).status).toBe(200);
+  await until(async () => (await json("/api/jobs")).export.current?.name === kept);
+  expect((await trashOf([kept])).status).toBe(409);
+  await api("/api/export/stop", { method: "POST" });
+  await until(async () => !(await json("/api/jobs")).export.current);
+
+  const res = await trashOf([gone]);
+  expect(res.status).toBe(200);
+  expect((await res.json()).trashed.sort()).toEqual([lrf, gone].sort());
+  expect(readdirSync(trash).sort()).toEqual([lrf, gone].sort());
+  expect(readdirSync(dir)).toEqual([kept]);
+  const s = await json(`/api/sources/${slow}`);
+  expect(s.clips.map((c) => c.name)).toEqual([kept]);
+  expect(s.grades[gone]).toEqual(grade);
+  expect((await trashOf([gone])).status).toBe(400);
+  expect((await trashOf([])).status).toBe(400);
+}, 120_000);

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The grade app's local server. Clips come from sources: the camera's card, by shoot day ("camera:2026-11-08", read
-// only, nothing is copied off it), and folders on this Mac (<root>/<folder>/originals). Whatever a source is, what the
+// only, nothing is copied off it; ⌘⌫ only moves clips to the card's Trash), and folders on this Mac
+// (<root>/<folder>/originals). Whatever a source is, what the
 // app makes for it lives in <root>/<day or folder>/: grades.json, the .grade/ cache (metadata, thumbnails, preview
 // proxies), and graded/ with each export and a .grade.json saying exactly what was applied. So a clip graded off the
 // card and the same clip in a Mac folder share one grade and one export. Listens on 127.0.0.1 only.
@@ -291,6 +292,56 @@ function stopExports() {
   return count;
 }
 
+// ---- moving clips to the Trash (⌘⌫) -------------------------------------------------------------------------------
+
+/** Where trashed clips go instead of the system Trash: a folder, for the tests. */
+const TRASH_DIR = process.env.GRADE_TRASH;
+
+async function moveToTrash(files) {
+  if (TRASH_DIR) {
+    await mkdir(TRASH_DIR, { recursive: true });
+    for (const f of files) await rename(f, join(TRASH_DIR, basename(f)));
+    return;
+  }
+  // macOS 15's trash(8): -s fails instead of skipping a file it can't move. A card's Trash is its own .Trashes.
+  await new Promise((resolve, reject) => {
+    execFile("/usr/bin/trash", ["-s", ...files], (err, _out, stderr) => {
+      if (err) reject(new Error(stderr.trim() || err.message));
+      else resolve();
+    });
+  });
+  const left = [];
+  for (const f of files) if (await exists(f)) left.push(basename(f));
+  if (left.length) throw new Error(`couldn't move ${left.join(", ")} to the Trash`);
+}
+
+/**
+ * Move clips to the Trash with the files the camera wrote beside them under the same name (DJI's low-res .LRF), and
+ * drop the app's preview and thumbnail for them. Their grades and graded copies stay: the edit uses those.
+ */
+async function trashClips(src, names) {
+  for (const name of names) {
+    if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
+    const exporting = (j) => j?.id === src.id && j?.name === name;
+    if (exporting(jobs.export.current) || jobs.export.queue.some(exporting)) throw httpError(409, `${name} is exporting: stop exporting first`);
+  }
+  const trashed = [];
+  for (const name of names) {
+    const path = src.paths.get(name);
+    const siblings = (await readdir(dirname(path))).filter((f) => f !== name && !f.startsWith(".") && stemOf(f) === stemOf(name));
+    const files = [path, ...siblings.map((f) => join(dirname(path), f))];
+    await moveToTrash(files);
+    trashed.push(...files.map((f) => basename(f)));
+    const k = key(src.id, name);
+    jobs.thumb.queue = jobs.thumb.queue.filter((j) => j.k !== k);
+    jobs.proxy.queue = jobs.proxy.queue.filter((j) => j.k !== k);
+    await rm(proxyFile(src, name), { force: true });
+    await rm(thumbFile(src, name), { force: true });
+  }
+  cardCache = null;
+  return trashed;
+}
+
 /**
  * Bake one clip's grade from its original, wherever that is, and write only the graded copy and its record. The LUT
  * is written beside its final name and moved into place only once the export has worked, so a failed or stopped
@@ -479,6 +530,14 @@ async function route(req, res) {
     const names = ((await body(req)).names ?? []).filter((n) => src.paths.has(n)).slice(0, 50);
     queueProxies(src, names, await metas(src, names));
     return send(res, 200, { queued: names.length });
+  }
+
+  m = /^\/api\/sources\/([^/]+)\/trash$/.exec(p);
+  if (m && req.method === "POST") {
+    const src = await source(m[1]);
+    const names = (await body(req)).clips ?? [];
+    if (!Array.isArray(names) || !names.length) throw httpError(400, "no clips to move to the Trash");
+    return send(res, 200, { trashed: await trashClips(src, names) });
   }
 
   m = /^\/api\/lut\/(\w+)\/([^/]+)$/.exec(p);

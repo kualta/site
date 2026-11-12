@@ -14,7 +14,7 @@ bun run grade          # http://127.0.0.1:4777, opens in the browser
 
 - **Pocket 4P**: the camera's card while it's plugged in (`/Volumes/Pocket4P/DCIM`, `GRADE_CAMERA`), one folder per
   shoot day, read from the date in each DJI file name. Clips stay on the card: nothing is copied off it, and nothing
-  is written to it. Thumbnails come from the still each DJI file carries; a clip's preview is made from the card
+  is written to it except by ⌘⌫ (below). Thumbnails come from the still each DJI file carries; a clip's preview is made from the card
   when you select it.
 - **On this Mac**: any `<root>/<folder>/originals/` with video in it, for clips that aren't on the camera.
 
@@ -57,6 +57,10 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
   precision, not from the preview. A camera day can't export while the camera is unplugged. Exporting more than ten
   clips at once asks for a second click; **Stop exporting** (top bar, while anything exports) drops the queue and
   stops the clip in progress, which leaves its previous export, LUT and record as they were.
+- **⌘⌫** moves the selected clips to the Trash, each with the files beside it under the same name (the camera's
+  `.LRF` proxy), as Finder would: a camera day's go to the card's own Trash, so Finder can put them back, and the
+  space comes back when the Trash is emptied. Their grades and graded copies stay. More than ten at once asks for a
+  second press; a clip that is exporting can't be trashed.
 
 ## Base looks (`luts/`)
 
