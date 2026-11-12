@@ -10,32 +10,34 @@ bun run grade          # http://127.0.0.1:4777, opens in the browser
 
 ## Where clips come from
 
-**Clips from** (top bar) lists two kinds of folder:
+**Clips from** (top bar) lists shoot days from two places:
 
-- **Pocket 4P**: the camera's card while it's plugged in (`/Volumes/Pocket4P/DCIM`, `GRADE_CAMERA`), one folder per
-  shoot day, read from the date in each DJI file name. Clips stay on the card: nothing is copied off it, and nothing
-  is written to it except by ⌘⌫ (below). Thumbnails come from the still each DJI file carries; a clip's preview is made from the card
-  when you select it.
-- **On this Mac**: any `<root>/<folder>/originals/` with video in it, for clips that aren't on the camera.
+- **Pocket 4P**: the camera's card while it's plugged in (`/Volumes/Pocket4P/DCIM`, `GRADE_CAMERA`), by the date in
+  each DJI file name. Clips stay on the card: nothing is copied off it, and nothing is written to it except by ⌘⌫
+  (below). Thumbnails come from the still each DJI file carries; a clip's preview is made from the card when you
+  select it.
+- **On this Mac**: the video in `~/Videos/Original/`, for clips that aren't on the camera, by the date in a DJI name
+  or else the file's own date.
 
-Each folder shows how many of its clips have a graded copy, and the clip list can show only graded or ungraded clips.
+Each day shows how many of its clips have an export, and the clip list can show only graded or ungraded clips.
 
 ## What the app writes
 
 ```
-~/Movies/Pocket4P/                  GRADE_ROOT
-  luts/                             GRADE_LUTS: base looks (below)
-  2026-11-08/                       a shoot day (or a Mac folder's name)
-    grades.json                     each clip's grade, saved as you work
-    graded/DJI_…_0234_D.mp4         the export: 8-bit H.264 BT.709, near lossless (or at the quality chosen), sound copied
-    graded/DJI_…_0234_D.grade.json  what was applied: source, base, grade, key, quality, LUT, camera white balance
-    graded/luts/DJI_…_0234_D.cube   the exact LUT the export used
-    graded/frames/DJI_…_0234_D_f0102.png  Export frame: frame 102, graded, full size
-    .grade/                         the app's cache: preview proxies, thumbnails, probed metadata
+~/Videos/                                 GRADE_ROOT
+  Original/                               clips on this Mac (above)
+  Exported/                               exports and nothing else:
+    DJI_…_0234_D.mp4                        8-bit H.264 BT.709, near lossless (or at the quality chosen), sound copied
+    DJI_…_0234_D_f0102.png                  Export frame: frame 102, graded, full size
+~/Library/Application Support/Grade/      GRADE_DATA
+  grades.json                             every clip's grade, by file name, saved as you work
+  exports.json                            what each export was made with: source, base look, grade, key, quality
+  luts/                                   GRADE_LUTS: base looks (below)
+~/Library/Caches/Grade/                   GRADE_CACHE: metadata, thumbnails, previews; safe to delete
 ```
 
-A camera day and a Mac folder with the same name share this folder, so a clip graded off the card and the same
-clip copied to the Mac share one grade and one export. A graded file put in `graded/` by hand counts as graded too.
+Clips are known by file name, so a clip graded off the card and the same clip copied into `Original/` share one grade
+and one export. An export put in `Exported/` by hand counts as graded too.
 
 ## Grading
 
@@ -54,13 +56,13 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
   on an export. HLG clips play a 1280 px preview copy instead, so the browser can't tone-map them.
   **Full screen** (or **F**) gives the viewer and its transport the whole screen.
 - **Export** (top right) bakes the selected clips. Its ∨ menu has **Export frame** (the frame on screen, graded, as a
-  full-size PNG in `graded/frames/`), **Re-export N changed** (every graded clip whose grade moved since its export)
+  full-size PNG in `Exported/`), **Re-export N changed** (every graded clip whose grade moved since its export)
   and **Quality**: 100% (each time the app opens) is near lossless, whatever size that takes; below it the video gets
   that share of the original's bitrate, so the menu can say the size first (50% ≈ half the original file), and
   Export shows the percentage. Exports come from the 10-bit originals (off the card, for a camera day) at 16-bit
   precision, not from the preview. A camera day can't export while the camera is unplugged. Exporting more than ten
   clips at once asks for a second click; **Stop exporting** (top bar, while anything exports) drops the queue and
-  stops the clip in progress, which leaves its previous export, LUT and record as they were.
+  stops the clip in progress, which leaves its previous export and record as they were.
 - **⌘⌫** moves the selected clips to the Trash, each with the files beside it under the same name (the camera's
   `.LRF` proxy), as Finder would: a camera day's go to the card's own Trash, so Finder can put them back, and the
   space comes back when the Trash is emptied. Their grades and graded copies stay. More than ten at once asks for a
@@ -78,7 +80,7 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
 | Custom | `custom/<dlog2\|dlog\|hlg\|rec709>/*.cube` | your own; each shows up as a look for that profile |
 
 ```sh
-uv run --with opencolorio --with numpy scripts/grade/make_luts.py ~/Movies/Pocket4P/luts
+uv run --with opencolorio --with numpy scripts/grade/make_luts.py "~/Library/Application Support/Grade/luts"
 ```
 
 Other cameras' LUTs take their own log, so `make_luts.py` converts each profile's footage into it (through
@@ -107,7 +109,7 @@ both against the preview: mean 0.6 and 0.5 of 255, 95% within 2.
 
 ## Into OpenFilm
 
-Edit with the files in `~/Movies/Pocket4P/<day>/graded/`: the originals may only exist on the camera. Each
-`.grade.json` says what was applied; a clip is current when its `key` matches `gradeKey(resolveGrade(grades.json's
-entry))`, which the app shows as "graded" and otherwise as "changed since export". Regrading and exporting again
-replaces the file under the same name, so trims and captions in a film stay valid.
+Edit with the files in `~/Videos/Exported/`: the originals may only exist on the camera. `exports.json` says what
+each was made with; a clip is current when its record's `key` matches `gradeKey(resolveGrade(grades.json's entry))`,
+which the app shows as "graded" and otherwise as "changed since export". Regrading and exporting again replaces the
+file under the same name, so trims and captions in a film stay valid.

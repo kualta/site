@@ -15,10 +15,13 @@ const ffmpeg = process.env.FFMPEG_PATH || ffmpegStatic;
 const shots = process.env.SCREENSHOT_DIR;
 const port = 8798;
 const root = mkdtempSync(path.join(tmpdir(), "grade-check-"));
-const shoot = path.join(root, "2026-01-01");
+const videos = path.join(root, "Videos");
+const original = path.join(videos, "Original");
+const exported = path.join(videos, "Exported");
+const data = path.join(root, "data");
 const name = "DJI_20260101120000_0001_D.MP4";
-mkdirSync(path.join(shoot, "originals"), { recursive: true });
-mkdirSync(path.join(root, "luts"), { recursive: true });
+mkdirSync(original, { recursive: true });
+mkdirSync(path.join(data, "luts"), { recursive: true });
 
 // A static field: red across, green down, blue constant, as D-Log2 code values.
 execFileSync(ffmpeg, [
@@ -27,11 +30,11 @@ execFileSync(ffmpeg, [
   "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
   "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "8", "-colorspace", "bt709", "-color_range", "tv",
   "-c:a", "aac", "-metadata", "com.dji.camera.ColorGammaSxS=D-Log2", "-metadata", "com.dji.camera.WhiteBalanceKelvin=5600",
-  "-movflags", "use_metadata_tags", path.join(shoot, "originals", name),
+  "-movflags", "use_metadata_tags", path.join(original, name),
 ]);
 // A second, never-graded clip: "Re-export N changed" must leave it alone.
 const other = "DJI_20260101120500_0002_D.MP4";
-execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-i", path.join(shoot, "originals", name), "-c", "copy", "-map_metadata", "0", "-movflags", "use_metadata_tags", path.join(shoot, "originals", other)]);
+execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-i", path.join(original, name), "-c", "copy", "-map_metadata", "0", "-movflags", "use_metadata_tags", path.join(original, other)]);
 
 // A smooth non-linear base look standing in for the ACES conversion.
 const size = 33;
@@ -44,10 +47,10 @@ for (let b = 0, i = 0; b < size; b++)
       base[i++] = 0.6 * y + 0.4 * y * y;
       base[i++] = Math.sin(z * 1.3) / Math.sin(1.3);
     }
-writeFileSync(path.join(root, "luts/dlog2-to-rec709-aces2.cube"), writeCube(size, base, "check base"));
+writeFileSync(path.join(data, "luts/dlog2-to-rec709-aces2.cube"), writeCube(size, base, "check base"));
 
 const server = spawn(process.execPath, ["scripts/grade/server.mjs"], {
-  env: { ...process.env, GRADE_ROOT: root, GRADE_LUTS: path.join(root, "luts"), GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port) },
+  env: { ...process.env, GRADE_ROOT: videos, GRADE_DATA: data, GRADE_CACHE: path.join(root, "cache"), GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port) },
   stdio: ["ignore", "pipe", "inherit"],
 });
 await new Promise((resolve, reject) => {
@@ -93,20 +96,20 @@ try {
   });
   assert.equal(preview.w, 640, "the preview draws the original at its own size");
 
-  const grades = JSON.parse(readFileSync(path.join(shoot, "grades.json"), "utf8"));
+  const grades = JSON.parse(readFileSync(path.join(data, "grades.json"), "utf8"));
   assert.equal(grades.clips[name].exposure, 0.75, "the grade is saved");
 
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
   if (shots) await page.screenshot({ path: path.join(shots, "grade-3-exported.png") });
 
-  const sidecar = JSON.parse(readFileSync(path.join(shoot, "graded", "DJI_20260101120000_0001_D.grade.json"), "utf8"));
-  assert.equal(sidecar.key, gradeKey(sidecar.grade), "the sidecar's key matches its grade");
-  assert.equal(sidecar.grade.kelvin, 4800);
-  assert.ok(existsSync(path.join(shoot, sidecar.lut)), "the exported LUT is kept");
+  const record = () => JSON.parse(readFileSync(path.join(data, "exports.json"), "utf8")).clips[name];
+  assert.equal(record().key, gradeKey(record().grade), "the record's key matches its grade");
+  assert.equal(record().grade.kelvin, 4800);
+  assert.deepEqual(readdirSync(exported), ["DJI_20260101120000_0001_D.mp4"], "Exported holds the export and nothing else");
 
   const frame = execFileSync(ffmpeg, [
-    "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", path.join(shoot, sidecar.graded), "-frames:v", "1",
+    "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", path.join(videos, record().file), "-frames:v", "1",
     // accurate_rnd: swscale's default 8-bit YUV→RGB path reads limited range about 2 levels low.
     "-vf", `scale=${preview.w}:${preview.h}:in_color_matrix=bt709:in_range=tv:flags=accurate_rnd+full_chroma_int,format=rgb24`, "-f", "rawvideo", "-",
   ], { maxBuffer: 64 * 1024 * 1024 });
@@ -140,9 +143,9 @@ try {
   await more.click();
   await page.getByRole("button", { name: /^Export frame/ }).click();
   await page.getByText(/Saved frame/).waitFor({ timeout: 30_000 });
-  const frameFile = readdirSync(path.join(shoot, "graded", "frames")).find((f) => f.startsWith("DJI_20260101120000_0001_D_f"));
-  assert.ok(frameFile, "the frame is saved in graded/frames");
-  const still = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", path.join(shoot, "graded", "frames", frameFile), "-vf", "format=rgb24", "-f", "rawvideo", "-"], { maxBuffer: 64 * 1024 * 1024 });
+  const frameFile = readdirSync(exported).find((f) => f.startsWith("DJI_20260101120000_0001_D_f"));
+  assert.ok(frameFile, "the frame is saved in Exported");
+  const still = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", path.join(exported, frameFile), "-vf", "format=rgb24", "-f", "rawvideo", "-"], { maxBuffer: 64 * 1024 * 1024 });
   compare("exported frame", still);
 
   // Quality below 100% shows on Export and says what the selection would come to.
@@ -165,8 +168,8 @@ try {
   });
   assert.deepEqual(queued.length ? queued : [name], [name], `only the changed clip is re-exported (queued: ${queued.join(", ")})`);
   await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
-  assert.ok(!existsSync(path.join(shoot, "graded", "DJI_20260101120500_0002_D.mp4")), "the never-graded clip was left alone");
-  assert.equal(JSON.parse(readFileSync(path.join(shoot, "graded", "DJI_20260101120000_0001_D.grade.json"), "utf8")).grade.exposure, 0.5);
+  assert.ok(!existsSync(path.join(exported, "DJI_20260101120500_0002_D.mp4")), "the never-graded clip was left alone");
+  assert.equal(record().grade.exposure, 0.5);
   assert.deepEqual(errors, []);
   console.log("grade check passed");
 } finally {

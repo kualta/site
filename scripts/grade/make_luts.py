@@ -1,6 +1,6 @@
 """Bake the grade app's generated base looks: each camera profile's code values → ACES2065-1 → a display rendering.
 
-    uv run --with opencolorio --with numpy scripts/grade/make_luts.py ~/Movies/Pocket4P/luts
+    uv run --with opencolorio --with numpy scripts/grade/make_luts.py "~/Library/Application Support/Grade/luts"
 
 For D-Log2, D-Log and HLG it writes (65 points, Rec.709 BT.1886 out):
 
@@ -178,7 +178,7 @@ def find_blender():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("out", nargs="?", default="~/Movies/Pocket4P/luts")
+    ap.add_argument("out", nargs="?", default="~/Library/Application Support/Grade/luts")
     ap.add_argument("--blender", type=Path, default=find_blender(), help="Blender's colormanagement/config.ocio, for AgX")
     ap.add_argument("--vendor", type=Path, help="other makers' LUTs, one folder per pack (default <out>/vendor)")
     ap.add_argument("--size", type=int, default=65)

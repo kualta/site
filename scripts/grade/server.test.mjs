@@ -6,24 +6,28 @@ import { join } from "node:path";
 import ffmpegStatic from "ffmpeg-static";
 import { gradeKey, writeCube } from "./color.mjs";
 
-// The grade server end to end on a throwaway library and a fake camera card: listing the card by shoot day and the
-// Mac's folders, probing, thumbnails (from a clip's embedded still or a decoded frame), previews made on request,
-// saving grades, exporting straight off the card with only the graded copy written, and the guards on its HTTP surface.
+// The grade server end to end on a throwaway Videos folder, data and cache, and a fake camera card: listing the card
+// and Videos/Original by shoot day, probing, thumbnails (from a clip's embedded still or a decoded frame), previews
+// made on request, saving grades, exporting into Videos/Exported with nothing else written there, and the guards on
+// its HTTP surface.
 const ffmpeg = process.env.FFMPEG_PATH || ffmpegStatic;
 const usable = spawnSync(ffmpeg, ["-version"]).status === 0;
 const port = 8900 + Math.floor(Math.random() * 90);
 const url = (p) => `http://127.0.0.1:${port}${p}`;
 const root = mkdtempSync(join(tmpdir(), "grade-test-"));
-const lib = join(root, "lib");
+const videos = join(root, "Videos");
+const original = join(videos, "Original");
+const exported = join(videos, "Exported");
+const data = join(root, "data");
 const trash = join(root, "trash");
 const camera = join(root, "card/DCIM");
-const folder = "2026-02-03";
 const name = "DJI_20260203101500_0007_D.MP4";
+const folder = "mac:2026-02-03";
 const day = "2026-02-05";
 const camId = `camera:${day}`;
 const withStill = "DJI_20260205090000_0001_D.MP4";
 const noStill = "DJI_20260205090100_0002_D.MP4";
-const slow = "2026-02-07";
+const slow = "mac:2026-02-07";
 const slowClips = ["DJI_20260207100000_0001_D.MP4", "DJI_20260207100100_0002_D.MP4"];
 let server;
 
@@ -53,6 +57,9 @@ function clip(dst, gamma, { still = false, busy = false, seconds: busySeconds = 
 const api = (p, opts = {}) =>
   fetch(url(p), { ...opts, headers: { "X-Grade": "1", "Content-Type": "application/json", ...opts.headers } });
 const json = async (p) => (await fetch(url(p))).json();
+const records = () => JSON.parse(readFileSync(join(data, "exports.json"), "utf8")).clips;
+/** What Videos/Exported holds, hidden files included: it must only ever be exports. */
+const exportedFiles = () => readdirSync(exported).sort();
 
 async function until(check, ms = 60_000) {
   const end = Date.now() + ms;
@@ -70,22 +77,20 @@ const patch = (f) =>
 
 beforeAll(async () => {
   if (!usable) return;
-  mkdirSync(join(lib, folder, "originals"), { recursive: true });
-  mkdirSync(join(lib, "luts"), { recursive: true });
+  mkdirSync(original, { recursive: true });
+  mkdirSync(join(data, "luts/agx"), { recursive: true });
   mkdirSync(join(camera, "DJI_001"), { recursive: true });
-  clip(join(lib, folder, "originals", name), "D-Log2");
+  clip(join(original, name), "D-Log2");
   clip(join(camera, "DJI_001", withStill), "Rec.709", { still: true });
   clip(join(camera, "DJI_001", noStill), "D-Log2");
-  mkdirSync(join(lib, slow, "originals"), { recursive: true });
-  for (const n of slowClips) clip(join(lib, slow, "originals", n), "D-Log2", { busy: true });
+  for (const n of slowClips) clip(join(original, n), "D-Log2", { busy: true });
   // An inverting stand-in for the D-Log2 ACES conversion, easy to recognise in an export.
-  const data = new Float32Array(2 ** 3 * 3);
-  for (let b = 0, i = 0; b < 2; b++) for (let g = 0; g < 2; g++) for (let r = 0; r < 2; r++) data.set([1 - r, 1 - g, 1 - b], i++ * 3);
-  writeFileSync(join(lib, "luts/dlog2-to-rec709-aces2.cube"), writeCube(2, data, "invert"));
-  mkdirSync(join(lib, "luts/agx"), { recursive: true });
-  writeFileSync(join(lib, "luts/agx/dlog2-punchy.cube"), writeCube(2, data, "agx stand-in"));
+  const cube = new Float32Array(2 ** 3 * 3);
+  for (let b = 0, i = 0; b < 2; b++) for (let g = 0; g < 2; g++) for (let r = 0; r < 2; r++) cube.set([1 - r, 1 - g, 1 - b], i++ * 3);
+  writeFileSync(join(data, "luts/dlog2-to-rec709-aces2.cube"), writeCube(2, cube, "invert"));
+  writeFileSync(join(data, "luts/agx/dlog2-punchy.cube"), writeCube(2, cube, "agx stand-in"));
   server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
-    env: { ...process.env, GRADE_ROOT: lib, GRADE_CAMERA: camera, GRADE_PORT: String(port), GRADE_TRASH: trash },
+    env: { ...process.env, GRADE_ROOT: videos, GRADE_DATA: data, GRADE_CACHE: join(root, "cache"), GRADE_CAMERA: camera, GRADE_PORT: String(port), GRADE_TRASH: trash },
     stdio: ["ignore", "pipe", "inherit"],
   });
   await new Promise((resolve) => server.stdout.on("data", (c) => String(c).includes("grade:") && resolve()));
@@ -96,13 +101,15 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test.if(usable)("lists the camera's clips by shoot day and the Mac's folders", async () => {
+test.if(usable)("lists the camera's clips and Videos/Original by shoot day", async () => {
   const library = await json("/api/library");
+  expect(library).toMatchObject({ original, exported });
   expect(library.camera).toMatchObject({ mounted: true, days: [{ id: camId, label: day, clips: 2, graded: 0 }] });
   expect(library.folders).toEqual([
-    { id: slow, label: slow, clips: 2, graded: 0 },
-    { id: folder, label: folder, clips: 1, graded: 0 },
+    { id: slow, label: "2026-02-07", clips: 2, graded: 0 },
+    { id: folder, label: "2026-02-03", clips: 1, graded: 0 },
   ]);
+  expect(exportedFiles()).toEqual([]);
   const bases = await json("/api/bases");
   expect(bases.dlog2.map((b) => b.id)).toEqual(["none", "aces", "agx-punchy"]);
   expect(bases.hlg.map((b) => b.id)).toEqual(["none"]);
@@ -124,13 +131,14 @@ test.if(usable)("reads a camera day straight off the card: metadata, thumbnails 
   expect(px[2]).toBeLessThan(60);
   expect(readdirSync(join(camera, "DJI_001")).sort()).toEqual([withStill, noStill].sort());
   // Full-quality preview streams the original straight off the card, seekable.
-  const original = await fetch(url(`/media/${encodeURIComponent(camId)}/original/${noStill}`), { headers: { Range: "bytes=10-109" } });
-  expect(original.status).toBe(206);
-  expect(Buffer.from(await original.arrayBuffer())).toEqual(readFileSync(join(camera, "DJI_001", noStill)).subarray(10, 110));
+  const clipOnCard = await fetch(url(`/media/${encodeURIComponent(camId)}/original/${noStill}`), { headers: { Range: "bytes=10-109" } });
+  expect(clipOnCard.status).toBe(206);
+  expect(Buffer.from(await clipOnCard.arrayBuffer())).toEqual(readFileSync(join(camera, "DJI_001", noStill)).subarray(10, 110));
 });
 
 test.if(usable)("makes previews only on request", async () => {
   const before = await json(`/api/sources/${folder}`);
+  expect(before).toMatchObject({ kind: "mac", label: "2026-02-03" });
   expect(before.clips[0]).toMatchObject({ name, profile: "dlog2", cameraKelvin: 5180, proxy: "none", exported: null });
   expect((await api(`/api/sources/${folder}/prepare`, { method: "POST", body: JSON.stringify({ names: [name, "nope.MP4"] }) })).status).toBe(200);
   await until(async () => (await json(`/api/sources/${folder}`)).clips[0].proxy === "ready");
@@ -139,44 +147,41 @@ test.if(usable)("makes previews only on request", async () => {
   expect((await proxy.arrayBuffer()).byteLength).toBe(100);
 });
 
-test.if(usable)("exports a Mac folder's clip with a record of what was applied", async () => {
+test.if(usable)("exports a clip from Videos/Original into Videos/Exported, recording what was applied in exports.json", async () => {
   const grade = { base: "aces", exposure: 0, kelvin: null, tint: 0, contrast: 1, saturation: 1 };
   expect((await api(`/api/sources/${folder}/grades`, { method: "PUT", body: JSON.stringify({ clips: { [name]: grade } }) })).status).toBe(200);
-  expect(JSON.parse(readFileSync(join(lib, folder, "grades.json"), "utf8")).clips[name]).toEqual(grade);
+  expect(JSON.parse(readFileSync(join(data, "grades.json"), "utf8")).clips[name]).toEqual(grade);
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: folder, names: [name] }) })).status).toBe(200);
   const s = await until(async () => {
     const body = await json(`/api/sources/${folder}`);
     return body.clips[0].exported && body;
   });
-  const sidecar = JSON.parse(readFileSync(join(lib, folder, "graded/DJI_20260203101500_0007_D.grade.json"), "utf8"));
-  expect(sidecar).toMatchObject({ source: `originals/${name}`, key: gradeKey(grade), quality: 100 });
-  expect(s.clips[0].exported.key).toBe(sidecar.key);
-  expect(existsSync(join(lib, folder, sidecar.lut))).toBe(true);
-  const graded = join(lib, folder, sidecar.graded);
-  expect(frames(graded)).toBe(frames(join(lib, folder, "originals", name)));
+  const record = records()[name];
+  expect(record).toMatchObject({ source: `Original/${name}`, file: "Exported/DJI_20260203101500_0007_D.mp4", key: gradeKey(grade), quality: 100 });
+  expect(s.clips[0].exported.key).toBe(record.key);
+  expect(exportedFiles()).toEqual(["DJI_20260203101500_0007_D.mp4"]);
+  const graded = join(videos, record.file);
+  expect(frames(graded)).toBe(frames(join(original, name)));
   // The stand-in base inverts: a source patch comes out as its inverse (within two H.264 round trips).
   const out = patch(graded);
-  const src = patch(join(lib, folder, "originals", name));
+  const src = patch(join(original, name));
   for (let k = 0; k < 3; k++) expect(Math.abs(out[k] - (255 - src[k]))).toBeLessThan(6);
 }, 120_000);
 
-test.if(usable)("exports straight off the card, writing only the graded copy", async () => {
+test.if(usable)("exports straight off the card, writing only the export", async () => {
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: camId, names: [withStill] }) })).status).toBe(200);
   await until(async () => (await json(`/api/sources/${encodeURIComponent(camId)}`)).clips[0].exported);
-  const dir = join(lib, day);
-  expect(readdirSync(dir).filter((f) => !f.startsWith(".")).sort()).toEqual(["graded"]);
-  expect(readdirSync(join(dir, "graded")).sort()).toEqual(["DJI_20260205090000_0001_D.grade.json", "DJI_20260205090000_0001_D.mp4", "luts"]);
-  const sidecar = JSON.parse(readFileSync(join(dir, "graded/DJI_20260205090000_0001_D.grade.json"), "utf8"));
-  expect(sidecar.source).toBe(`Pocket 4P: DCIM/DJI_001/${withStill}`);
-  expect(frames(join(dir, sidecar.graded))).toBe(frames(join(camera, "DJI_001", withStill)));
+  expect(exportedFiles()).toEqual(["DJI_20260203101500_0007_D.mp4", "DJI_20260205090000_0001_D.mp4"]);
+  const record = records()[withStill];
+  expect(record.source).toBe(`Pocket 4P: DCIM/DJI_001/${withStill}`);
+  expect(frames(join(videos, record.file))).toBe(frames(join(camera, "DJI_001", withStill)));
   expect(readdirSync(join(camera, "DJI_001")).sort()).toEqual([withStill, noStill].sort());
   const library = await json("/api/library");
   expect(library.camera.days[0]).toMatchObject({ id: camId, clips: 2, graded: 1 });
 }, 120_000);
 
-test.if(usable)("counts a graded file made outside the app as graded", async () => {
-  mkdirSync(join(lib, day, "graded"), { recursive: true });
-  writeFileSync(join(lib, day, "graded/DJI_20260205090100_0002_D.mp4"), "made by hand");
+test.if(usable)("counts an export put in Videos/Exported by hand as graded", async () => {
+  writeFileSync(join(exported, "DJI_20260205090100_0002_D.mp4"), "made by hand");
   const s = await json(`/api/sources/${encodeURIComponent(camId)}`);
   expect(s.clips[1].exported).toMatchObject({ key: null });
   expect((await json("/api/library")).camera.days[0].graded).toBe(2);
@@ -192,9 +197,8 @@ test.if(usable)("stops exporting: drops the queue, and the clip in progress leav
   expect(jobs.export.queue).toEqual([]);
   expect(jobs.export.failed.filter((f) => f.id === slow)).toEqual([]);
   expect(jobs.export.stopped.count).toBe(2);
-  const graded = join(lib, slow, "graded");
-  const left = existsSync(graded) ? readdirSync(graded, { recursive: true }).map(String) : [];
-  expect(left.filter((f) => /\.(mp4|json|cube)$/.test(f))).toEqual([]);
+  expect(exportedFiles().filter((f) => f.includes("20260207"))).toEqual([]);
+  expect(records()[slowClips[0]]).toBeUndefined();
   expect((await json(`/api/sources/${slow}`)).clips.map((c) => c.exported)).toEqual([null, null]);
 }, 120_000);
 
@@ -203,16 +207,16 @@ test.if(usable)("refuses other origins' requests, unknown clips, missing days an
   expect((await fetch(url("/api/library"), { headers: { Host: "evil.example" } })).status).toBe(421);
   expect((await api(`/api/sources/${folder}/grades`, { method: "PUT", body: JSON.stringify({ clips: { "nope.MP4": {} } }) })).status).toBe(400);
   expect((await fetch(url(`/api/sources/${encodeURIComponent("camera:2020-01-01")}`))).status).toBe(404);
+  expect((await fetch(url("/api/sources/mac:2020-01-01"))).status).toBe(404);
   expect((await fetch(url("/api/sources/..%2F..%2Fetc"))).status).toBe(404);
   expect((await fetch(url("/api/sources/.hidden"))).status).toBe(400);
   expect((await fetch(url(`/media/${folder}/proxy/..%2Fgrades.json`))).status).toBe(404);
 });
 
 test.if(usable)("moves a clip and its .LRF to the Trash, keeps its grade, and won't trash one that's exporting", async () => {
-  const dir = join(lib, slow, "originals");
   const [gone, kept] = slowClips;
   const lrf = gone.replace(".MP4", ".LRF");
-  writeFileSync(join(dir, lrf), "the camera's low-res proxy");
+  writeFileSync(join(original, lrf), "the camera's low-res proxy");
   const grade = { base: "aces", exposure: 1, kelvin: null, tint: 0, contrast: 1, saturation: 1 };
   expect((await api(`/api/sources/${slow}/grades`, { method: "PUT", body: JSON.stringify({ clips: { [gone]: grade } }) })).status).toBe(200);
   const trashOf = (clips) => api(`/api/sources/${slow}/trash`, { method: "POST", body: JSON.stringify({ clips }) });
@@ -227,10 +231,10 @@ test.if(usable)("moves a clip and its .LRF to the Trash, keeps its grade, and wo
   expect(res.status).toBe(200);
   expect((await res.json()).trashed.sort()).toEqual([lrf, gone].sort());
   expect(readdirSync(trash).sort()).toEqual([lrf, gone].sort());
-  expect(readdirSync(dir)).toEqual([kept]);
+  expect(readdirSync(original).filter((f) => f.includes("20260207"))).toEqual([kept]);
   const s = await json(`/api/sources/${slow}`);
   expect(s.clips.map((c) => c.name)).toEqual([kept]);
-  expect(s.grades[gone]).toEqual(grade);
+  expect(JSON.parse(readFileSync(join(data, "grades.json"), "utf8")).clips[gone]).toEqual(grade);
   expect((await trashOf([gone])).status).toBe(400);
   expect((await trashOf([])).status).toBe(400);
 }, 120_000);
@@ -249,22 +253,21 @@ test.if(usable)("trashes a card clip the cached listing still has after its MP4 
 });
 
 // A short moving clip of its own, for frames and sizes; its base is the inverting stand-in.
-const moving = "2026-02-13";
+const moving = "mac:2026-02-13";
 const movingClip = "DJI_20260213100000_0001_D.MP4";
-const movingFile = () => join(lib, moving, "originals", movingClip);
+const movingFile = () => join(original, movingClip);
 /** Frame `k` of a file as small RGB, read the way the export reads it (BT.709, limited range). */
 const frameAt = (file, k) =>
   execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", file, "-vf", `select=eq(n\\,${k}),scale=160:90:flags=area:in_color_matrix=bt709:in_range=tv,format=rgb24`, "-frames:v", "1", "-f", "rawvideo", "-"]);
 const meanDiff = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0) / a.length;
 
-test.if(usable)("exports the frame on screen as a graded PNG: that very frame, through the clip's grade", async () => {
-  mkdirSync(join(lib, moving, "originals"), { recursive: true });
+test.if(usable)("exports the frame on screen as a graded PNG beside the exports: that very frame, through the clip's grade", async () => {
   clip(movingFile(), "D-Log2", { busy: true, seconds: 3 });
   const res = await api("/api/export-frame", { method: "POST", body: JSON.stringify({ source: moving, name: movingClip, frame: 12 }) });
   expect(res.status).toBe(200);
   const { file } = await res.json();
-  expect(file).toBe("graded/frames/DJI_20260213100000_0001_D_f0012.png");
-  const png = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", join(lib, moving, file), "-vf", "scale=160:90:flags=area,format=rgb24", "-f", "rawvideo", "-"]);
+  expect(file).toBe("Exported/DJI_20260213100000_0001_D_f0012.png");
+  const png = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", join(videos, file), "-vf", "scale=160:90:flags=area,format=rgb24", "-f", "rawvideo", "-"]);
   const inverted = (k) => frameAt(movingFile(), k).map((v) => 255 - v);
   const [before, at, after] = [11, 12, 13].map((k) => meanDiff(png, inverted(k)));
   expect(at).toBeLessThan(4);
@@ -276,10 +279,12 @@ test.if(usable)("exports the frame on screen as a graded PNG: that very frame, t
 test.if(usable)("exports below full quality at the share of the original's bitrate it promises", async () => {
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: moving, names: [movingClip], quality: 20 }) })).status).toBe(200);
   await until(async () => (await json(`/api/sources/${moving}`)).clips[0].exported, 120_000);
-  const sidecar = JSON.parse(readFileSync(join(lib, moving, "graded/DJI_20260213100000_0001_D.grade.json"), "utf8"));
-  expect(sidecar.quality).toBe(20);
+  const record = records()[movingClip];
+  expect(record.quality).toBe(20);
   // The whole file against what the menu shows: a fifth of the original's video bitrate, plus its sound as is.
   const [c] = (await json(`/api/sources/${moving}`)).clips;
-  const rate = (statSync(join(lib, moving, sidecar.graded)).size * 8) / c.duration;
+  const rate = (statSync(join(videos, record.file)).size * 8) / c.duration;
   expect(Math.abs(rate / (c.videoBitrate * 0.2 + c.audioBitrate) - 1)).toBeLessThan(0.3);
+  // Still nothing in Exported but exports.
+  expect(exportedFiles().every((f) => /\.(mp4|png)$/.test(f) && !f.startsWith("."))).toBe(true);
 }, 180_000);
