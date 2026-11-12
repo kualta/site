@@ -301,7 +301,7 @@ async function drawThumb(clip) {
 
 // ---- library and sources ------------------------------------------------------------------------------------------
 
-/** Every source the picker can open: the camera's days (when it's plugged in), then folders on this Mac. */
+/** Every source the picker can open: the camera's days (when it's plugged in), then the days in Videos/Original. */
 const allSources = () => [...(state.library?.camera.days ?? []), ...(state.library?.folders ?? [])];
 const sourceInfo = (id) => allSources().find((s) => s.id === id);
 const sourceLabel = (s) => `${s.label} · ${s.clips} clip${s.clips === 1 ? "" : "s"}${s.graded ? ` · ${s.graded} graded` : ""}`;
@@ -1211,7 +1211,7 @@ try {
   const id = defaultSource();
   if (id) await openSource(id);
   else {
-    $("empty").textContent = `Plug in the ${state.library.camera.name}, or put clips in ${state.library.root}/<folder>/originals.`;
+    $("empty").textContent = `Plug in the ${state.library.camera.name}, or put clips in ${state.library.original}.`;
     updatePanel();
   }
 } catch (e) {
