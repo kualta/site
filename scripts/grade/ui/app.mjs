@@ -960,13 +960,15 @@ $("stop-export").addEventListener("click", async () => {
 
 /** When a pending ⌘⌫ for more than CONFIRM_OVER clips stops waiting for its confirming second press. */
 let trashArmedUntil = 0;
+/** A ⌘⌫ is on its way: another press until it lands would send the same clips again. */
+let trashBusy = false;
 
 /**
  * Move the selected clips in the list, each with the files the camera wrote beside it (the .LRF), to the Trash: the
  * card's own for a camera day, so Finder can put them back. Their grades and graded copies stay.
  */
 async function trashSelected() {
-  if (!state.source) return;
+  if (!state.source || trashBusy) return;
   const names = visibleClips().filter((c) => state.selected.has(c.name)).map((c) => c.name);
   if (!names.length) return;
   if (names.length > CONFIRM_OVER && Date.now() > trashArmedUntil) {
@@ -980,8 +982,9 @@ async function trashSelected() {
   const land = order[at + 1] ?? order[at - 1] ?? null;
   const one = names.length === 1;
   const what = one ? label(state.byName.get(names[0])).title : `${names.length} clips`;
-  await save();
+  trashBusy = true;
   try {
+    await save();
     const res = await api(`/api/sources/${encodeURIComponent(state.source)}/trash`, { method: "POST", json: { clips: names } });
     const { trashed } = await res.json();
     store.set(`grade.selection.${state.source}`, land ? [land] : []);
@@ -993,6 +996,8 @@ async function trashSelected() {
     setStatus(`Moved ${what} to the Trash: ${files}`, { first: true });
   } catch (e) {
     showError(e);
+  } finally {
+    trashBusy = false;
   }
 }
 
