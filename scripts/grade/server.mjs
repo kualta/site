@@ -315,11 +315,22 @@ async function moveToTrash(files) {
   if (left.length) throw new Error(`couldn't move ${left.join(", ")} to the Trash`);
 }
 
+/** The trash request in progress: requests run one after another. */
+let trashing = Promise.resolve();
+
 /**
  * Move clips to the Trash with the files the camera wrote beside them under the same name (DJI's low-res .LRF), and
  * drop the app's preview and thumbnail for them. Their grades and graded copies stay: the edit uses those.
+ * One request at a time, and a file already gone is skipped: a second ⌘⌫ on a clip can arrive with a card listing
+ * (cached for a few seconds) that still has it.
  */
-async function trashClips(src, names) {
+function trashClips(src, names) {
+  const run = trashing.then(() => trashNow(src, names));
+  trashing = run.catch(() => {});
+  return run;
+}
+
+async function trashNow(src, names) {
   for (const name of names) {
     if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
     const exporting = (j) => j?.id === src.id && j?.name === name;
@@ -329,8 +340,9 @@ async function trashClips(src, names) {
   for (const name of names) {
     const path = src.paths.get(name);
     const siblings = (await readdir(dirname(path))).filter((f) => f !== name && !f.startsWith(".") && stemOf(f) === stemOf(name));
-    const files = [path, ...siblings.map((f) => join(dirname(path), f))];
-    await moveToTrash(files);
+    const files = siblings.map((f) => join(dirname(path), f));
+    if (await exists(path)) files.unshift(path);
+    if (files.length) await moveToTrash(files);
     trashed.push(...files.map((f) => basename(f)));
     const k = key(src.id, name);
     jobs.thumb.queue = jobs.thumb.queue.filter((j) => j.k !== k);

@@ -233,3 +233,16 @@ test.if(usable)("moves a clip and its .LRF to the Trash, keeps its grade, and wo
   expect((await trashOf([gone])).status).toBe(400);
   expect((await trashOf([])).status).toBe(400);
 }, 120_000);
+
+test.if(usable)("trashes a card clip the cached listing still has after its MP4 already went", async () => {
+  // A second ⌘⌫ landing while the first is still moving files: the card listing (cached a few seconds) still has it.
+  const dir = join(camera, "DJI_001");
+  const lrf = noStill.replace(".MP4", ".LRF");
+  writeFileSync(join(dir, lrf), "the camera's low-res proxy");
+  await json(`/api/sources/${encodeURIComponent(camId)}`);
+  rmSync(join(dir, noStill));
+  const res = await api(`/api/sources/${encodeURIComponent(camId)}/trash`, { method: "POST", body: JSON.stringify({ clips: [noStill] }) });
+  expect(res.status).toBe(200);
+  expect((await res.json()).trashed).toEqual([lrf]);
+  expect(readdirSync(dir)).toEqual([withStill]);
+});
