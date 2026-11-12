@@ -29,9 +29,26 @@ const P4P = [
   ["04", "PrintFilm", "Film"], ["06", "Bleach", "Film"], ["11", "RetroFade", "Film"], ["10", "Mono", "Film"],
   ["05", "TealAmber", "Situational"], ["07", "NightNeon", "Situational"], ["08", "Golden", "Situational"], ["09", "Nordic", "Situational"],
 ];
+const DJI = "dji/DJI OSMO Pocket 4P";
+/** One generated file per log profile, from make_luts.py: `name(profile)` is its path under the LUT folder. */
+const perLogProfile = (name) => Object.fromEntries(["dlog2", "dlog", "hlg"].map((p) => [p, name(p)]));
+/** A make_luts.py pack: <dir>/<profile>-<slug>.cube for each [slug, name], with ids `<dir>-<slug>`. */
+const pack = (group, dir, looks) =>
+  looks.map(([slug, name]) => ({ id: `${dir}-${slug}`, name, group, files: perLogProfile((p) => `${dir}/${p}-${slug}.cube`) }));
 const REGISTRY = [
   { id: "none", name: "As shot", group: "Camera", files: { dlog2: null, dlog: null, hlg: null, rec709: null } },
-  { id: "aces", name: "ACES conversion", group: "ACES", files: { dlog2: "dlog2-to-rec709-aces2.cube", dlog: "dlog-to-rec709-aces2.cube", hlg: "hlg-to-rec709-aces2.cube" } },
+  { id: "dji", name: "Rec.709", group: "DJI", files: { dlog2: `${DJI} D-Log2 to Rec.709 V1.0 size65.cube`, dlog: `${DJI} D-Log to Rec.709 V2.0 size33.cube` } },
+  { id: "dji-vivid", name: "Rec.709 vivid", group: "DJI", files: { dlog2: `${DJI} D-Log2 to Rec.709 vivid V1.0 size65.cube`, dlog: `${DJI} D-Log to Rec.709 vivid V2.0 size33.cube` } },
+  { id: "aces", name: "ACES 2.0", group: "ACES", files: perLogProfile((p) => `${p}-to-rec709-aces2.cube`) },
+  { id: "aces1", name: "ACES 1.0", group: "ACES", files: perLogProfile((p) => `${p}-to-rec709-aces1.cube`) },
+  ...pack("ARRI", "arri", [["reveal", "ALEXA 35 REVEAL"], ["classic", "ALEXA Classic"]]),
+  ...pack("AgX", "agx", [["base", "Base"], ["punchy", "Punchy"], ["high", "High contrast"], ["low", "Low contrast"]]),
+  ...pack("OpenDRT", "opendrt", [["default", "Default"], ["colorful", "Colorful"], ["umbra", "Umbra"]]),
+  ...pack("Fujifilm", "fujifilm", [
+    ["provia", "Provia"], ["velvia", "Velvia"], ["astia", "Astia"], ["classic-chrome", "Classic Chrome"], ["reala-ace", "Reala Ace"],
+    ["pro-neg-std", "Pro Neg. Std"], ["classic-neg", "Classic Neg."], ["eterna", "Eterna"], ["eterna-bb", "Eterna Bleach Bypass"], ["acros", "Acros"],
+  ]),
+  ...pack("Sony", "sony", [["s709", "s709"], ["cool", "Cool"], ["teal-orange", "Teal & orange"], ["vintage", "Vintage"], ["warm", "Warm"]]),
   ...P4P.map(([n, name, group]) => ({ id: `p4p-${n}`, name, group: `P4P · ${group}`, files: { dlog2: `p4p/P4P_${n}_${name}_size65.cube` } })),
 ];
 
