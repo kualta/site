@@ -97,7 +97,6 @@ const state = {
   error: null,
   input: null,
   filter: ["all", "graded", "ungraded"].includes(store.get("grade.filter")) ? store.get("grade.filter") : "all",
-  fullQuality: store.get("grade.fullQuality") === true,
 };
 
 const viewer = new Viewer($("canvas"));
@@ -374,7 +373,7 @@ let prepareTimer = null;
 function prepareSelection() {
   clearTimeout(prepareTimer);
   prepareTimer = setTimeout(async () => {
-    // Full quality plays originals, so only a clip that falls back (HLG) still needs a proxy made.
+    // The preview plays originals, so only an HLG clip needs a proxy made.
     const clip = primaryClip();
     const names = clip && clip.proxy !== "ready" && !playsOriginal(clip) ? [clip.name] : [];
     if (!names.length || !state.source) return;
@@ -512,37 +511,22 @@ function setPrimary(name) {
 // ---- video and viewer ---------------------------------------------------------------------------------------------
 
 /**
- * Full quality plays the original itself at full size, decoded by the Mac (still 8-bit on the GPU: Chrome hands video
+ * The preview plays the original itself at full size, decoded by the Mac (still 8-bit on the GPU: Chrome hands video
  * to WebGL at 8 bits, so judge banding on the export).
- * HLG keeps the proxy: its HDR transfer tag invites the browser to tone-map it, which would bend what the grade sees.
+ * HLG plays a proxy: its HDR transfer tag invites the browser to tone-map it, which would bend what the grade sees.
  */
-const playsOriginal = (clip) => state.fullQuality && clip?.profile !== "hlg";
+const playsOriginal = (clip) => clip?.profile !== "hlg";
 
-/** After switching between proxy and original, carry on from the same moment. */
-function seekWhenLoaded(at) {
-  video.addEventListener(
-    "loadedmetadata",
-    () => {
-      video.currentTime = at;
-    },
-    { once: true },
-  );
-}
-
-function loadVideo(clip, { keepTime = false } = {}) {
+function loadVideo(clip) {
   const playing = !video.paused;
-  const at = video.currentTime;
   viewer.hasFrame = false;
   if (clip && playsOriginal(clip)) {
     $("empty").hidden = true;
     $("canvas").hidden = false;
     video.src = `/media/${encodeURIComponent(state.source)}/original/${encodeURIComponent(clip.name)}`;
-    if (keepTime) seekWhenLoaded(at);
     if (playing) video.play().catch(() => {});
-    showQuality(clip);
     return;
   }
-  showQuality(clip);
   if (!clip || clip.proxy !== "ready") {
     video.removeAttribute("src");
     video.load();
@@ -557,30 +541,8 @@ function loadVideo(clip, { keepTime = false } = {}) {
   $("empty").hidden = true;
   $("canvas").hidden = false;
   video.src = `/media/${encodeURIComponent(state.source)}/proxy/${encodeURIComponent(clip.stem)}.mp4`;
-  if (keepTime) seekWhenLoaded(at);
   if (playing) video.play().catch(() => {});
 }
-
-/** The quality toggle's state, and why a clip falls back to the standard preview when it does. */
-function showQuality(clip) {
-  const b = $("quality");
-  b.setAttribute("aria-pressed", String(state.fullQuality));
-  const fallback = state.fullQuality && clip?.profile === "hlg";
-  b.classList.toggle("fallback", fallback);
-  if (fallback) b.title = "Full quality isn't available for HLG clips; showing the standard preview";
-  else if (state.fullQuality) b.title = "Full quality: the original clip at full resolution, no preview compression (still 8-bit, so check banding on the export)";
-  else b.title = "Standard preview: a light 1280 px copy (turn on to see the original at full resolution)";
-}
-
-function setFullQuality(on) {
-  state.fullQuality = on;
-  store.set("grade.fullQuality", on);
-  const clip = primaryClip();
-  loadVideo(clip, { keepTime: true });
-  refreshPreview();
-  if (!on) prepareSelection();
-}
-$("quality").addEventListener("click", () => setFullQuality(!state.fullQuality));
 
 // Fullscreen: the viewer and its transport fill the screen; Esc or F leaves.
 function toggleFullscreen() {

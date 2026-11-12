@@ -473,7 +473,7 @@ async function route(req, res) {
     return res.end(Buffer.from(lut.data.buffer, lut.data.byteOffset, lut.data.byteLength));
   }
 
-  // A clip's preview proxy, its thumbnail, or the original itself (full-quality preview, streamed off the card).
+  // A clip's preview proxy, its thumbnail, or the original itself (the preview, streamed off the card).
   m = /^\/media\/([^/]+)\/(proxy|thumb|original)\/([^/]+)$/.exec(p);
   if (m) {
     const [, id, kind, file] = m;
