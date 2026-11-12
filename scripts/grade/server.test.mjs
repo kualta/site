@@ -81,6 +81,8 @@ beforeAll(async () => {
   const data = new Float32Array(2 ** 3 * 3);
   for (let b = 0, i = 0; b < 2; b++) for (let g = 0; g < 2; g++) for (let r = 0; r < 2; r++) data.set([1 - r, 1 - g, 1 - b], i++ * 3);
   writeFileSync(join(lib, "luts/dlog2-to-rec709-aces2.cube"), writeCube(2, data, "invert"));
+  mkdirSync(join(lib, "luts/agx"), { recursive: true });
+  writeFileSync(join(lib, "luts/agx/dlog2-punchy.cube"), writeCube(2, data, "agx stand-in"));
   server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
     env: { ...process.env, GRADE_ROOT: lib, GRADE_CAMERA: camera, GRADE_PORT: String(port) },
     stdio: ["ignore", "pipe", "inherit"],
@@ -101,7 +103,8 @@ test.if(usable)("lists the camera's clips by shoot day and the Mac's folders", a
     { id: folder, label: folder, clips: 1, graded: 0 },
   ]);
   const bases = await json("/api/bases");
-  expect(bases.dlog2.map((b) => b.id)).toEqual(["none", "aces"]);
+  expect(bases.dlog2.map((b) => b.id)).toEqual(["none", "aces", "agx-punchy"]);
+  expect(bases.hlg.map((b) => b.id)).toEqual(["none"]);
   expect(bases.rec709.map((b) => b.id)).toEqual(["none"]);
 });
 

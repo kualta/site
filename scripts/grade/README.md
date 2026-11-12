@@ -39,8 +39,9 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
 ## Grading
 
 - **Look**: the base look for the clip's camera profile, read from its own metadata tag. D-Log2, D-Log and HLG get
-  the ACES conversion (from DJI's curve math, out through ACES 2.0 SDR Rec.709); D-Log2 also gets the twelve P4P
-  looks. Rec.709 clips are graded as shot.
+  the ACES conversions (from DJI's curve math, out through ACES 2.0 or 1.0), ARRI, AgX, OpenDRT, Fujifilm film
+  simulations and Sony looks; D-Log2 and D-Log also get DJI's own Rec.709 LUTs, and D-Log2 the twelve P4P looks.
+  Rec.709 clips are graded as shot. A new clip starts on ACES 2.0.
 - **Exposure** in stops, **Temperature** in Kelvin (as if the camera had been set to it; it starts at the camera's
   own), **Tint** (+ magenta, − green), **Contrast** around 18% grey, **Saturation**. All of it happens in scene
   linear light before the look.
@@ -59,14 +60,33 @@ clip copied to the Mac share one grade and one export. A graded file put in `gra
 
 ## Base looks (`luts/`)
 
-| File | Made by |
-| --- | --- |
-| `dlog2-to-rec709-aces2.cube`, `dlog-…`, `hlg-…` | `uv run --with opencolorio --with numpy scripts/grade/make_luts.py ~/Movies/Pocket4P/luts` |
-| `p4p/P4P_01_Neutral_size65.cube` … `P4P_12_Punch_…` | [Codebater/pocket4-luts](https://github.com/Codebater/pocket4-luts) (CC BY 4.0), D-Log2 only |
-| `custom/<dlog2\|dlog\|hlg\|rec709>/*.cube` | your own; each shows up as a look for that profile |
+| Group | Files | From |
+| --- | --- | --- |
+| DJI | `dji/DJI OSMO Pocket 4P D-Log2 to Rec.709 [vivid] V1.0 size65.cube`, `… D-Log … V2.0 size33.cube` | DJI's own, listed on [dji.com/lut](https://www.dji.com/lut) (no HLG) |
+| ACES | `<profile>-to-rec709-aces2.cube`, `…-aces1.cube` | `make_luts.py`, OpenColorIO's ACES configs |
+| AgX | `agx/<profile>-<look>.cube` | `make_luts.py`, Blender's OpenColorIO config (needs Blender in /Applications) |
+| ARRI, Fujifilm, Sony, OpenDRT | `<pack>/<profile>-<look>.cube` | `make_luts.py`, from the makers' LUTs in `vendor/<pack>/` (below) |
+| P4P | `p4p/P4P_01_Neutral_size65.cube` … `P4P_12_Punch_…` | [Codebater/pocket4-luts](https://github.com/Codebater/pocket4-luts) (CC BY 4.0), D-Log2 only |
+| Custom | `custom/<dlog2\|dlog\|hlg\|rec709>/*.cube` | your own; each shows up as a look for that profile |
+
+```sh
+uv run --with opencolorio --with numpy scripts/grade/make_luts.py ~/Movies/Pocket4P/luts
+```
+
+Other cameras' LUTs take their own log, so `make_luts.py` converts each profile's footage into it (through
+ACES2065-1, exact for every curve and gamut involved) and runs the maker's LUT on that, unmodified. Missing packs are
+skipped. Each `vendor/<pack>/SOURCE.txt` records its download:
+
+| `vendor/` | Looks | Input | Download |
+| --- | --- | --- | --- |
+| `fujifilm/` | Provia, Velvia, Astia, Classic Chrome, Reala Ace, Pro Neg. Std, Classic Neg., Eterna, Eterna Bleach Bypass, Acros | F-Log2 / F-Gamut | [GFX ETERNA 55 3D-LUT v1.10](https://dl.fujifilm-x.com/support/lut/gfx-eterna-55-3d-lut-v110.zip), `65Grid/F-Log2/` (personal, noncommercial use; keep it out of git) |
+| `arri/` | ALEXA 35 REVEAL, ALEXA Classic | LogC4, LogC3 EI800 | ARRI's LogC4 and LogC3 LUT packages (arri.com, Color › LUTs): the Rec709 D65 gamma 2.4 files |
+| `sony/` | s709, Cool, Teal & orange, Vintage, Warm | S-Log3 / S-Gamut3.Cine | [s709Cubes.zip](https://www.sony.jp/ls-camera/knowledge/data/s709Cubes.zip), [NewCubes.zip](https://www.sony.jp/ls-camera/knowledge/data/NewCubes.zip) |
+| `opendrt/` | Default, Colorful, Umbra | its own OCIO config | [OpenDRT v1.0.0 mini config](https://github.com/jedypod/open-display-transform/releases/tag/v1.0.0) (MIT), unzipped whole |
 
 Every base takes the profile's own code values, read as limited range (the default; the P4P README's advice to read
-full range lifts blacks).
+full range lifts blacks). DJI's own LUTs agree: read as limited, D-Log2 and D-Log both put 18% grey at 0.414, and
+P4P Neutral shares the D-Log2 tone curve exactly.
 
 ## How the preview stays honest
 
