@@ -1,7 +1,6 @@
 ---
 import CornersScope from "@/components/CornersScope.astro";
 import ThemeInit from "@/components/ThemeInit.astro";
-import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?url";
 import Publisher from "@/components/Publisher";
 import { env } from "cloudflare:workers";
 import { publisherSession } from "@/lib/publisher/auth";
@@ -47,7 +46,6 @@ Astro.response.headers.set("Referrer-Policy", "same-origin");
     <meta name="robots" content="noindex,nofollow" />
     <title>{initialTab === "analytics" ? "analytics · kualta" : "post · kualta"}</title>
     <link rel="icon" href="/favicon.ico" />
-    <link rel="preload" href={fredoka} as="font" type="font/woff2" crossorigin />
     <ThemeInit />
   </head>
   <body class="publisher-page bg-bg dark:bg-dark-bg text-text dark:text-dark-text min-h-screen relative">

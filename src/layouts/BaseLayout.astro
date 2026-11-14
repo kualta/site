@@ -1,6 +1,5 @@
 ---
 import "@/styles/globals.css";
-import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?url";
 import { ClientRouter } from "astro:transitions";
 import MusicShelf from "@/components/MusicShelf.tsx";
 import musicData from "@/data/music.json";
@@ -8,8 +7,6 @@ import type { Track } from "@/types";
 import ThemeInit from "@/components/ThemeInit.astro";
 import Header from "@/components/Header.astro";
 import NotificationsButton from "@/components/NotificationsButton.astro";
-import CornersScope from "@/components/CornersScope.astro";
-import LiveVisitors from "@/components/LiveVisitors.astro";
 import { Snow } from "@/components/Snow.tsx";
 import { Toaster } from "@/components/Toaster.tsx";
 import SEO from "@/components/SEO.astro";
@@ -88,11 +85,9 @@ const robots = noindex
     <meta name="author" content={SITE_NAME} />
     <!-- the Person schema's sameAs, repeated as rel=me so profiles that link back can verify the site -->
     {SAME_AS.map((href) => <link rel="me" href={href} />)}
-    <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f8f8f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#030303" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 
-    <!-- the page is set in this face, so waiting for the stylesheet to ask for it costs a repaint -->
-    <link rel="preload" href={fredoka} as="font" type="font/woff2" crossorigin />
     <link rel="alternate" type="application/rss+xml" title={`${SITE_NAME} - posts`} href="/rss.xml" />
 
     <meta property="og:site_name" content={SITE_NAME} />
@@ -138,11 +133,9 @@ const robots = noindex
   <body
     data-music-page={musicPage ? "true" : undefined}
     data-kaomoji-results={kaomojiResultsPage ? "true" : undefined}
-    class="bg-bg dark:bg-dark-bg disable-scrollbars text-text transition-colors
-           ease-in-out delay-150 dark:text-dark-text place-items-center
-           min-h-screen flex flex-col justify-center relative"
+    class="relative flex min-h-screen flex-col items-center bg-background text-foreground
+           transition-[background-color,color] duration-200 ease-(--ease-out)"
   >
-    <div class="noise"></div>
 
     {isChristmas && <Snow client:idle />}
 
@@ -153,15 +146,7 @@ const robots = noindex
       <MusicShelf client:load transition:persist="music-player" transition:persist-props tracks={tracks} slug={musicSlug} musicPage={musicPage} />
     </main>
 
-    <CornersScope bottom_left={false} bottom_right={false} />
-    <LiveVisitors />
-    {Astro.url.pathname === "/" && (
-      <div class="home-screen-corners" aria-hidden="true">
-        <CornersScope top_left={false} top_right={false} />
-      </div>
-    )}
     <div class="page-bottom" data-home={Astro.url.pathname === "/" ? "true" : undefined}>
-      <CornersScope top_left={false} top_right={false} class="page-bottom-corner" />
       {!musicPage && !kaomojiPage && <NotificationsButton />}
     </div>
     <script>

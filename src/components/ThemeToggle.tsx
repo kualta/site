@@ -1,24 +1,17 @@
+import { Button } from "@flow-industries/ui/components/button";
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-import { MoonIcon, SunIcon } from "@/components/icons";
 
 function readTheme(): "dark" | "light" {
   if (typeof document === "undefined") return "dark";
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
-export function ThemeToggle({
-  path: initial = "/",
-  showOnHome = false,
-}: { path?: string; showOnHome?: boolean }) {
+export function ThemeToggle() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [path, setPath] = useState(initial);
 
   useEffect(() => {
-    setTheme(readTheme());
-    const update = () => {
-      setPath(window.location.pathname);
-      setTheme(readTheme());
-    };
+    const update = () => setTheme(readTheme());
     update();
     document.addEventListener("astro:after-swap", update);
     return () => document.removeEventListener("astro:after-swap", update);
@@ -33,19 +26,15 @@ export function ThemeToggle({
     } catch {}
   };
 
-  if (path === "/" && !showOnHome) {
-    return <div className="sm:w-8 sm:h-8" />;
-  }
-
   return (
-    <div className="w-8 h-8 flex items-center justify-center rounded-xl active:text-secondary-text">
-      <button type="button" onClick={toggle} aria-label="Toggle theme">
-        {theme === "dark" ? (
-          <SunIcon size={22} aria-hidden="true" />
-        ) : (
-          <MoonIcon size={22} aria-hidden="true" />
-        )}
-      </button>
-    </div>
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggle}
+      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      className="text-muted-foreground hover:text-foreground"
+    >
+      {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+    </Button>
   );
 }

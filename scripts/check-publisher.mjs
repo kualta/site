@@ -106,14 +106,14 @@ try {
     ]);
     assert.equal(await page.getByRole("navigation", { name: "Presets" }).count(), 1);
     assert.equal(await page.getByRole("textbox", { name: "Post" }).count(), 1);
-    if (mobile)
-      assert.equal(
-        await presets
-          .getByRole("button")
-          .first()
-          .evaluate((el) => getComputedStyle(el).transitionDuration),
-        "0s",
-      );
+    // Flow's base.css takes reduced motion to 0.01ms rather than 0, which reads as 1e-05s
+    if (mobile) {
+      const duration = await presets
+        .getByRole("button")
+        .first()
+        .evaluate((el) => getComputedStyle(el).transitionDuration);
+      assert.ok(Number.parseFloat(duration) < 0.001, `transition still runs under reduced motion: ${duration}`);
+    }
     const pressed = () => presets.locator('[aria-pressed="true"]').allTextContents();
     const destinations = page.getByRole("group", { name: "Share to" });
     const checked = () =>

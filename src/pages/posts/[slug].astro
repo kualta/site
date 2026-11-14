@@ -6,6 +6,8 @@ import TableOfContents, { POST_TITLE_ID } from "@/components/TableOfContents.tsx
 import ArticleComments from "@/components/ArticleComments";
 import { SITE_URL } from "@/lib/seo";
 import { getPosts, getPostContent } from "@/lib/posts";
+import { badgeVariants } from "@flow-industries/ui/components/badge";
+import { readingMinutes } from "@/lib/reading-time";
 
 export async function getStaticPaths() {
   const posts = await getPosts();
@@ -20,6 +22,9 @@ if (!post) {
 }
 
 const { Content, headings } = post;
+const published = post.data.publishedTime || post.data.date;
+const publishedLabel = new Date(published).toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+const tagClass = badgeVariants({ variant: "secondary", className: "font-normal" });
 ---
 <BaseLayout
   atprotoDocument={documentUri(atprotoConfig, slug as string)}
@@ -36,14 +41,22 @@ const { Content, headings } = post;
     wordCount: post.data.wordCount,
   }}
 >
-  <div class="max-w-2xl w-full relative mb-10">
+  <div class="relative mb-10 w-full max-w-2xl px-4">
     <TableOfContents headings={headings} title={post.data.title} client:idle />
-    <article
-      class="z-[10] max-w-2xl rounded-xl p-2 py-8 prose dark:prose-invert dark:prose-blockquote:border-dark-primary prose-img:rounded-xl"
-      data-post-body
-    >
-      <h1 id={POST_TITLE_ID} class="mb-2 text-center">{post.data.title}</h1>
-      <p class="post-subtitle mb-6 mt-0 text-center">{post.data.description}</p>
+    <article class="post-prose prose z-[10] max-w-none py-8 prose-img:rounded-xl" data-post-body>
+      <h1 id={POST_TITLE_ID} class="mb-3 text-4xl leading-tight font-medium tracking-tighter text-balance sm:text-5xl">
+        {post.data.title}
+      </h1>
+      {post.data.description && <p class="post-subtitle mt-0 mb-5">{post.data.description}</p>}
+      <div class="not-prose mb-12 flex flex-wrap items-center gap-x-3 gap-y-2 text-muted-foreground" data-post-meta>
+        <time class="font-mono text-xs tabular-nums" datetime={published}>{publishedLabel}</time>
+        <span class="font-mono text-xs tabular-nums">{readingMinutes(post.data.wordCount)} min read</span>
+        {post.data.tags.length > 0 && (
+          <span class="flex flex-wrap gap-1.5">
+            {post.data.tags.map((tag) => <a class={tagClass} href={`/posts/tags/${tag}`}>{tag.replace("-", " ")}</a>)}
+          </span>
+        )}
+      </div>
       <Content />
     </article>
     <ArticleComments url={`${SITE_URL}/posts/${slug}`} title={post.data.title} client:visible />

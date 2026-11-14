@@ -1,4 +1,5 @@
 import { MusicCheckbox } from "@/components/MusicCheckbox";
+import { toggleVariants } from "@flow-industries/ui/components/toggle";
 import { flushSync } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CloseIcon, PauseIcon, PlayIcon, RepeatIcon, SkipBackIcon, SkipForwardIcon, VolumeIcon, VolumeLowIcon, VolumeMuteIcon } from "@/components/icons";
@@ -738,14 +739,14 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
             active.score || pane === "records" ? "flex" : "hidden"
           }`}
         >
-          <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">records</h2>
+          <h2 className="text-sm font-[550] tracking-wide text-muted-foreground">records</h2>
 
           <div className="flex flex-wrap gap-1.5">
             {FILTERS.map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
-                className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${filter === key ? "is-on" : ""}`}
+                className={toggleVariants({ size: "sm", className: "filter-chip" })}
                 onClick={() => setFilter(key)}
                 aria-pressed={filter === key}
               >
@@ -783,7 +784,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
             </ul>
           </Scrollable>
           {shown.length === 0 && (
-            <p className="font-mono text-xs text-secondary-text">
+            <p className="text-xs text-muted-foreground">
               no {filter === "cover" ? "covers" : "originals"} yet
             </p>
           )}
@@ -920,7 +921,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
                 <button
                   key={name}
                   type="button"
-                  className={`filter-chip rounded-full px-2.5 py-1 font-mono text-xs ${pane === name ? "is-on" : ""}`}
+                  className={toggleVariants({ size: "sm", className: "filter-chip" })}
                   onClick={() => setPane(name)}
                   aria-pressed={pane === name}
                 >
@@ -937,7 +938,7 @@ export default function MusicShelf({ tracks, slug, musicPage }: Props) {
               pane === "lyrics" ? "flex" : "hidden"
             }`}
           >
-            <h2 className="font-mono text-xs uppercase tracking-widest text-secondary-text">lyrics</h2>
+            <h2 className="text-sm font-[550] tracking-wide text-muted-foreground">lyrics</h2>
             <MusicCheckbox label="focus sync" checked={lyricsFocus} onChange={setLyricsFocus} />
             <LyricsPanel track={active} time={time} focus={lyricsFocus} onSeek={seekTo} />
           </aside>

@@ -30,7 +30,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     renderCard ? (
       <div
         class="site-bluesky-card relative w-full min-w-0 overflow-hidden rounded-xl bg-secondary
-               drop-shadow-sm dark:bg-dark-secondary"
+               dark:bg-dark-secondary"
         data-reposted={repostedOn ? "true" : undefined}
       >
         {repostedOn && (
@@ -49,7 +49,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     ) : (
       <div
         class="flex w-full items-center justify-between gap-3 rounded-xl bg-secondary p-4
-               text-sm drop-shadow-sm dark:bg-dark-secondary"
+               text-sm dark:bg-dark-secondary"
         data-bluesky-fallback
       >
         <span class="min-w-0 truncate text-secondary-text">Post available on Bluesky</span>
@@ -85,9 +85,9 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     --bluesky-color-text-secondary: var(--secondary-text);
     --bluesky-color-border: color-mix(in oklab, var(--secondary-text) 24%, transparent);
     --bluesky-color-background: transparent;
-    --bluesky-color-background-hover: var(--primary);
+    --bluesky-color-background-hover: var(--wash);
     --bluesky-color-link: var(--text);
-    --bluesky-font-family: "Fredoka", "M PLUS Rounded 1c", "Huninn", system-ui, sans-serif;
+    --bluesky-font-family: "Geist Sans", system-ui, sans-serif;
     --bluesky-font-size-sm: 0.75rem;
     --bluesky-font-size-base: 0.75rem;
     --bluesky-font-size-lg: 0.875rem;
@@ -104,7 +104,7 @@ const repostedOn = event.action === "repost" ? formatDay(event.occurredAt) : nul
     --bluesky-color-text: var(--text-dark);
     --bluesky-color-text-secondary: var(--secondary-text);
     --bluesky-color-border: color-mix(in oklab, var(--secondary-text) 24%, transparent);
-    --bluesky-color-background-hover: var(--primary-dark);
+    --bluesky-color-background-hover: var(--wash);
     --bluesky-color-link: var(--text-dark);
   }
 

@@ -2,7 +2,7 @@ import { defineConfig } from "astro/config";
 import { readFileSync, readdirSync } from "node:fs";
 import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
-import tailwind from "@astrojs/tailwind";
+import tailwindcss from "@tailwindcss/vite";
 import sitemap from "@astrojs/sitemap";
 import cloudflare from "@astrojs/cloudflare";
 import { buildImageManifest } from "./scripts/lib/image-manifest.mjs";
@@ -25,6 +25,12 @@ function readPostLastmod() {
 
 const postLastmod = readPostLastmod();
 
+// every @flow-industries/ui component the site imports, so the optimizer bundles
+// them in its first pass rather than discovering them one page at a time
+const FLOW_UI_ENTRIES = ["badge", "button", "input", "item", "toggle", "tooltip"].map(
+  (name) => `@flow-industries/ui/components/${name}`,
+);
+
 // sizes for every file in public/, so the layout can declare real og:image
 // dimensions without reading the disk at request time
 buildImageManifest();
@@ -42,7 +48,6 @@ export default defineConfig({
   integrations: [
     react(),
     mdx(),
-    tailwind({ applyBaseStyles: false }),
     sitemap({
       customPages: [
         "https://pomo.kualta.dev",
@@ -88,8 +93,9 @@ export default defineConfig({
     ],
   },
   vite: {
-    optimizeDeps: { exclude: ["@ffmpeg/ffmpeg"] },
+    optimizeDeps: { exclude: ["@ffmpeg/ffmpeg"], include: ["lucide-react", ...FLOW_UI_ENTRIES] },
     plugins: [
+      tailwindcss(),
       {
         // This package ships Astro source. Cloudflare's SSR optimizer would
         // otherwise treat its `.astro` component as plain JavaScript.
@@ -101,7 +107,26 @@ export default defineConfig({
               exclude: ["@astro-community/astro-embed-bluesky"],
               // Prebundle the renderer helper and content schema before workerd
               // loads React, avoiding a second React instance during discovery.
-              include: ["picomatch", "astro/zod", "react-icons/ri"],
+              // Flow UI ships source, and Base UI's store is CommonJS, which workerd
+              // cannot load unbundled; found late, either would re-run the optimizer
+              // mid-session and load React twice.
+              include: [
+                "picomatch",
+                "astro/zod",
+                "react-icons/ri",
+                "lucide-react",
+                ...FLOW_UI_ENTRIES,
+                "use-sync-external-store/shim",
+                "use-sync-external-store/shim/with-selector",
+                // the post pages' markdown pipeline, found on the first post visited
+                "unified",
+                "remark-parse",
+                "remark-mdx",
+                "remark-gfm",
+                "remark-stringify",
+                "mdast-util-to-string",
+                "yaml",
+              ],
             },
           };
         },

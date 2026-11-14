@@ -27,13 +27,13 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
 >
   <div data-activity-skeleton hidden={!!feed} role="status" class="space-y-3">
     <span class="sr-only">Loading recent activity</span>
-    <div aria-hidden="true" class="h-6 w-48 rounded bg-secondary motion-safe:animate-pulse dark:bg-dark-secondary" />
+    <div aria-hidden="true" class="h-6 w-48 rounded-sm bg-secondary motion-safe:animate-pulse" />
     {[1, 2, 3].map(() => (
-      <div aria-hidden="true" class="h-20 w-full rounded-xl bg-secondary motion-safe:animate-pulse dark:bg-dark-secondary" />
+      <div aria-hidden="true" class="h-20 w-full rounded-xl bg-secondary motion-safe:animate-pulse" />
     ))}
   </div>
   <div class="min-w-0" data-activity-content hidden={!feed}>
-    <h2 id="activity-presence" class="text-balance text-base font-bold">
+    <h2 id="activity-presence" class="text-lg font-medium tracking-tighter text-balance">
       <span class="presence-trigger relative inline-block">
         <span
           class="cursor-help"
@@ -46,18 +46,18 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
         <span
           id="presence-explainer"
           role="tooltip"
-          class="presence-tooltip rounded-xl bg-secondary p-3 text-xs font-normal
-                 text-secondary-text drop-shadow-sm dark:bg-dark-secondary"
+          class="presence-tooltip rounded-md bg-foreground px-3 py-2 text-xs font-normal tracking-normal
+                 text-background/70"
         >
           When was kualta last seen
-          <span class="mt-1 block text-text dark:text-dark-text" data-presence-detail>
+          <span class="mt-1 block text-background" data-presence-detail>
             {presenceDetail}
           </span>
         </span>
       </span>
     </h2>
     <div class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-secondary-text">
-      <time datetime={feed?.lastSeenAt ?? undefined} class="tabular-nums" data-activity-last-seen hidden={!lastSeenText}>
+      <time datetime={feed?.lastSeenAt ?? undefined} class="font-mono tabular-nums" data-activity-last-seen hidden={!lastSeenText}>
         {lastSeenText}
       </time>
       <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>

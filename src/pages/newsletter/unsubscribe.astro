@@ -1,6 +1,7 @@
 ---
 import { env, waitUntil } from 'cloudflare:workers';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { buttonVariants } from '@flow-industries/ui/components/button';
 import { unsubscribe } from '@/lib/newsletter/subscriptions';
 import { verifyToken } from '@/lib/newsletter/security';
 export const prerender = false;
@@ -17,13 +18,14 @@ if (Astro.request.method === 'POST' && id && env.NEWSLETTER_DB) {
   } catch { failed = true; Astro.response.status = 503; }
 }
 if (Astro.request.method === 'POST' && (!id || !env.NEWSLETTER_DB)) Astro.response.status = id ? 503 : 400;
+const confirmClass = buttonVariants({ size: "lg" });
 ---
 <BaseLayout title="Unsubscribe" noindex>
   <section class="max-w-md w-full px-6 pb-24 space-y-6 text-center">
-    <h1 class="text-3xl">{completed ? "You're unsubscribed." : 'Unsubscribe'}</h1>
+    <h1 class="text-3xl font-medium tracking-tighter text-balance">{completed ? "You're unsubscribed." : 'Unsubscribe'}</h1>
     {completed ? <p>You won’t receive any more newsletter emails.</p> : failed ? <p>Couldn’t save that change. Please try again.</p> :
       !id ? <p>Use the unsubscribe link at the bottom of an email.</p> : null}
-    {!completed && id && <form method="POST"><button class="rounded-xl bg-primary px-6 py-3 text-text hover:opacity-80" type="submit">Unsubscribe</button></form>}
-    <a href="/" class="inline-block underline">Back to the site</a>
+    {!completed && id && <form method="POST"><button class={confirmClass} type="submit">Unsubscribe</button></form>}
+    <a href="/" class="inline-block text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">Back to the site</a>
   </section>
 </BaseLayout>
