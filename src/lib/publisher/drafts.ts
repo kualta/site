@@ -1,5 +1,6 @@
 import { defaultMetadata, platforms, support } from "./presets";
 import { MAX_LOCATION, PostError, postMedia, postUploads, validatePost, validId, type MediaBucket } from "./server";
+import { UPLOAD_LIFETIME } from "./schedule";
 
 /** A video post prepared from the terminal, waiting in the composer for the owner to publish it. */
 export interface Draft {
@@ -192,8 +193,8 @@ export async function deleteDraft(
   if (free.length) await bucket.delete(free);
 }
 
-/** The bucket expires every object a week after it's uploaded, a draft along with its video. */
-export const DRAFT_LIFETIME = 7 * 86_400_000;
+/** The bucket expires every object as long after it's uploaded as any upload, a draft along with its video. */
+export const DRAFT_LIFETIME = UPLOAD_LIFETIME;
 /** What the composer lists of a draft waiting to be posted. */
 export interface DraftSummary {
   id: string;

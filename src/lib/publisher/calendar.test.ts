@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import type { NewsletterDB } from "../newsletter/types";
 import { calendarPosts } from "./calendar";
 import { STOPPED_BEFORE } from "./server";
+import { UPLOAD_LIFETIME } from "./schedule";
 
 function database() {
   const sqlite = new Database(":memory:");
@@ -118,8 +119,8 @@ test("the calendar shows each destination on the day it published or is schedule
     ],
   });
   expect(posts[1].cover).toBe("c2");
-  // It goes out an hour before its upload's week is up, at the latest.
-  expect(posts[1].expires).toBe(16 * day - 60_000 - 3_600_000);
+  // It goes out an hour before its upload expires, at the latest.
+  expect(posts[1].expires).toBe(9 * day - 60_000 + UPLOAD_LIFETIME - 3_600_000);
   expect(posts[1].targets.map((t) => [t.platform, t.at, t.scheduled])).toEqual([
     ["instagram", 11 * day, true],
     ["xiaohongshu", 12 * day, true],

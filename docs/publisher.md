@@ -10,7 +10,7 @@ Grain's AppView, with KV caching. It does not fall back to Bluesky posts.
    in both server audience and dialog origin lists. The website verifies Flow
    sessions server-side and admits only the non-guest username `kualta`.
 2. Create the private R2 bucket: `bunx wrangler r2 bucket create kualta-publisher-media`.
-   Do not enable public access. Set a seven-day expiration lifecycle rule for
+   Do not enable public access. Set a 31-day expiration lifecycle rule for
    uploads (including abandoned uploads) in the Cloudflare dashboard.
 3. Apply D1 migrations: `bunx wrangler d1 migrations apply NEWSLETTER_DB --remote`.
    Publisher tables are separate from existing newsletter tables.
@@ -255,7 +255,7 @@ the server still refuses to queue the same video twice.
 Text is checked before the upload as a post to every video destination, so a draft opens
 ready whichever ones are selected, and it therefore needs a title and a Chinese version.
 Videos over the 90 MB upload limit are re-encoded to fit. Drafts are small R2 objects
-beside the media, and the bucket's seven-day lifecycle rule expires them together.
+beside the media, and the bucket's 31-day lifecycle rule expires them together.
 
 The `crosspost-video` skill in `.agents/skills` finds an OpenFilm film's final video and
 writes the JSON. `openfilm-chinese` makes a film's Chinese version in a `<film>-zh` folder
@@ -275,8 +275,14 @@ necessary before relying on the browser upload adapters, and on Farcaster and Le
 
 History, its own tab at post.kualta.dev/history, shows posts sent through this app, with
 saved title/caption, photo/video previews, links and outcomes for each destination. Older
-pages remain available after upload expiry; previews become unavailable after the seven-day
+pages remain available after upload expiry; previews become unavailable after the 31-day
 media retention window.
+
+Once a video post's video has expired, its **Manage** panel offers **Upload again**: choose the
+video (and the Chinese video, if Xiaohongshu needs it) and optionally a new cover, and the post
+takes the new uploads in place of the expired ones. **Retry publishing** and **Crosspost to**
+then work as before. Retry and crossposting check that the uploads a destination needs still
+exist and say so when they don't.
 
 Deleting from Farcaster or Lens removes the post but not its media: Grove answers "could
 not find resource" when asked to delete recent uploads, so photos and videos stay at their

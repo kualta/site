@@ -4,11 +4,12 @@ import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
 import PlatformIcon from "./PlatformIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { AlertIcon, CheckIcon, CloseIcon, ImageIcon, VideoIcon, type IconComponent } from "@/components/icons";
+import { AlertIcon, CheckIcon, CloseIcon, ImageIcon, VideoIcon } from "@/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import PublisherChinese from "./PublisherChinese";
 import PublisherCover, { type Cover } from "./PublisherCover";
+import MediaButton from "./MediaButton";
 import {
   defaultPreferences,
   MAX_PHOTOS,
@@ -122,46 +123,6 @@ function videoShape(file: File): Promise<VideoShape | undefined> {
     document.addEventListener("visibilitychange", read);
     read();
   });
-}
-/** A toolbar button that opens its own file picker. */
-function MediaButton({
-  accept,
-  multiple = false,
-  label,
-  hint,
-  Icon,
-  disabled,
-  onFiles,
-}: {
-  accept: string;
-  multiple?: boolean;
-  label: string;
-  hint: string;
-  Icon: IconComponent;
-  disabled: boolean;
-  onFiles: (files: File[]) => void;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        accept={accept}
-        multiple={multiple}
-        hidden
-        onChange={(event) => {
-          const files = Array.from(event.target.files || []);
-          event.target.value = "";
-          onFiles(files);
-        }}
-      />
-      <button type="button" title={hint} disabled={disabled} onClick={() => input.current?.click()}>
-        <Icon size={18} />
-        {label}
-      </button>
-    </>
-  );
 }
 /** A message held at the bottom of the window: errors are announced at once, notices when the reader is free. */
 function Toast({ tone, text, onDismiss }: { tone: "error" | "notice"; text: string; onDismiss: () => void }) {
@@ -700,7 +661,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       await api("jobs", pending.payload);
       setSubmitted(false);
       setPostsVersion((v) => v + 1);
-      // Uploads expire in a week; a small picture stays with the post for Analytics.
+      // Uploads expire after 31 days; a small picture stays with the post for Analytics.
       const picture = cover?.file ?? files[0];
       if (picture)
         thumbnailOf(picture)

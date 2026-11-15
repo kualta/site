@@ -6,7 +6,7 @@ import type { CalendarPost, CalendarTarget } from "@/lib/publisher/calendar";
 import { needsTitle, platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
 import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
 import { readMonth } from "@/lib/publisher/route";
-import { localInput, UPLOAD_LIFETIME } from "@/lib/publisher/schedule";
+import { localInput, SCHEDULE_WINDOW } from "@/lib/publisher/schedule";
 import { parseTags, problem, renderVariant } from "@/lib/publisher/variants";
 
 type Props = {
@@ -113,7 +113,7 @@ function onDay(time: number, day: string): number {
   return new Date(year, month - 1, date, at.getHours(), at.getMinutes()).getTime();
 }
 /** The latest a post can go out: within the next week, and before its uploads expire. */
-const latest = (post: CalendarPost) => Math.min(Date.now() + UPLOAD_LIFETIME, post.expires ?? Number.POSITIVE_INFINITY);
+const latest = (post: CalendarPost) => Math.min(Date.now() + SCHEDULE_WINDOW, post.expires ?? Number.POSITIVE_INFINITY);
 /** A destination's time as its field starts: its scheduled one, or none for one waiting on the laptop or stopped. */
 const startingTime = (target: CalendarTarget) => (target.scheduled ? localInput(target.at) : "");
 const briefPlatforms: Platform[] = ["twitter", "bluesky", "farcaster"];

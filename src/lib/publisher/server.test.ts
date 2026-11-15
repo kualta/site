@@ -10,6 +10,7 @@ import {
   postUploads,
   stopTarget,
   retryTarget,
+  replaceMedia,
   rescheduleTarget,
   editPost,
   MEDIA_EXPIRED,
@@ -21,6 +22,7 @@ import {
   validatePost,
 } from "./server";
 import { defaultMetadata } from "./presets";
+import { UPLOAD_LIFETIME } from "./schedule";
 import type { NewsletterDB } from "../newsletter/types";
 const post = () => ({
   id: crypto.randomUUID(),
@@ -262,10 +264,10 @@ describe("queue", () => {
     const { db, sqlite } = database();
     const hour = 3_600_000;
     const day = 24 * hour;
-    // The post's video went up two days ago, so its uploads last five more days.
+    // The post's video went up long enough ago that its uploads last five more days.
     sqlite
       .query("INSERT INTO publisher_media (id, kind, name, job_id, created_at) VALUES ('m', 'video', 'v', 'job', ?)")
-      .run(Date.now() - 2 * day);
+      .run(Date.now() - UPLOAD_LIFETIME + 5 * day);
     const target = (id: string, state: string, message: string | null = null) =>
       sqlite
         .query(
@@ -548,8 +550,10 @@ test("a retry queues a failed destination again only while its media still exist
     (sqlite.query("SELECT id FROM publisher_targets WHERE platform = ?").get(platform) as { id: string }).id;
   const state = () =>
     sqlite.query("SELECT state, message, claim FROM publisher_targets WHERE platform = 'youtube'").get();
-  // A week after upload the bucket has dropped the video, so the helper could only fail.
-  await expect(retryTarget(db, { head: async () => null }, job.id, id("youtube"))).rejects.toThrow(MEDIA_EXPIRED);
+  // A month after upload the bucket has dropped the video, so the helper could only fail.
+  await expect(retryTarget(db, { head: async () => null }, job.id, id("youtube"))).rejects.toThrow(
+    `${MEDIA_EXPIRED} Upload it again to publish it.`,
+  );
   expect(state()).toEqual({ state: "failed", message: "Upload rejected", claim: "c" });
   const kept = { head: async () => ({}) };
   expect(await retryTarget(db, kept, job.id, id("youtube"))).toBe(true);
@@ -558,6 +562,95 @@ test("a retry queues a failed destination again only while its media still exist
   expect(await retryTarget(db, kept, job.id, id("tiktok"))).toBe(false);
   expect(await retryTarget(db, kept, job.id, id("youtube"))).toBe(false);
   expect(await retryTarget(db, kept, crypto.randomUUID(), id("youtube"))).toBe(false);
+});
+/** A video post to YouTube and Xiaohongshu with a cover and a Chinese video and cover, its uploads recorded. */
+function videoPost() {
+  const [video, cover, zhVideo, zhCover] = [1, 2, 3, 4].map((): string => crypto.randomUUID());
+  const job = validatePost({
+    ...post(),
+    kind: "video",
+    media: [video],
+    cover,
+    platforms: ["youtube", "xiaohongshu"],
+    zh: { title: "散步", text: "周末散步。", topics: ["旅行"], video: zhVideo, cover: zhCover },
+  });
+  const { db, sqlite, payload } = published(job);
+  const record = (id: string, kind: string, jobId: string | null, at = 1) =>
+    sqlite
+      .query("INSERT INTO publisher_media (id, kind, name, created_at, job_id) VALUES (?, ?, 'media', ?, ?)")
+      .run(id, kind, at, jobId);
+  record(video, "video", job.id);
+  record(cover, "photo", job.id);
+  record(zhVideo, "video", job.id);
+  record(zhCover, "photo", job.id);
+  const fail = (platform: string) =>
+    sqlite.query("UPDATE publisher_targets SET state = 'failed' WHERE platform = ?").run(platform);
+  const target = (platform: string) =>
+    (sqlite.query("SELECT id FROM publisher_targets WHERE platform = ?").get(platform) as { id: string }).id;
+  return { job, db, sqlite, payload, record, fail, target, old: { video, cover, zhVideo, zhCover } };
+}
+test("a retry needs only the uploads its own destination publishes", async () => {
+  const { job, db, fail, target, old } = videoPost();
+  fail("youtube");
+  fail("xiaohongshu");
+  // Only the Chinese version has expired: YouTube can go again, Xiaohongshu can't.
+  const bucket = { head: async (id: string) => ([old.zhVideo, old.zhCover].includes(id) ? null : {}) };
+  expect(await retryTarget(db, bucket, job.id, target("youtube"))).toBe(true);
+  await expect(retryTarget(db, bucket, job.id, target("xiaohongshu"))).rejects.toThrow(MEDIA_EXPIRED);
+});
+test("an expired video post takes new uploads, then retries and crossposts with them", async () => {
+  const { job, db, sqlite, payload, record, fail, target, old } = videoPost();
+  fail("youtube");
+  const [video, cover]: string[] = [crypto.randomUUID(), crypto.randomUUID()];
+  record(video, "video", null, 2);
+  record(cover, "photo", null, 2);
+  const deleted: string[][] = [];
+  const bucket = {
+    head: async (id: string) => ([video, cover].includes(id) ? {} : null),
+    delete: async (keys: string | string[]) => void deleted.push([keys].flat()),
+  };
+  await replaceMedia(db, bucket, { job: job.id, video, cover });
+  expect(payload().media).toEqual([video]);
+  expect(payload().cover).toBe(cover);
+  expect(payload().variants.youtube.cover).toBeUndefined();
+  // The Chinese video stays for a later upload; its cover was a frame beside the old cover, gone with it.
+  expect(payload().zh).toEqual({ title: "散步", text: "周末散步。", topics: ["旅行"], video: old.zhVideo });
+  expect(payload().variants.xiaohongshu.video).toBe(old.zhVideo);
+  // The post now expires by its new uploads; the replaced ones go from the records and the bucket.
+  expect(sqlite.query("SELECT id, job_id FROM publisher_media ORDER BY created_at, id").all()).toEqual([
+    { id: old.zhVideo, job_id: job.id },
+    ...[video, cover].sort().map((id) => ({ id, job_id: job.id })),
+  ]);
+  expect(deleted).toEqual([[old.video, old.cover, old.zhCover]]);
+  expect(await retryTarget(db, bucket, job.id, target("youtube"))).toBe(true);
+  expect(await addDestinations(db, bucket, { job: job.id, platforms: ["tiktok"] })).toEqual(["tiktok"]);
+});
+test("only fresh uploads of the right kind can replace a video post's", async () => {
+  const { job, db, sqlite, record } = videoPost();
+  const bucket = { head: async () => ({}), delete: async () => {} };
+  const queued = crypto.randomUUID();
+  record(queued, "video", crypto.randomUUID());
+  const photo = crypto.randomUUID();
+  record(photo, "photo", null);
+  await expect(replaceMedia(db, bucket, { job: job.id })).rejects.toThrow("Choose the video");
+  await expect(replaceMedia(db, bucket, { job: job.id, video: queued })).rejects.toThrow("already queued");
+  await expect(replaceMedia(db, bucket, { job: job.id, video: photo })).rejects.toThrow("already queued");
+  await expect(replaceMedia(db, bucket, { job: job.id, video: crypto.randomUUID() })).rejects.toThrow("missing");
+  const fresh = crypto.randomUUID();
+  record(fresh, "video", null);
+  sqlite.query("UPDATE publisher_targets SET state = 'working' WHERE platform = 'youtube'").run();
+  await expect(replaceMedia(db, bucket, { job: job.id, video: fresh })).rejects.toThrow("finished publishing");
+  const text = validatePost({ ...post(), kind: "text", media: [], caption: "Hi", platforms: ["bluesky"] });
+  const other = published(text);
+  await expect(replaceMedia(other.db, bucket, { job: text.id, video: fresh })).rejects.toThrow("Only a video post");
+});
+test("a post whose scheduled time has passed can still be crossposted, its schedule kept", async () => {
+  const job = { ...validatePost({ ...post(), platforms: ["grain"] }), schedule: { grain: Date.now() - 86_400_000 } };
+  const { db, payload } = published(job);
+  expect(await addDestinations(db, { head: async () => ({}) }, { job: job.id, platforms: ["bluesky"] })).toEqual([
+    "bluesky",
+  ]);
+  expect(payload().schedule).toEqual(job.schedule);
 });
 test("a post from before Farcaster and Lens existed can still be crossposted to them", async () => {
   const job = validatePost({ ...post(), kind: "text", title: "", media: [], platforms: ["bluesky"], caption: "Hi" });

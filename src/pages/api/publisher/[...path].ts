@@ -20,6 +20,8 @@ import {
   PostError,
   stopTarget,
   retryTarget,
+  replaceMedia,
+  type MediaReplacement,
   rescheduleTarget,
   MEDIA_EXPIRED,
   editPost,
@@ -43,7 +45,7 @@ import {
   saveComposerDraft,
   saveDraft,
 } from "@/lib/publisher/drafts";
-import { EXPIRY_MARGIN, UPLOAD_LIFETIME } from "@/lib/publisher/schedule";
+import { EXPIRY_MARGIN, UPLOAD_LIFETIME, WEEK } from "@/lib/publisher/schedule";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { calendarPosts } from "@/lib/publisher/calendar";
@@ -350,6 +352,10 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "crosspost" && request.method === "POST")
       return json({ platforms: await addDestinations(db, bucket, (await request.json()) as Record<string, unknown>) });
+    if (path === "replace-media" && request.method === "POST") {
+      await replaceMedia(db, bucket, (await request.json()) as MediaReplacement);
+      return json({ ok: true });
+    }
     if (path === "link" && request.method === "POST")
       return json(await linkPublication(db, (await request.json()) as Record<string, unknown>), 201);
     if (path === "unlink" && request.method === "POST") {
@@ -368,7 +374,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
           ? json({ id: post.id })
           : json({ error: "Post identifier already used" }, 409);
       const uploads = postUploads(post).map((upload) => upload.id);
-      // The bucket removes an upload a week after it went up, so a scheduled post must go out before its first one does.
+      // The bucket removes an upload a month after it went up, so a scheduled post must go out before its first one does.
       let expires = Number.POSITIVE_INFINITY;
       for (const { id, kind } of postUploads(post)) {
         const media = await db
@@ -402,7 +408,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     // When each platform last posted or is scheduled to, for the composer's "Next free slot": a week back and on.
     if (path === "schedule" && request.method === "GET") {
-      const since = Date.now() - UPLOAD_LIFETIME;
+      const since = Date.now() - WEEK;
       const { results } = await db
         .prepare(
           `SELECT platform, COALESCE(scheduled_at, finished_at, started_at, ?) AS at FROM publisher_targets

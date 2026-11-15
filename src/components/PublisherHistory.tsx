@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDownIcon, TrashIcon } from "@/components/icons";
+import { ChevronDownIcon, TrashIcon, VideoIcon } from "@/components/icons";
 import {
   kindNames,
   platformNames,
@@ -11,12 +11,15 @@ import {
   type PostKind,
 } from "@/lib/publisher/presets";
 import { publicationLink } from "@/lib/publisher/links";
-import { localInput } from "@/lib/publisher/schedule";
-import { STOPPED_BEFORE } from "@/lib/publisher/server";
+import { localInput, UPLOAD_LIFETIME } from "@/lib/publisher/schedule";
+import { coverPlatforms, STOPPED_BEFORE } from "@/lib/publisher/server";
 import { parseTags } from "@/lib/publisher/variants";
 import type { DraftSummary } from "@/lib/publisher/drafts";
+import { frameAt } from "@/lib/publisher/frame";
+import MediaButton from "./MediaButton";
 import PlatformIcon from "./PlatformIcon";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
+import PublisherCover, { type Cover } from "./PublisherCover";
 
 type Target = {
   id: string;
@@ -50,9 +53,11 @@ type Post = {
     alt: string;
     alts?: string[];
     tags?: string[];
-    zh?: { title: string; text: string; topics: string[] };
+    zh?: { title: string; text: string; topics: string[]; video?: string };
   };
   targets: Target[];
+  /** For a video post, the uploads the bucket has expired. */
+  expired?: string[];
 };
 type Page = { posts: Post[]; next: string | null };
 type Props = {
@@ -169,7 +174,7 @@ function Thumbnail({ post }: { post: Post["post"] }) {
   if (post.kind === "text") return null;
   const src = `/api/publisher/media/${post.media[0]}`;
   let preview: React.ReactNode;
-  // Uploads expire after seven days; the history stays.
+  // Uploads expire after 31 days; the history stays.
   if (expired || !post.media.length) preview = <span>{kindNames[post.kind]}</span>;
   else if ((post.mediaKinds?.[0] ?? post.kind) === "photo")
     preview = <img src={src} alt={post.alts?.[0] || post.alt || ""} loading="lazy" onError={() => setExpired(true)} />;
@@ -293,6 +298,116 @@ function Crosspost({ post, request, onDone, onError }: PostActionProps) {
   );
 }
 /** Adds a post the owner published themselves, such as a repost on a new account, so its stats count toward this one. */
+/** Which of a video post's videos the bucket has expired: its own, and its Chinese version's. */
+function expiredVideos(post: Post): { video: boolean; zh: boolean } {
+  const expired = post.post.kind === "video" ? post.expired ?? [] : [];
+  const zh = post.post.zh?.video;
+  return { video: expired.includes(post.post.media[0]), zh: Boolean(zh && expired.includes(zh)) };
+}
+/** One video, up to the upload limit, or a reason it can't go up. */
+function videoProblem(file: File): string | null {
+  return file.type.startsWith("video/") && file.size <= 90e6 ? null : "Choose one video, up to 90 MB.";
+}
+async function upload(file: File): Promise<string> {
+  const response = await fetch("/api/publisher/media", {
+    method: "POST",
+    headers: { "Content-Type": file.type },
+    body: file,
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Upload failed");
+  return result.id;
+}
+/** Puts a video post's expired video back, so its destinations can be retried and it can be crossposted. */
+function Reupload({ post, request, onDone, onError }: PostActionProps) {
+  const [video, setVideo] = useState<File>();
+  const [zhVideo, setZhVideo] = useState<File>();
+  const [cover, setCover] = useState<Cover>();
+  const [busy, setBusy] = useState(false);
+  const expired = expiredVideos(post);
+  function choose(file: File | undefined, set: (file: File) => void) {
+    if (!file) return;
+    const problem = videoProblem(file);
+    if (problem) return onError(problem);
+    onError("");
+    set(file);
+  }
+  async function send() {
+    setBusy(true);
+    onError("");
+    try {
+      const ids: Record<string, string> = {};
+      if (video) ids.video = await upload(video);
+      if (cover) ids.cover = await upload(cover.file);
+      if (zhVideo) ids.zhVideo = await upload(zhVideo);
+      // Xiaohongshu's Chinese version gets its own cover: its frame at the chosen moment.
+      if (cover && zhVideo) ids.zhCover = await upload(await frameAt(zhVideo, cover.at ?? 0, "cover-zh.jpg"));
+      await request("replace-media", { job: post.id, ...ids });
+      setVideo(undefined);
+      setZhVideo(undefined);
+      setCover(undefined);
+      await onDone();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const size = (file: File) => `${file.name} · ${(file.size / 1e6).toFixed(1)} MB`;
+  return (
+    <fieldset className="publisher-crosspost publisher-reupload">
+      <legend>Upload again</legend>
+      <p className="publisher-note">
+        Uploads expire after {UPLOAD_LIFETIME / 86_400_000} days. Choose the {expired.video ? "video" : "Chinese video"}{" "}
+        again to retry or crosspost this post.
+      </p>
+      {expired.video && (
+        <div className="publisher-reupload-file">
+          <MediaButton
+            accept="video/*"
+            label={video ? "Choose another video" : "Video"}
+            hint="The post's video, up to 90 MB"
+            Icon={VideoIcon}
+            disabled={busy}
+            onFiles={([file]) =>
+              choose(file, (next) => {
+                setVideo(next);
+                setCover(undefined);
+              })
+            }
+          />
+          {video && <span className="publisher-note">{size(video)}</span>}
+        </div>
+      )}
+      {expired.zh && (
+        <div className="publisher-reupload-file">
+          <MediaButton
+            accept="video/*"
+            label={zhVideo ? "Choose another Chinese video" : "Chinese video"}
+            hint="The video made for Chinese audiences, for Xiaohongshu, up to 90 MB"
+            Icon={VideoIcon}
+            disabled={busy}
+            onFiles={([file]) => choose(file, setZhVideo)}
+          />
+          {zhVideo && <span className="publisher-note">{size(zhVideo)}</span>}
+        </div>
+      )}
+      {video && (
+        <PublisherCover
+          video={video}
+          value={cover}
+          onChange={setCover}
+          platforms={coverPlatforms.map((p) => platformNames[p]).join(", ")}
+          disabled={busy}
+          onError={onError}
+        />
+      )}
+      <button disabled={busy || (!video && !zhVideo)} onClick={() => void send()}>
+        {busy ? "Uploading…" : "Upload"}
+      </button>
+    </fieldset>
+  );
+}
 function LinkPost({ post, request, onDone, onError }: PostActionProps) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -531,6 +646,8 @@ export default function PublisherHistory({
     const problems = post.targets.filter((t) => ["bad", "warn"].includes(status(t).tone));
     const dates = (post.post.datesTaken ?? []).flatMap((date, index) => (date ? [{ date, index }] : []));
     const crosspostable = !deleted && crosspostOptions(post).length > 0;
+    const { video: videoExpired, zh: zhExpired } = expiredVideos(post);
+    const reuploadable = !deleted && (videoExpired || zhExpired);
     const stoppable = post.targets.some((t) => ["queued", "working"].includes(t.state));
     const manageable = !deleted || removable || problems.length > 0 || dates.length > 0 || stoppable;
     const expanded = open === post.id;
@@ -712,6 +829,7 @@ export default function PublisherHistory({
                       Photo {index + 1} · taken {new Date(date).toLocaleString()}
                     </p>
                   ))}
+                  {reuploadable && <Reupload post={post} request={request} onDone={refresh} onError={onError} />}
                   {crosspostable && <Crosspost post={post} request={request} onDone={refresh} onError={onError} />}
                   {!deleted && <LinkPost post={post} request={request} onDone={refresh} onError={onError} />}
                   {removable && (

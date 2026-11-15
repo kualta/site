@@ -320,6 +320,27 @@ try {
     const halloweenCrosspost = halloween.getByRole("group", { name: "Crosspost to" });
     assert.equal(await halloweenCrosspost.locator("label", { hasText: "TikTok" }).count(), 0);
     await halloween.getByRole("button", { name: "Close" }).click();
+    // Its videos expired before YouTube was retried: the post takes the video again, then retries and crossposts.
+    const lorax = history.locator(".publisher-history-item", { hasText: "Lorax wisdom, part 7" });
+    await lorax.getByRole("button", { name: "Manage" }).click();
+    const reupload = lorax.getByRole("group", { name: "Upload again" });
+    await reupload.getByText("Uploads expire after 31 days.", { exact: false }).waitFor();
+    assert.equal(await reupload.getByRole("button", { name: "Chinese video" }).count(), 1);
+    const sendReupload = reupload.getByRole("button", { name: "Upload", exact: true });
+    assert.equal(await sendReupload.isDisabled(), true);
+    await reupload.locator('input[type="file"][accept="video/*"]').first().setInputFiles(wideClip);
+    await reupload.getByText("wide.webm", { exact: false }).waitFor();
+    await reupload.getByRole("group", { name: /^Cover · YouTube/ }).waitFor();
+    await shot("history-reupload");
+    await sendReupload.click();
+    await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "replace-media"));
+    const replaced = await page.evaluate(() => window.publisherRequests.find((r) => r.path === "replace-media").body);
+    assert.equal(replaced.job, "00000000-0000-4000-8000-000000000008");
+    assert.match(replaced.video, /^[0-9a-f-]{36}$/);
+    assert.deepEqual(Object.keys(replaced).sort(), ["job", "video"]);
+    await reupload.waitFor({ state: "detached" });
+    await lorax.getByRole("button", { name: "Retry publishing" }).waitFor();
+    await lorax.getByRole("button", { name: "Close" }).click();
     await page.getByRole("button", { name: "Compose", exact: true }).click();
 
     // Text only: the Text preset reaches Bluesky and X; media-only destinations say why they sit out.

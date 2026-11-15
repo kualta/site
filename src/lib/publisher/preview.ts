@@ -13,7 +13,7 @@ export type PreviewSource = { src: string; video?: true; upload?: true };
 const upload = (id: string) => `/api/publisher/media/${id}`;
 /**
  * Where a post's picture can come from, best first: its kept thumbnail, its cover, a still from YouTube, then its
- * first photo or video. Uploads expire after seven days. A video file comes last because the browser downloads it to
+ * first photo or video. Uploads expire after 31 days. A video file comes last because the browser downloads it to
  * show a frame.
  */
 export function previewSources(
