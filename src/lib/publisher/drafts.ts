@@ -25,6 +25,8 @@ export interface Draft {
   zhTopicsText?: string;
   /** Saved from the composer: when its video was uploaded, which is when the bucket starts counting its week. */
   created?: number;
+  /** Saved from the composer: the Pipeline piece it is, which moves to Posted when the draft is queued. */
+  content?: string;
 }
 
 const videoDestinations = platforms.filter((platform) => support[platform].includes("video"));
@@ -107,6 +109,7 @@ export function validateComposerDraft(value: unknown): Omit<Draft, "id" | "creat
     !optionalId(d.cover) ||
     (d.coverAt !== undefined && !(typeof d.coverAt === "number" && d.coverAt >= 0 && d.coverAt < 86_400)) ||
     !optionalText(d.zhTopicsText, 500) ||
+    !optionalId(d.content) ||
     (zh !== undefined &&
       (!text(zh.title, 100) ||
         !text(zh.text, 5000) ||
@@ -141,6 +144,7 @@ export function validateComposerDraft(value: unknown): Omit<Draft, "id" | "creat
     ...(d.cover ? { cover: d.cover } : {}),
     ...(d.coverAt !== undefined && d.cover ? { coverAt: d.coverAt } : {}),
     ...(d.location ? { location: d.location } : {}),
+    ...(d.content ? { content: d.content } : {}),
   };
 }
 
