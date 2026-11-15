@@ -1,5 +1,15 @@
 import { expect, test } from "bun:test";
-import { closestPlace, publicationUrl, tikTokCaptionParts } from "./browser.mjs";
+import { closestPlace, draftListed, publicationUrl, tikTokCaptionParts } from "./browser.mjs";
+
+test("a TikTok draft counts as saved once the draft list carries its caption's first line", () => {
+  const list = { status_code: 0, total_count: 1, draft_list: [{ desc: "time to go out love #fyp" }] };
+  expect(draftListed(list, "time to go out love\n\n#fyp #walk")).toBe(true);
+  expect(draftListed(list, "something else\n\n#fyp")).toBe(false);
+  expect(draftListed({ status_code: 0, total_count: 1 }, "\n#fyp")).toBe(true);
+  expect(draftListed({ status_code: 0, total_count: 0 }, "")).toBe(false);
+  expect(draftListed({ status_code: 8, total_count: 1, draft_list: list.draft_list }, "time to go out love")).toBe(false);
+  expect(draftListed(null, "time to go out love")).toBe(false);
+});
 
 test("TikTok links photo posts apart from videos; a YouTube post links to the post", () => {
   expect(publicationUrl("tiktok", "video", "7")).toBe("https://www.tiktok.com/@_/video/7");
