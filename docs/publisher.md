@@ -279,6 +279,24 @@ Queue tests cover claim exclusivity, unsupported destinations and interrupted
 work. Tests do not publish externally. Authenticated account acceptance remains
 necessary before relying on the browser upload adapters, and on Farcaster and Lens.
 
+## Pipeline
+
+The Pipeline tab, at post.kualta.dev/pipeline, tracks each piece of content from idea to post.
+Its stages run **Idea**, **Script ready**, **Footage ready**, **Edit ready** and **Posted**, and
+each stage is a column with the piece that most recently reached it at the top. Type a title under
+**New idea** to add one. The button on a card moves it to the next stage. Clicking its title opens
+its title, its notes (script, shots, links) and its stage, which can be set to any stage, plus
+**Delete**.
+
+**Compose** on an Edit ready card opens the composer linked to that piece (`?content=<id>`). The
+composer's **Pipeline** field shows the link, and it can link any piece that isn't posted yet,
+including from a draft. A draft saved from the composer keeps its link. Queueing the post moves the
+piece to Posted and records the post, and the card then links to the post's numbers in Analytics.
+Moving a posted piece back to an earlier stage drops that record. Cancelling the post before it
+goes out moves the piece back to Edit ready. Pieces marked Posted by hand have no post recorded.
+Posted shows the latest 30. Pieces live in D1 (`publisher_content`, `0012_publisher_content.sql`),
+and the tab reads them when it opens, never on a timer.
+
 ## History and deleting publications
 
 History, its own tab at post.kualta.dev/history, shows posts sent through this app, with

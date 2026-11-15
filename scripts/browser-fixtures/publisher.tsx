@@ -337,6 +337,41 @@ const listed = (item: (typeof saved)[string], created: number) => ({
 drafts = [...Object.values(saved).map((item) => listed(item, Date.now())), ...drafts].filter(
   (item, i, all) => all.findIndex((other) => other.id === item.id) === i,
 );
+// The pipeline: a piece at every stage, the posted one linked to the first post in History.
+type Piece = {
+  id: string;
+  title: string;
+  notes: string;
+  stage: string;
+  job_id: string | null;
+  created_at: number;
+  stage_at: number;
+  thumbnail: number | null;
+};
+const piece = (n: number, title: string, stage: string, daysAgo: number, notes = ""): Piece => ({
+  id: `00000000-0000-4000-8000-0000000c0${String(n).padStart(3, "0")}`,
+  title,
+  notes,
+  stage,
+  job_id: null,
+  created_at: Date.now() - (daysAgo + 3) * day,
+  stage_at: Date.now() - daysAgo * day,
+  thumbnail: null,
+});
+let pieces: Piece[] = [
+  piece(1, "Lorax wisdom, part 8", "idea", 0),
+  piece(2, "Why Bogotá has no seasons", "idea", 4, "Rain at 3pm every day. Find the IDEAM chart."),
+  piece(
+    3,
+    "Colombian breakfast tier list",
+    "script",
+    1,
+    "Hook: arepa vs. calentado.\nS tier: changua (fight me)\nA tier: tamal\nEnd on the coffee.",
+  ),
+  piece(4, "Night market walk", "footage", 2, "42 clips on the Pocket, graded."),
+  piece(5, "Square windows", "edit", 0, "Final cut is in OpenFilm."),
+  { ...piece(6, "this, too, is modern art", "posted", 0), job_id: history.posts[0].id },
+];
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const url = new URL(String(input), location.href);
@@ -430,6 +465,32 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     for (const post of history.posts as { id: string; expired?: string[] }[])
       if (post.id === body.job) post.expired = [];
     return json({ ok: true });
+  }
+  if (path === "content" && method === "GET")
+    return json({ items: [...pieces].sort((a, b) => b.stage_at - a.stage_at) });
+  if (path === "content" && method === "POST") {
+    const created = { ...piece(0, body.title.trim(), "idea", 0), id: crypto.randomUUID(), notes: body.notes ?? "" };
+    pieces = [created, ...pieces];
+    return json(created, 201);
+  }
+  if (path.startsWith("content/")) {
+    const found = pieces.find((item) => `content/${item.id}` === path);
+    if (!found) return json({ error: "This piece was deleted" }, 404);
+    if (method === "DELETE") {
+      pieces = pieces.filter((item) => item !== found);
+      return json({ ok: true });
+    }
+    if (method === "PATCH") {
+      const stage = body.job ? "posted" : body.stage ?? found.stage;
+      Object.assign(found, {
+        title: body.title?.trim() ?? found.title,
+        notes: body.notes ?? found.notes,
+        stage_at: stage === found.stage ? found.stage_at : Date.now(),
+        stage,
+        job_id: stage === "posted" ? body.job ?? found.job_id : null,
+      });
+    }
+    return json(found);
   }
   if (path === "crosspost") return json({ platforms: JSON.parse(String(init.body)).platforms });
   if (path === "translate") return json({ title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });

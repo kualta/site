@@ -49,6 +49,14 @@ import { EXPIRY_MARGIN, UPLOAD_LIFETIME, WEEK } from "@/lib/publisher/schedule";
 import { platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { calendarPosts } from "@/lib/publisher/calendar";
+import {
+  createContent,
+  deleteContent,
+  listContent,
+  readContent,
+  releaseJob,
+  updateContent,
+} from "@/lib/publisher/content";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
 import { isTag } from "@/lib/publisher/variants";
 export const prerender = false;
@@ -147,6 +155,24 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!Number.isInteger(from) || !Number.isInteger(to) || to <= from || to - from > 45 * 86_400_000)
         return json({ error: "Choose a month" }, 400);
       return json({ posts: await calendarPosts(db, from, to) });
+    }
+    // The Pipeline: each piece of content from its idea to the post it went out as.
+    if (path === "content" && request.method === "GET") return json({ items: await listContent(db) });
+    if (path === "content" && request.method === "POST")
+      return json(await createContent(db, await request.json()), 201);
+    if (path.startsWith("content/")) {
+      const id = path.slice("content/".length);
+      if (!validId(id)) return json({ error: "Invalid content" }, 400);
+      const missing = () => json({ error: "This piece was deleted" }, 404);
+      if (request.method === "GET") {
+        const item = await readContent(db, id);
+        return item ? json(item) : missing();
+      }
+      if (request.method === "PATCH") {
+        const item = await updateContent(db, id, await request.json());
+        return item ? json(item) : missing();
+      }
+      if (request.method === "DELETE") return (await deleteContent(db, id)) ? json({ ok: true }) : missing();
     }
     if (path === "delete-publications" && request.method === "POST") {
       const data = (await request.json()) as { job: string; target?: string; confirmed?: boolean };
@@ -563,6 +589,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       await db.batch([
         db.prepare("DELETE FROM publisher_targets WHERE job_id = ?").bind(id),
         db.prepare("DELETE FROM publisher_thumbnails WHERE job_id = ?").bind(id),
+        releaseJob(db, id),
         db.prepare("DELETE FROM publisher_jobs WHERE id = ?").bind(id),
         db.prepare("DELETE FROM publisher_media WHERE job_id = ?").bind(id),
       ]);

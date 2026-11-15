@@ -2,6 +2,7 @@ import PublisherAnalytics from "./PublisherAnalytics";
 import PublisherCalendar from "./PublisherCalendar";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
+import PublisherPipeline from "./PublisherPipeline";
 import PlatformIcon from "./PlatformIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AlertIcon, CheckIcon, CloseIcon, ImageIcon, VideoIcon } from "@/components/icons";
@@ -36,7 +37,8 @@ import "@/styles/publisher.css";
 import type { Draft } from "@/lib/publisher/drafts";
 import { describeProgress, readWithProgress } from "@/lib/publisher/download";
 import { frameAt } from "@/lib/publisher/frame";
-import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost } from "@/lib/publisher/server";
+import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost, validId } from "@/lib/publisher/server";
+import { stageNames, stages, type Content } from "@/lib/publisher/content";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 import { readPath, tabPath, type Tab } from "@/lib/publisher/route";
 import {
@@ -248,6 +250,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const [openDraftId, setOpenDraftId] = useState<string | null>(null);
   const [draftsVersion, setDraftsVersion] = useState(0);
   const [postsVersion, setPostsVersion] = useState(0);
+  // The Pipeline piece this post is, from the composer's address or its draft; queueing the post moves it to Posted.
+  const [contentId, setContentId] = useState<string | null>(() => {
+    if (typeof window === "undefined" || readPath(location.pathname).tab !== "compose") return null;
+    const id = new URLSearchParams(location.search).get("content");
+    return validId(id) ? id : null;
+  });
+  // The pieces still on their way, which the composer offers to link.
+  const [pieces, setPieces] = useState<Content[]>([]);
   const draftId = useRef<string | null>(null);
   // A draft's video is already in Cloudflare, so publishing it doesn't upload it again.
   const storedMedia = useRef(new WeakMap<File, string>());
@@ -465,6 +475,31 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       document.removeEventListener("visibilitychange", poll);
     };
   }, [access]);
+  // Linking a piece is optional, so the composer works the same when the pipeline can't be read.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new post is the trigger to read it again
+  useEffect(() => {
+    if (access !== "owner" || tab !== "compose") return;
+    let active = true;
+    api("content")
+      .then((result: { items: Content[] }) => {
+        if (active) setPieces(result.items.filter((piece) => piece.stage !== "posted"));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [access, tab, postsVersion]);
+  // The address keeps the linked piece, so a reload or coming back to Compose keeps it too.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate reads the address itself
+  useEffect(() => {
+    if (tab !== "compose") return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("content") === contentId) return;
+    if (contentId) params.set("content", contentId);
+    else params.delete("content");
+    const query = params.toString();
+    navigate(location.pathname, query ? `?${query}` : "", true);
+  }, [tab, contentId]);
   // A draft sent from the terminal shows its text and settings as soon as they arrive, then its videos follow.
   // Until they're in the composer stays locked, so it can't go out as a text post.
   useEffect(() => {
@@ -499,6 +534,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         filled = true;
         setPendingDraft({ zhVideo: Boolean(draft.zh?.video), cover: Boolean(draft.cover) });
         setOpenDraftId(id);
+        if (draft.content) setContentId(draft.content);
         const active = draft.preset;
         if (active) setPreferences((p) => (p.presets.some((item) => item.id === active) ? { ...p, active } : p));
         // Edits this tab made before a reload that the draft didn't get in time win over its saved text.
@@ -676,6 +712,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           .catch(() => {})
           .finally(() => setDraftsVersion((v) => v + 1));
       }
+      if (linkedPiece) {
+        const piece = linkedPiece;
+        setPieces((list) => list.filter((item) => item.id !== piece.id));
+        api(`content/${piece.id}`, { job: pending.id }, "PATCH").catch((e) =>
+          setError(`The post is queued, but “${piece.title}” didn't move to Posted: ${(e as Error).message}`),
+        );
+      }
       if (sentLocation) {
         const next = [sentLocation, ...recentPlaces.filter((recent) => recent !== sentLocation)].slice(0, 8);
         setRecentPlaces(next);
@@ -734,6 +777,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     }
     savedDraft.current = "";
     setDraftStatus(undefined);
+    setContentId(null);
     clearMedia();
     setPlace("");
     setZhPlace("");
@@ -820,6 +864,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       zhTopicsText,
       ...(coverId ? { cover: coverId, ...(cover?.at !== undefined ? { coverAt: cover.at } : {}) } : {}),
       location: place.trim(),
+      ...(contentId ? { content: contentId } : {}),
     };
   }
   /** The open draft as the composer has it, with anything not uploaded yet marked, to tell whether it's saved. */
@@ -1006,6 +1051,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const unplanned = plan.filter(({ at }) => at === null).map(({ platform }) => platformNames[platform]);
   const schedule =
     when === "now" ? undefined : Object.fromEntries(plan.flatMap(({ platform, at }) => (at ? [[platform, at]] : [])));
+  const linkedPiece = pieces.find((piece) => piece.id === contentId);
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
@@ -1055,6 +1101,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
             <button aria-pressed={tab === "compose"} onClick={() => openTab("compose")}>
               Compose
             </button>
+            <button type="button" aria-pressed={tab === "pipeline"} onClick={() => openTab("pipeline")}>
+              Pipeline
+            </button>
             <button aria-pressed={tab === "history"} onClick={() => openTab("history")}>
               History
             </button>
@@ -1068,6 +1117,18 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               Accounts
             </button>
           </nav>
+          {tab === "pipeline" && (
+            <PublisherPipeline
+              request={api}
+              onError={setError}
+              onCompose={(id) => {
+                setContentId(id);
+                openTab("compose");
+              }}
+              statsHref={(job) => `${tabPath(base, "analytics")}?post=${job}`}
+              postsVersion={postsVersion}
+            />
+          )}
           {tab === "history" && (
             <PublisherHistory
               request={api}
@@ -1390,6 +1451,33 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                   placeholder="#travel #bogota"
                 />
               </label>
+              {!!pieces.length && (
+                <label>
+                  Pipeline
+                  <select
+                    value={linkedPiece?.id ?? ""}
+                    disabled={busy || submitted}
+                    onChange={(e) => setContentId(e.target.value || null)}
+                  >
+                    <option value="">Not in the pipeline</option>
+                    {/* Closest to posting first. */}
+                    {[...stages].reverse().map((stage) => {
+                      const here = pieces.filter((piece) => piece.stage === stage);
+                      if (!here.length) return null;
+                      return (
+                        <optgroup key={stage} label={stageNames[stage]}>
+                          {here.map((piece) => (
+                            <option key={piece.id} value={piece.id}>
+                              {piece.title}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                  {linkedPiece && <small className="publisher-note">Moves to Posted once the post is queued.</small>}
+                </label>
+              )}
               {!!locationTargets.length && (
                 <label>
                   Location<span className="publisher-for"> · {namesOf(locationTargets)}</span>

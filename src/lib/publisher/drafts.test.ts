@@ -177,6 +177,10 @@ describe("drafts saved from the composer", () => {
     expect(() => validateComposerDraft({ ...edited(), zh: { ...text().zh, cover } })).toThrow("can't be saved");
     expect(validateComposerDraft({ ...edited(), coverAt: 2 })).not.toHaveProperty("coverAt");
     expect(validateComposerDraft({ ...edited(), cover, coverAt: 2 }).coverAt).toBe(2);
+    // The Pipeline piece it is comes back when it opens.
+    const content = "00000000-0000-4000-8000-0000000000c1";
+    expect(validateComposerDraft({ ...edited(), content }).content).toBe(content);
+    expect(() => validateComposerDraft({ ...edited(), content: "idea" })).toThrow("can't be saved");
   });
 
   test("save over a draft from the terminal, keeping when its video went up, and let go of a replaced cover", async () => {

@@ -1,8 +1,8 @@
 import type { Metric } from "./metrics";
 import type { PostKind } from "./presets";
 
-export type Tab = "compose" | "history" | "calendar" | "analytics" | "accounts";
-const TAB = /\/(history|calendar|analytics|accounts)\/?$/;
+export type Tab = "compose" | "pipeline" | "history" | "calendar" | "analytics" | "accounts";
+const TAB = /\/(pipeline|history|calendar|analytics|accounts)\/?$/;
 /**
  * Which tab a path opens, and the composer's own path: `/` or another tab's own, such as `/history`, on
  * post.kualta.dev, `/publish…` locally.

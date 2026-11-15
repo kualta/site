@@ -23,7 +23,7 @@ const server = await createServer({
       name: "publisher-tabs",
       configureServer(vite) {
         vite.middlewares.use((request, _response, next) => {
-          request.url = request.url?.replace(/^\/publisher\.html\/(history|calendar|analytics|accounts)(?=\?|$)/, "/publisher.html");
+          request.url = request.url?.replace(/^\/publisher\.html\/(pipeline|history|calendar|analytics|accounts)(?=\?|$)/, "/publisher.html");
           next();
         });
       },
@@ -1128,9 +1128,119 @@ try {
     await page.getByRole("button", { name: "Accounts", exact: true }).click();
     await page.getByRole("region", { name: "Publishing accounts" }).waitFor();
     assert.deepEqual(await chrome(), composeChrome);
-    // Every tab fits a 390px phone, without scrolling.
-    assert.ok(await page.locator(".publisher-tabs").evaluate((bar) => bar.scrollWidth <= bar.clientWidth));
+    // Every tab fits from a 430px window up; a phone scrolls them sideways, the open one in view, the page still fitting.
+    assert.deepEqual(
+      await page.evaluate(() => {
+        const bar = document.querySelector(".publisher-tabs");
+        const shown = bar.getBoundingClientRect();
+        const open = bar.querySelector('[aria-pressed="true"]').getBoundingClientRect();
+        return {
+          fits: bar.scrollWidth <= bar.clientWidth,
+          inView: open.left >= shown.left && open.right <= shown.right + 0.5,
+          pageFits: document.documentElement.scrollWidth <= innerWidth,
+        };
+      }),
+      { fits: width >= 430, inView: true, pageFits: true },
+    );
     if (shots) await page.screenshot({ path: path.join(shots, `accounts-tab-${name}.png`), fullPage: true });
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+
+  // The Pipeline holds each piece of content in a column for its stage. A piece moves on a stage at a time and opens to
+  // edit; composed from Edit ready and queued, it moves to Posted, linked to its post.
+  for (const [width, name] of [
+    [1280, "desktop"],
+    [390, "mobile"],
+  ]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("http://127.0.0.1:8797/publisher.html/pipeline");
+    const board = page.getByRole("region", { name: "Pipeline" });
+    const column = (stage) => board.getByRole("region", { name: stage, exact: true });
+    const card = (stage, title) => column(stage).getByRole("listitem").filter({ hasText: title });
+    await card("Posted", "this, too, is modern art").waitFor();
+    // Side by side when there's room; a phone takes them one under another, in order.
+    const [first, last] = [await column("Idea").boundingBox(), await column("Posted").boundingBox()];
+    assert.ok(width > 900 ? first.y === last.y && first.x < last.x : last.y > first.y, `columns at ${width}px`);
+    assert.equal(
+      await card("Posted", "this, too, is modern art").getByRole("link", { name: "Stats" }).getAttribute("href"),
+      "/publisher.html/analytics?post=00000000-0000-4000-8000-000000000001",
+    );
+    const idea = board.getByRole("textbox", { name: "New idea" });
+    await idea.fill("Hammock physics");
+    await board.getByRole("button", { name: "Add" }).click();
+    await card("Idea", "Hammock physics").waitFor();
+    assert.equal(await idea.inputValue(), "");
+    assert.equal(await column("Idea").locator(".publisher-pipeline-open").first().textContent(), "Hammock physics");
+    await board.getByRole("button", { name: "Move “Hammock physics” to Script ready" }).click();
+    await card("Script ready", "Hammock physics").waitFor();
+    assert.equal(await card("Idea", "Hammock physics").count(), 0);
+    // Opened, it takes its script and can move to any stage.
+    await card("Script ready", "Hammock physics").getByRole("button", { name: "Hammock physics", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Hammock physics" });
+    const save = editor.getByRole("button", { name: "Save" });
+    assert.ok(await save.isDisabled());
+    await editor.getByLabel("Notes").fill("Why you sag in the middle.\nCatenary, not parabola.");
+    await editor.getByLabel("Stage").selectOption("footage");
+    assert.ok(await save.isEnabled());
+    if (shots) {
+      await page.waitForTimeout(300); // let Save fade in
+      await page.screenshot({ path: path.join(shots, `pipeline-editor-${name}.png`) });
+    }
+    await save.click();
+    await editor.waitFor({ state: "hidden" });
+    await card("Footage ready", "Hammock physics").getByText("Why you sag in the middle.").waitFor();
+    if (shots) await page.screenshot({ path: path.join(shots, `pipeline-${name}.png`), fullPage: true });
+    page.once("dialog", (dialog) => dialog.accept());
+    await card("Footage ready", "Hammock physics").getByRole("button", { name: "Hammock physics", exact: true }).click();
+    await editor.getByRole("button", { name: "Delete" }).click();
+    await editor.waitFor({ state: "hidden" });
+    assert.equal(await board.getByText("Hammock physics").count(), 0);
+    // Composed, the composer links it, offering only the pieces not yet posted.
+    const squareWindows = "00000000-0000-4000-8000-0000000c0005";
+    await board.getByRole("button", { name: "Compose “Square windows”" }).click();
+    const link = page.getByRole("combobox", { name: /^Pipeline/ });
+    await page.getByText("Moves to Posted once the post is queued.").waitFor();
+    assert.equal(new URL(page.url()).search, `?content=${squareWindows}`);
+    assert.equal(await link.inputValue(), squareWindows);
+    assert.deepEqual(await link.locator("option").allTextContents(), [
+      "Not in the pipeline",
+      "Square windows",
+      "Night market walk",
+      "Colombian breakfast tier list",
+      "Lorax wisdom, part 8",
+      "Why Bogotá has no seasons",
+    ]);
+    // A reload keeps the link.
+    await page.reload();
+    await page.getByText("Moves to Posted once the post is queued.").waitFor();
+    if (shots) await page.screenshot({ path: path.join(shots, `pipeline-compose-${name}.png`), fullPage: true });
+    await page
+      .getByRole("navigation", { name: "Presets" })
+      .getByRole("button", { name: "Text post", exact: true })
+      .click();
+    await page.getByRole("textbox", { name: "Post" }).fill("Square windows, out now");
+    await page.getByRole("button", { name: "Publish to 2 places" }).click();
+    const linked = await page
+      .waitForFunction((id) => {
+        const job = window.publisherRequests.find((r) => r.path === "jobs")?.body.id;
+        const patch = window.publisherRequests.find((r) => r.path === `content/${id}` && r.method === "PATCH");
+        return job && patch && { job, body: patch.body };
+      }, squareWindows)
+      .then((handle) => handle.jsonValue());
+    assert.deepEqual(linked.body, { job: linked.job });
+    // The composer lets go of it, and so does its address.
+    await page.waitForFunction(() => location.search === "");
+    assert.equal(await link.inputValue(), "");
+    await page.getByRole("button", { name: "Pipeline", exact: true }).click();
+    assert.equal(
+      await card("Posted", "Square windows").getByRole("link", { name: "Stats" }).getAttribute("href"),
+      `/publisher.html/analytics?post=${linked.job}`,
+    );
+    assert.equal(await card("Edit ready", "Square windows").count(), 0);
     assert.deepEqual(errors, []);
     await context.close();
   }
