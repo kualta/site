@@ -5,7 +5,7 @@ description: Make the version of an OpenFilm film for Chinese audiences, with it
 
 # A film's Chinese version
 
-The Chinese version is a film of its own, in a folder beside the original, so the original never changes and the person can edit either in Studio. The result is two videos and a link to the composer. The person clicks Publish there. Never click it or queue the post for them.
+The Chinese version is a film of its own, in the `zh/` folder inside the original's, so the original never changes and the person can edit either in Studio. The result is two videos and a link to the composer. The person clicks Publish there. Never click it or queue the post for them.
 
 Run `npx -y openfilm@latest` first and follow the manual it prints.
 
@@ -17,16 +17,16 @@ Take the first that applies:
 - The nearest folder above the working directory holding `film.html`.
 - `recent[0].path` in `~/.openfilm/studio.json`, the film last opened in Studio.
 
-`<film>` is its folder and `<name>` the folder's name.
+`<film>` is its folder and `<name>` the folder's name (`013-maybe-later`). If that's a film's `zh/` folder, `<film>` is the folder above it.
 
 ## 2. Make the copy
 
-If `<film>-zh` already exists, it's the person's: they may have edited it in Studio. Don't copy over it. Read it, and change only what the original's changes or this request call for.
+If `<film>/zh` already exists, it's the person's: they may have edited it in Studio. Don't copy over it. Read it, and change only what the original's changes or this request call for.
 
-Otherwise, copy it. `-c` clones the media without using disk, and `-p` keeps file times, which is how OpenFilm knows a transcript still matches its media.
+Otherwise, copy the film into it. Leave out `zh/` itself and the renders; the glob skips `.film`, which a copy must not take. `-c` clones the media without using disk, and `-p` keeps file times, which is how OpenFilm knows a transcript still matches its media.
 
-    cp -cRp <film> <film>-zh
-    rm -rf <film>-zh/.film <film>-zh/<name>.mp4
+    mkdir <film>/zh
+    for f in <film>/*; do case "${f##*/}" in zh|*.mp4|*.mov|*.webm) ;; *) cp -cRp "$f" <film>/zh/ ;; esac; done
 
 ## 3. Translate what's on screen
 
@@ -51,28 +51,30 @@ Music and lyrics stay. For each voice in the film:
 
 **A person's recorded voice stays, with Chinese subtitles,** unless they ask for a dub. Beside each `<clip>.vtt`, write `<clip>.zh.vtt`: the same lines at the same times, in Chinese. Speech with no transcript needs `npx -y openfilm@latest get asr`; if no service is connected for it, tell the person which ones make it. Never draw subtitles in a page.
 
-Then pick the language, the one file in `.film` to write here, since a new folder has no other way to set it. Copy `<film>/.film/subtitles.json` to `<film>-zh/.film/subtitles.json` if it exists, to keep the person's look, and set `"language": "zh"`. Without one, write `{ "language": "zh" }`.
+Then pick the language, the one file in `.film` to write here, since a new folder has no other way to set it. Copy `<film>/.film/subtitles.json` to `<film>/zh/.film/subtitles.json` if it exists, to keep the person's look, and set `"language": "zh"`. Without one, write `{ "language": "zh" }`.
 
 **Narration made with `get tts`, under `assets/audio/vo`, is spoken again in Chinese.** Find a voice with `get voice --language zh`, then run `get tts --text … --voice …` for each line. Chinese runs a different length, so move the clips around it to keep each line with its picture, and any sound effects with them. If no voice-over service is connected, use subtitles and say so.
 
 ## 5. Open, check and render
 
-In `<film>-zh`:
+In `<film>/zh`:
 
     npx -y openfilm@latest open .
     npx -y openfilm@latest look
+
+Studio's projects list shows only top-level folders, so it opens this one by its path and keeps it under recents.
 
 Look at every moment with words: no empty boxes where glyphs are missing, nothing cut off or overflowing. `look <seconds>` shows one frame at full size.
 
 Then render it, with `--subtitles` if step 4 wrote any:
 
-    npx -y openfilm@latest render --subtitles
+    npx -y openfilm@latest render --subtitles --out ../<name>-zh.mp4
 
-That writes `<film>-zh/<name>-zh.mp4`. If the person exports from Studio instead, use that file.
+That writes `<film>/<name>-zh.mp4`, beside the original's `<name>.mp4`. Without `--out` it would land in `zh/` as `zh.mp4`. If the person exports from Studio instead, use that file.
 
 ## 6. Send both versions
 
-Follow the `crosspost-video` skill for `<film>`. It finds this version by its folder name and sends it as `zh.video`.
+Follow the `crosspost-video` skill for `<film>`. It finds this version in `<film>/zh` and sends it as `zh.video`.
 
 ## 7. Report
 

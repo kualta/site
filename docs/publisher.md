@@ -265,8 +265,9 @@ Videos over the 90 MB upload limit are re-encoded to fit. Drafts are small R2 ob
 beside the media, and the bucket's 31-day lifecycle rule expires them together.
 
 The `crosspost-video` skill in `.agents/skills` finds an OpenFilm film's final video and
-writes the JSON. `openfilm-chinese` makes a film's Chinese version in a `<film>-zh` folder
-beside it, which `crosspost-video` then sends as `zh.video`. Link each in once:
+writes the JSON. `openfilm-chinese` makes a film's Chinese version in the film's `zh/`
+folder and renders it beside the original as `<name>-zh.mp4`, which `crosspost-video`
+then sends as `zh.video`. Link each in once:
 `ln -s ~/Projects/site/.agents/skills/<skill> ~/.claude/skills/`.
 
 ## Validation

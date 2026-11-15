@@ -15,23 +15,23 @@ Take the first that applies:
 - The nearest folder above the working directory holding `film.html`.
 - `recent[0].path` in `~/.openfilm/studio.json`, the film last opened in Studio.
 
-A folder ending in `-zh` is a film's Chinese version: its original is the same path without the ending, and that's the film to post.
+A folder named `zh` inside a film's folder is that film's Chinese version: the folder above it is the film to post.
 
 ## 2. Find the final video
 
-Candidates, where `<name>` is the film's folder name:
+Candidates, where `<name>` is the film's folder name (`013-maybe-later`):
 - `<film>/<name>.mp4`, from `openfilm render`. Each render overwrites it.
 - `~/Desktop/<name>*` (`.mp4`, `.mov`, `.webm`), from a Studio export, named like `<name> 9x16 1080p.mp4`. Exports go to whichever folder was chosen for that export, so a file the person points at always wins.
 
 A candidate is fresh when this prints nothing:
 
-    find <film> -type f -newer <video> -not -path '*/.film/*' -not -path '<film>/<name>.mp4' -not -name .DS_Store
+    find <film> -type f -newer <video> -not -path '*/.film/*' -not -path '<film>/zh/*' -not -path '<film>/<name>.mp4' -not -path '<film>/<name>-zh.mp4' -not -name .DS_Store
 
 Take the newest fresh candidate. If a fresh 9x16 export and a wider one both exist, take the 9x16 for a film up to three minutes.
 
 If none is fresh, run `npx -y openfilm@latest render` in the film's folder: being asked to post the film is being asked for the file. Say in your report that you rendered it.
 
-**A Chinese version.** If `<film>-zh` exists, made by the `openfilm-chinese` skill, find its video the same way: `<film>-zh/<name>-zh.mp4` or `~/Desktop/<name>-zh*`. If none is fresh, render it, adding `--subtitles` if it has any `*.zh.vtt` files. Xiaohongshu gets this video and every other destination the original. If `<film>/film.html` is newer than `<film>-zh/film.html`, the original may have changed since it was translated, so say so in your report. Without that folder Xiaohongshu gets the original; don't make a Chinese version unasked.
+**A Chinese version.** If `<film>/zh` exists, made by the `openfilm-chinese` skill, find its video: `<film>/<name>-zh.mp4`, or a Studio export of it, which Studio names after its folder (`~/Desktop/zh 9x16 1080p.mp4`). It's fresh when `find <film>/zh -type f -newer <video> -not -path '*/.film/*' -not -name .DS_Store` prints nothing. If none is fresh, render it in `<film>/zh` with `npx -y openfilm@latest render --out ../<name>-zh.mp4`, adding `--subtitles` if it has any `*.zh.vtt` files. Xiaohongshu gets this video and every other destination the original. If `<film>/film.html` is newer than `<film>/zh/film.html`, the original may have changed since it was translated, so say so in your report. Without that folder Xiaohongshu gets the original; don't make a Chinese version unasked.
 
 ## 3. See what it is
 
