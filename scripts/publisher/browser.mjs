@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Innertube } from "youtubei.js";
+import { humanClick, humanType, lookAround, pause } from "./human.mjs";
 import { rejected } from "./protocol.mjs";
 
 export const destinations = {
@@ -114,15 +115,16 @@ export function closestPlace(offered, place, { named = false } = {}) {
 }
 /** TikTok's Edit cover dialog: upload the image, then Save. The cover box shows once the video has uploaded. */
 export async function setTikTokCover(page, cover) {
-  await page
-    .locator('[data-e2e="cover_container"]')
-    .getByText("Edit cover", { exact: true })
-    .click({ timeout: 10 * 60_000 });
+  await humanClick(page, page.locator('[data-e2e="cover_container"]').getByText("Edit cover", { exact: true }), {
+    timeout: 10 * 60_000,
+  });
+  await pause(page, 800, 2000);
   // TikTok only takes an image chosen through its picker: one set straight on its input never uploads.
   const [chooser] = await Promise.all([
     page.waitForEvent("filechooser"),
-    page.getByRole("button", { name: "Upload cover image" }).click(),
+    humanClick(page, page.getByRole("button", { name: "Upload cover image" })),
   ]);
+  await pause(page, 700, 1800);
   await chooser.setFiles(cover);
   // The image replaces the upload tile once TikTok has it.
   await page.waitForFunction(
@@ -133,9 +135,9 @@ export async function setTikTokCover(page, cover) {
     null,
     { timeout: 60_000 },
   );
-  await page.waitForTimeout(1500);
+  await pause(page, 1500, 3500);
   const save = page.getByRole("button", { name: "Save", exact: true });
-  await save.click();
+  await humanClick(page, save);
   await save.waitFor({ state: "hidden", timeout: 30_000 });
 }
 /** Xiaohongshu's cover editor: the default cover opens 设置封面, whose 上传封面 tab takes the image; 确定 keeps it. */
@@ -187,9 +189,41 @@ export async function setXiaohongshuLocation(page, place) {
   }
   throw new Error(`it offered no place named ${name}`);
 }
+/**
+ * Picks files the way a person does, through the page's Select button and the file picker it opens. If the button
+ * isn't there or opens no picker, the files go straight onto the page's file input.
+ */
+export async function chooseFiles(page, button, input, files) {
+  try {
+    const [chooser] = await Promise.all([
+      page.waitForEvent("filechooser", { timeout: 15_000 }),
+      humanClick(page, page.getByRole("button", { name: button }).first(), { timeout: 5000 }),
+    ]);
+    await pause(page, 900, 2500);
+    await chooser.setFiles(files);
+  } catch {
+    await page.locator(input).first().setInputFiles(files);
+  }
+}
+/**
+ * TikTok Studio offers to continue a video left unsaved, such as one from a stopped post: start fresh instead. Its
+ * Discard asks "Discard this post?" in a dialog that covers the page until it's answered.
+ */
+export async function discardUnsaved(page) {
+  const banner = page.getByText(/wasn.t saved\. Continue editing\?/).first();
+  if (!(await banner.isVisible().catch(() => false))) return;
+  await humanClick(page, page.getByRole("button", { name: "Discard", exact: true }).first(), { timeout: 5000 });
+  const dialog = page.locator(".TUXModal-overlay").filter({ hasText: "Discard this post?" }).last();
+  if (await dialog.waitFor({ timeout: 5000 }).then(() => true, () => false)) {
+    await pause(page, 700, 1600);
+    await humanClick(page, dialog.getByRole("button", { name: "Discard", exact: true }), { timeout: 10_000 });
+    await dialog.waitFor({ state: "hidden", timeout: 10_000 });
+  }
+  await pause(page, 800, 2000);
+}
 /** TikTok's Photos tab takes the whole set at once, in order, and says how many it has once they're up. */
 export async function addTikTokPhotos(page, files) {
-  await page.locator('input[type="file"][accept*="image"]').first().setInputFiles(files);
+  await chooseFiles(page, /^Select photos?$/, 'input[type="file"][accept*="image"]', files);
   await page
     .getByText(new RegExp(`^${files.length} photos? uploaded`))
     .first()
@@ -224,26 +258,34 @@ export async function writeTikTokCaption(page, caption) {
     .filter({ hasText: /\S/ })
     .waitFor({ timeout: 10_000 })
     .catch(() => {});
-  await editor.click();
+  await pause(page, 1000, 2500);
+  await humanClick(page, editor);
+  await pause(page, 300, 900);
   await page.keyboard.press("ControlOrMeta+a");
+  await pause(page, 200, 600);
   await page.keyboard.press("Backspace");
+  await pause(page, 400, 1200);
   const linked = editor.locator('[data-testid="mentionText"]');
   const list = page.locator(".mention-list-popover");
   const parts = tikTokCaptionParts(caption);
   for (const part of parts) {
     if (part.text !== undefined) {
-      await page.keyboard.type(part.text);
+      await humanType(page, part.text);
       continue;
     }
     const before = await linked.count();
-    await page.keyboard.type(`#${part.tag}`, { delay: 120 });
+    await humanType(page, `#${part.tag}`);
     try {
-      await list
-        .locator(".hash-tag-topic")
-        .filter({ hasText: new RegExp(`^#${part.tag}$`, "iu") })
-        .first()
-        .click({ timeout: 10_000 });
+      await humanClick(
+        page,
+        list
+          .locator(".hash-tag-topic")
+          .filter({ hasText: new RegExp(`^#${part.tag}$`, "iu") })
+          .first(),
+        { timeout: 10_000 },
+      );
       await linked.nth(before).waitFor({ timeout: 5000 });
+      await pause(page, 200, 700);
       if (!part.space) await page.keyboard.press("Backspace");
     } catch {
       // Left as typed: it shows, unlinked. Enter would pick from a list still open.
@@ -333,7 +375,31 @@ function findId(value, names) {
   }
   return null;
 }
-export async function publishBrowser(platform, profile, files, post, infos = [], signal, { cover } = {}) {
+/** Whether TikTok Studio's draft list carries this caption: its first line, or any draft when it has none. */
+export function draftListed(data, caption) {
+  if (data?.status_code !== 0) return false;
+  const line = caption.split("\n")[0].trim();
+  if (!line) return Number(data.total_count) > 0;
+  return JSON.stringify(data).includes(JSON.stringify(line).slice(1, -1));
+}
+/** A saved draft has no link: it shows in TikTok Studio's draft list, which its Content page loads. */
+async function confirmTikTokDraft(page, caption, profile) {
+  await pause(page, 3000, 6000);
+  const listed = page.waitForResponse((response) => /\/tiktok\/creator\/draft\/list\//.test(response.url()), {
+    timeout: 30_000,
+  });
+  await page.goto("https://www.tiktok.com/tiktokstudio/content");
+  const data = await listed.then((response) => response.json()).catch(() => null);
+  if (draftListed(data, caption))
+    return { draft: true, message: "Saved as a TikTok draft. Finish and post it from the TikTok app." };
+  await page.screenshot({ path: join(profile, "last-error.png") }).catch(() => {});
+  return {
+    uncertain: true,
+    message: "TikTok's draft list doesn't show the draft. Check TikTok Studio's drafts. Screenshot: last-error.png.",
+  };
+}
+/** `draft`: TikTok saves the video as a draft instead of posting it, for the owner to post from the phone. */
+export async function publishBrowser(platform, profile, files, post, infos = [], signal, { cover, draft = false } = {}) {
   const context = await openProfile(profile);
   // Closing the browser fails whatever the flow is waiting on.
   signal?.addEventListener("abort", () => void context.close().catch(() => {}), { once: true });
@@ -473,11 +539,14 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
       submitting = true;
       await postButton.click();
     } else {
-      if (platform === "tiktok" && post.kind === "photo") await addTikTokPhotos(page, files);
-      else await page.locator('input[type="file"]').first().setInputFiles(files);
+      // TikTok's uploader, at a person's pace (human.mjs).
+      await lookAround(page);
+      await discardUnsaved(page);
+      if (post.kind === "photo") await addTikTokPhotos(page, files);
+      else await chooseFiles(page, /^Select video$/, 'input[type="file"]', files);
       const { linked, tags } = await writeTikTokCaption(page, post.caption);
       if (linked < tags) notes.push(`TikTok linked ${linked} of ${tags} hashtags.`);
-      if (cover && platform === "tiktok")
+      if (cover)
         await setTikTokCover(page, cover).catch(async (error) => {
           notes.push(`Kept TikTok's own cover: ${error.message.split("\n")[0].slice(0, 100)}.`);
           await page
@@ -485,15 +554,24 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
             .click({ timeout: 3000 })
             .catch(() => page.keyboard.press("Escape"));
         });
+      await lookAround(page);
+      // Post turns on once the video is up; a draft is saved only then too.
+      const postButton = page.getByRole("button", { name: "Post", exact: true });
+      await postButton.click({ trial: true, timeout: 10 * 60_000 });
+      if (draft) {
+        await humanClick(page, page.getByRole("button", { name: "Save draft", exact: true }));
+        const saved = await confirmTikTokDraft(page, post.caption, profile);
+        return { ...saved, message: [saved.message, ...notes].join(" ") };
+      }
       submitting = true;
-      await page.getByRole("button", { name: "Post", exact: true }).click({ timeout: 10 * 60_000 });
+      await humanClick(page, postButton);
     }
     const deadline = Date.now() + 120_000;
     // TikTok asks "Continue to post?" while its content check is still running: Post now goes ahead.
     const postNow = page.getByRole("button", { name: "Post now", exact: true });
     while (!publishedUrl && Date.now() < deadline) {
       if (platform === "tiktok" && (await postNow.isVisible().catch(() => false)))
-        await postNow.click({ timeout: 5000 }).catch(() => {});
+        await humanClick(page, postNow, { timeout: 5000 }).catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     await Promise.allSettled([...responses]);

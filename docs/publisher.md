@@ -176,6 +176,13 @@ contain original metadata until the helper prepares each destination's copy.
   Recent places are offered in the field.
 - TikTok asks **Continue to post?** while its content check is still running; the helper
   answers **Post now**.
+- TikTok gave the helper's uploads no views while the same videos posted from the phone got
+  them, so its uploader runs at a person's pace (`scripts/publisher/human.mjs`): uneven pauses
+  between steps, the mouse travelling on curves to a spot inside each control, the video
+  picked through **Select video** and its file picker, and the caption typed with uneven gaps.
+  A video left unsaved by a stopped post is discarded first. `publishBrowser`'s `draft` option
+  ends with **Save draft** instead of **Post**, confirmed by TikTok Studio's draft list, for
+  the owner to post from the phone; the composer doesn't offer it yet.
 - **Stop** in a post's Manage panel releases a queued or publishing destination at
   once, so the next one can start and it can be retried. The helper checks every
   5 seconds and ends the running attempt; if the post did go out, its confirmed
