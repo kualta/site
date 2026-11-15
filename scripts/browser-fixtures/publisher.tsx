@@ -94,6 +94,24 @@ const history = {
         }),
       ],
     },
+    // Its videos expired from storage before YouTube was retried; the post can take them again.
+    {
+      id: "00000000-0000-4000-8000-000000000008",
+      created_at: minutes(24 * 60),
+      post: {
+        kind: "video",
+        title: "Lorax wisdom, part 7",
+        caption: "",
+        media: ["m-lorax"],
+        alt: "",
+        zh: { title: "洛拉克斯", text: "", topics: [], video: "m-lorax-zh" },
+      },
+      targets: [
+        target("instagram", "succeeded"),
+        target("youtube", "failed", { message: "This post's media has expired." }),
+      ],
+      expired: ["m-lorax", "m-lorax-zh"],
+    },
     {
       id: "00000000-0000-4000-8000-000000000004",
       created_at: Date.parse("2026-09-28T22:00:06Z"),
@@ -407,6 +425,12 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     return json({ ok: true });
   }
   if (path === "link") return json({ id: crypto.randomUUID(), platform: "tiktok" }, 201);
+  // The post takes its new uploads, so nothing is expired any more.
+  if (path === "replace-media") {
+    for (const post of history.posts as { id: string; expired?: string[] }[])
+      if (post.id === body.job) post.expired = [];
+    return json({ ok: true });
+  }
   if (path === "crosspost") return json({ platforms: JSON.parse(String(init.body)).platforms });
   if (path === "translate") return json({ title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
   return json({ error: `Unexpected ${method} ${path}` }, 404);

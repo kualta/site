@@ -254,6 +254,9 @@
 .publisher-crosspost-options label small { display:block; font-size:12px; }
 .publisher-crosspost-options label[data-unavailable="true"] > span { color:var(--publisher-muted); }
 .publisher-crosspost > button { justify-self:start; margin-top:6px; }
+.publisher-reupload > .publisher-note { margin:0 0 6px; }
+.publisher-reupload-file { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; min-width:0; padding:2px 0; }
+.publisher-reupload-file > .publisher-note { min-width:0; overflow-wrap:anywhere; }
 @keyframes publisher-pulse { 50% { opacity:.3; } }
 .publisher-history-pagination { display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:20px; }
 .publisher-history-pagination button { font-size:13px; }

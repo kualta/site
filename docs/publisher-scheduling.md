@@ -2,7 +2,7 @@
 
 A post can go out now, at each platform's next free slot, or on a chosen day. Each destination gets its own time, which can also be set by hand. The laptop helper claims a destination only once its time has come (`publisher_targets.scheduled_at`). If the laptop is asleep then, the post goes out when it wakes.
 
-A scheduled post has to go out before its uploads expire. The bucket removes an upload a week after it went up, so the server refuses a time later than the first upload's expiry, less an hour.
+A scheduled post has to go out before its uploads expire. The bucket removes an upload 31 days after it went up, so the server refuses a time later than the first upload's expiry, less an hour. A destination can be scheduled up to a week ahead.
 
 ## Posting times
 

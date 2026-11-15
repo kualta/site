@@ -15,15 +15,20 @@ export interface PlatformSchedule {
 }
 export type Schedule = Record<Platform, PlatformSchedule>;
 export const SCHEDULE_KEY = "publisher.schedule.v1";
-/** Uploads expire a week after they go up, so a post can be scheduled at most this far after its first upload. */
-export const UPLOAD_LIFETIME = 7 * 86_400_000;
+export const WEEK = 7 * 86_400_000;
+/**
+ * The bucket's expire-uploads rule removes an upload 31 days after it goes up, so a post must go out, be retried or be
+ * crossposted before its first upload is this old. After that its video can be uploaded again from History.
+ */
+export const UPLOAD_LIFETIME = 31 * 86_400_000;
+/** How far ahead a destination can be scheduled. */
+export const SCHEDULE_WINDOW = WEEK;
 /** The laptop needs a little time before an upload expires. */
 export const EXPIRY_MARGIN = 60 * 60_000;
 /** How far ahead "Next free slot" looks. */
 const HORIZON_DAYS = 14;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const HOUR = 3_600_000;
-const WEEK = 7 * 86_400_000;
 
 /**
  * Defaults from published posting-time studies (Buffer, Sprout Social, Hootsuite, Adobe, vidIQ; 2025–2026) for a small

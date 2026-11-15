@@ -55,6 +55,24 @@ function fixture() {
   );
   return { sql, db, job, ids };
 }
+test("a video post says which of its uploads have expired", async () => {
+  const { db, sql } = fixture();
+  const [job, video, zhVideo] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+  sql
+    .query("INSERT INTO publisher_jobs VALUES (?,?,?)")
+    .run(job, JSON.stringify({ kind: "video", title: "Walk", media: [video], zh: { video: zhVideo } }), 2000);
+  const month = 31 * 86_400_000;
+  sql
+    .query("INSERT INTO publisher_media (id, kind, name, created_at, job_id) VALUES (?, 'video', 'media', ?, ?)")
+    .run(video, Date.now() - month, job);
+  sql
+    .query("INSERT INTO publisher_media (id, kind, name, created_at, job_id) VALUES (?, 'video', 'media', ?, ?)")
+    .run(zhVideo, Date.now() - 86_400_000, job);
+  const { posts } = await historyPage(db, null);
+  expect(posts.find((post) => post.id === job)?.expired).toEqual([video]);
+  // Other posts have nothing to upload again.
+  expect(posts.find((post) => post.id !== job)).not.toHaveProperty("expired");
+});
 test("delete everywhere queues only confirmed posts and claims each once", async () => {
   const { db, sql, job, ids } = fixture();
   await queueDeletion(db, job, undefined);

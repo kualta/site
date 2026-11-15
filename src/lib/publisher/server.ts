@@ -15,7 +15,7 @@ import {
   type PostKind,
 } from "./presets";
 import { postKey, publicationLink } from "./links";
-import { EXPIRY_MARGIN, UPLOAD_LIFETIME } from "./schedule";
+import { EXPIRY_MARGIN, SCHEDULE_WINDOW, UPLOAD_LIFETIME } from "./schedule";
 import { isTag, problem, renderVariant, type Variant } from "./variants";
 
 /** A scheduled time can be this far in the past by the time the post reaches the server: it publishes at once. */
@@ -33,7 +33,7 @@ function validSchedule(schedule: unknown, destinations: string[]): boolean {
         typeof at === "number" &&
         Number.isInteger(at) &&
         at >= now - SCHEDULE_SLACK &&
-        at <= now + UPLOAD_LIFETIME,
+        at <= now + SCHEDULE_WINDOW,
     )
   );
 }
@@ -331,17 +331,12 @@ export async function addDestinations(
   );
   if (!added.length) throw new PostError("Choose where to crosspost");
   // The title and Chinese version can be filled in now when the post went out without them.
-  const next = validatePost({
-    ...post,
+  const next = revalidate(post, {
     platforms: [...post.platforms, ...added.filter((p) => !post.platforms.includes(p))],
-    // A post from before a destination existed has no policy saved for it.
-    metadata: { ...defaultMetadata(), ...post.metadata },
     title: !post.title.trim() && typeof input.title === "string" ? input.title : post.title,
     zh: post.zh ?? input.zh,
-    // Mixed posts from before the choice was asked already went out as carousels.
-    ...(post.kind === "mixed" ? { carousel: true } : {}),
   });
-  for (const id of postMedia(next)) if (!(await bucket.head(id))) throw new PostError(MEDIA_EXPIRED);
+  await requireMedia(bucket, next, added);
   await db.batch([
     db.prepare("UPDATE publisher_jobs SET payload = ? WHERE id = ?").bind(JSON.stringify(next), next.id),
     ...added.map((platform) =>
@@ -463,11 +458,115 @@ export async function stopTarget(db: NewsletterDB, job: string, target: string):
     .run();
   return result.meta.changes > 0;
 }
-/** The words for a post whose uploads the bucket has expired; the helper can't publish it. */
-export const MEDIA_EXPIRED = "This post's media has expired. Post it again from the composer.";
+/** The words for an upload the bucket has expired; the helper can't publish without it. */
+export const MEDIA_EXPIRED = "This post's media has expired.";
+/** The uploads the laptop fetches to publish `post` to `platform`, picked as the runner picks them. */
+function destinationMedia(post: Post, platform: Platform): string[] {
+  const variant = post.variants?.[platform];
+  const cover = variant?.cover ?? post.cover;
+  return [
+    ...(variant?.video ? [variant.video] : post.media),
+    ...(post.kind === "video" && cover && coverPlatforms.includes(platform) ? [cover] : []),
+  ];
+}
+/** Refuses when the bucket has expired an upload one of `destinations` needs. A video post's can be uploaded again. */
+async function requireMedia(bucket: Pick<MediaBucket, "head">, post: Post, destinations: Platform[]): Promise<void> {
+  const remedy = post.kind === "video" ? "Upload it again to publish it." : "Post it again from the composer.";
+  for (const id of new Set(destinations.flatMap((platform) => destinationMedia(post, platform))))
+    if (!(await bucket.head(id))) throw new PostError(`${MEDIA_EXPIRED} ${remedy}`);
+}
 /**
- * Queues a failed or uncertain destination again, while its post's uploads still exist: the bucket expires them a week
- * after upload, and a retry after that could only fail. False when the destination isn't failed or uncertain.
+ * Checks a queued post again after a change, rendering what each destination receives anew. Its schedule was checked
+ * when it was queued and its times may have passed since, so it stays as it was, unchecked.
+ */
+function revalidate(post: Post, changes: Record<string, unknown>): Post {
+  const { schedule, ...rest } = post;
+  const next = validatePost({
+    ...rest,
+    // A post from before a destination existed has no policy saved for it.
+    metadata: { ...defaultMetadata(), ...post.metadata },
+    // Mixed posts from before the choice was asked already went out as carousels.
+    ...(post.kind === "mixed" ? { carousel: true } : {}),
+    ...changes,
+  });
+  return schedule ? { ...next, schedule } : next;
+}
+/** New uploads for a video post, in place of ones the bucket expired. Each is a media id; what stays is left out. */
+export interface MediaReplacement {
+  job?: unknown;
+  video?: unknown;
+  cover?: unknown;
+  zhVideo?: unknown;
+  zhCover?: unknown;
+}
+/**
+ * Gives a video post new uploads in place of ones the bucket expired, so its destinations can be retried and it can be
+ * crossposted again: its video, its Chinese version's video, and their covers. A cover that's gone and has no new one
+ * is dropped, and those platforms pick their own frame. The uploads it replaces go.
+ */
+export async function replaceMedia(
+  db: NewsletterDB,
+  bucket: Pick<MediaBucket, "head" | "delete">,
+  input: MediaReplacement,
+): Promise<void> {
+  if (!validId(input.job)) throw new PostError("Invalid post");
+  const job = await db
+    .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
+    .bind(input.job)
+    .first<{ payload: string }>();
+  if (!job) throw new PostError("Invalid post");
+  const post = JSON.parse(job.payload) as Post;
+  if (post.kind !== "video") throw new PostError("Only a video post's video can be uploaded again");
+  if (input.video === undefined && input.zhVideo === undefined) throw new PostError("Choose the video to upload");
+  if (input.zhVideo !== undefined && !post.zh?.video) throw new PostError("This post has no Chinese video");
+  const fields = { video: "video", cover: "photo", zhVideo: "video", zhCover: "photo" } as const;
+  const given: Partial<Record<keyof typeof fields, string>> = {};
+  for (const [field, kind] of Object.entries(fields) as [keyof typeof fields, string][]) {
+    const id = input[field];
+    if (id === undefined) continue;
+    if (!validId(id)) throw new PostError("Invalid media");
+    const media = await db
+      .prepare("SELECT kind, job_id FROM publisher_media WHERE id = ?")
+      .bind(id)
+      .first<{ kind: string; job_id: string | null }>();
+    if (!media || media.kind !== kind || media.job_id) throw new PostError("Media is missing or already queued");
+    given[field] = id;
+  }
+  if (await db.prepare("SELECT 1 FROM publisher_targets WHERE job_id = ? AND state = 'working'").bind(post.id).first())
+    throw new PostError("Wait until it has finished publishing");
+  const kept = async (id?: string) => (id && (await bucket.head(id)) ? id : undefined);
+  const cover = given.cover ?? (await kept(post.cover));
+  const zhVideo = given.zhVideo ?? post.zh?.video;
+  // The Chinese cover is the same frame of the Chinese video, beside the post's own.
+  const zhCover = cover && zhVideo ? given.zhCover ?? (await kept(post.zh?.cover)) : undefined;
+  const next = revalidate(post, {
+    media: [given.video ?? post.media[0]],
+    cover,
+    zh: post.zh && { ...post.zh, video: zhVideo, cover: zhCover },
+  });
+  const before = postMedia(post);
+  const after = postMedia(next);
+  const added = after.filter((id) => !before.includes(id));
+  const replaced = before.filter((id) => !after.includes(id));
+  await db.batch([
+    db.prepare("UPDATE publisher_jobs SET payload = ? WHERE id = ?").bind(JSON.stringify(next), post.id),
+    ...added.map((id) =>
+      db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ? AND job_id IS NULL").bind(post.id, id),
+    ),
+    // Uploads expire by when they went up, so the post's expiry follows its new ones.
+    ...(replaced.length
+      ? [
+          db
+            .prepare(`DELETE FROM publisher_media WHERE job_id = ? AND id IN (${replaced.map(() => "?").join(",")})`)
+            .bind(post.id, ...replaced),
+        ]
+      : []),
+  ]);
+  if (replaced.length) await bucket.delete(replaced);
+}
+/**
+ * Queues a failed or uncertain destination again, while the uploads it needs still exist: the bucket expires them a
+ * month after upload, and a retry after that could only fail. False when the destination isn't failed or uncertain.
  */
 export async function retryTarget(
   db: NewsletterDB,
@@ -476,12 +575,13 @@ export async function retryTarget(
   target: string,
 ): Promise<boolean> {
   const row = await db
-    .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
-    .bind(job)
-    .first<{ payload: string }>();
+    .prepare(
+      "SELECT t.platform, j.payload FROM publisher_targets t JOIN publisher_jobs j ON j.id = t.job_id WHERE t.id = ? AND t.job_id = ? AND t.state IN ('failed','uncertain')",
+    )
+    .bind(target, job)
+    .first<{ platform: Platform; payload: string }>();
   if (!row) return false;
-  for (const id of postMedia(JSON.parse(row.payload) as Post))
-    if (!(await bucket.head(id))) throw new PostError(MEDIA_EXPIRED);
+  await requireMedia(bucket, JSON.parse(row.payload) as Post, [row.platform]);
   const result = await db
     .prepare(
       "UPDATE publisher_targets SET state = 'queued', claim = NULL, started_at = NULL, finished_at = NULL, message = NULL, url = NULL WHERE id = ? AND job_id = ? AND state IN ('failed','uncertain')",
@@ -497,7 +597,7 @@ export async function retryTarget(
  */
 export async function rescheduleTarget(db: NewsletterDB, job: string, target: string, at: unknown): Promise<boolean> {
   const now = Date.now();
-  if (typeof at !== "number" || !Number.isInteger(at) || at < now - SCHEDULE_SLACK || at > now + UPLOAD_LIFETIME)
+  if (typeof at !== "number" || !Number.isInteger(at) || at < now - SCHEDULE_SLACK || at > now + SCHEDULE_WINDOW)
     throw new PostError("Choose a time within the next week");
   const first = await db
     .prepare("SELECT MIN(created_at) AS at FROM publisher_media WHERE job_id = ?")
