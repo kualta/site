@@ -16,6 +16,7 @@ import { connectAccount } from "./connections.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
+import { archiveStories, storiesRoot } from "./stories.mjs";
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const stateDir = join(root, ".publisher");
@@ -115,6 +116,8 @@ if (command === "connect") {
       .catch((error) => console.error(`Chrome copy cleanup failed: ${error.message}`));
   void sweep();
   setInterval(sweep, 10 * 60_000).unref();
+  // Instagram's story archive is copied to disk on start, then every 6 hours when nothing else is waiting.
+  let storiesDue = 0;
   while (true) {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
@@ -191,6 +194,10 @@ if (command === "connect") {
         console.log(
           `${target.platform}: ${result.state}${delivered ? "" : " (receipt not saved; check the platform)"}`,
         );
+      } else if (config.platforms.includes("instagram") && Date.now() >= storiesDue) {
+        storiesDue = Date.now() + 6 * 60 * 60_000;
+        const { saved, total } = await archiveStories({ stateDir });
+        if (saved) console.log(`Saved ${saved} Instagram stories (${total} in ${storiesRoot})`);
       } else await new Promise((resolve) => setTimeout(resolve, 5000));
     } catch (e) {
       console.error(e.message);
