@@ -19,7 +19,9 @@ import {
   unlinkPublication,
   PostError,
   stopTarget,
+  retryTarget,
   rescheduleTarget,
+  MEDIA_EXPIRED,
   editPost,
   type PostEdit,
   markPublished,
@@ -469,7 +471,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const id = path.slice(path.lastIndexOf("/") + 1);
       if (!validId(id)) return json({ error: "Invalid media" }, 400);
       const object = await bucket.get(id);
-      if (!object) return json({ error: "Media expired" }, 404);
+      if (!object) return json({ error: MEDIA_EXPIRED }, 404);
       headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
       // The composer shows how much of a draft's video has arrived.
       if (object.size) headers.set("Content-Length", String(object.size));
@@ -529,13 +531,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const data = (await request.json()) as { job: string; target: string; checked: boolean };
       if (!validId(data.job) || !validId(data.target) || data.checked !== true)
         return json({ error: "Confirm the destination has no duplicate first" }, 400);
-      const result = await db
-        .prepare(
-          "UPDATE publisher_targets SET state = 'queued', claim = NULL, started_at = NULL, finished_at = NULL, message = NULL, url = NULL WHERE id = ? AND job_id = ? AND state IN ('failed','uncertain')",
-        )
-        .bind(data.target, data.job)
-        .run();
-      return json({ ok: result.meta.changes > 0 });
+      return json({ ok: await retryTarget(db, bucket, data.job, data.target) });
     }
     if (path.startsWith("jobs/") && request.method === "DELETE") {
       const id = path.slice(5);
