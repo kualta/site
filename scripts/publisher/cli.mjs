@@ -44,7 +44,11 @@ async function api(path, data) {
     body: data === undefined ? undefined : JSON.stringify(data),
     signal: AbortSignal.timeout(120_000),
   });
-  if (!response.ok) throw new Error(`Publisher request failed (${response.status})`);
+  if (!response.ok) {
+    // The site says why, such as media that has expired; History shows it.
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `Publisher request failed (${response.status})`);
+  }
   return response;
 }
 async function python(script, args, signal) {

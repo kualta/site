@@ -341,9 +341,7 @@ export async function addDestinations(
     // Mixed posts from before the choice was asked already went out as carousels.
     ...(post.kind === "mixed" ? { carousel: true } : {}),
   });
-  for (const id of postMedia(next))
-    if (!(await bucket.head(id)))
-      throw new PostError("This post's media has expired. Post it again from the composer.");
+  for (const id of postMedia(next)) if (!(await bucket.head(id))) throw new PostError(MEDIA_EXPIRED);
   await db.batch([
     db.prepare("UPDATE publisher_jobs SET payload = ? WHERE id = ?").bind(JSON.stringify(next), next.id),
     ...added.map((platform) =>
@@ -462,6 +460,33 @@ export async function stopTarget(db: NewsletterDB, job: string, target: string):
       WHERE id = ? AND job_id = ? AND state IN ('queued','working')`,
     )
     .bind(STOPPED_BEFORE, Date.now(), target, job)
+    .run();
+  return result.meta.changes > 0;
+}
+/** The words for a post whose uploads the bucket has expired; the helper can't publish it. */
+export const MEDIA_EXPIRED = "This post's media has expired. Post it again from the composer.";
+/**
+ * Queues a failed or uncertain destination again, while its post's uploads still exist: the bucket expires them a week
+ * after upload, and a retry after that could only fail. False when the destination isn't failed or uncertain.
+ */
+export async function retryTarget(
+  db: NewsletterDB,
+  bucket: Pick<MediaBucket, "head">,
+  job: string,
+  target: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
+    .bind(job)
+    .first<{ payload: string }>();
+  if (!row) return false;
+  for (const id of postMedia(JSON.parse(row.payload) as Post))
+    if (!(await bucket.head(id))) throw new PostError(MEDIA_EXPIRED);
+  const result = await db
+    .prepare(
+      "UPDATE publisher_targets SET state = 'queued', claim = NULL, started_at = NULL, finished_at = NULL, message = NULL, url = NULL WHERE id = ? AND job_id = ? AND state IN ('failed','uncertain')",
+    )
+    .bind(target, job)
     .run();
   return result.meta.changes > 0;
 }

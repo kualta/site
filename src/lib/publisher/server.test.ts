@@ -9,8 +9,10 @@ import {
   postMedia,
   postUploads,
   stopTarget,
+  retryTarget,
   rescheduleTarget,
   editPost,
+  MEDIA_EXPIRED,
   STOPPED_BEFORE,
   targetActive,
   claimTarget,
@@ -535,6 +537,27 @@ test("crossposting asks for what new destinations need, and for media that still
   await addDestinations(db, kept, { job: job.id, platforms: ["grain", "xiaohongshu"], title: "Walk", zh });
   expect(payload().title).toBe("Walk");
   expect(payload().variants.xiaohongshu.title).toBe("散步");
+});
+test("a retry queues a failed destination again only while its media still exists", async () => {
+  const job = validatePost({ ...post(), kind: "video", platforms: ["youtube", "tiktok"] });
+  const { db, sqlite } = published(job);
+  sqlite
+    .query("UPDATE publisher_targets SET state = 'failed', message = 'Upload rejected', claim = 'c' WHERE platform = ?")
+    .run("youtube");
+  const id = (platform: string) =>
+    (sqlite.query("SELECT id FROM publisher_targets WHERE platform = ?").get(platform) as { id: string }).id;
+  const state = () =>
+    sqlite.query("SELECT state, message, claim FROM publisher_targets WHERE platform = 'youtube'").get();
+  // A week after upload the bucket has dropped the video, so the helper could only fail.
+  await expect(retryTarget(db, { head: async () => null }, job.id, id("youtube"))).rejects.toThrow(MEDIA_EXPIRED);
+  expect(state()).toEqual({ state: "failed", message: "Upload rejected", claim: "c" });
+  const kept = { head: async () => ({}) };
+  expect(await retryTarget(db, kept, job.id, id("youtube"))).toBe(true);
+  expect(state()).toEqual({ state: "queued", message: null, claim: null });
+  // Published and queued destinations, and other posts' destinations, stay as they are.
+  expect(await retryTarget(db, kept, job.id, id("tiktok"))).toBe(false);
+  expect(await retryTarget(db, kept, job.id, id("youtube"))).toBe(false);
+  expect(await retryTarget(db, kept, crypto.randomUUID(), id("youtube"))).toBe(false);
 });
 test("a post from before Farcaster and Lens existed can still be crossposted to them", async () => {
   const job = validatePost({ ...post(), kind: "text", title: "", media: [], platforms: ["bluesky"], caption: "Hi" });
