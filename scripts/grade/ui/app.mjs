@@ -134,6 +134,11 @@ function needsReexport(clip) {
   return Boolean(clip.exported) && stale(clip) && !exporting(clip) && !queued(clip);
 }
 
+/** Whether a clip's grade differs from the one it starts with. A reset clip is back to the start. */
+function hasGrade(clip) {
+  return gradeKey(gradeOf(clip)) !== gradeKey(resolveGrade(undefined, baseIds(clip)));
+}
+
 /** Whether a clip needs exporting: never graded, or graded with a different grade than it has now. */
 function stale(clip) {
   if (!clip.exported) return true;
@@ -445,6 +450,7 @@ function updateRows() {
     let kind = "ok";
     if (exporting(clip)) [text, kind] = [`Exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
     else if (queued(clip)) [text, kind] = ["Export queued", "busy"];
+    else if (!clip.exported && hasGrade(clip)) [text, kind] = ["Grade not exported", "unexported"];
     else if (!clip.exported) [text, kind] = ["Not graded", "none"];
     else if (stale(clip)) [text, kind] = ["Changed since export", "changed"];
     // Just the dot; the words stay for screen readers and as its tooltip.

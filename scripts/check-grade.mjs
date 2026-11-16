@@ -81,6 +81,7 @@ try {
   await setRange("c-kelvin", 4800);
   await setRange("c-saturation", 1.3);
   await page.waitForFunction(() => document.getElementById("n-exposure").value === "+0.75");
+  await row.getByText("Grade not exported").waitFor({ timeout: 5_000 });
   await page.waitForTimeout(1500);
   if (shots) await page.screenshot({ path: path.join(shots, "grade-2-graded.png") });
 
