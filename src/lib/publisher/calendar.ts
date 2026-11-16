@@ -1,7 +1,8 @@
 import type { NewsletterDB } from "../newsletter/types";
 import type { Platform, PostKind } from "./presets";
 import { EXPIRY_MARGIN, UPLOAD_LIFETIME } from "./schedule";
-import { STOPPED_BEFORE } from "./server";
+import { STOPPED_BEFORE, postMedia } from "./server";
+import type { ArchivedCheck } from "./archive";
 
 /** One destination on the calendar: when it published, or is to. */
 export interface CalendarTarget {
@@ -55,6 +56,7 @@ export async function calendarPosts(
   from: number,
   to: number,
   now = Date.now(),
+  archived?: ArchivedCheck,
 ): Promise<CalendarPost[]> {
   const { results } = await db
     .prepare(
@@ -104,9 +106,17 @@ export async function calendarPosts(
     for (const row of thumbnails.results) thumbnailAt.set(row.job_id, row.created_at);
     for (const row of uploads.results) uploadedAt.set(row.job_id, row.at);
   }
+  // A post whose every upload the archive holds a copy of never runs out of media.
+  const posts = new Map(jobs.map(({ id, payload }) => [id, JSON.parse(payload)]));
+  const uploads = [...posts].flatMap(([id, post]) => (uploadedAt.has(id) ? postMedia(post) : []));
+  const kept = archived && uploads.length ? await archived(uploads) : new Set<string>();
+  const safe = (post: Parameters<typeof postMedia>[0]) => {
+    const ids = postMedia(post);
+    return ids.length > 0 && ids.every((media) => kept.has(media));
+  };
   return jobs
-    .map(({ id, payload }) => {
-      const post = JSON.parse(payload);
+    .map(({ id }) => {
+      const post = posts.get(id);
       const uploaded = uploadedAt.get(id);
       return {
         id,
@@ -120,7 +130,7 @@ export async function calendarPosts(
         tags: post.tags ?? [],
         short: post.short ?? "",
         ...(post.zh ? { zh: { title: post.zh.title, text: post.zh.text, topics: post.zh.topics } } : {}),
-        expires: uploaded === undefined ? null : uploaded + UPLOAD_LIFETIME - EXPIRY_MARGIN,
+        expires: uploaded === undefined || safe(post) ? null : uploaded + UPLOAD_LIFETIME - EXPIRY_MARGIN,
         targets: results
           .filter((row) => row.job_id === id)
           .map((row) => ({

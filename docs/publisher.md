@@ -12,6 +12,8 @@ Grain's AppView, with KV caching. It does not fall back to Bluesky posts.
 2. Create the private R2 bucket: `bunx wrangler r2 bucket create kualta-publisher-media`.
    Do not enable public access. Set a 31-day expiration lifecycle rule for
    uploads (including abandoned uploads) in the Cloudflare dashboard.
+   Then the archive bucket, private too and with no expiration rule:
+   `bunx wrangler r2 bucket create kualta-archive --storage-class InfrequentAccess`.
 3. Apply D1 migrations: `bunx wrangler d1 migrations apply NEWSLETTER_DB --remote`.
    Publisher tables are separate from existing newsletter tables.
 4. Deploy the site after review. The existing `post.kualta.dev` Worker route
@@ -279,6 +281,36 @@ folder and renders it beside the original as `<name>-zh.mp4`, which `crosspost-v
 then sends as `zh.video`. Link each in once:
 `ln -s ~/Projects/site/.agents/skills/<skill> ~/.claude/skills/`.
 
+## Archive
+
+The `kualta-archive` R2 bucket (binding `ARCHIVE`) keeps what the media bucket's 31-day rule
+would lose. It's on R2's Infrequent Access class, which is cheap to keep and charges a little
+for each read, and nothing in it expires. The media bucket's expiry rule covers every key, and
+uploads are bare UUIDs, so the archive is a bucket of its own rather than a prefix there.
+
+**A queued post's uploads.** Queueing a post, or giving it new uploads with **Upload again**,
+copies its uploads to `media/<id>` once the answer has gone (`waitUntil`). A daily sweep at
+03:17 UTC copies any that a post of the last 31 days is still missing. Once the media bucket
+expires an upload, the publisher reads the archived copy in its place: retries, crossposts,
+rescheduling and the helper's downloads carry on, and History doesn't offer **Upload again**
+for it. Deleting a post deletes its copies. **Upload again** remains for posts queued before
+the archive existed.
+
+**Finished projects.** `bun run publisher archive <project folder>…` sends an OpenFilm project
+(with its Chinese version in `zh/`) to the archive. Each file is stored once by its SHA-256 at
+`blobs/<sha256>`, so footage several projects share, and the Chinese version's clones of it,
+cost nothing more. A manifest at `projects/<name>/<time>.json` names every file with its size
+and modified time, and the archive keeps it only once every file it names is there. Files up to
+64 MiB go up whole, checked against their hash by R2, and larger ones in 64 MiB parts. Studio's
+`.film/cache` is left out, and once the manifest is kept, the command deletes it from the
+laptop; `--keep-cache` keeps it. Archiving again sends only what changed.
+
+`bun run publisher archives` lists what's archived, and `bun run publisher restore <name>
+[folder] [--at <time>]` brings a project back, into `~/Movies/OpenFilm/Projects/<name>` unless
+another empty folder is named. Each file is checked against its hash, files the project held
+twice come back as clones, and file times are restored. `bun run publisher archive-media` runs
+the uploads sweep now. All of it goes through the helper API on the laptop's pairing token.
+
 ## Validation
 
 `bun test`, `bun run check`, `bun run build`. Native metadata tests run when
@@ -327,7 +359,9 @@ saved title/caption, photo/video previews, links and outcomes for each destinati
 pages remain available after upload expiry; previews become unavailable after the 31-day
 media retention window.
 
-Once a video post's video has expired, its **Manage** panel offers **Upload again**: choose the
+A post's uploads are archived when it's queued (see Archive), so its video doesn't expire. A
+video post queued before the archive existed can still lose its video. Once it has, its
+**Manage** panel offers **Upload again**: choose the
 video (and the Chinese video, if Xiaohongshu needs it) and optionally a new cover, and the post
 takes the new uploads in place of the expired ones. **Retry publishing** and **Crosspost to**
 then work as before. Retry and crossposting check that the uploads a destination needs still

@@ -11,6 +11,7 @@ import ffmpeg from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
 import { deletePublication } from "./delete.mjs";
 import { createDraft } from "./draft.mjs";
+import { archiveProject, archiveRecentMedia, listArchived, restoreProject } from "./archive.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
@@ -223,6 +224,46 @@ if (command === "connect") {
     console.error(error.message);
     process.exitCode = 1;
   }
+} else if (["archive", "restore", "archives", "archive-media"].includes(command)) {
+  try {
+    if (!config.token) throw new Error("Connect the helper first");
+    const auth = { origin: config.origin, token: config.token };
+    const args = process.argv.slice(3);
+    const flag = (name) => {
+      const at = args.indexOf(name);
+      return at === -1 ? undefined : args.splice(at, 2)[1];
+    };
+    const gb = (bytes) => `${(bytes / 1e9).toFixed(2)} GB`;
+    if (command === "archive") {
+      const keepCache = args.includes("--keep-cache");
+      const folders = args.filter((arg) => arg !== "--keep-cache");
+      if (!folders.length) throw new Error("Usage: bun run publisher archive <project folder>… [--keep-cache]");
+      for (const folder of folders) {
+        const done = await archiveProject(resolve(folder), { ...auth, keepCache, log: (line) => console.error(line) });
+        console.log(
+          `${done.name}: archived ${done.files} files, ${gb(done.bytes)} (${gb(done.sent)} new) as ${done.key}` +
+            (done.cleared ? `; cleared ${gb(done.cleared)} of Studio's cache` : ""),
+        );
+      }
+    } else if (command === "restore") {
+      const at = flag("--at");
+      const [name, dest] = args;
+      if (!name) throw new Error("Usage: bun run publisher restore <project> [folder] [--at <archived time>]");
+      const done = await restoreProject(name, { ...auth, at, dest, log: (line) => console.error(line) });
+      console.log(`${done.name}: restored ${done.files} files, ${gb(done.bytes)}, to ${done.dest}`);
+    } else if (command === "archives") {
+      for (const p of await listArchived(auth))
+        console.log(`${p.name}  last archived ${p.archivedAt}${p.versions > 1 ? `, ${p.versions} times` : ""}`);
+    } else {
+      const done = await archiveRecentMedia(auth);
+      console.log(
+        `Checked ${done.posts} posts: copied ${done.copied} uploads to the archive; ${done.gone} had expired`,
+      );
+    }
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 } else if (command === "oauth-key") {
   const file = join(stateDir, "oauth/client-key.json");
   const { created, jwk } = await ensureClientKey(file, `publisher-${new Date().toISOString().slice(0, 10)}`);
@@ -233,4 +274,7 @@ if (command === "connect") {
   );
   console.log(JSON.stringify(jwk));
 } else
-  console.log("Usage: bun run publisher connect | start | install | uninstall | draft <post.json> | oauth-key");
+  console.log(
+    "Usage: bun run publisher connect | start | install | uninstall | draft <post.json> | oauth-key |\n" +
+      "  archive <project folder>… [--keep-cache] | restore <project> [folder] [--at <time>] | archives | archive-media",
+  );

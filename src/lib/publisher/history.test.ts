@@ -72,6 +72,12 @@ test("a video post says which of its uploads have expired", async () => {
   expect(posts.find((post) => post.id === job)?.expired).toEqual([video]);
   // Other posts have nothing to upload again.
   expect(posts.find((post) => post.id !== job)).not.toHaveProperty("expired");
+  // An upload the archive holds a copy of hasn't expired, and only the lapsed ones are looked up.
+  const asked: string[][] = [];
+  const archived = async (ids: string[]) => (asked.push(ids), new Set(ids));
+  const kept = await historyPage(db, null, undefined, archived);
+  expect(kept.posts.find((post) => post.id === job)?.expired).toEqual([]);
+  expect(asked).toEqual([[video]]);
 });
 test("delete everywhere queues only confirmed posts and claims each once", async () => {
   const { db, sql, job, ids } = fixture();

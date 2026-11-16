@@ -296,6 +296,11 @@ describe("queue", () => {
     expect(await rescheduleTarget(db, "other", "waiting", later)).toBe(false);
     // Not after the uploads expire, nor outside the next week, nor anything but a time.
     await expect(rescheduleTarget(db, "job", "waiting", Date.now() + 5 * day + hour)).rejects.toThrow("expire");
+    // Unless the archive holds a copy of every upload: then they never run out.
+    const archived = async (ids: string[]) => new Set(ids);
+    expect(await rescheduleTarget(db, "job", "waiting", Date.now() + 5 * day + hour, archived)).toBe(true);
+    const none = async () => new Set<string>();
+    await expect(rescheduleTarget(db, "job", "waiting", Date.now() + 5 * day + hour, none)).rejects.toThrow("expire");
     await expect(rescheduleTarget(db, "job", "waiting", Date.now() - day)).rejects.toThrow("within the next week");
     await expect(rescheduleTarget(db, "job", "waiting", String(later))).rejects.toThrow("within the next week");
     // Stopped, it says so; moved, it waits for the new time.

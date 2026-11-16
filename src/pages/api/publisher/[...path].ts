@@ -11,8 +11,16 @@ import {
   storeThumbnail,
 } from "@/lib/publisher/analytics";
 import type { APIRoute } from "astro";
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { publisherSession, publisherSameOrigin } from "@/lib/publisher/auth";
+import {
+  type ArchiveBucket,
+  archivedCheck,
+  archivePost,
+  archiveResponse,
+  archiveUploads,
+  withArchive,
+} from "@/lib/publisher/archive";
 import {
   addDestinations,
   linkPublication,
@@ -27,6 +35,7 @@ import {
   editPost,
   type PostEdit,
   markPublished,
+  postMedia,
   postUploads,
   targetActive,
   authorizeHelper,
@@ -67,7 +76,15 @@ export const ALL: APIRoute = async ({ request, params }) => {
   const json = (data: unknown, status = 200) => Response.json(data, { status, headers });
   try {
     const db = env.NEWSLETTER_DB;
-    const bucket = env.PUBLISHER_MEDIA;
+    const media = env.PUBLISHER_MEDIA;
+    const archive = env.ARCHIVE;
+    // An upload the media bucket has expired is read from the archive's copy, when it has one.
+    const bucket = media && withArchive(media, archive);
+    const archived = archivedCheck(archive);
+    /** Copies a queued post's uploads to the archive after the answer has gone. */
+    const keep = (work: (archive: ArchiveBucket) => Promise<unknown>) => {
+      if (archive) waitUntil(work(archive).catch((error) => console.error("Archiving a post's uploads failed", error)));
+    };
     const helper = path.startsWith("helper/");
     if (helper) {
       if (!db || !(await authorizeHelper(request, db))) return json({ error: "Helper authentication required" }, 401);
@@ -77,7 +94,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!owner.allowed) return json({ error: "Owner sign-in required" }, 403);
       if (request.method !== "GET" && !publisherSameOrigin(request)) return json({ error: "Invalid origin" }, 403);
     }
-    if (!db || !bucket) return json({ error: "Publisher storage is not configured" }, 503);
+    if (!db || !media || !bucket) return json({ error: "Publisher storage is not configured" }, 503);
+    if (path.startsWith("helper/archive/")) {
+      if (!archive) return json({ error: "The archive bucket isn't configured" }, 503);
+      return await archiveResponse(path.slice("helper/archive/".length), request, { db, media, archive });
+    }
     if (path === "pair" && request.method === "POST") {
       const token = [...crypto.getRandomValues(new Uint8Array(32))]
         .map((n) => n.toString(16).padStart(2, "0"))
@@ -145,7 +166,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ ok: true });
     }
     if (path === "history" && request.method === "GET") {
-      return json(await historyPage(db, new URL(request.url).searchParams.get("before")));
+      return json(await historyPage(db, new URL(request.url).searchParams.get("before"), undefined, archived));
     }
     // The Calendar's month, with the days around it its grid shows: at most about six weeks.
     if (path === "calendar" && request.method === "GET") {
@@ -154,7 +175,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const to = Number(params.get("to"));
       if (!Number.isInteger(from) || !Number.isInteger(to) || to <= from || to - from > 45 * 86_400_000)
         return json({ error: "Choose a month" }, 400);
-      return json({ posts: await calendarPosts(db, from, to) });
+      return json({ posts: await calendarPosts(db, from, to, undefined, archived) });
     }
     // The Pipeline: each piece of content from its idea to the post it went out as.
     if (path === "content" && request.method === "GET") return json({ items: await listContent(db) });
@@ -379,7 +400,10 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (path === "crosspost" && request.method === "POST")
       return json({ platforms: await addDestinations(db, bucket, (await request.json()) as Record<string, unknown>) });
     if (path === "replace-media" && request.method === "POST") {
-      await replaceMedia(db, bucket, (await request.json()) as MediaReplacement);
+      const input = (await request.json()) as MediaReplacement;
+      await replaceMedia(db, bucket, input);
+      const job = input.job;
+      if (validId(job)) keep((archive) => archivePost(db, media, archive, job));
       return json({ ok: true });
     }
     if (path === "link" && request.method === "POST")
@@ -430,6 +454,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
             .bind(crypto.randomUUID(), post.id, platform, post.schedule?.[platform] ?? null),
         ),
       ]);
+      // Its uploads go to the archive now, so retries and crossposts work after the media bucket expires them.
+      keep((archive) => archiveUploads(media, archive, postMedia(post)));
       return json({ id: post.id }, 201);
     }
     // When each platform last posted or is scheduled to, for the composer's "Next free slot": a week back and on.
@@ -535,7 +561,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (path === "reschedule" && request.method === "POST") {
       const data = (await request.json()) as { job: string; target: string; at: unknown };
       if (!validId(data.job) || !validId(data.target)) return json({ error: "Invalid post" }, 400);
-      if (!(await rescheduleTarget(db, data.job, data.target, data.at)))
+      if (!(await rescheduleTarget(db, data.job, data.target, data.at, archived)))
         return json({ error: "It's publishing or done by now, so its time can't change." }, 409);
       return json({ ok: true });
     }

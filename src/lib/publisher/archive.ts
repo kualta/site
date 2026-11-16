@@ -1,0 +1,382 @@
+import type { NewsletterDB } from "../newsletter/types";
+import { type MediaBucket, type Post, postMedia, validId } from "./server";
+import { UPLOAD_LIFETIME } from "./schedule";
+
+/**
+ * The archive: an R2 bucket on the Infrequent Access class with no expiry, beside the media bucket whose uploads
+ * expire 31 days after they go up. It keeps two things:
+ *
+ *   media/<upload id>        a copy of each upload a queued post uses, made when it's queued, so a post's video is
+ *                            still there to retry or crosspost once the media bucket has expired it
+ *   blobs/<sha256>           the files of finished projects, each stored once however many projects hold it
+ *   projects/<name>/<at>.json  a project's files as archived at that time: path, sha256, size and modified time each
+ */
+export interface ArchiveBucket {
+  put(
+    key: string,
+    body: ArrayBuffer | string,
+    options?: { httpMetadata?: { contentType?: string }; sha256?: string },
+  ): Promise<unknown>;
+  get(key: string): Promise<{
+    body: ReadableStream;
+    httpMetadata?: { contentType?: string };
+    size?: number;
+    uploaded?: Date;
+  } | null>;
+  head(key: string): Promise<{ size: number } | null>;
+  delete(keys: string | string[]): Promise<void>;
+  list(options: { prefix: string; cursor?: string }): Promise<{
+    objects: { key: string; size: number; uploaded: Date }[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
+  createMultipartUpload(key: string): Promise<{ uploadId: string }>;
+  resumeMultipartUpload(
+    key: string,
+    uploadId: string,
+  ): {
+    uploadPart(partNumber: number, body: ArrayBuffer): Promise<{ partNumber: number; etag: string }>;
+    complete(parts: { partNumber: number; etag: string }[]): Promise<unknown>;
+    abort(): Promise<void>;
+  };
+}
+
+export class ArchiveError extends Error {}
+
+const mediaKey = (id: string) => `media/${id}`;
+const blobKey = (hash: string) => `blobs/${hash}`;
+export const isHash = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+export const isProjectName = (value: unknown): value is string =>
+  typeof value === "string" && /^[\w][\w.-]{0,119}$/.test(value);
+
+/** Runs `work` on each item, a few at a time. */
+async function each<T>(items: T[], work: (item: T) => Promise<void>, at = 16): Promise<void> {
+  for (let i = 0; i < items.length; i += at) await Promise.all(items.slice(i, i + at).map(work));
+}
+
+/**
+ * The media bucket as the publisher sees it once there's an archive: an upload the media bucket has expired is read
+ * from its archived copy, so a post queued since archiving started never runs out of media. Deleting an upload deletes
+ * its copy too. Drafts and other keys that aren't upload ids are the media bucket's alone.
+ */
+export function withArchive(media: MediaBucket, archive: ArchiveBucket | undefined): MediaBucket {
+  if (!archive) return media;
+  return {
+    put: (key, body, options) => media.put(key, body, options),
+    get: async (key) => (await media.get(key)) ?? (validId(key) ? await archive.get(mediaKey(key)) : null),
+    head: async (key) => (await media.head(key)) ?? (validId(key) ? await archive.head(mediaKey(key)) : null),
+    delete: async (keys) => {
+      await media.delete(keys);
+      const ids = [keys].flat().filter(validId);
+      if (ids.length) await archive.delete(ids.map(mediaKey));
+    },
+    list: (options) => media.list(options),
+  };
+}
+
+/** Which of `ids` have an archived copy. */
+export async function archivedMedia(archive: ArchiveBucket | undefined, ids: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  if (!archive) return found;
+  await each([...new Set(ids)].filter(validId), async (id) => {
+    if (await archive.head(mediaKey(id))) found.add(id);
+  });
+  return found;
+}
+
+/** Answers which of a list of upload ids are archived; absent when there's no archive. */
+export type ArchivedCheck = (ids: string[]) => Promise<Set<string>>;
+export const archivedCheck = (archive: ArchiveBucket | undefined): ArchivedCheck | undefined =>
+  archive && ((ids) => archivedMedia(archive, ids));
+
+/**
+ * Copies `ids` from the media bucket to the archive, each that isn't there yet and hasn't expired. Uploads are at most
+ * 90 MB, so each is read whole. Says how many it copied, and how many were already gone.
+ */
+export async function archiveUploads(
+  media: Pick<MediaBucket, "get">,
+  archive: ArchiveBucket,
+  ids: string[],
+): Promise<{ copied: number; gone: number }> {
+  let copied = 0;
+  let gone = 0;
+  for (const id of new Set(ids)) {
+    if (!validId(id) || (await archive.head(mediaKey(id)))) continue;
+    const object = await media.get(id);
+    if (!object) {
+      gone++;
+      continue;
+    }
+    const bytes = await new Response(object.body).arrayBuffer();
+    await archive.put(mediaKey(id), bytes, { httpMetadata: { contentType: object.httpMetadata?.contentType } });
+    copied++;
+  }
+  return { copied, gone };
+}
+
+/** Archives the uploads of the post `job`. */
+export async function archivePost(
+  db: NewsletterDB,
+  media: Pick<MediaBucket, "get">,
+  archive: ArchiveBucket,
+  job: string,
+): Promise<{ copied: number; gone: number }> {
+  const row = await db
+    .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
+    .bind(job)
+    .first<{ payload: string }>();
+  if (!row) return { copied: 0, gone: 0 };
+  return archiveUploads(media, archive, postMedia(JSON.parse(row.payload) as Post));
+}
+
+/**
+ * Archives the uploads of every post queued while its uploads could still be in the media bucket: a sweep that catches
+ * a post whose copy didn't finish when it was queued, and the posts queued before the archive existed.
+ */
+export async function archiveRecentPosts(
+  db: NewsletterDB,
+  media: Pick<MediaBucket, "get">,
+  archive: ArchiveBucket,
+  now = Date.now(),
+): Promise<{ posts: number; copied: number; gone: number }> {
+  const { results } = await db
+    .prepare("SELECT payload FROM publisher_jobs WHERE created_at >= ?")
+    .bind(now - UPLOAD_LIFETIME)
+    .all<{ payload: string }>();
+  let copied = 0;
+  let gone = 0;
+  for (const { payload } of results) {
+    const done = await archiveUploads(media, archive, postMedia(JSON.parse(payload) as Post));
+    copied += done.copied;
+    gone += done.gone;
+  }
+  return { posts: results.length, copied, gone };
+}
+
+/* ── projects ──────────────────────────────────────────────────────────── */
+
+/** The largest part or whole file one request carries: under the Worker's 100 MB request limit. */
+export const MAX_ARCHIVE_PART = 96 * 1024 * 1024;
+
+/** Which of `hashes` the archive doesn't hold yet. */
+export async function missingBlobs(archive: ArchiveBucket, hashes: unknown): Promise<string[]> {
+  if (!Array.isArray(hashes) || hashes.length > 2000 || !hashes.every(isHash)) throw new ArchiveError("Invalid hashes");
+  const missing: string[] = [];
+  await each([...new Set(hashes)], async (hash) => {
+    if (!(await archive.head(blobKey(hash)))) missing.push(hash);
+  });
+  return missing.sort();
+}
+
+/** Stores a file whole. R2 checks it against its hash and refuses it when they differ. */
+export async function putBlob(archive: ArchiveBucket, hash: string, bytes: ArrayBuffer): Promise<void> {
+  if (!isHash(hash)) throw new ArchiveError("Invalid hash");
+  await archive.put(blobKey(hash), bytes, { sha256: hash });
+}
+
+export async function startBlob(archive: ArchiveBucket, hash: unknown): Promise<string> {
+  if (!isHash(hash)) throw new ArchiveError("Invalid hash");
+  return (await archive.createMultipartUpload(blobKey(hash))).uploadId;
+}
+
+export async function putBlobPart(
+  archive: ArchiveBucket,
+  hash: string,
+  upload: string | null,
+  part: number,
+  bytes: ArrayBuffer,
+): Promise<{ partNumber: number; etag: string }> {
+  if (!isHash(hash) || !upload || !Number.isInteger(part) || part < 1 || part > 10_000)
+    throw new ArchiveError("Invalid upload");
+  return archive.resumeMultipartUpload(blobKey(hash), upload).uploadPart(part, bytes);
+}
+
+export async function finishBlob(archive: ArchiveBucket, hash: string, input: unknown): Promise<void> {
+  const { upload, parts } = (input ?? {}) as { upload?: unknown; parts?: unknown };
+  const valid =
+    Array.isArray(parts) &&
+    parts.length > 0 &&
+    parts.every((p) => p && Number.isInteger(p.partNumber) && typeof p.etag === "string" && p.etag.length < 200);
+  if (!isHash(hash) || typeof upload !== "string" || !valid) throw new ArchiveError("Invalid upload");
+  await archive.resumeMultipartUpload(blobKey(hash), upload).complete(parts as { partNumber: number; etag: string }[]);
+}
+
+export async function abortBlob(archive: ArchiveBucket, hash: string, upload: string | null): Promise<void> {
+  if (!isHash(hash) || !upload) throw new ArchiveError("Invalid upload");
+  await archive.resumeMultipartUpload(blobKey(hash), upload).abort();
+}
+
+export async function getBlob(archive: ArchiveBucket, hash: string) {
+  if (!isHash(hash)) throw new ArchiveError("Invalid hash");
+  return archive.get(blobKey(hash));
+}
+
+/** A project's files as archived: each by its path in the project, with `/` between folders. */
+export interface Manifest {
+  name: string;
+  archivedAt: string;
+  files: { path: string; sha256: string; size: number; mtime: number }[];
+}
+
+/**
+ * Keeps a project's manifest, once every file it names is in the archive, under the time it was archived. Refuses one
+ * that names a file the archive doesn't hold, so a manifest never points at something missing.
+ */
+export async function saveManifest(archive: ArchiveBucket, name: string, input: unknown, now = new Date()) {
+  if (!isProjectName(name)) throw new ArchiveError("Invalid project name");
+  const files = (input as { files?: unknown })?.files;
+  const valid =
+    Array.isArray(files) &&
+    files.length <= 50_000 &&
+    files.every(
+      (f) =>
+        f &&
+        typeof f.path === "string" &&
+        f.path.length > 0 &&
+        f.path.length < 1000 &&
+        !f.path.startsWith("/") &&
+        !f.path.split("/").includes("..") &&
+        isHash(f.sha256) &&
+        Number.isSafeInteger(f.size) &&
+        f.size >= 0 &&
+        Number.isFinite(f.mtime),
+    );
+  if (!valid) throw new ArchiveError("Invalid manifest");
+  const listed = files as Manifest["files"];
+  const missing = await missingBlobs(
+    archive,
+    listed.map((f) => f.sha256),
+  );
+  if (missing.length) throw new ArchiveError(`${missing.length} of its files aren't in the archive yet`);
+  const manifest: Manifest = {
+    name,
+    archivedAt: now.toISOString(),
+    files: listed.map(({ path, sha256, size, mtime }) => ({ path, sha256, size, mtime })),
+  };
+  const key = `projects/${name}/${manifest.archivedAt}.json`;
+  await archive.put(key, JSON.stringify(manifest), { httpMetadata: { contentType: "application/json" } });
+  return { key, files: manifest.files.length, bytes: manifest.files.reduce((sum, f) => sum + f.size, 0) };
+}
+
+async function listAll(archive: ArchiveBucket, prefix: string) {
+  const objects: { key: string; size: number; uploaded: Date }[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await archive.list({ prefix, cursor });
+    objects.push(...page.objects);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return objects;
+}
+
+/** Each archived project, by name, with when it was last archived and how many times. */
+export async function listProjects(archive: ArchiveBucket) {
+  const projects = new Map<string, { name: string; archivedAt: string; versions: number }>();
+  for (const { key } of await listAll(archive, "projects/")) {
+    const [, name, file] = key.split("/");
+    const at = file?.replace(/\.json$/, "");
+    if (!name || !at) continue;
+    const known = projects.get(name);
+    projects.set(name, {
+      name,
+      archivedAt: known && known.archivedAt > at ? known.archivedAt : at,
+      versions: (known?.versions ?? 0) + 1,
+    });
+  }
+  return [...projects.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A project's manifest as last archived, or as archived at `at`. Null when there's none. */
+export async function readManifest(archive: ArchiveBucket, name: string, at?: string | null): Promise<Manifest | null> {
+  if (!isProjectName(name)) throw new ArchiveError("Invalid project name");
+  const latest = async () =>
+    (await listAll(archive, `projects/${name}/`))
+      .map((o) => o.key)
+      .sort()
+      .pop();
+  const key = at ? `projects/${name}/${at}.json` : await latest();
+  if (!key) return null;
+  const object = await archive.get(key);
+  return object ? ((await new Response(object.body).json()) as Manifest) : null;
+}
+
+/* ── the laptop's archive requests (helper/archive/…, behind the pairing token) ── */
+
+/**
+ * Answers a request under `helper/archive/`, `rest` being what follows:
+ *
+ *   POST   missing                    { blobs: [sha256] } → { missing: [sha256] }
+ *   PUT    blobs/<sha256>             a file of up to 96 MiB, whole
+ *   GET    blobs/<sha256>             a file
+ *   POST   uploads                    { blob } → { upload }, for a larger file sent in parts
+ *   PUT    uploads/<sha256>/<n>?upload=…  part n (all but the last the same size) → { partNumber, etag }
+ *   POST   uploads/<sha256>/complete  { upload, parts }
+ *   DELETE uploads/<sha256>?upload=…  gives a part-sent file up
+ *   PUT    projects/<name>            a manifest, once its files are in → { key, files, bytes }
+ *   GET    projects                   { projects: [{ name, archivedAt, versions }] }
+ *   GET    projects/<name>?at=…       the manifest as last archived, or as archived at that time
+ *   POST   media                      archives the uploads of every post queued in the last 31 days
+ */
+export async function archiveResponse(
+  rest: string,
+  request: Request,
+  { db, media, archive }: { db: NewsletterDB; media: Pick<MediaBucket, "get">; archive: ArchiveBucket },
+): Promise<Response> {
+  const headers = { "Cache-Control": "no-store" };
+  const json = (data: unknown, status = 200) => Response.json(data, { status, headers });
+  const method = request.method;
+  const params = new URL(request.url).searchParams;
+  const [kind, key, part] = rest.split("/");
+  const body = async () => {
+    const length = Number(request.headers.get("Content-Length"));
+    if (!length || length > MAX_ARCHIVE_PART) throw new ArchiveError("Send at most 96 MiB a request");
+    const bytes = await request.arrayBuffer();
+    if (bytes.byteLength !== length) throw new ArchiveError("Incomplete upload");
+    return bytes;
+  };
+  try {
+    if (rest === "missing" && method === "POST")
+      return json({ missing: await missingBlobs(archive, ((await request.json()) as { blobs?: unknown }).blobs) });
+    if (kind === "blobs" && key && part === undefined) {
+      if (method === "PUT") {
+        await putBlob(archive, key, await body());
+        return json({ ok: true }, 201);
+      }
+      if (method === "GET") {
+        const object = await getBlob(archive, key);
+        if (!object) return json({ error: "Not in the archive" }, 404);
+        return new Response(object.body, {
+          headers: { ...headers, "Content-Type": "application/octet-stream", "Content-Length": String(object.size) },
+        });
+      }
+    }
+    if (rest === "uploads" && method === "POST")
+      return json({ upload: await startBlob(archive, ((await request.json()) as { blob?: unknown }).blob) }, 201);
+    if (kind === "uploads" && key) {
+      if (part === "complete" && method === "POST") {
+        await finishBlob(archive, key, await request.json());
+        return json({ ok: true });
+      }
+      if (part && method === "PUT")
+        return json(await putBlobPart(archive, key, params.get("upload"), Number(part), await body()));
+      if (part === undefined && method === "DELETE") {
+        await abortBlob(archive, key, params.get("upload"));
+        return json({ ok: true });
+      }
+    }
+    if (rest === "projects" && method === "GET") return json({ projects: await listProjects(archive) });
+    if (kind === "projects" && key && part === undefined) {
+      if (method === "PUT") return json(await saveManifest(archive, key, await request.json()), 201);
+      if (method === "GET") {
+        const manifest = await readManifest(archive, key, params.get("at"));
+        return manifest ? json(manifest) : json({ error: "No such archived project" }, 404);
+      }
+    }
+    if (rest === "media" && method === "POST") return json(await archiveRecentPosts(db, media, archive));
+    return json({ error: "Not found" }, 404);
+  } catch (error) {
+    if (error instanceof ArchiveError) return json({ error: error.message }, 400);
+    if (error instanceof SyntaxError) return json({ error: "Invalid request" }, 400);
+    throw error;
+  }
+}
