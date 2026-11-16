@@ -11,8 +11,8 @@
 /* --- page --- */
 .publisher { width:100%; padding:40px 48px 120px; font-size:16px; line-height:1.5; }
 /* Everything keeps to one centred column whichever tab is open, so switching tabs never moves the header or the
-   tabs. Only the calendar's month leaves it, to take the whole width of the window. */
-:where(.publisher > :not(.publisher-calendar, .publisher-toasts), .publisher-calendar > :not(.publisher-calendar-grid)) { max-width:1104px; margin-inline:auto; }
+   tabs. Only the calendar's month and the pipeline's board leave it, to take the whole width of the window. */
+:where(.publisher > :not(.publisher-calendar, .publisher-pipeline, .publisher-toasts), .publisher-calendar > :not(.publisher-calendar-grid), .publisher-pipeline > :not(.publisher-pipeline-board)) { max-width:1104px; margin-inline:auto; }
 .publisher,.publisher * { box-sizing:border-box; }
 .publisher a { color:inherit; text-decoration:none; }
 .publisher-note, .publisher small, .publisher time, .publisher-for { color:var(--publisher-muted); }
@@ -491,28 +491,57 @@
   .publisher .publisher-calendar-destinations input { width:100%; }
 }
 
-/* --- pipeline: each piece of content in a column for its stage, from idea to posted --- */
-.publisher-pipeline-new { display:flex; gap:8px; max-width:560px; margin:0 0 32px; }
-.publisher .publisher-pipeline-new input { flex:1; min-width:0; margin:0; }
+/* --- pipeline: each piece of content in a column for its stage, from idea to posted. The board takes the whole window,
+   as the calendar's month does, down to its bottom, and each column scrolls on its own. --- */
+.publisher:has(> .publisher-pipeline) { padding-bottom:24px; }
+.publisher-pipeline-new { display:flex; gap:8px; margin-bottom:24px; }
+.publisher .publisher-pipeline-new input { flex:0 1 480px; min-width:0; margin:0; }
 .publisher .publisher-pipeline-new button { flex:none; }
-.publisher-pipeline-board { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:16px; align-items:start; }
-.publisher .publisher-pipeline-stage h2 { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0 0 12px; font-size:13px; color:var(--publisher-muted); }
+.publisher-pipeline-board { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px, 1fr); gap:12px; overflow-x:auto; overscroll-behavior-x:contain; }
+.publisher-pipeline-stage { display:flex; flex-direction:column; min-width:0; min-height:0; border-radius:14px; background:var(--publisher-wash); transition:box-shadow 160ms, background-color 160ms; }
+/* While a card is dragged, the columns that would take it show it; the one under it most. */
+.publisher-pipeline-stage[data-droppable] { box-shadow:inset 0 0 0 1px var(--publisher-edge); }
+.publisher-pipeline-stage[data-drop] { box-shadow:inset 0 0 0 2px var(--publisher-ink); }
+.publisher .publisher-pipeline-stage h2 { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0; padding:12px 14px 10px; font-size:13px; color:var(--publisher-muted); }
 .publisher-pipeline-stage h2 small { font-size:12px; font-variant-numeric:tabular-nums; }
-.publisher-pipeline-stage ul { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
-.publisher-pipeline-empty { margin:0; padding:14px 12px; border:1px dashed var(--publisher-line); border-radius:12px; color:var(--publisher-muted); font-size:13px; }
-.publisher-pipeline-card { display:grid; gap:4px; padding:12px; border:1px solid var(--publisher-line); border-radius:12px; background:var(--publisher-surface); transition:border-color 160ms; }
-.publisher-pipeline-card:hover { border-color:var(--publisher-edge); }
-.publisher-pipeline-card img { width:40px; height:52px; margin-bottom:4px; border-radius:8px; object-fit:cover; background:var(--publisher-wash); }
-.publisher .publisher-pipeline-open { display:block; width:100%; padding:0; border:0; background:none; font-size:15px; line-height:1.35; text-align:left; overflow-wrap:anywhere; }
-.publisher .publisher-pipeline-open:hover:not(:disabled) { background:none; opacity:.7; }
-.publisher-pipeline-notes { display:-webkit-box; margin:0; overflow:hidden; color:var(--publisher-muted); font-size:13px; line-height:1.45; white-space:pre-line; overflow-wrap:anywhere; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
-.publisher-pipeline-foot { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 8px; margin-top:8px; }
-.publisher-pipeline-foot time { font-size:12px; }
-.publisher .publisher-pipeline-foot button { gap:2px; padding:4px 8px 4px 10px; border-radius:999px; font-size:12px; }
-.publisher .publisher-pipeline-foot a { font-size:12px; text-decoration:underline; text-underline-offset:2px; }
+.publisher-pipeline-stage ul { display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; margin:0; padding:0 10px 10px; overflow-y:auto; overscroll-behavior-y:contain; list-style:none; }
+.publisher-pipeline-empty { margin:0 10px 10px; padding:14px 12px; border:1px dashed var(--publisher-edge); border-radius:12px; color:var(--publisher-muted); font-size:13px; }
+/* A card is one button: click opens it, drag moves it. */
+.publisher-pipeline-card { flex:none; transition:opacity 160ms; }
+.publisher-pipeline-card[data-carried] { opacity:.35; }
+.publisher .publisher-pipeline-open { position:relative; display:flex; flex-direction:column; align-items:stretch; gap:6px; width:100%; padding:12px; border:1px solid var(--publisher-line); border-radius:12px; background:var(--publisher-page); text-align:left; overflow:hidden; cursor:grab; }
+.publisher .publisher-pipeline-open:hover:not(:disabled) { border-color:var(--publisher-edge); background:var(--publisher-page); }
+.publisher .publisher-pipeline-open:active { cursor:grabbing; }
+.publisher-pipeline-info { display:grid; gap:2px; }
+.publisher-pipeline-info strong { display:-webkit-box; font-weight:400; font-size:15px; line-height:1.3; overflow:hidden; overflow-wrap:anywhere; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+.publisher-pipeline-info small { color:var(--publisher-muted); font-size:12px; }
+.publisher-pipeline-notes { display:-webkit-box; overflow:hidden; color:var(--publisher-muted); font-size:13px; line-height:1.45; white-space:pre-line; overflow-wrap:anywhere; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
+/* With a picture, the picture is the card and what it is sits over its top. Videos are vertical; photos 4:5. */
+.publisher .publisher-pipeline-card[data-picture] .publisher-pipeline-open { padding:0; border:0; background:#000; }
+.publisher-pipeline-card[data-picture] .publisher-pipeline-open > :is(img, video) { display:block; width:100%; aspect-ratio:4/5; object-fit:cover; pointer-events:none; transition:opacity 160ms; }
+.publisher-pipeline-card[data-picture][data-kind="video"] .publisher-pipeline-open > :is(img, video) { aspect-ratio:9/16; }
+.publisher-pipeline-card[data-picture] .publisher-pipeline-open:hover > :is(img, video) { opacity:.85; }
+.publisher-pipeline-card[data-picture] .publisher-pipeline-info { position:absolute; inset:0 0 auto; padding:12px 12px 40px; background:linear-gradient(rgb(0 0 0 / 72%), rgb(0 0 0 / 40%) 60%, transparent); color:#fff; }
+.publisher .publisher-pipeline-card[data-picture] .publisher-pipeline-info :is(small, time) { color:rgb(255 255 255 / 80%); }
+/* The editor: a posted piece's numbers on each platform, then its fields. */
 .publisher .publisher-pipeline-editor-foot { display:flex; gap:8px; }
 .publisher .publisher-pipeline-editor-foot .publish-button { flex:1; width:auto; }
-.publisher .publisher-pipeline-editor small.publisher-note a { text-decoration:underline; text-underline-offset:2px; }
-/* Below the full width each stage takes a row of its own, in order. */
-@media(max-width:899px) { .publisher-pipeline-board { grid-template-columns:minmax(0,1fr); gap:28px; } }
-@media (pointer:coarse) { .publisher .publisher-pipeline-foot button, .publisher .publisher-pipeline-new button { min-height:44px; } }
+.publisher-pipeline-stats { margin:0 0 24px; }
+.publisher-pipeline-stats-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:4px; }
+.publisher .publisher-pipeline-stats h3 { color:var(--publisher-muted); font-size:14px; }
+.publisher .publisher-pipeline-stats a { display:inline-flex; align-items:center; gap:4px; }
+.publisher .publisher-pipeline-stats-head a { font-size:14px; text-decoration:underline; text-underline-offset:2px; }
+.publisher-pipeline-stats table { width:100%; border-collapse:collapse; font-size:14px; font-variant-numeric:tabular-nums; }
+.publisher-pipeline-stats :is(th, td) { padding:9px 0 9px 10px; border-bottom:1px solid var(--publisher-line); font-weight:400; text-align:right; white-space:nowrap; }
+.publisher-pipeline-stats :is(th, td):first-child { padding-left:0; text-align:left; }
+.publisher-pipeline-stats thead th { padding-block:6px; color:var(--publisher-muted); font-size:12px; }
+.publisher .publisher-pipeline-stats tbody th :is(a, span) { display:inline-flex; align-items:center; gap:6px; }
+.publisher-pipeline-stats tr[data-deleted] :is(th, td) { color:var(--publisher-muted); }
+.publisher-pipeline-stats tfoot :is(th, td) { border-bottom:0; }
+/* A phone shows one column at a time and swipes to the next, edge to edge. */
+@media(max-width:700px) {
+  .publisher-pipeline-board { grid-auto-columns:86%; margin-inline:-20px; padding-inline:20px; scroll-padding-inline:20px; scroll-snap-type:x mandatory; }
+  .publisher-pipeline-stage { scroll-snap-align:start; }
+  .publisher-pipeline-stats :is(th, td) { padding-left:8px; font-size:13px; }
+}
+@media (pointer:coarse) { .publisher .publisher-pipeline-new button { min-height:44px; } }
