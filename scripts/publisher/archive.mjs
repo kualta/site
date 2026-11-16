@@ -72,29 +72,45 @@ export const hashFile = (abs) => digestFile(abs, "sha256");
 /** A file's MD5: the checksum R2 keeps of each upload, so a render can be found among the posts it went out as. */
 export const md5File = (abs) => digestFile(abs, "md5");
 
-/** The helper API's archive routes, retrying a request that fails on the way a couple of times. */
-export function archiveClient({ origin, token, fetcher = fetch }) {
+/** The type a request says it carries. */
+function contentType(method, body) {
+  if (body !== undefined) return "application/octet-stream";
+  // One that isn't a GET says a type even without a body (a DELETE): Astro refuses one without as a cross-site form
+  // submission.
+  if (method !== "GET") return "application/json";
+  return undefined;
+}
+
+/**
+ * The helper API's archive routes, retrying a request that fails on the way a couple of times, and saying so: a 503
+ * here can be Cloudflare refusing the Worker for using too much CPU, which the helper's requests then meet too.
+ */
+export function archiveClient({ origin, token, fetcher = fetch, log = () => {} }) {
   return async function request(path, { method = "GET", json, body, raw = false } = {}) {
+    const type = contentType(method, body);
+    const route = path.split("?")[0];
     for (let attempt = 1; ; attempt++) {
       let response;
       try {
         response = await fetcher(`${origin}/api/publisher/helper/archive/${path}`, {
           method,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
-            ...(body !== undefined ? { "Content-Type": "application/octet-stream" } : {}),
-          },
+          headers: { Authorization: `Bearer ${token}`, ...(type ? { "Content-Type": type } : {}) },
           body: json !== undefined ? JSON.stringify(json) : body,
           signal: AbortSignal.timeout(10 * 60_000),
         });
       } catch (error) {
-        if (attempt < 3) continue;
+        if (attempt < 3) {
+          log(`${method} ${route} failed (${error.message}); trying again`);
+          continue;
+        }
         throw error;
       }
       if (response.ok) return raw ? response : response.json();
       const data = await response.json().catch(() => ({}));
-      if (response.status >= 500 && attempt < 3) continue;
+      if (response.status >= 500 && attempt < 3) {
+        log(`${method} ${route} answered ${response.status}; trying again`);
+        continue;
+      }
       throw new Error(data.error || `Archive request failed (${response.status})`);
     }
   };
@@ -154,7 +170,7 @@ export async function archiveProject(
   const root = resolve(dir);
   const name = basename(root);
   if (!isName(name)) throw new Error(`${name} isn't a name the archive takes: letters, digits, . _ and - only`);
-  const request = archiveClient({ origin, token, fetcher });
+  const request = archiveClient({ origin, token, fetcher, log });
   const { files, folders } = await projectContents(root);
   if (!files.length) throw new Error(`${root} holds no files to archive`);
   const total = files.reduce((sum, file) => sum + file.size, 0);
@@ -227,7 +243,7 @@ export async function cleanupProject(
   const root = resolve(dir);
   const name = basename(root);
   if (name === "zh" || !(await statOf(join(root, "film.html")))) throw new Error(`${root} isn't an OpenFilm project`);
-  const request = archiveClient({ origin, token, fetcher });
+  const request = archiveClient({ origin, token, fetcher, log });
   const render = join(root, `${name}.mp4`);
   const posts = (await statOf(render))
     ? (await request("posted", { method: "POST", json: { md5s: [await md5File(render)] } })).posted
@@ -294,7 +310,7 @@ export async function listArchived({ origin, token, fetcher = fetch }) {
  */
 export async function restoreProject(name, { dest, at, origin, token, fetcher = fetch, log = () => {} }) {
   if (!isName(name)) throw new Error("Name an archived project");
-  const request = archiveClient({ origin, token, fetcher });
+  const request = archiveClient({ origin, token, fetcher, log });
   const manifest = await request(`projects/${name}${at ? `?at=${encodeURIComponent(at)}` : ""}`);
   const root = resolve(dest ?? join(PROJECTS, name));
   const present = await readdir(root).catch(() => []);

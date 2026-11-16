@@ -12,6 +12,10 @@ const toBytes = (body: ArrayBuffer | ArrayBufferView | string) =>
       ? new Uint8Array(body)
       : new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
 
+/** A body R2 takes, stream or bytes, read whole. */
+const bytesOf = async (body: ReadableStream | ArrayBuffer | ArrayBufferView | string) =>
+  body instanceof ReadableStream ? new Uint8Array(await new Response(body).arrayBuffer()) : toBytes(body);
+
 const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((n) => n.toString(16).padStart(2, "0")).join("");
 
 /** What R2's head says of an object put whole: its size and the MD5 it computes for it. */
@@ -69,7 +73,7 @@ export function memoryArchive() {
   const uploads = new Map<string, { key: string; parts: Map<number, Uint8Array> }>();
   const bucket: ArchiveBucket = {
     async put(key, body, options) {
-      const bytes = toBytes(body);
+      const bytes = await bytesOf(body);
       // R2 refuses a body that doesn't match the hash it's given.
       if (options?.sha256 && hex(await crypto.subtle.digest("SHA-256", new Uint8Array(bytes))) !== options.sha256)
         throw new Error("put: The SHA-256 checksum you specified did not match what we received.");
@@ -101,7 +105,7 @@ export function memoryArchive() {
       };
       return {
         async uploadPart(partNumber, body) {
-          upload().parts.set(partNumber, toBytes(body));
+          upload().parts.set(partNumber, await bytesOf(body));
           return { partNumber, etag: `etag-${partNumber}` };
         },
         async complete(parts) {

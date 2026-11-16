@@ -4,7 +4,15 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from "
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { archiveProject, cleanupProject, listArchived, projectContents, restoreProject, skipped } from "./archive.mjs";
+import {
+  archiveClient,
+  archiveProject,
+  cleanupProject,
+  listArchived,
+  projectContents,
+  restoreProject,
+  skipped,
+} from "./archive.mjs";
 import { archiveResponse } from "../../src/lib/publisher/archive.ts";
 import { memoryArchive, memoryMedia } from "../../src/lib/publisher/memory-archive.ts";
 
@@ -236,4 +244,24 @@ test("a file that comes back different is refused", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a request without a body still says its type, and a retry is told", async () => {
+  const sent = [];
+  let failures = 1;
+  const fetcher = async (_url, init) => {
+    sent.push(`${init.method} ${init.headers["Content-Type"] ?? "-"}`);
+    if (failures-- > 0) return new Response("Worker exceeded resource limits", { status: 503 });
+    return Response.json({ ok: true });
+  };
+  const lines = [];
+  const log = (line) => lines.push(line);
+  const request = archiveClient({ origin: "https://post.kualta.dev", token: "token", fetcher, log });
+  // Astro refuses a DELETE with no type as a cross-site form submission.
+  expect(await request("uploads/abc?upload=x", { method: "DELETE" })).toEqual({ ok: true });
+  expect(sent).toEqual(["DELETE application/json", "DELETE application/json"]);
+  expect(lines).toEqual(["DELETE uploads/abc answered 503; trying again"]);
+  sent.length = 0;
+  await request("projects");
+  expect(sent).toEqual(["GET -"]);
 });

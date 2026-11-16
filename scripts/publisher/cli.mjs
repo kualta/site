@@ -208,7 +208,8 @@ if (command === "connect") {
         if (saved) console.log(`Saved ${saved} Instagram stories (${total} in ${storiesRoot})`);
       } else await new Promise((resolve) => setTimeout(resolve, 5000));
     } catch (e) {
-      console.error(e.message);
+      // Timed, so a run of failures in the log can be matched to what happened then.
+      console.error(`${new Date().toISOString()} ${e.message}`);
       await new Promise((resolve) => setTimeout(resolve, 10_000));
     }
   }

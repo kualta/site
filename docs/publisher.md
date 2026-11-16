@@ -310,7 +310,11 @@ the archive existed.
 cost nothing more. A manifest at `projects/<name>/<time>.json` names every file with its size
 and modified time, and every empty folder (git, which Studio's history is, needs some of its
 folders even empty). The archive keeps it only once every file it names is there. Files up to
-64 MiB go up whole, checked against their hash by R2, and larger ones in 64 MiB parts. Studio's
+64 MiB go up whole, checked against their hash by R2, and larger ones in 64 MiB parts. The
+Worker streams each one on to R2 without reading it, and copies a post's uploads to the archive
+the same way. On Workers Free a request gets 10 ms of CPU, and reading a 64 MiB part took about
+200 ms: an archive run that read its parts made Cloudflare answer other requests, the helper's
+among them, with 503s (error 1102) on 2026-11-16. Studio's
 `.film/cache` is left out, and once the manifest is kept, the command deletes it from the
 laptop; `--keep-cache` keeps it. Archiving again sends only what changed.
 
@@ -361,16 +365,20 @@ the stage there works on a phone, where cards don't drag.
 
 **Compose** opens the composer linked to that piece (`?content=<id>`), saving any edits first. The
 composer's **Pipeline** field shows the link, and it can link any piece that isn't posted yet,
-including from a draft. A draft saved from the composer keeps its link. Queueing the post moves the
-piece to Posted and records the post. Moving a posted piece back to an earlier stage drops that
-record. Cancelling the post before it goes out moves the piece back to Edit ready. Pieces marked
-Posted by hand have no post recorded.
+including from a draft. A draft saved from the composer keeps its link.
+
+Every post queued from the composer lands in Posted, linked to it, in the same write that queues
+it. A linked piece moves there, and a post linked to nothing gets a piece of its own, named as
+History names it (its title, else its caption's first line). Moving a posted piece back to an
+earlier stage drops its post. Cancelling the post before it goes out deletes a piece it made for
+itself and moves a linked piece back to Edit ready. Pieces marked Posted by hand have no post.
 
 Posted shows the latest 30. Pieces live in D1 (`publisher_content`, `0012_publisher_content.sql`).
 The list brings each posted piece's post and each destination's latest counts in two more reads,
 and the tab reads it when it opens, never on a timer. `0013_publisher_content_backfill.sql` put
-every post that had gone out before the Pipeline existed into Posted. Each is named as History
-names it and dated by its first destination to finish.
+every post that had gone out before the Pipeline existed into Posted, and
+`0014_publisher_content_catch_up.sql` the posts queued after that and before queueing made pieces.
+Each is named as History names it and dated by its first destination to finish.
 
 ## History and deleting publications
 

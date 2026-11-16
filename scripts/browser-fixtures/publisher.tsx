@@ -3,7 +3,7 @@ import Publisher from "../../src/components/Publisher";
 import "../../src/styles/globals.css";
 
 // The composer against a signed-in owner and an online laptop; requests are recorded, never sent.
-const requests: { path: string; method: string; body: unknown }[] = [];
+const requests: { path: string; method: string; body: any; query: string }[] = [];
 Object.assign(window, { publisherRequests: requests });
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 const connecting = new URLSearchParams(location.search).get("connecting");
@@ -421,7 +421,7 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const path = url.pathname.replace("/api/publisher/", "");
   const method = init.method || "GET";
   const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
-  requests.push({ path, method, body });
+  requests.push({ path, method, body, query: url.search });
   if (path === `media/${draftVideo}` || path === `media/${chineseVideo}`) return realFetch(input, init);
   if (path.startsWith("drafts/") && method === "DELETE") {
     drafts = drafts.filter((item) => `drafts/${item.id}` !== path);
@@ -480,7 +480,18 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     return json({ samples: path === `analytics/${analyticsPost}` ? samples : [] });
   if (path === "media") return json({ id: crypto.randomUUID() });
   if (/^jobs\/[^/]+\/thumbnail$/.test(path) && method === "PUT") return json({ ok: true });
-  if (path === "jobs") return json({ id: JSON.parse(String(init.body)).id }, 201);
+  // As the server does: the linked piece moves to Posted with the post, else the post gets a piece of its own.
+  if (path === "jobs") {
+    const linked = pieces.find((item) => item.id === url.searchParams.get("content") && !item.job_id);
+    if (linked) Object.assign(linked, { stage: "posted", job_id: body.id, stage_at: Date.now() });
+    else
+      pieces.unshift({
+        ...piece(0, body.title || body.caption.trim().split("\n")[0].slice(0, 80) || "Untitled", "posted", 0),
+        id: body.id,
+        job_id: body.id,
+      });
+    return json({ id: body.id }, 201);
+  }
   // Stopped before publishing, a calendar destination can be scheduled again.
   if (path === "stop")
     for (const item of calendarTargets())

@@ -694,7 +694,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       // Freeze the request after uploading. A lost response retries the same job.
       pending.payload ||= payload(pending.id, pending.media, pending.zhVideo, pending.cover, pending.zhCover);
       setSubmitted(true);
-      await api("jobs", pending.payload);
+      // The linked piece moves to Posted with the post; without one the post gets a piece of its own.
+      await api(linkedPiece ? `jobs?content=${linkedPiece.id}` : "jobs", pending.payload);
       setSubmitted(false);
       setPostsVersion((v) => v + 1);
       // Uploads expire after 31 days; a small picture stays with the post for Analytics.
@@ -712,13 +713,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           .catch(() => {})
           .finally(() => setDraftsVersion((v) => v + 1));
       }
-      if (linkedPiece) {
-        const piece = linkedPiece;
-        setPieces((list) => list.filter((item) => item.id !== piece.id));
-        api(`content/${piece.id}`, { job: pending.id }, "PATCH").catch((e) =>
-          setError(`The post is queued, but “${piece.title}” didn't move to Posted: ${(e as Error).message}`),
-        );
-      }
+      if (linkedPiece) setPieces((list) => list.filter((item) => item.id !== linkedPiece.id));
       if (sentLocation) {
         const next = [sentLocation, ...recentPlaces.filter((recent) => recent !== sentLocation)].slice(0, 8);
         setRecentPlaces(next);
