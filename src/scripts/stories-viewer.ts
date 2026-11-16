@@ -174,9 +174,10 @@ export function mountStories(root: HTMLElement): () => void {
     // the clock it was posted on, as written in its date
     time!.textContent = `${days[dayIndex].label}, ${story.date.slice(11, 16)}`;
     link!.href = story.url;
-    // A story shaped like the frame fills it, cropping a sliver as Instagram does; any other shape shows whole.
+    // A story shaped like the frame fills it, cropping its sides as Instagram does: a 9:16 story is about 22% wider than
+    // a 19.5:9 phone screen. Any other shape, a square or 4:5 photo, shows whole.
     const frameRatio = frame!.clientWidth / frame!.clientHeight || 9 / 16;
-    const fit = Math.abs(story.width / story.height - frameRatio) / frameRatio < 0.2 ? "cover" : "contain";
+    const fit = Math.abs(story.width / story.height - frameRatio) / frameRatio < 0.3 ? "cover" : "contain";
     media!.dataset.fit = fit;
     if (story.kind === "photo") {
       const image = new Image();
