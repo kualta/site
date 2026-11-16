@@ -29,7 +29,11 @@
     "database_id": "4103ceff-20df-4314-b5c7-ee64df0e52ad",
     "migrations_dir": "migrations"
   }],
-  "r2_buckets": [{ "binding": "PUBLISHER_MEDIA", "bucket_name": "kualta-publisher-media" }],
+  "r2_buckets": [
+    { "binding": "PUBLISHER_MEDIA", "bucket_name": "kualta-publisher-media" },
+    // Infrequent Access by default and never expired: queued posts' uploads, and finished projects
+    { "binding": "ARCHIVE", "bucket_name": "kualta-archive" }
+  ],
   "observability": {
     "enabled": true
   },

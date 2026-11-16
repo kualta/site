@@ -2,9 +2,18 @@ import type { NewsletterDB } from "../newsletter/types";
 import { EARLIER_SIGN_IN, SIGN_INS, postMedia, validId, type Post } from "./server";
 import type { Platform, PostKind } from "./presets";
 import { EXPIRY_MARGIN, UPLOAD_LIFETIME } from "./schedule";
+import type { ArchivedCheck } from "./archive";
 
-/** `kinds` keeps only posts of those kinds; without it every post is listed. */
-export async function historyPage(db: NewsletterDB, cursor: string | null, kinds?: readonly PostKind[]) {
+/**
+ * `kinds` keeps only posts of those kinds; without it every post is listed. `archived` says which uploads the archive
+ * holds a copy of, and those never expire.
+ */
+export async function historyPage(
+  db: NewsletterDB,
+  cursor: string | null,
+  kinds?: readonly PostKind[],
+  archived?: ArchivedCheck,
+) {
   const [timestamp, id] = cursor?.split(":") || [];
   if (cursor && (!/^\d+$/.test(timestamp) || !validId(id))) throw new Error("Invalid history cursor");
   const conditions: string[] = [];
@@ -49,19 +58,18 @@ export async function historyPage(db: NewsletterDB, cursor: string | null, kinds
   ]);
   const uploaded = new Map(media.map((row) => [row.id, row.created_at]));
   const now = Date.now();
+  const lapsed = (id: string) => (uploaded.get(id) ?? 0) + UPLOAD_LIFETIME - EXPIRY_MARGIN <= now;
+  const stale = uploads.filter(lapsed);
+  const kept = archived && stale.length ? await archived(stale) : new Set<string>();
   const last = page[page.length - 1];
   return {
     posts: page.map((job) => ({
       ...job,
       payload: undefined,
       targets: targets.filter((target) => target.job_id === job.id),
-      // The uploads the bucket has removed by now, or will within the hour.
+      // The uploads the bucket has removed by now, or will within the hour, and the archive holds no copy of.
       ...(job.post.kind === "video"
-        ? {
-            expired: postMedia(job.post).filter(
-              (id) => (uploaded.get(id) ?? 0) + UPLOAD_LIFETIME - EXPIRY_MARGIN <= now,
-            ),
-          }
+        ? { expired: postMedia(job.post).filter((id) => lapsed(id) && !kept.has(id)) }
         : {}),
     })),
     next: jobs.length > 20 ? `${last.created_at}:${last.id}` : null,

@@ -17,6 +17,7 @@ import {
 import { postKey, publicationLink } from "./links";
 import { EXPIRY_MARGIN, SCHEDULE_WINDOW, UPLOAD_LIFETIME } from "./schedule";
 import { isTag, problem, renderVariant, type Variant } from "./variants";
+import type { ArchivedCheck } from "./archive";
 
 /** A scheduled time can be this far in the past by the time the post reaches the server: it publishes at once. */
 const SCHEDULE_SLACK = 10 * 60_000;
@@ -592,18 +593,28 @@ export async function retryTarget(
 }
 /**
  * Moves a destination still waiting to publish to a new time, or schedules one stopped before it published again.
- * The time must fall within the next week and before the post's first upload expires. False when the destination is
- * publishing or done by now.
+ * The time must fall within the next week and before the post's first upload expires, unless the archive holds a copy
+ * of every upload. False when the destination is publishing or done by now.
  */
-export async function rescheduleTarget(db: NewsletterDB, job: string, target: string, at: unknown): Promise<boolean> {
+export async function rescheduleTarget(
+  db: NewsletterDB,
+  job: string,
+  target: string,
+  at: unknown,
+  archived?: ArchivedCheck,
+): Promise<boolean> {
   const now = Date.now();
   if (typeof at !== "number" || !Number.isInteger(at) || at < now - SCHEDULE_SLACK || at > now + SCHEDULE_WINDOW)
     throw new PostError("Choose a time within the next week");
-  const first = await db
-    .prepare("SELECT MIN(created_at) AS at FROM publisher_media WHERE job_id = ?")
+  const { results: uploads } = await db
+    .prepare("SELECT id, created_at FROM publisher_media WHERE job_id = ?")
     .bind(job)
-    .first<{ at: number | null }>();
-  const expires = first?.at ? first.at + UPLOAD_LIFETIME - EXPIRY_MARGIN : Number.POSITIVE_INFINITY;
+    .all<{ id: string; created_at: number }>();
+  const kept = archived && uploads.length ? await archived(uploads.map((u) => u.id)) : new Set<string>();
+  const lapsing = uploads.filter((u) => !kept.has(u.id));
+  const expires = lapsing.length
+    ? Math.min(...lapsing.map((u) => u.created_at)) + UPLOAD_LIFETIME - EXPIRY_MARGIN
+    : Number.POSITIVE_INFINITY;
   if (at > expires)
     throw new PostError(`This post's uploads expire ${new Date(expires).toUTCString()}. Choose an earlier time.`);
   const result = await db

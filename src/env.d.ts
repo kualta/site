@@ -3,6 +3,7 @@
 declare namespace Cloudflare {
   interface Env {
     PUBLISHER_MEDIA?: import("@/lib/publisher/server").MediaBucket;
+    ARCHIVE?: import("@/lib/publisher/archive").ArchiveBucket;
     ACTIVITY_CACHE?: import("@/lib/activity").ActivityCacheStore;
     ACTIVITY_STORE?: import("@/lib/activity/durable").ActivityDurableNamespace;
     ACTIVITY_STORE_MODE?: string;
