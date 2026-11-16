@@ -135,3 +135,48 @@ test("cancelling its post puts the piece back at Edit ready, so the post can be 
   expect(await deleteContent(db, piece.id)).toBe(true);
   expect(await deleteContent(db, piece.id)).toBe(false);
 });
+
+test("posts that went out before the Pipeline join Posted, named as History names them", async () => {
+  const { db, sql, job: linked } = fixture();
+  const addJob = (payload: object, createdAt: number, targets: [string, number | null, number | null][]) => {
+    const id = crypto.randomUUID();
+    sql.query("INSERT INTO publisher_jobs VALUES (?, ?, ?)").run(id, JSON.stringify(payload), createdAt);
+    for (const [state, started, finished] of targets)
+      sql
+        .query(
+          "INSERT INTO publisher_targets (id, job_id, platform, state, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run(crypto.randomUUID(), id, crypto.randomUUID(), state, started, finished);
+    return id;
+  };
+  const titled = addJob({ title: "Square windows", caption: "Lorax wisdom" }, 10, [
+    ["failed", 11, 12],
+    ["succeeded", 13, 20],
+    ["succeeded", 14, 15],
+  ]);
+  const text = addJob({ title: "", caption: "\n  meow, part one\nsecond line" }, 30, [["succeeded", 31, null]]);
+  const long = addJob({ title: "", caption: "x".repeat(90) }, 40, [["succeeded", null, null]]);
+  const blank = addJob({ title: "", caption: "" }, 50, [["succeeded", 51, 52]]);
+  // Never went out anywhere, so it isn't posted.
+  addJob({ title: "Failed everywhere", caption: "" }, 60, [["failed", 61, 62]]);
+  // Already linked from the composer: it keeps its own piece.
+  sql
+    .query("INSERT INTO publisher_targets (id, job_id, platform, state) VALUES (?, ?, 'bluesky', 'succeeded')")
+    .run(crypto.randomUUID(), linked);
+  const piece = await createContent(db, { title: "Linked by hand", stage: "edit" }, 1);
+  await updateContent(db, piece.id, { job: linked }, 2);
+  sql.exec(readFileSync("migrations/0013_publisher_content_backfill.sql", "utf8"));
+  const list = await listContent(db);
+  expect(
+    list.map(({ title, job_id, created_at, stage_at, notes }) => ({ title, job_id, created_at, stage_at, notes })),
+  ).toEqual([
+    { title: "Untitled", job_id: blank, created_at: 50, stage_at: 52, notes: "" },
+    { title: "x".repeat(80), job_id: long, created_at: 40, stage_at: 40, notes: "" },
+    { title: "meow, part one", job_id: text, created_at: 30, stage_at: 31, notes: "" },
+    { title: "Square windows", job_id: titled, created_at: 10, stage_at: 15, notes: "" },
+    { title: "Linked by hand", job_id: linked, created_at: 1, stage_at: 2, notes: "" },
+  ]);
+  expect(list.every((p) => p.stage === "posted")).toBe(true);
+  // Each takes its post's id, which the API accepts as a piece's.
+  expect(list.filter((p) => p.job_id !== linked).every((p) => p.id === p.job_id)).toBe(true);
+});
