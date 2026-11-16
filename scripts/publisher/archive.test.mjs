@@ -169,6 +169,7 @@ test("a posted film's project and the exported clips the archive holds come off 
     await stat(join(dir, "film.html"));
 
     const done = await cleanupProject(dir, { ...auth, exported });
+    expect(done.skipped).toBeUndefined();
     expect(done.posts.map((p) => p.job)).toEqual([job]);
     expect(done.posts[0].platforms).toContainEqual({ platform: "tiktok", state: "queued" });
     expect(done.deleted.map((clip) => clip.name)).toEqual(["clip.mp4"]);
@@ -197,7 +198,8 @@ test("a film no post went out as stays, unless the owner vouches for it", async 
     await post("another render", { instagram: "succeeded" });
 
     const kept = await cleanupProject(dir, { ...auth, exported });
-    expect(kept.kept).toContain("014-test-film.mp4");
+    expect(kept.skipped).toContain("014-test-film.mp4");
+    expect(kept.deleted).toBeUndefined();
     expect(requests.filter((r) => !r.endsWith("posted"))).toEqual([]);
     await stat(join(dir, "film.html"));
     expect((await readdir(exported)).length).toBe(3);
