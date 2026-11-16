@@ -191,6 +191,26 @@ export async function setXiaohongshuLocation(page, place) {
   throw new Error(`it offered no place named ${name}`);
 }
 /**
+ * TikTok walks a newly signed-in profile through its uploader in a tour ("Preview your video on your phone", Got it)
+ * whose overlay covers the page until each step is answered. A person reads the step, then takes its button; Escape
+ * closes one that has none. `appearing`: how long to give a tour that may be about to show.
+ */
+export async function finishTour(page, { appearing = 0 } = {}) {
+  const overlay = page.locator(".react-joyride__overlay");
+  if (appearing) await overlay.waitFor({ timeout: appearing }).catch(() => {});
+  const answer = page
+    .getByRole("button", { name: /^(Got it|Next|Done|Skip|OK)$/i })
+    .filter({ visible: true })
+    .last();
+  for (let step = 0; step < 8 && (await overlay.isVisible().catch(() => false)); step++) {
+    await pause(page, 1200, 3200);
+    if (await answer.count())
+      await humanClick(page, answer, { timeout: 5000 }).catch(() => page.keyboard.press("Escape"));
+    else await page.keyboard.press("Escape");
+    await pause(page, 600, 1400);
+  }
+}
+/**
  * Picks files the way a person does, through the page's Select button and the file picker it opens. If the button
  * isn't there or opens no picker, the files go straight onto the page's file input.
  */
@@ -275,7 +295,12 @@ export async function writeTikTokCaption(page, caption) {
     .waitFor({ timeout: 10_000 })
     .catch(() => {});
   await pause(page, 1000, 2500);
-  await humanClick(page, editor);
+  await finishTour(page, { appearing: 3000 });
+  // A tour step can still turn up a moment later and cover the editor.
+  await humanClick(page, editor, { timeout: 15_000 }).catch(async () => {
+    await finishTour(page);
+    await humanClick(page, editor);
+  });
   await pause(page, 300, 900);
   await page.keyboard.press("ControlOrMeta+a");
   await pause(page, 200, 600);
@@ -564,6 +589,7 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
       else await chooseFiles(page, /^Select video$/, 'input[type="file"]', files);
       const { linked, tags } = await writeTikTokCaption(page, post.caption);
       if (linked < tags) notes.push(`TikTok linked ${linked} of ${tags} hashtags.`);
+      await finishTour(page);
       if (cover)
         await setTikTokCover(page, cover).catch(async (error) => {
           notes.push(`Kept TikTok's own cover: ${error.message.split("\n")[0].slice(0, 100)}.`);
@@ -573,6 +599,7 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
             .catch(() => page.keyboard.press("Escape"));
         });
       await lookAround(page);
+      await finishTour(page);
       // Post turns on once the video is up; a draft is saved only then too.
       const postButton = page.getByRole("button", { name: "Post", exact: true });
       await postButton.click({ trial: true, timeout: 10 * 60_000 });
@@ -582,6 +609,7 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
         return { ...saved, message: [saved.message, ...notes].join(" ") };
       }
       await waitForTikTokChecks(page);
+      await finishTour(page);
       submitting = true;
       await humanClick(page, postButton);
     }
