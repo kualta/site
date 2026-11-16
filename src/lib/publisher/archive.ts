@@ -1,5 +1,5 @@
 import type { NewsletterDB } from "../newsletter/types";
-import { type MediaBucket, type Post, postMedia, validId } from "./server";
+import { type MediaBucket, type Post, postMedia, postUploads, validId } from "./server";
 import { UPLOAD_LIFETIME } from "./schedule";
 
 /**
@@ -23,7 +23,7 @@ export interface ArchiveBucket {
     size?: number;
     uploaded?: Date;
   } | null>;
-  head(key: string): Promise<{ size: number } | null>;
+  head(key: string): Promise<{ size: number; etag?: string; checksums?: { md5?: ArrayBuffer } } | null>;
   delete(keys: string | string[]): Promise<void>;
   list(options: { prefix: string; cursor?: string }): Promise<{
     objects: { key: string; size: number; uploaded: Date }[];
@@ -169,6 +169,67 @@ export async function archiveRecentPosts(
     gone += done.gone;
   }
   return { posts: results.length, copied, gone };
+}
+
+/* ── posts the laptop's files went out as ─────────────────────────────── */
+
+const isMd5 = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
+const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((n) => n.toString(16).padStart(2, "0")).join("");
+
+/** An object's MD5 as R2 keeps it: the checksum R2 computes for an object put whole, as every upload is, or else an
+ * etag that is one. */
+function md5Of(object: unknown): string | null {
+  const { checksums, etag } = (object ?? {}) as { checksums?: { md5?: ArrayBuffer }; etag?: string };
+  if (checksums?.md5) return hex(checksums.md5);
+  return isMd5(etag) ? etag : null;
+}
+
+/** A post that holds a file the laptop asked about. */
+export interface PostedUpload {
+  md5: string;
+  job: string;
+  queuedAt: number;
+  platforms: { platform: string; state: string }[];
+}
+
+/**
+ * Which of `md5s`, the MD5s of files on the laptop, are videos of a post that went out or is set to: one with a
+ * destination that succeeded or is queued or working, as a scheduled post waits. A post whose every destination failed
+ * doesn't count. Each video's MD5 is read from the media bucket, or from the archive's copy once that has expired.
+ */
+export async function postedUploads(
+  db: NewsletterDB,
+  media: Pick<MediaBucket, "head">,
+  archive: ArchiveBucket,
+  md5s: unknown,
+): Promise<PostedUpload[]> {
+  if (!Array.isArray(md5s) || md5s.length > 1000 || !md5s.every(isMd5))
+    throw new ArchiveError("Send up to 1000 MD5s, each as 32 hexadecimal digits");
+  const wanted = new Set(md5s);
+  const { results } = await db
+    .prepare(
+      `SELECT j.id, j.payload, j.created_at, t.platform, t.state FROM publisher_jobs j
+       JOIN publisher_targets t ON t.job_id = j.id
+       WHERE j.id IN (SELECT job_id FROM publisher_targets WHERE state IN ('queued','working','succeeded'))`,
+    )
+    .all<{ id: string; payload: string; created_at: number; platform: string; state: string }>();
+  const jobs = new Map<string, { payload: string; queuedAt: number; platforms: PostedUpload["platforms"] }>();
+  for (const row of results) {
+    const job = jobs.get(row.id) ?? { payload: row.payload, queuedAt: row.created_at, platforms: [] };
+    job.platforms.push({ platform: row.platform, state: row.state });
+    jobs.set(row.id, job);
+  }
+  const videos = [...jobs].flatMap(([job, { payload, queuedAt, platforms }]) =>
+    postUploads(JSON.parse(payload) as Post)
+      .filter((upload) => upload.kind === "video" && validId(upload.id))
+      .map((upload) => ({ upload: upload.id, job, queuedAt, platforms })),
+  );
+  const posted: PostedUpload[] = [];
+  await each(videos, async ({ upload, job, queuedAt, platforms }) => {
+    const md5 = md5Of((await media.head(upload)) ?? (await archive.head(mediaKey(upload))));
+    if (md5 && wanted.has(md5)) posted.push({ md5, job, queuedAt, platforms });
+  });
+  return posted;
 }
 
 /* ── projects ──────────────────────────────────────────────────────────── */
@@ -353,11 +414,13 @@ export async function readManifest(archive: ArchiveBucket, name: string, at?: st
  *   GET    projects                   { projects: [{ name, archivedAt, versions }] }
  *   GET    projects/<name>?at=…       the manifest as last archived, or as archived at that time
  *   POST   media                      archives the uploads of every post queued in the last 31 days
+ *   POST   posted                     { md5s: [md5] } → { posted: [{ md5, job, queuedAt, platforms }] }: the posts,
+ *                                      published or scheduled, whose videos are those files
  */
 export async function archiveResponse(
   rest: string,
   request: Request,
-  { db, media, archive }: { db: NewsletterDB; media: Pick<MediaBucket, "get">; archive: ArchiveBucket },
+  { db, media, archive }: { db: NewsletterDB; media: Pick<MediaBucket, "get" | "head">; archive: ArchiveBucket },
 ): Promise<Response> {
   const headers = { "Cache-Control": "no-store" };
   const json = (data: unknown, status = 200) => Response.json(data, { status, headers });
@@ -412,6 +475,10 @@ export async function archiveResponse(
       }
     }
     if (rest === "media" && method === "POST") return json(await archiveRecentPosts(db, media, archive));
+    if (rest === "posted" && method === "POST") {
+      const { md5s } = (await request.json()) as { md5s?: unknown };
+      return json({ posted: await postedUploads(db, media, archive, md5s) });
+    }
     return json({ error: "Not found" }, 404);
   } catch (error) {
     if (error instanceof ArchiveError) return json({ error: error.message }, 400);

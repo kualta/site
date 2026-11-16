@@ -3,7 +3,7 @@ import { collectAnalytics } from "./analytics.mjs";
 import { mkdir, readFile, writeFile, chmod, rm } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { resolve, join, dirname } from "node:path";
+import { resolve, join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -11,7 +11,14 @@ import ffmpeg from "ffmpeg-static";
 import ffprobe from "ffprobe-static";
 import { deletePublication } from "./delete.mjs";
 import { createDraft } from "./draft.mjs";
-import { archiveProject, archiveRecentMedia, listArchived, restoreProject } from "./archive.mjs";
+import {
+  archiveProject,
+  archiveRecentMedia,
+  cleanupProject,
+  listArchived,
+  projectFolders,
+  restoreProject,
+} from "./archive.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
@@ -225,7 +232,7 @@ if (command === "connect") {
     console.error(error.message);
     process.exitCode = 1;
   }
-} else if (["archive", "restore", "archives", "archive-media"].includes(command)) {
+} else if (["archive", "restore", "archives", "archive-media", "cleanup"].includes(command)) {
   try {
     if (!config.token) throw new Error("Connect the helper first");
     const auth = { origin: config.origin, token: config.token };
@@ -255,6 +262,46 @@ if (command === "connect") {
     } else if (command === "archives") {
       for (const p of await listArchived(auth))
         console.log(`${p.name}  last archived ${p.archivedAt}${p.versions > 1 ? `, ${p.versions} times` : ""}`);
+    } else if (command === "cleanup") {
+      const posted = args.includes("--posted");
+      const dryRun = args.includes("--dry-run");
+      let folders = args.filter((arg) => !arg.startsWith("--"));
+      if (args.includes("--all")) {
+        if (posted) throw new Error("--posted vouches for one film: name its folder instead of --all");
+        folders = await projectFolders();
+      }
+      if (!folders.length)
+        throw new Error("Usage: bun run publisher cleanup <project folder>… | --all [--posted] [--dry-run]");
+      const size = (files) => gb(files.reduce((sum, file) => sum + file.size, 0));
+      const names = (files) => files.map((file) => file.name).join(", ");
+      for (const folder of folders) {
+        try {
+          const done = await cleanupProject(resolve(folder), { ...auth, posted, dryRun, log: (l) => console.error(l) });
+          if (done.kept) {
+            console.log(`${done.name}: kept, ${done.kept}`);
+            continue;
+          }
+          const states = new Set(done.posts.flatMap((p) => p.platforms.map((t) => `${t.platform} ${t.state}`)));
+          const out = states.size ? `posted: ${[...states].join(", ")}` : "posted, as you confirmed";
+          if (done.dryRun) {
+            const listed = done.clips.length ? `: ${names(done.clips)}` : "";
+            console.log(
+              `${done.name}: ${out}. Would archive it again, then delete ${done.clips.length} exported clips ` +
+                `(${size(done.clips)}) whose bytes the archive holds${listed}, and the project (${gb(done.bytes)})`,
+            );
+            continue;
+          }
+          console.log(
+            `${done.name}: ${out}. Archived (${gb(done.archived.sent)} new); deleted ${done.deleted.length} exported ` +
+              `clips (${size(done.deleted)}) and the project (${gb(done.bytes)})` +
+              (done.kept.length ? `; kept ${names(done.kept)}, exported again since it was archived` : "") +
+              `. Bring it back with: bun run publisher restore ${done.name}`,
+          );
+        } catch (error) {
+          console.error(`${basename(folder)}: ${error.message}`);
+          process.exitCode = 1;
+        }
+      }
     } else {
       const done = await archiveRecentMedia(auth);
       console.log(
@@ -277,5 +324,6 @@ if (command === "connect") {
 } else
   console.log(
     "Usage: bun run publisher connect | start | install | uninstall | draft <post.json> | oauth-key |\n" +
-      "  archive <project folder>… [--keep-cache] | restore <project> [folder] [--at <time>] | archives | archive-media",
+      "  archive <project folder>… [--keep-cache] | restore <project> [folder] [--at <time>] | archives | archive-media |\n" +
+      "  cleanup <project folder>… | --all [--posted] [--dry-run]",
   );

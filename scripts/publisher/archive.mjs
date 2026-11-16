@@ -60,11 +60,17 @@ export async function projectContents(root) {
   return { files: files.sort((a, b) => byPath(a.path, b.path)), folders: folders.sort(byPath) };
 }
 
-export async function hashFile(abs) {
-  const hash = createHash("sha256");
+async function digestFile(abs, algorithm) {
+  const hash = createHash(algorithm);
   for await (const chunk of createReadStream(abs, { highWaterMark: 4 * 1024 * 1024 })) hash.update(chunk);
   return hash.digest("hex");
 }
+
+/** A file's SHA-256: what the archive stores it by. */
+export const hashFile = (abs) => digestFile(abs, "sha256");
+
+/** A file's MD5: the checksum R2 keeps of each upload, so a render can be found among the posts it went out as. */
+export const md5File = (abs) => digestFile(abs, "md5");
 
 /** The type a request says it carries. */
 function contentType(method, body) {
@@ -202,6 +208,78 @@ export async function archiveProject(
       cleared += before;
     }
   return { name, key: saved.key, files: files.length, bytes: total, sent, cleared };
+}
+
+/** Where the grade app exports clips. A project's footage is its own copy of some of them. */
+export const EXPORTED = join(homedir(), "Movies/Exported");
+
+const statOf = (abs) => stat(abs).catch(() => null);
+
+/** The projects in `dir`: each folder there holding a film.html. */
+export async function projectFolders(dir = PROJECTS) {
+  const found = [];
+  for (const entry of await readdir(dir, { withFileTypes: true }))
+    if (entry.isDirectory() && (await statOf(join(dir, entry.name, "film.html")))) found.push(join(dir, entry.name));
+  return found.sort();
+}
+
+/**
+ * Takes a finished project off the laptop, once that loses nothing:
+ *
+ * 1. Its film is out or set to go: its render, `<name>.mp4`, is the video of a post with a destination that published
+ *    or is queued or scheduled (a draft sends a render up unchanged, so their MD5s match), or `posted` says the owner
+ *    confirmed it. Otherwise it's kept, and nothing else happens.
+ * 2. The archive gets the project as it is now: only what changed since it was last archived goes up.
+ * 3. Each clip in `exported` that the project copied (one of the same name in its assets) goes, but only when the
+ *    archive holds those exact bytes. A clip exported again since the project copied it stays.
+ * 4. The project's folder goes. `restore` brings it back whole.
+ *
+ * `dryRun` says what would go, and archives and deletes nothing.
+ */
+export async function cleanupProject(
+  dir,
+  { origin, token, fetcher = fetch, log = () => {}, exported = EXPORTED, posted = false, dryRun = false, part = PART },
+) {
+  const root = resolve(dir);
+  const name = basename(root);
+  if (name === "zh" || !(await statOf(join(root, "film.html")))) throw new Error(`${root} isn't an OpenFilm project`);
+  const request = archiveClient({ origin, token, fetcher, log });
+  const render = join(root, `${name}.mp4`);
+  const posts = (await statOf(render))
+    ? (await request("posted", { method: "POST", json: { md5s: [await md5File(render)] } })).posted
+    : [];
+  if (!posts.length && !posted) return { name, kept: `no published or scheduled post has ${name}.mp4 as its video` };
+
+  const clips = [];
+  for (const folder of ["assets", "zh/assets"]) {
+    const files = await readdir(join(root, folder)).catch(() => []);
+    for (const file of files) {
+      const abs = join(exported, file);
+      const found = await statOf(abs);
+      if (found?.isFile() && !clips.some((clip) => clip.abs === abs)) clips.push({ name: file, abs, size: found.size });
+    }
+  }
+  const bytes = (await folderSize(root)) ?? 0;
+  if (dryRun) return { name, posts, clips, bytes, dryRun: true };
+
+  const archived = await archiveProject(root, { origin, token, fetcher, log, part });
+  for (const clip of clips) clip.sha256 = await hashFile(clip.abs);
+  let missing = new Set();
+  if (clips.length) {
+    const blobs = clips.map((clip) => clip.sha256);
+    missing = new Set((await request("missing", { method: "POST", json: { blobs } })).missing);
+  }
+  const deleted = [];
+  const kept = [];
+  for (const clip of clips) {
+    if (missing.has(clip.sha256)) kept.push(clip);
+    else {
+      await rm(clip.abs);
+      deleted.push(clip);
+    }
+  }
+  await rm(root, { recursive: true, force: true });
+  return { name, posts, archived, deleted, kept, bytes };
 }
 
 async function folderSize(dir) {

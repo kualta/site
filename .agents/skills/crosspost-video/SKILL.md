@@ -95,3 +95,5 @@ A video over the 90 MB upload limit is re-encoded to fit. One too long to stay w
 ## 6. Report
 
 Give the link, which video files you sent, whether you rendered or re-encoded them, the title and caption as written, and the cover and place you chose, if any. Mention that destinations and YouTube visibility come from the preset saved in the person's browser, and that the draft expires after 31 days.
+
+Once the person has published or scheduled an OpenFilm film, `node ~/Projects/site/scripts/publisher/cli.mjs cleanup <film>` takes its project and the exported clips it was cut from off the laptop, after checking the post is out and the archive holds them (the `openfilm` skill says when). Don't render the film again between the draft and the cleanup: the cleanup finds the post by the render's exact bytes.

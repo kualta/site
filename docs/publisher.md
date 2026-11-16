@@ -324,6 +324,17 @@ another empty folder is named. Each file is checked against its hash, files the 
 twice come back as clones, and file times are restored. `bun run publisher archive-media` runs
 the uploads sweep now. All of it goes through the helper API on the laptop's pairing token.
 
+**Cleaning up.** `bun run publisher cleanup <project folder>…` (or `--all`, every project in
+`~/Movies/OpenFilm/Projects`) takes a film off the laptop once that loses nothing. It needs the
+film to be out or set to go: the project's render `<name>.mp4` must be the video of a post with a
+destination that succeeded or is queued, as a scheduled post waits. `helper/archive/posted` answers
+that from the MD5 R2 keeps of each upload, which matches the render's because a draft sends it
+unchanged (one re-encoded to fit 90 MB doesn't match). A film the publisher can't confirm is
+kept; `--posted` vouches for one named film. Then the project is archived again (only changes go
+up), each clip in `~/Movies/Exported` the project copied (by name) is deleted when the archive
+holds its exact bytes, so a clip exported again since stays, and the project's folder goes.
+`--dry-run` says what would go, without archiving or deleting.
+
 ## Validation
 
 `bun test`, `bun run check`, `bun run build`. Native metadata tests run when
