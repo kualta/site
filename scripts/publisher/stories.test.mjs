@@ -1,8 +1,17 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { archiveStories, dateTags, postedAt, storyMedia } from "./stories.mjs";
+import { recordKey } from "../lib/atproto-content.mjs";
+import {
+  archiveStories,
+  clockTime,
+  crosspostStories,
+  dateTags,
+  pinkleapTags,
+  postedAt,
+  storyMedia,
+} from "./stories.mjs";
 
 test("a story is dated on the clock of the phone that posted it", () => {
   // 2026-11-15 03:30:00 UTC is still the evening of the 14th in Bogotá, and the morning of the 15th in Mumbai.
@@ -181,4 +190,117 @@ test("a signed-out profile is an error, not an empty archive", async () => {
     "Log in to Instagram",
   );
   expect(signedOut.seen.closed).toBe(true);
+});
+
+test("a time is written on another clock the way AT Protocol dates are", () => {
+  const now = Date.parse("2026-11-16T14:31:20.880Z");
+  expect(clockTime(now, "-05:00")).toBe("2026-11-16T09:31:20.880-05:00");
+  expect(clockTime(now, "+05:30")).toBe("2026-11-16T20:01:20.880+05:30");
+  expect(clockTime(now, "")).toBe("2026-11-16T14:31:20.880Z");
+  expect(Date.parse(clockTime(now, "-05:00"))).toBe(now);
+});
+
+/** A stories folder whose index lists these stories, each with a file. */
+async function savedStories(stories) {
+  const root = await mkdtemp(join(tmpdir(), "stories-"));
+  for (const story of stories) {
+    await mkdir(join(root, story.file, ".."), { recursive: true });
+    await writeFile(join(root, story.file), `bytes of ${story.id}`);
+  }
+  await writeFile(join(root, "index.json"), JSON.stringify({ days: {}, stories }));
+  return root;
+}
+const pds = { agent: { did: "did:plc:jhvnnnd3adml7t6anu3ay7ip" }, pdsUrl: new URL("https://pds.example") };
+
+test("stories still up go to Pinkleap once, oldest first, as tagged posts dated on their own clock", async () => {
+  const now = Date.parse("2026-11-16T14:00:00Z");
+  const root = await savedStories([
+    { id: "3", posted: "2026-11-16T08:00:00-05:00", file: "2026/11/2026-11-16 08.00.00.mp4" },
+    { id: "2", posted: "2026-11-15T20:00:00-05:00", file: "2026/11/2026-11-15 20.00.00.jpg" },
+    // a day and more ago: gone from Instagram, so not sent on
+    { id: "1", posted: "2026-11-14T20:00:00-05:00", file: "2026/11/2026-11-14 20.00.00.mp4" },
+  ]);
+  const prepared = [];
+  const posts = [];
+  const options = {
+    root,
+    now,
+    oauth: { agent: async () => pds },
+    process: async (input, output, settings) => {
+      prepared.push([input.slice(root.length + 1), settings]);
+      return { width: 720, height: 1280 };
+    },
+    atproto: async (platform, authorization, files, infos, post) => {
+      expect([platform, authorization, infos]).toEqual(["bluesky", pds, [{ width: 720, height: 1280 }]]);
+      posts.push(post);
+      return { url: "https://bsky.app/x" };
+    },
+    fetcher: async (url) => {
+      expect(url.startsWith("https://pds.example/xrpc/com.atproto.repo.getRecord?")).toBe(true);
+      return new Response("", { status: 400 });
+    },
+    log: () => {},
+  };
+  expect(await crosspostStories(options)).toEqual({ posted: 2 });
+  expect(prepared).toEqual([
+    ["2026/11/2026-11-15 20.00.00.jpg", { kind: "photo", policy: "remove-all", maxBytes: 1_900_000 }],
+    ["2026/11/2026-11-16 08.00.00.mp4", { kind: "video", policy: "remove-all", maxBytes: 1_900_000 }],
+  ]);
+  expect(posts).toEqual([
+    {
+      id: "story-2",
+      kind: "photo",
+      caption: "",
+      alt: "",
+      tags: pinkleapTags,
+      createdAt: "2026-11-16T09:00:00.000-05:00",
+    },
+    {
+      id: "story-3",
+      kind: "video",
+      caption: "",
+      alt: "",
+      tags: pinkleapTags,
+      createdAt: "2026-11-16T09:00:00.000-05:00",
+    },
+  ]);
+  const index = JSON.parse(await readFile(join(root, "index.json"), "utf8"));
+  const link = (id) =>
+    `https://bsky.app/profile/did:plc:jhvnnnd3adml7t6anu3ay7ip/post/${recordKey(`publisher:bluesky:story-${id}`)}`;
+  expect(index.stories.map((story) => story.pinkleap)).toEqual([link("3"), link("2"), undefined]);
+
+  // Sent stories aren't sent again, and with nothing due the account isn't even asked for.
+  posts.length = 0;
+  const noOauth = { agent: async () => Promise.reject(new Error("must not sign in")) };
+  expect(await crosspostStories({ ...options, oauth: noOauth })).toEqual({ posted: 0 });
+  expect(posts).toEqual([]);
+});
+
+test("a story already posted is noted rather than posted twice, and a failed one waits for the next run", async () => {
+  const now = Date.parse("2026-11-16T14:00:00Z");
+  const root = await savedStories([
+    { id: "a", posted: "2026-11-16T07:00:00-05:00", file: "a.mp4" },
+    { id: "b", posted: "2026-11-16T08:00:00-05:00", file: "b.mp4" },
+  ]);
+  const posts = [];
+  const logged = [];
+  const result = await crosspostStories({
+    root,
+    now,
+    oauth: { agent: async () => pds },
+    process: async () => ({ width: 720, height: 1280 }),
+    atproto: async (platform, authorization, files, infos, post) => {
+      posts.push(post.id);
+      throw new Error("Bluesky video processing failed");
+    },
+    // a run stopped after posting a left its post up
+    fetcher: async (url) =>
+      new Response("{}", { status: url.includes(recordKey("publisher:bluesky:story-a")) ? 200 : 400 }),
+    log: (line) => logged.push(line),
+  });
+  expect(result).toEqual({ posted: 1 });
+  expect(posts).toEqual(["story-b"]);
+  expect(logged).toEqual(["Story b not sent to Pinkleap: Bluesky video processing failed"]);
+  const index = JSON.parse(await readFile(join(root, "index.json"), "utf8"));
+  expect(index.stories.map((story) => Boolean(story.pinkleap))).toEqual([true, false]);
 });

@@ -165,10 +165,9 @@ const gb = (bytes) => `${(bytes / 1e9).toFixed(2)} GB`;
  */
 export async function archiveProject(
   dir,
-  { origin, token, fetcher = fetch, log = () => {}, keepCache = false, part = PART },
+  { origin, token, fetcher = fetch, log = () => {}, keepCache = false, part = PART, name = basename(resolve(dir)) },
 ) {
   const root = resolve(dir);
-  const name = basename(root);
   if (!isName(name)) throw new Error(`${name} isn't a name the archive takes: letters, digits, . _ and - only`);
   const request = archiveClient({ origin, token, fetcher, log });
   const { files, folders } = await projectContents(root);

@@ -1,9 +1,12 @@
 import { execFile } from "node:child_process";
-import { access, mkdir, readFile, rename, rm, utimes, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { access, mkdir, mkdtemp, readFile, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { recordKey } from "../lib/atproto-content.mjs";
+import { owner, publishAtproto } from "./atproto.mjs";
 import { openProfile } from "./browser.mjs";
+import { processMedia } from "./process.mjs";
 
 const exec = promisify(execFile);
 export const storiesRoot = join(homedir(), "Movies", "Instagram Stories");
@@ -206,4 +209,81 @@ export async function archiveStories({
   } finally {
     await context.close().catch(() => {});
   }
+}
+
+/** Pinkleap shows a Bluesky post with this tag as a story. */
+export const pinkleapTags = ["pinkleapStory"];
+/** How long a story is up on Instagram, and so how long after posting it's still worth sending on. */
+const STORY_LIFE_MS = 24 * 60 * 60_000;
+
+/** `now` on the clock of the `zone` (as in -05:00), written the way AT Protocol dates are. */
+export function clockTime(now, zone) {
+  const [, sign, hours, minutes] = zone.match(/^([+-])(\d\d):(\d\d)$/) ?? [];
+  if (!sign) return new Date(now).toISOString();
+  const offset = (sign === "-" ? -1 : 1) * (Number(hours) * 60 + Number(minutes)) * 60_000;
+  return `${new Date(now + offset).toISOString().slice(0, 23)}${zone}`;
+}
+
+/**
+ * Sends each saved story that's still up on Instagram, and hasn't gone yet, to Pinkleap: a post on the Bluesky account
+ * with no text, the story's photo or video, and Pinkleap's story tag. On Bluesky itself it's an ordinary post. It's
+ * dated when it's sent, on the clock the story was posted with, so the site files it under that day. index.json notes
+ * each one's post, and a run stopped after posting finds the post by its fixed key rather than posting it twice.
+ */
+export async function crosspostStories({
+  root = storiesRoot,
+  oauth,
+  process = processMedia,
+  atproto = publishAtproto,
+  fetcher = fetch,
+  now = Date.now(),
+  log = console.log,
+} = {}) {
+  const indexFile = join(root, "index.json");
+  const index = await readIndex(indexFile);
+  const due = index.stories
+    .filter((story) => !story.pinkleap && now - Date.parse(story.posted) < STORY_LIFE_MS)
+    .sort((a, b) => Date.parse(a.posted) - Date.parse(b.posted));
+  if (!due.length) return { posted: 0 };
+  const authorization = await oauth.agent();
+  const temp = await mkdtemp(join(tmpdir(), "kualta-story-"));
+  let posted = 0;
+  try {
+    for (const story of due) {
+      const id = `story-${story.id}`;
+      const rkey = recordKey(`publisher:bluesky:${id}`);
+      try {
+        const query = new URLSearchParams({ repo: owner, collection: "app.bsky.feed.post", rkey });
+        const existing = await fetcher(`${authorization.pdsUrl.origin}/xrpc/com.atproto.repo.getRecord?${query}`, {
+          signal: AbortSignal.timeout(20_000),
+        });
+        if (!existing.ok) {
+          const kind = story.file.endsWith(".jpg") ? "photo" : "video";
+          const output = join(temp, `${story.id}.${kind === "photo" ? "jpg" : "mp4"}`);
+          const info = await process(join(root, story.file), output, {
+            kind,
+            policy: "remove-all",
+            maxBytes: 1_900_000,
+          });
+          const zone = story.posted.match(/[+-]\d\d:\d\d$/)?.[0] ?? "";
+          await atproto("bluesky", authorization, [output], [info], {
+            id,
+            kind,
+            caption: "",
+            alt: "",
+            tags: pinkleapTags,
+            createdAt: clockTime(now, zone),
+          });
+        }
+        story.pinkleap = `https://bsky.app/profile/${owner}/post/${rkey}`;
+        posted++;
+        await writeIndex(indexFile, index);
+      } catch (error) {
+        log(`Story ${story.id} not sent to Pinkleap: ${error.message}`);
+      }
+    }
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+  return { posted };
 }

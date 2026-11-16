@@ -5,10 +5,12 @@ import {
   getVideoLibrary,
   getWatchVideo,
   isShort,
+  normalizeStoryPost,
   normalizeVideoPost,
   playlistDuration,
   richText,
   splitTitle,
+  storyDays,
   timeAgo,
   upNext,
 } from "./videos";
@@ -185,4 +187,89 @@ test("watches listed videos, reads unlisted ones on their own, and rejects bad k
 test("up next continues after the current video, then wraps", () => {
   const videos = ["a", "b", "c", "d"].map((rkey) => normalizeVideoPost(post(rkey, rkey))!);
   expect(upNext(videos, videos[1]).map((video) => video.rkey)).toEqual(["c", "d", "a"]);
+});
+
+function story(rkey: string, createdAt: string, kind: "photo" | "video" = "video") {
+  const base = post(rkey, "", { createdAt, width: 720, height: 1280 });
+  const record = { ...base.record, tags: ["pinkleapStory"] };
+  if (kind === "video") return { ...base, record };
+  return {
+    ...base,
+    record,
+    embed: {
+      $type: "app.bsky.embed.images#view",
+      images: [
+        {
+          thumb: `https://cdn.bsky.app/img/feed_thumbnail/plain/${did}/${rkey}@jpeg`,
+          fullsize: `https://cdn.bsky.app/img/feed_fullsize/plain/${did}/${rkey}@jpeg`,
+          alt: "",
+          aspectRatio: { width: 1179, height: 2096 },
+        },
+      ],
+    },
+  };
+}
+
+test("stories are photos or videos of the account's own tagged posts, never listed as videos", () => {
+  const video = story("sv", "2026-11-16T09:31:20.880-05:00");
+  expect(normalizeVideoPost(video)).toBeUndefined();
+  expect(normalizeStoryPost(video)).toMatchObject({
+    rkey: "sv",
+    kind: "video",
+    src: `https://video.bsky.app/watch/${encodeURIComponent(did)}/bafysv/playlist.m3u8`,
+    thumbnail: `https://video.bsky.app/watch/${encodeURIComponent(did)}/bafysv/thumbnail.jpg`,
+    date: "2026-11-16T09:31:20.880-05:00",
+    width: 720,
+    height: 1280,
+  });
+  expect(normalizeStoryPost(story("sp", "2026-11-16T09:00:00-05:00", "photo"))).toMatchObject({
+    kind: "photo",
+    src: `https://cdn.bsky.app/img/feed_fullsize/plain/${did}/sp@jpeg`,
+    thumbnail: `https://cdn.bsky.app/img/feed_thumbnail/plain/${did}/sp@jpeg`,
+    width: 1179,
+    height: 2096,
+  });
+  // the tag Pinkleap used as Pinksky still counts
+  const older = story("old", "2025-06-01T12:00:00Z");
+  expect(normalizeStoryPost({ ...older, record: { ...older.record, tags: ["pinkskyStory"] } })?.rkey).toBe("old");
+  expect(normalizeStoryPost(post("plain", "a video"))).toBeUndefined();
+  expect(normalizeStoryPost({ ...video, author: { did: "did:plc:other" } })).toBeUndefined();
+  expect(normalizeStoryPost({ ...video, labels: [{ val: "porn" }] })).toBeUndefined();
+});
+
+test("stories group by the day they were posted, on the clock they were posted with", () => {
+  const stories = [
+    normalizeStoryPost(story("late", "2026-11-14T23:30:00-05:00"))!,
+    normalizeStoryPost(story("next", "2026-11-15T08:00:00-05:00"))!,
+    normalizeStoryPost(story("early", "2026-11-14T07:00:00-05:00"))!,
+    normalizeStoryPost(story("lastyear", "2025-12-31T10:00:00Z"))!,
+  ];
+  // 23:30 in Bogotá is already the 15th in UTC; it stays on the 14th
+  const days = storyDays(stories, Date.parse("2026-11-16T12:00:00Z"));
+  expect(days.map((day) => [day.day, day.label, day.stories.map((s) => s.rkey)])).toEqual([
+    ["2026-11-15", "Nov 15", ["next"]],
+    ["2026-11-14", "Nov 14", ["early", "late"]],
+    ["2025-12-31", "Dec 31, 2025", ["lastyear"]],
+  ]);
+});
+
+test("the library carries stories from the media feed, and keeps the last ones when that read fails", async () => {
+  const cache = memoryCache();
+  const now = Date.parse("2026-11-16T12:00:00Z");
+  const media = [{ post: story("s1", "2026-11-16T09:00:00-05:00", "photo") }, { post: post("v", "video") }];
+  const fetcher =
+    (failStories: boolean): ActivityFetch =>
+    async (input) => {
+      const url = String(input);
+      if (url.includes("posts_with_media"))
+        return failStories ? new Response("down", { status: 502 }) : Response.json({ feed: media });
+      if (url.includes("getAuthorFeed")) return Response.json({ feed: [{ post: post("v", "video") }] });
+      return new Response(m3u8);
+    };
+  const first = await getVideoLibrary({ cache, fetch: fetcher(false), now });
+  expect(first.stories.map((s) => s.rkey)).toEqual(["s1"]);
+  expect(first.videos.map((video) => video.rkey)).toEqual(["v"]);
+  const later = await getVideoLibrary({ cache, fetch: fetcher(true), now: now + 10 * 60_000 });
+  expect(later.stories.map((s) => s.rkey)).toEqual(["s1"]);
+  expect(later.videos.map((video) => video.rkey)).toEqual(["v"]);
 });
