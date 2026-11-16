@@ -335,6 +335,40 @@ up), each clip in `~/Movies/Exported` the project copied (by name) is deleted wh
 holds its exact bytes, so a clip exported again since stays, and the project's folder goes.
 `--dry-run` says what would go, without archiving or deleting.
 
+## Instagram stories
+
+The helper keeps the stories posted on Instagram (`scripts/publisher/stories.mjs`), on start and then hourly when
+nothing else is queued, if Instagram is connected.
+
+**Saved on the laptop.** It opens the account's story archive (instagram.com/archive/stories) in the Instagram profile,
+reads the replies the page fetches as it scrolls, and saves each new story to `~/Movies/Instagram Stories` as
+`YYYY/MM/YYYY-MM-DD HH.MM.SS.mp4` (photo stories without music stay `.jpg`). The video Instagram serves has a music
+sticker's song mixed into its sound. Each story is dated on the clock of the phone that posted it, from the UTC offset
+Instagram keeps on it: in its name, its QuickTime or EXIF dates, and its file times, which Photos and Finder go by.
+`index.json` lists each story with its song and remembers finished archive days, so a run loads the page once and fetches
+only what's new. Instagram's "Save story to archive" must stay on.
+
+**Archived to Cloudflare.** On start and after a run that saved or sent anything, the folder goes to the archive bucket
+as the project `instagram-stories` (see Archive): only files the archive lacks go up. `bun run publisher restore
+instagram-stories "<folder>"` brings it back.
+
+**Sent to Pinkleap.** With Grain / Bluesky connected, each saved story under 24 hours old that hasn't gone yet is posted
+to the Bluesky account with no text, its photo or video (prepared as for any Bluesky post), and the hidden tag
+`pinkleapStory`, which makes Pinkleap show it as a story. On Bluesky it's an ordinary post that stays on the profile; a
+story's 24 hours are Pinkleap's doing, and nothing deletes it. It's dated when it's sent, on the clock the story was
+posted with (`2026-11-16T09:31:20.880-05:00`). Its record key comes from the story's id, so a run stopped after posting
+finds the post instead of posting it twice; `index.json` notes each post. Stories older than a day when the helper first
+sees them, such as those saved before this existed, are kept but not sent.
+
+**On the site.** kualta.dev/videos reads the account's media posts and shows those tagged as stories (`pinkleapStory`
+or Pinksky's `pinkskyStory`) as a row of days above the videos, never among them; the activity feed leaves them out
+too. A day opens a full-screen viewer like Instagram's: a bar per story, photos for five seconds and videos for their
+length, tap the right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to
+close, and on into the next day. Each browser remembers which stories it has seen. Stories are grouped by the date
+written in the post, so a story posted at 23:30 in Bogotá stays on that day.
+
+TikTok stories can't be sent: TikTok's posting API has none, and its web uploader isn't known to offer them.
+
 ## Validation
 
 `bun test`, `bun run check`, `bun run build`. Native metadata tests run when

@@ -24,7 +24,7 @@ import { connectAccount } from "./connections.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
-import { archiveStories, storiesRoot } from "./stories.mjs";
+import { archiveStories, crosspostStories, storiesRoot } from "./stories.mjs";
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const stateDir = join(root, ".publisher");
@@ -124,8 +124,10 @@ if (command === "connect") {
       .catch((error) => console.error(`Chrome copy cleanup failed: ${error.message}`));
   void sweep();
   setInterval(sweep, 10 * 60_000).unref();
-  // Instagram's story archive is copied to disk on start, then every 6 hours when nothing else is waiting.
+  // Instagram's story archive is copied to disk on start, then hourly when nothing else is waiting, so new stories
+  // reach Pinkleap while they're still up. The folder goes to the Cloudflare archive on start and after any change.
   let storiesDue = 0;
+  let storiesChanged = true;
   while (true) {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
@@ -203,9 +205,25 @@ if (command === "connect") {
           `${target.platform}: ${result.state}${delivered ? "" : " (receipt not saved; check the platform)"}`,
         );
       } else if (config.platforms.includes("instagram") && Date.now() >= storiesDue) {
-        storiesDue = Date.now() + 6 * 60 * 60_000;
+        storiesDue = Date.now() + 60 * 60_000;
         const { saved, total } = await archiveStories({ stateDir });
         if (saved) console.log(`Saved ${saved} Instagram stories (${total} in ${storiesRoot})`);
+        storiesChanged ||= saved > 0;
+        if (config.platforms.includes("bluesky")) {
+          const { posted } = await crosspostStories({ oauth });
+          if (posted) console.log(`Sent ${posted} Instagram stories to Pinkleap`);
+          storiesChanged ||= posted > 0;
+        }
+        if (storiesChanged) {
+          const { sent } = await archiveProject(storiesRoot, {
+            name: "instagram-stories",
+            origin: config.origin,
+            token: config.token,
+            keepCache: true,
+          });
+          storiesChanged = false;
+          if (sent) console.log(`Archived Instagram stories to Cloudflare (${(sent / 1e6).toFixed(1)} MB sent)`);
+        }
       } else await new Promise((resolve) => setTimeout(resolve, 5000));
     } catch (e) {
       // Timed, so a run of failures in the log can be matched to what happened then.

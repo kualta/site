@@ -1,6 +1,7 @@
 import { asRecord } from "./activity/validation";
 import type { ActivityCacheStore, ActivityFetch } from "./activity/types";
 import identity from "../../atproto.config.json";
+import { isStoryRecord } from "./bluesky/story-tags";
 
 /** A run of post text, linked when a facet covers it. */
 export interface VideoSegment {
@@ -33,9 +34,33 @@ export interface VideoChannel {
   name: string;
   avatar?: string;
 }
+/** A story posted to Bluesky for Pinkleap: a photo or a video, shown for a moment rather than listed. */
+export interface Story {
+  rkey: string;
+  uri: string;
+  /** the post on Bluesky */
+  url: string;
+  /** when it was posted, on the clock it was posted with */
+  date: string;
+  kind: "photo" | "video";
+  /** the photo, or the video's HLS playlist */
+  src: string;
+  thumbnail?: string;
+  alt: string;
+  width: number;
+  height: number;
+}
+/** One day's stories, in the order they were posted. */
+export interface StoryDay {
+  /** YYYY-MM-DD where the stories were posted */
+  day: string;
+  label: string;
+  stories: Story[];
+}
 export interface VideoLibrary {
   channel: VideoChannel;
   videos: Video[];
+  stories: Story[];
 }
 interface Options {
   cache?: ActivityCacheStore;
@@ -45,9 +70,11 @@ interface Options {
 }
 
 const APPVIEW = "https://public.api.bsky.app/xrpc";
-const KEY = "videos:bluesky:v1";
+const KEY = "videos:bluesky:v2";
 const FRESH_MS = 5 * 60 * 1000;
 const MAX_PAGES = 3;
+/** Stories are read from every media post, so they look further back than the videos do. */
+const STORY_PAGES = 5;
 /** playlist reads per refresh, so one request stays well inside the subrequest limit */
 const DURATION_BUDGET = 30;
 /** a Worker opens six connections at once; more would sit queued while their timeouts run */
@@ -148,8 +175,15 @@ export function isShort(video: Pick<Video, "width" | "height">): boolean {
   return video.height > video.width;
 }
 
-/** One of the account's own posts that carries a video, ready to list. */
-export function normalizeVideoPost(value: unknown): Video | undefined {
+interface OwnPost {
+  post: Record<string, unknown>;
+  uri: string;
+  rkey: string;
+  record: Record<string, unknown>;
+}
+
+/** One of the account's own posts that carries no label, moderation's or its own. */
+function ownPost(value: unknown): OwnPost | undefined {
   const post = asRecord(value);
   const uri = post?.uri;
   if (!post || typeof uri !== "string" || !uri.startsWith(POST_PREFIX)) return;
@@ -160,6 +194,14 @@ export function normalizeVideoPost(value: unknown): Video | undefined {
   const record = asRecord(post.record);
   const selfLabels = asRecord(record?.labels)?.values;
   if (!record || (Array.isArray(selfLabels) && selfLabels.length)) return;
+  return { post, uri, rkey, record };
+}
+
+/** One of the account's own posts that carries a video, ready to list. */
+export function normalizeVideoPost(value: unknown): Video | undefined {
+  const own = ownPost(value);
+  if (!own || isStoryRecord(own.record)) return;
+  const { post, uri, rkey, record } = own;
   const embed = asRecord(post.embed);
   const view = embed?.$type === "app.bsky.embed.recordWithMedia#view" ? asRecord(embed.media) : embed;
   if (view?.$type !== "app.bsky.embed.video#view") return;
@@ -185,6 +227,76 @@ export function normalizeVideoPost(value: unknown): Video | undefined {
     reposts: count(post.repostCount),
     replies: count(post.replyCount),
   };
+}
+
+/** One of the account's own story posts: its photo or its video. */
+export function normalizeStoryPost(value: unknown): Story | undefined {
+  const own = ownPost(value);
+  if (!own || !isStoryRecord(own.record)) return;
+  const { post, uri, rkey, record } = own;
+  const date = record.createdAt;
+  if (typeof date !== "string" || !Number.isFinite(Date.parse(date))) return;
+  const embed = asRecord(post.embed);
+  let kind: Story["kind"];
+  let media: Record<string, unknown> | undefined;
+  let src: string | undefined;
+  let thumbnail: string | undefined;
+  if (embed?.$type === "app.bsky.embed.images#view") {
+    kind = "photo";
+    media = asRecord(Array.isArray(embed.images) ? embed.images[0] : undefined);
+    src = httpsUrl(media?.fullsize);
+    thumbnail = httpsUrl(media?.thumb);
+  } else if (embed?.$type === "app.bsky.embed.video#view") {
+    kind = "video";
+    media = embed;
+    src = httpsUrl(embed.playlist);
+    thumbnail = httpsUrl(embed.thumbnail);
+  } else return;
+  if (!media || !src) return;
+  const ratio = asRecord(media.aspectRatio);
+  return {
+    rkey,
+    uri,
+    url: `https://bsky.app/profile/${identity.did}/post/${encodeURIComponent(rkey)}`,
+    date,
+    kind,
+    src,
+    thumbnail,
+    alt: typeof media.alt === "string" ? media.alt : "",
+    width: dimension(ratio?.width, 9),
+    height: dimension(ratio?.height, 16),
+  };
+}
+
+const dayLabel = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
+const dayLabelWithYear = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/**
+ * Stories by the day they were posted, newest day first and each day in posting order. A story's date is written with
+ * the offset of the phone that posted it, so its own date part is that day, wherever the page is read.
+ */
+export function storyDays(stories: Story[], now = Date.now()): StoryDay[] {
+  const byDay = new Map<string, Story[]>();
+  for (const story of [...stories].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))) {
+    const day = story.date.slice(0, 10);
+    byDay.set(day, [...(byDay.get(day) ?? []), story]);
+  }
+  const year = new Date(now).getUTCFullYear();
+  return [...byDay]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([day, list]) => {
+      const date = new Date(`${day}T00:00:00Z`);
+      return {
+        day,
+        label: (date.getUTCFullYear() === year ? dayLabel : dayLabelWithYear).format(date),
+        stories: list,
+      };
+    });
 }
 
 function normalizeChannel(value: unknown): VideoChannel | undefined {
@@ -262,7 +374,41 @@ async function addDurations(videos: Video[], known: Map<string, number>, fetcher
   );
 }
 
-async function fetchLibrary(fetcher: ActivityFetch, known: Map<string, number>): Promise<VideoLibrary> {
+async function fetchStories(fetcher: ActivityFetch): Promise<Story[]> {
+  const stories: Story[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  for (let page = 0; page < STORY_PAGES; page++) {
+    const url = new URL(`${APPVIEW}/app.bsky.feed.getAuthorFeed`);
+    url.searchParams.set("actor", identity.did);
+    url.searchParams.set("filter", "posts_with_media");
+    url.searchParams.set("limit", "100");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const response = await fetcher(url, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) throw new Error("Bluesky is unavailable");
+    const body = asRecord(await response.json());
+    if (!Array.isArray(body?.feed)) throw new Error("Invalid Bluesky feed");
+    for (const item of body.feed) {
+      const entry = asRecord(item);
+      if (entry?.reason) continue;
+      const story = normalizeStoryPost(entry?.post);
+      if (!story || seen.has(story.uri)) continue;
+      seen.add(story.uri);
+      stories.push(story);
+    }
+    cursor = typeof body.cursor === "string" && body.cursor ? body.cursor : undefined;
+    if (!cursor) break;
+  }
+  return stories;
+}
+
+async function fetchLibrary(
+  fetcher: ActivityFetch,
+  known: Map<string, number>,
+  lastStories: Story[] = [],
+): Promise<VideoLibrary> {
+  // Stories are a side shelf: when they can't be read, the last ones read stay up and the videos still load.
+  const stories = fetchStories(fetcher).catch(() => lastStories);
   const videos: Video[] = [];
   const seen = new Set<string>();
   let channel: VideoChannel | undefined;
@@ -292,7 +438,7 @@ async function fetchLibrary(fetcher: ActivityFetch, known: Map<string, number>):
   }
   videos.sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
   await addDurations(videos, known, fetcher);
-  return { channel: channel ?? fallbackChannel, videos };
+  return { channel: channel ?? fallbackChannel, videos, stories: await stories };
 }
 
 /** Every video post, newest first. Served from cache, refreshed in the background once stale. */
@@ -310,7 +456,7 @@ export async function getVideoLibrary(options: Options = {}): Promise<VideoLibra
     const known = new Map<string, number>();
     for (const video of cached?.library.videos ?? []) if (video.duration) known.set(video.cid, video.duration);
     pending = (async () => {
-      const library = await fetchLibrary(options.fetch ?? fetch, known);
+      const library = await fetchLibrary(options.fetch ?? fetch, known, cached?.library.stories);
       try {
         await cache?.put(KEY, JSON.stringify({ at: now, library }));
       } catch {}

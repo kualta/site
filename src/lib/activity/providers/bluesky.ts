@@ -1,5 +1,6 @@
 import type { ActivityEvent, ActivityProvider, BlueskyActivity, ProviderContext } from "../types";
 import { sanitizeBlueskyPostView } from "../bluesky-post";
+import { isStoryRecord } from "@/lib/bluesky/story-tags";
 import { parsePostUri } from "@/lib/bluesky/urls";
 import { asRecord, safeDate, stringField } from "../validation";
 
@@ -61,7 +62,8 @@ export function normalizeBlueskyFeed(value: unknown): BlueskyActivity[] {
   for (const item of feed) {
     const event = normalizeBlueskyItem(item);
     if (!event) throw new Error("Bluesky returned a malformed feed item");
-    if (event.action === "reply") continue;
+    // Stories have their own place on the videos page.
+    if (event.action === "reply" || isStoryRecord(event.post.record)) continue;
     events.push(event);
   }
   return events;

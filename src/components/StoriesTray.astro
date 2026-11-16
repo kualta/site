@@ -1,0 +1,89 @@
+---
+import {
+  ArrowUpRightIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  PauseIcon,
+  PlayIcon,
+  VolumeIcon,
+  VolumeMuteIcon,
+} from "@/components/icons";
+import type { StoryDay, VideoChannel } from "@/lib/videos";
+
+interface Props {
+  days: StoryDay[];
+  channel: VideoChannel;
+}
+
+const { days, channel } = Astro.props;
+// Read by the viewer; `<` is escaped so no text in it can close the script element.
+const data = JSON.stringify({ channel, days }).replace(/</g, "\\u003c");
+---
+<section class="stories" data-stories aria-label="Stories">
+  <ol class="stories-tray">
+    {days.map((day, index) => {
+      const cover = day.stories.at(-1);
+      return (
+        <li>
+          <button
+            type="button"
+            class="story-day"
+            data-story-day={index}
+            aria-label={`${day.label}: ${day.stories.length} ${day.stories.length === 1 ? "story" : "stories"}`}
+          >
+            <span class="story-ring">
+              {cover?.thumbnail && <img src={cover.thumbnail} alt="" loading={index < 8 ? "eager" : "lazy"} decoding="async" />}
+            </span>
+            <span class="story-day-label">{day.label}</span>
+          </button>
+        </li>
+      );
+    })}
+  </ol>
+  <script type="application/json" data-stories-data set:html={data} />
+  <div class="story-viewer" data-story-viewer role="dialog" aria-modal="true" aria-label="Stories" hidden>
+    <button type="button" class="story-step story-step-previous" data-story-previous aria-label="Previous story">
+      <ChevronLeftIcon size={22} />
+    </button>
+    <div class="story-frame" data-story-frame data-paused="false" data-muted="false">
+      <div class="story-media" data-story-media></div>
+      <div class="story-top">
+        <div class="story-bars" data-story-bars></div>
+        <div class="story-header">
+          <span class="story-author">
+            {channel.avatar && <img src={channel.avatar} alt="" width="32" height="32" />}
+            <span>{channel.name}</span>
+            <time class="story-time" data-story-time></time>
+          </span>
+          <span class="story-controls">
+            <button type="button" data-story-pause aria-label="Pause">
+              <span data-pause-icon><PauseIcon size={20} /></span>
+              <span data-play-icon><PlayIcon size={20} /></span>
+            </button>
+            <button type="button" data-story-mute aria-label="Mute">
+              <span data-volume-icon><VolumeIcon size={20} /></span>
+              <span data-muted-icon><VolumeMuteIcon size={20} /></span>
+            </button>
+            <a data-story-link href="https://bsky.app" target="_blank" rel="noreferrer" aria-label="Open on Bluesky">
+              <ArrowUpRightIcon size={20} />
+            </a>
+            <button type="button" data-story-close aria-label="Close">
+              <CloseIcon size={22} />
+            </button>
+          </span>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="story-step story-step-next" data-story-next aria-label="Next story">
+      <ChevronRightIcon size={22} />
+    </button>
+  </div>
+</section>
+
+<script>
+  import { mountOnEachPage } from "@/scripts/page-mount";
+  import { mountStories } from "@/scripts/stories-viewer";
+
+  mountOnEachPage("[data-stories]", mountStories);
+</script>

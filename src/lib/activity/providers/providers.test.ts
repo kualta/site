@@ -237,6 +237,25 @@ describe("Bluesky normalization", () => {
     expect(feed[2].url).toBe(`https://bsky.app/profile/${BLUESKY_DID}/post/original`);
   });
 
+  test("leaves stories out of the feed: they have their own shelf on the videos page", () => {
+    const feed = normalizeBlueskyFeed({
+      feed: [
+        { post: blueskyPost("post1", "post", "2026-11-16T12:00:00Z") },
+        {
+          post: blueskyPost("story1", "", "2026-11-16T11:00:00Z", {
+            record: {
+              $type: "app.bsky.feed.post",
+              createdAt: "2026-11-16T06:00:00-05:00",
+              text: "",
+              tags: ["pinkleapStory"],
+            },
+          }),
+        },
+      ],
+    });
+    expect(feed.map(({ uri }) => uri.split("/").at(-1))).toEqual(["post1"]);
+  });
+
   test("rejects malformed author feeds", () => {
     expect(() => normalizeBlueskyFeed({ feed: "not-an-array" })).toThrow("invalid author feed");
   });

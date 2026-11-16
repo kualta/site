@@ -1,14 +1,15 @@
 import { RichText } from "@atproto/api";
 import { readFile } from "node:fs/promises";
 import { recordKey } from "../lib/atproto-content.mjs";
-const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
+export const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 
 export async function publishAtproto(platform, authorization, files, infos, post, options = {}) {
   const agent = authorization.agent;
   const fetcher = options.fetcher || fetch;
   const wait = options.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   if (agent.did !== owner) throw new Error("The AT Protocol account must belong to kualta");
-  const createdAt = new Date().toISOString();
+  // A story says the time on the clock it was posted with, so it's dated to that day wherever it's read.
+  const createdAt = post.createdAt ?? new Date().toISOString();
   // Older jobs carry one description for every photo.
   const alt = (i) => post.alts?.[i] ?? post.alt;
   const blobs = [];
