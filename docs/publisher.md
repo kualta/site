@@ -350,16 +350,20 @@ the stage there works on a phone, where cards don't drag.
 
 **Compose** opens the composer linked to that piece (`?content=<id>`), saving any edits first. The
 composer's **Pipeline** field shows the link, and it can link any piece that isn't posted yet,
-including from a draft. A draft saved from the composer keeps its link. Queueing the post moves the
-piece to Posted and records the post. Moving a posted piece back to an earlier stage drops that
-record. Cancelling the post before it goes out moves the piece back to Edit ready. Pieces marked
-Posted by hand have no post recorded.
+including from a draft. A draft saved from the composer keeps its link.
+
+Every post queued from the composer lands in Posted, linked to it, in the same write that queues
+it. A linked piece moves there, and a post linked to nothing gets a piece of its own, named as
+History names it (its title, else its caption's first line). Moving a posted piece back to an
+earlier stage drops its post. Cancelling the post before it goes out deletes a piece it made for
+itself and moves a linked piece back to Edit ready. Pieces marked Posted by hand have no post.
 
 Posted shows the latest 30. Pieces live in D1 (`publisher_content`, `0012_publisher_content.sql`).
 The list brings each posted piece's post and each destination's latest counts in two more reads,
 and the tab reads it when it opens, never on a timer. `0013_publisher_content_backfill.sql` put
-every post that had gone out before the Pipeline existed into Posted. Each is named as History
-names it and dated by its first destination to finish.
+every post that had gone out before the Pipeline existed into Posted, and
+`0014_publisher_content_catch_up.sql` the posts queued after that and before queueing made pieces.
+Each is named as History names it and dated by its first destination to finish.
 
 ## History and deleting publications
 
