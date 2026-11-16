@@ -225,6 +225,8 @@ test("stories still up go to Pinkleap once, oldest first, as tagged posts dated 
   const options = {
     root,
     now,
+    // a clock that doesn't move, as when two photos go out within a millisecond
+    clock: () => now,
     oauth: { agent: async () => pds },
     process: async (input, output, settings) => {
       prepared.push([input.slice(root.length + 1), settings]);
@@ -261,7 +263,8 @@ test("stories still up go to Pinkleap once, oldest first, as tagged posts dated 
       caption: "",
       alt: "",
       tags: pinkleapTags,
-      createdAt: "2026-11-16T09:00:00.000-05:00",
+      // never the same time as the story before: Bluesky's author feed would show only one of them
+      createdAt: "2026-11-16T09:00:00.001-05:00",
     },
   ]);
   const index = JSON.parse(await readFile(join(root, "index.json"), "utf8"));
