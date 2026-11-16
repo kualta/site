@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { closestPlace, draftListed, publicationUrl, tikTokCaptionParts } from "./browser.mjs";
+import { closestPlace, draftListed, pickHashtag, publicationUrl, tikTokCaptionParts } from "./browser.mjs";
 
 test("a TikTok draft counts as saved once the draft list carries its caption's first line", () => {
   const list = { status_code: 0, total_count: 1, draft_list: [{ desc: "time to go out love #fyp" }] };
@@ -64,6 +64,18 @@ test("TikTok's caption splits into text to type and hashtags to pick, minus the 
     { tag: "tag", space: false },
     { text: "\nnext" },
   ]);
+});
+
+test("picks the hashtag itself, else the top suggestion starting with it, else none", () => {
+  expect(pickHashtag(["#recipes", " #Recipe ", "#recipetok"], "recipe")).toBe("Recipe");
+  expect(pickHashtag(["#recipetok", "#recipeideas"], "recipe")).toBe("recipetok");
+  expect(pickHashtag(["#cooking", "#recipetok"], "recipe")).toBe("recipetok");
+  expect(pickHashtag(["#cooking", "#food"], "recipe")).toBeNull();
+  expect(pickHashtag([], "recipe")).toBeNull();
+  expect(pickHashtag(["#bogotá"], "Bogotá")).toBe("bogotá");
+  // Searches offered alongside hashtags are never picked.
+  expect(pickHashtag(["#recipe ideas for dinner", "#recipetok"], "recipe")).toBe("recipetok");
+  expect(pickHashtag(["#recipe ideas for dinner"], "recipe")).toBeNull();
 });
 
 test("only a # that starts a word is a hashtag", () => {
