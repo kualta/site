@@ -51,6 +51,8 @@ async function project(root) {
     "zh/assets/clip.mp4": "x".repeat(250),
     "014-test-film.mp4": "rendered",
     ".film/id": "abc123\n",
+    // Studio keeps this one empty.
+    ".film/opened": "",
     ".film/cache/frames/1.png": "cached",
     "zh/.film/cache/look/2.png": "cached",
     ".DS_Store": "finder",
@@ -78,6 +80,7 @@ test("a project is archived once per file, its caches cleared, and restored as i
     const { auth, archive, requests } = site();
     expect((await projectFiles(dir)).map((f) => f.path)).toEqual([
       ".film/id",
+      ".film/opened",
       "014-test-film.mp4",
       "assets/clip.mp4",
       "film.html",
@@ -86,9 +89,9 @@ test("a project is archived once per file, its caches cleared, and restored as i
     ]);
     // Parts of 100 bytes send the 250-byte clip in three.
     const done = await archiveProject(dir, { ...auth, part: 100 });
-    expect(done).toMatchObject({ name: "014-test-film", files: 6, sent: 15 + 250 + 23 + 8 + 7, cleared: 12 });
+    expect(done).toMatchObject({ name: "014-test-film", files: 7, sent: 15 + 250 + 23 + 8 + 7 + 0, cleared: 12 });
     expect(requests.filter((r) => r.startsWith("PUT uploads/"))).toHaveLength(3);
-    expect([...archive.objects.keys()].filter((k) => k.startsWith("blobs/"))).toHaveLength(5);
+    expect([...archive.objects.keys()].filter((k) => k.startsWith("blobs/"))).toHaveLength(6);
     await expect(stat(join(dir, ".film/cache"))).rejects.toThrow();
     await expect(stat(join(dir, "zh/.film/cache"))).rejects.toThrow();
     expect(await readFile(join(dir, ".film/id"), "utf8")).toBe("abc123\n");
@@ -99,7 +102,7 @@ test("a project is archived once per file, its caches cleared, and restored as i
 
     const dest = join(root, "restored");
     const back = await restoreProject("014-test-film", { ...auth, dest });
-    expect(back.files).toBe(6);
+    expect(back.files).toBe(7);
     for (const file of await projectFiles(dir))
       expect(await readFile(join(dest, file.path), "utf8")).toBe(await readFile(file.abs, "utf8"));
     expect((await stat(join(dest, "film.html"))).mtimeMs).toBe(1_700_000_000_000);

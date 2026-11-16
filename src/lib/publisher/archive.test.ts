@@ -130,9 +130,15 @@ describe("the laptop's archive requests", () => {
     });
     expect((await body("missing", { method: "POST", body: JSON.stringify({ blobs: ["../x"] }) })).status).toBe(400);
     // A file whose bytes don't match its hash is refused.
-    await expect(call(`blobs/${a}`, { method: "PUT", bytes: "goodbye" })).rejects.toThrow("checksum");
+    expect((await body(`blobs/${a}`, { method: "PUT", bytes: "goodbye" })).data).toEqual({
+      error: "The file doesn't match its hash",
+    });
     expect((await call(`blobs/${a}`, { method: "PUT", bytes: "hello" })).status).toBe(201);
-    expect((await body(`blobs/${a}`, { method: "PUT" })).status).toBe(400);
+    expect((await body(`blobs/${a}`, { method: "PUT", bytes: "" })).status).toBe(400);
+    // An empty file is a file too.
+    const empty = await sha256("");
+    expect((await call(`blobs/${empty}`, { method: "PUT", bytes: "" })).status).toBe(201);
+    expect(await (await call(`blobs/${empty}`)).response.text()).toBe("");
     const { data } = await body("uploads", { method: "POST", body: JSON.stringify({ blob: b }) });
     const upload = encodeURIComponent(data.upload);
     const parts = [];

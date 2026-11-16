@@ -171,7 +171,13 @@ export async function missingBlobs(archive: ArchiveBucket, hashes: unknown): Pro
 /** Stores a file whole. R2 checks it against its hash and refuses it when they differ. */
 export async function putBlob(archive: ArchiveBucket, hash: string, bytes: ArrayBuffer): Promise<void> {
   if (!isHash(hash)) throw new ArchiveError("Invalid hash");
-  await archive.put(blobKey(hash), bytes, { sha256: hash });
+  try {
+    await archive.put(blobKey(hash), bytes, { sha256: hash });
+  } catch (error) {
+    if (error instanceof Error && /checksum/i.test(error.message))
+      throw new ArchiveError("The file doesn't match its hash");
+    throw error;
+  }
 }
 
 export async function startBlob(archive: ArchiveBucket, hash: unknown): Promise<string> {
@@ -327,11 +333,14 @@ export async function archiveResponse(
   const method = request.method;
   const params = new URL(request.url).searchParams;
   const [kind, key, part] = rest.split("/");
+  // An empty file is a file too (OpenFilm keeps an empty .film/opened): a length of 0 is a length.
   const body = async () => {
-    const length = Number(request.headers.get("Content-Length"));
-    if (!length || length > MAX_ARCHIVE_PART) throw new ArchiveError("Send at most 96 MiB a request");
+    const declared = request.headers.get("Content-Length");
+    const tooLarge = "Send at most 96 MiB a request";
+    if (declared !== null && Number(declared) > MAX_ARCHIVE_PART) throw new ArchiveError(tooLarge);
     const bytes = await request.arrayBuffer();
-    if (bytes.byteLength !== length) throw new ArchiveError("Incomplete upload");
+    if (bytes.byteLength > MAX_ARCHIVE_PART) throw new ArchiveError(tooLarge);
+    if (declared !== null && Number(declared) !== bytes.byteLength) throw new ArchiveError("Incomplete upload");
     return bytes;
   };
   try {
