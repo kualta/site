@@ -248,7 +248,7 @@ export async function cleanupProject(
   const posts = (await statOf(render))
     ? (await request("posted", { method: "POST", json: { md5s: [await md5File(render)] } })).posted
     : [];
-  if (!posts.length && !posted) return { name, kept: `no published or scheduled post has ${name}.mp4 as its video` };
+  if (!posts.length && !posted) return { name, skipped: `no published or scheduled post has ${name}.mp4 as its video` };
 
   const clips = [];
   for (const folder of ["assets", "zh/assets"]) {

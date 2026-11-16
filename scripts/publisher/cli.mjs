@@ -277,8 +277,8 @@ if (command === "connect") {
       for (const folder of folders) {
         try {
           const done = await cleanupProject(resolve(folder), { ...auth, posted, dryRun, log: (l) => console.error(l) });
-          if (done.kept) {
-            console.log(`${done.name}: kept, ${done.kept}`);
+          if (done.skipped) {
+            console.log(`${done.name}: kept, ${done.skipped}`);
             continue;
           }
           const states = new Set(done.posts.flatMap((p) => p.platforms.map((t) => `${t.platform} ${t.state}`)));
