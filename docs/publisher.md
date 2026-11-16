@@ -300,7 +300,8 @@ the archive existed.
 (with its Chinese version in `zh/`) to the archive. Each file is stored once by its SHA-256 at
 `blobs/<sha256>`, so footage several projects share, and the Chinese version's clones of it,
 cost nothing more. A manifest at `projects/<name>/<time>.json` names every file with its size
-and modified time, and the archive keeps it only once every file it names is there. Files up to
+and modified time, and every empty folder (git, which Studio's history is, needs some of its
+folders even empty). The archive keeps it only once every file it names is there. Files up to
 64 MiB go up whole, checked against their hash by R2, and larger ones in 64 MiB parts. Studio's
 `.film/cache` is left out, and once the manifest is kept, the command deletes it from the
 laptop; `--keep-cache` keeps it. Archiving again sends only what changed.

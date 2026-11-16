@@ -168,8 +168,10 @@ describe("the laptop's archive requests", () => {
       body(`projects/${name}`, { method: "PUT", body: JSON.stringify(value) });
     expect((await put("013-maybe-later", manifest)).data.error).toContain("aren't in the archive");
     await call(`blobs/${hash}`, { method: "PUT", bytes: "film" });
-    for (const path of ["/etc/passwd", "a/../../b", ""])
+    for (const path of ["/etc/passwd", "a/../../b", ""]) {
       expect((await put("013-maybe-later", { files: [{ ...manifest.files[0], path }] })).status).toBe(400);
+      expect((await put("013-maybe-later", { ...manifest, folders: [path] })).status).toBe(400);
+    }
     expect((await put("not a name!", manifest)).status).toBe(400);
     const first = await put("013-maybe-later", manifest);
     expect(first.status).toBe(201);
@@ -187,6 +189,10 @@ describe("the laptop's archive requests", () => {
       .replace(/\.json$/, "");
     expect((await body(`projects/013-maybe-later?at=${encodeURIComponent(at)}`)).data.files).toHaveLength(1);
     expect((await body("projects/014-nothing")).status).toBe(404);
+    // Empty folders are kept as named; a manifest without any keeps none.
+    expect((await body("projects/013-maybe-later")).data.folders).toEqual([]);
+    await put("014-folders", { ...manifest, folders: [".film/history/refs/heads"] });
+    expect((await body("projects/014-folders")).data.folders).toEqual([".film/history/refs/heads"]);
   });
 
   test("the media sweep archives recent posts' uploads", async () => {
