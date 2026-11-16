@@ -14,7 +14,7 @@ import { UPLOAD_LIFETIME } from "./schedule";
 export interface ArchiveBucket {
   put(
     key: string,
-    body: ArrayBuffer | string,
+    body: ReadableStream | ArrayBuffer | string,
     options?: { httpMetadata?: { contentType?: string }; sha256?: string },
   ): Promise<unknown>;
   get(key: string): Promise<{
@@ -35,13 +35,29 @@ export interface ArchiveBucket {
     key: string,
     uploadId: string,
   ): {
-    uploadPart(partNumber: number, body: ArrayBuffer): Promise<{ partNumber: number; etag: string }>;
+    uploadPart(partNumber: number, body: ReadableStream | ArrayBuffer): Promise<{ partNumber: number; etag: string }>;
     complete(parts: { partNumber: number; etag: string }[]): Promise<unknown>;
     abort(): Promise<void>;
   };
 }
 
 export class ArchiveError extends Error {}
+
+/**
+ * A body R2 takes without the Worker reading it: the stream itself, held to exactly `length` bytes, which the runtime
+ * pipes to R2. Read into memory instead, a 64 MiB part cost the Worker about 200 ms of CPU, and Workers Free allows
+ * 10 ms a request: an archive run's parts made Cloudflare refuse requests with 503s (error 1102), the laptop helper's
+ * among them. A stream that turns out shorter or longer than `length` fails the put.
+ */
+export function sized(body: ReadableStream | null, length: number): ReadableStream | ArrayBuffer {
+  if (!body || length === 0) return new ArrayBuffer(0);
+  const Fixed = (globalThis as { FixedLengthStream?: new (length: number) => TransformStream }).FixedLengthStream;
+  // Outside a Worker (tests) there's no FixedLengthStream, and the stream goes as it is.
+  if (!Fixed) return body;
+  const { readable, writable } = new Fixed(length);
+  body.pipeTo(writable).catch(() => {});
+  return readable;
+}
 
 const mediaKey = (id: string) => `media/${id}`;
 const blobKey = (hash: string) => `blobs/${hash}`;
@@ -107,8 +123,10 @@ export async function archiveUploads(
       gone++;
       continue;
     }
-    const bytes = await new Response(object.body).arrayBuffer();
-    await archive.put(mediaKey(id), bytes, { httpMetadata: { contentType: object.httpMetadata?.contentType } });
+    // Streamed bucket to bucket: read whole, a 90 MB video would cost far more CPU than a request has.
+    const body =
+      object.size === undefined ? await new Response(object.body).arrayBuffer() : sized(object.body, object.size);
+    await archive.put(mediaKey(id), body, { httpMetadata: { contentType: object.httpMetadata?.contentType } });
     copied++;
   }
   return { copied, gone };
@@ -169,10 +187,10 @@ export async function missingBlobs(archive: ArchiveBucket, hashes: unknown): Pro
 }
 
 /** Stores a file whole. R2 checks it against its hash and refuses it when they differ. */
-export async function putBlob(archive: ArchiveBucket, hash: string, bytes: ArrayBuffer): Promise<void> {
+export async function putBlob(archive: ArchiveBucket, hash: string, body: ReadableStream | ArrayBuffer): Promise<void> {
   if (!isHash(hash)) throw new ArchiveError("Invalid hash");
   try {
-    await archive.put(blobKey(hash), bytes, { sha256: hash });
+    await archive.put(blobKey(hash), body, { sha256: hash });
   } catch (error) {
     if (error instanceof Error && /checksum/i.test(error.message))
       throw new ArchiveError("The file doesn't match its hash");
@@ -190,11 +208,11 @@ export async function putBlobPart(
   hash: string,
   upload: string | null,
   part: number,
-  bytes: ArrayBuffer,
+  body: ReadableStream | ArrayBuffer,
 ): Promise<{ partNumber: number; etag: string }> {
   if (!isHash(hash) || !upload || !Number.isInteger(part) || part < 1 || part > 10_000)
     throw new ArchiveError("Invalid upload");
-  return archive.resumeMultipartUpload(blobKey(hash), upload).uploadPart(part, bytes);
+  return archive.resumeMultipartUpload(blobKey(hash), upload).uploadPart(part, body);
 }
 
 export async function finishBlob(archive: ArchiveBucket, hash: string, input: unknown): Promise<void> {
@@ -346,22 +364,21 @@ export async function archiveResponse(
   const method = request.method;
   const params = new URL(request.url).searchParams;
   const [kind, key, part] = rest.split("/");
-  // An empty file is a file too (OpenFilm keeps an empty .film/opened): a length of 0 is a length.
-  const body = async () => {
+  // The file, streamed on to R2 at its declared length (see `sized`). An empty file is a file too (OpenFilm keeps an
+  // empty .film/opened): a length of 0 is a length.
+  const body = () => {
     const declared = request.headers.get("Content-Length");
-    const tooLarge = "Send at most 96 MiB a request";
-    if (declared !== null && Number(declared) > MAX_ARCHIVE_PART) throw new ArchiveError(tooLarge);
-    const bytes = await request.arrayBuffer();
-    if (bytes.byteLength > MAX_ARCHIVE_PART) throw new ArchiveError(tooLarge);
-    if (declared !== null && Number(declared) !== bytes.byteLength) throw new ArchiveError("Incomplete upload");
-    return bytes;
+    const length = Number(declared);
+    if (declared === null || !Number.isSafeInteger(length) || length < 0) throw new ArchiveError("Send its length");
+    if (length > MAX_ARCHIVE_PART) throw new ArchiveError("Send at most 96 MiB a request");
+    return sized(request.body, length);
   };
   try {
     if (rest === "missing" && method === "POST")
       return json({ missing: await missingBlobs(archive, ((await request.json()) as { blobs?: unknown }).blobs) });
     if (kind === "blobs" && key && part === undefined) {
       if (method === "PUT") {
-        await putBlob(archive, key, await body());
+        await putBlob(archive, key, body());
         return json({ ok: true }, 201);
       }
       if (method === "GET") {
@@ -380,7 +397,7 @@ export async function archiveResponse(
         return json({ ok: true });
       }
       if (part && method === "PUT")
-        return json(await putBlobPart(archive, key, params.get("upload"), Number(part), await body()));
+        return json(await putBlobPart(archive, key, params.get("upload"), Number(part), body()));
       if (part === undefined && method === "DELETE") {
         await abortBlob(archive, key, params.get("upload"));
         return json({ ok: true });
