@@ -1,6 +1,6 @@
-import type { NewsletterDB } from "../newsletter/types";
+import type { NewsletterDB, Statement } from "../newsletter/types";
 import type { Metrics } from "./metrics";
-import type { Platform, PostKind } from "./presets";
+import { postLabel, type Platform, type PostKind } from "./presets";
 import { PostError, validId, type Post } from "./server";
 
 /** Where a piece of content is on its way out, in order. */
@@ -223,8 +223,45 @@ export async function deleteContent(db: NewsletterDB, id: string): Promise<boole
   return result.meta.changes > 0;
 }
 
-/** Cancelling a post that never went out puts the piece it was back at Edit ready, before the post is deleted. */
-export const releaseJob = (db: NewsletterDB, job: string, now = Date.now()) =>
+/**
+ * Where a post goes in the Pipeline as it's queued, in the same batch as the post, after it. The piece the composer
+ * linked moves to Posted; a post without one, or whose piece has gone or holds another post, gets a piece of its own
+ * in Posted, named as History names it and sharing the post's id.
+ */
+export function placeJob(
+  db: NewsletterDB,
+  post: Pick<Post, "id" | "title" | "caption">,
+  content: string | null,
+  now = Date.now(),
+): Statement[] {
+  const statements: Statement[] = [];
+  if (content)
+    statements.push(
+      db
+        .prepare(
+          "UPDATE publisher_content SET stage = 'posted', job_id = ?, stage_at = ? WHERE id = ? AND job_id IS NULL",
+        )
+        .bind(post.id, now, content),
+    );
+  // Runs after the link, so a post whose piece took it gets no second one.
+  statements.push(
+    db
+      .prepare(
+        `INSERT INTO publisher_content (id, title, notes, stage, job_id, created_at, stage_at)
+         SELECT ?1, ?2, '', 'posted', ?1, ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM publisher_content WHERE job_id = ?1)`,
+      )
+      .bind(post.id, postLabel(post), now),
+  );
+  return statements;
+}
+
+/**
+ * Cancelling a post that never went out, before the post is deleted: a piece it made for itself goes with it, and a
+ * piece the composer linked goes back to Edit ready.
+ */
+export const releaseJob = (db: NewsletterDB, job: string, now = Date.now()): Statement[] => [
+  db.prepare("DELETE FROM publisher_content WHERE id = ? AND job_id = ?").bind(job, job),
   db
     .prepare("UPDATE publisher_content SET stage = 'edit', job_id = NULL, stage_at = ? WHERE job_id = ?")
-    .bind(now, job);
+    .bind(now, job),
+];

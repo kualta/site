@@ -63,6 +63,7 @@ import {
   deleteContent,
   listContent,
   readContent,
+  placeJob,
   releaseJob,
   updateContent,
 } from "@/lib/publisher/content";
@@ -414,6 +415,9 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return json({ ok: await unlinkPublication(db, data.job, data.target) });
     }
     if (path === "jobs" && request.method === "POST") {
+      // The Pipeline piece the composer linked, which moves to Posted with it; without one the post gets its own.
+      const content = new URL(request.url).searchParams.get("content");
+      if (content !== null && !validId(content)) return json({ error: "Invalid content" }, 400);
       const post = validatePost(await request.json());
       const existing = await db
         .prepare("SELECT payload FROM publisher_jobs WHERE id = ?")
@@ -453,6 +457,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
             .prepare("INSERT INTO publisher_targets (id, job_id, platform, scheduled_at) VALUES (?, ?, ?, ?)")
             .bind(crypto.randomUUID(), post.id, platform, post.schedule?.[platform] ?? null),
         ),
+        ...placeJob(db, post, content),
       ]);
       // Its uploads go to the archive now, so retries and crossposts work after the media bucket expires them.
       keep((archive) => archiveUploads(media, archive, postMedia(post)));
@@ -615,7 +620,7 @@ export const ALL: APIRoute = async ({ request, params }) => {
       await db.batch([
         db.prepare("DELETE FROM publisher_targets WHERE job_id = ?").bind(id),
         db.prepare("DELETE FROM publisher_thumbnails WHERE job_id = ?").bind(id),
-        releaseJob(db, id),
+        ...releaseJob(db, id),
         db.prepare("DELETE FROM publisher_jobs WHERE id = ?").bind(id),
         db.prepare("DELETE FROM publisher_media WHERE job_id = ?").bind(id),
       ]);

@@ -6,6 +6,7 @@ import {
   createContent,
   deleteContent,
   listContent,
+  placeJob,
   readContent,
   releaseJob,
   updateContent,
@@ -177,10 +178,50 @@ test("cancelling its post puts the piece back at Edit ready, so the post can be 
   await updateContent(db, piece.id, { job }, 2);
   // The foreign key holds a post that a piece still points at.
   expect(() => sql.query("DELETE FROM publisher_jobs WHERE id = ?").run(job)).toThrow("FOREIGN KEY");
-  await db.batch([releaseJob(db, job, 3), db.prepare("DELETE FROM publisher_jobs WHERE id = ?").bind(job)]);
+  await db.batch([...releaseJob(db, job, 3), db.prepare("DELETE FROM publisher_jobs WHERE id = ?").bind(job)]);
   expect(await readContent(db, piece.id)).toMatchObject({ stage: "edit", job_id: null, stage_at: 3 });
   expect(await deleteContent(db, piece.id)).toBe(true);
   expect(await deleteContent(db, piece.id)).toBe(false);
+});
+
+test("a queued post joins Posted: the piece the composer linked, else a piece of its own", async () => {
+  const { db, sql } = fixture();
+  // As the jobs route queues it: the post, then its place in the Pipeline, in one batch.
+  const queue = (post: { title: string; caption: string }, content: string | null, now: number) => {
+    const id = crypto.randomUUID();
+    return db
+      .batch([
+        db.prepare("INSERT INTO publisher_jobs VALUES (?, '{}', ?)").bind(id, now),
+        ...placeJob(db, { id, ...post }, content, now),
+      ])
+      .then(() => id);
+  };
+  const linked = await createContent(db, { title: "Square windows", stage: "edit" }, 1);
+  const square = await queue({ title: "", caption: "Square windows, out now" }, linked.id, 10);
+  expect(await readContent(db, linked.id)).toMatchObject({ stage: "posted", job_id: square, stage_at: 10 });
+  // Without a link, or linked to a piece that's gone or already holds a post, it gets its own, named as History does.
+  const cookie = await queue({ title: "", caption: "  Baking one big cookie\nwhile France is burning" }, null, 20);
+  const gone = await queue({ title: "Gone", caption: "" }, crypto.randomUUID(), 30);
+  const taken = await queue({ title: "", caption: "" }, linked.id, 40);
+  expect(await readContent(db, linked.id)).toMatchObject({ job_id: square });
+  const own = (job: string) => readContent(db, job);
+  expect(await own(cookie)).toMatchObject({
+    title: "Baking one big cookie",
+    notes: "",
+    stage: "posted",
+    job_id: cookie,
+    created_at: 20,
+    stage_at: 20,
+  });
+  expect(await own(gone)).toMatchObject({ title: "Gone", job_id: gone });
+  expect(await own(taken)).toMatchObject({ title: "Untitled", job_id: taken });
+  expect((await listContent(db)).filter((piece) => piece.stage === "posted")).toHaveLength(4);
+  // Cancelled before it goes out, its own piece goes with it; a linked piece goes back to Edit ready.
+  for (const job of [cookie, square])
+    await db.batch([...releaseJob(db, job, 50), db.prepare("DELETE FROM publisher_jobs WHERE id = ?").bind(job)]);
+  expect(await own(cookie)).toBeNull();
+  expect(await readContent(db, linked.id)).toMatchObject({ stage: "edit", job_id: null, stage_at: 50 });
+  expect(sql.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 test("posts that went out before the Pipeline join Posted, named as History names them", async () => {
@@ -226,4 +267,22 @@ test("posts that went out before the Pipeline join Posted, named as History name
   expect(list.every((p) => p.stage === "posted")).toBe(true);
   // Each takes its post's id, which the API accepts as a piece's.
   expect(list.filter((p) => p.job_id !== linked).every((p) => p.id === p.job_id)).toBe(true);
+});
+
+test("posts queued without a piece before queueing made one each get one, whatever became of them", async () => {
+  const { db, sql, job: placed } = fixture();
+  sql.exec(readFileSync("migrations/0013_publisher_content_backfill.sql", "utf8"));
+  await db.batch(placeJob(db, { id: placed, title: "Placed", caption: "" }, null, 1));
+  const missed = crypto.randomUUID();
+  sql
+    .query("INSERT INTO publisher_jobs VALUES (?, ?, 5)")
+    .run(missed, JSON.stringify({ title: "", caption: "Baking one big chocolate chip cookie" }));
+  sql
+    .query("INSERT INTO publisher_targets (id, job_id, platform, state) VALUES ('t', ?, 'tiktok', 'queued')")
+    .run(missed);
+  sql.exec(readFileSync("migrations/0014_publisher_content_catch_up.sql", "utf8"));
+  expect((await listContent(db)).map(({ id, title, job_id, stage_at }) => ({ id, title, job_id, stage_at }))).toEqual([
+    { id: missed, title: "Baking one big chocolate chip cookie", job_id: missed, stage_at: 5 },
+    { id: placed, title: "Placed", job_id: placed, stage_at: 1 },
+  ]);
 });

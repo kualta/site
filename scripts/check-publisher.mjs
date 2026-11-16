@@ -1310,20 +1310,29 @@ try {
       .click();
     await page.getByRole("textbox", { name: "Post" }).fill("Square windows, out now");
     await page.getByRole("button", { name: "Publish to 2 places" }).click();
-    const linked = await page
-      .waitForFunction((id) => {
-        const job = window.publisherRequests.find((r) => r.path === "jobs")?.body.id;
-        const patch = window.publisherRequests.find((r) => r.path === `content/${id}` && r.method === "PATCH");
-        return job && patch && { job, body: patch.body };
-      }, squareWindows)
-      .then((handle) => handle.jsonValue());
-    assert.deepEqual(linked.body, { job: linked.job });
+    // The link goes with the post itself, so the piece moves to Posted with it.
+    const queuedWith = () =>
+      page
+        .waitForFunction(() => {
+          const last = window.publisherRequests.filter((r) => r.path === "jobs").at(-1);
+          return last && { query: last.query };
+        })
+        .then((handle) => handle.jsonValue())
+        .then(({ query }) => query);
+    assert.equal(await queuedWith(), `?content=${squareWindows}`);
     // The composer lets go of it, and so does its address.
     await page.waitForFunction(() => location.search === "");
     assert.equal(await link.inputValue(), "");
+    // A post linked to nothing joins Posted on its own, named as History names it.
+    await page.evaluate(() => (window.publisherRequests.length = 0));
+    await page.getByRole("textbox", { name: "Post" }).fill("Baking one big cookie\nwhile France is burning");
+    await page.getByRole("button", { name: "Publish to 2 places" }).click();
+    assert.equal(await queuedWith(), "");
     await page.getByRole("button", { name: "Pipeline", exact: true }).click();
     await card("Posted", "Square windows").waitFor();
     assert.equal(await card("Edit ready", "Square windows").count(), 0);
+    await card("Posted", "Baking one big cookie").waitFor();
+    assert.equal(await card("Posted", "France").count(), 0);
     assert.deepEqual(errors, []);
     await context.close();
   }
