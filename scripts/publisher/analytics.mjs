@@ -46,16 +46,6 @@ export function extractMetrics(platform, id, payload) {
         comments: item.comment_count ?? item.edge_media_to_comment?.count,
       };
     }
-    if (platform === "tiktok" && String(item.id) === id) {
-      const stats = item.stats || item.statsV2 || {};
-      values = {
-        views: stats.playCount,
-        likes: stats.diggCount,
-        comments: stats.commentCount,
-        shares: stats.shareCount,
-        saves: stats.collectCount,
-      };
-    }
     // A YouTube post shows likes and replies as text; a rounded "1.2K" stays unknown rather than guessed.
     if (platform === "youtube" && item.postId === id) {
       const text = (value) =>
@@ -101,6 +91,32 @@ export function tiktokInsights(id, utcOffset = -new Date().getTimezoneOffset()) 
   return `https://www.tiktok.com/aweme/v2/data/insight/?locale=en&aid=1988&tz_offset=${
     utcOffset * 60
   }&type_requests=${encodeURIComponent(requests)}`;
+}
+/** A TikTok post's counts as Studio's insight reply gives them, for exactly that post. */
+export function tiktokCounts(id, data) {
+  if (data?.status_code !== 0 || data.video_info?.aweme_id !== id) return {};
+  const stats = data.video_info.statistics ?? {};
+  return counts({
+    views: stats.play_count,
+    likes: stats.digg_count,
+    comments: stats.comment_count,
+    shares: stats.share_count,
+    saves: stats.collect_count,
+  });
+}
+/**
+ * Headers that ask as the saved session from ordinary Chrome: its cookies, and its user agent without the "Headless" a
+ * profile opened just to read them would announce.
+ */
+export async function sessionHeaders(context, origin) {
+  const cookies = await context.cookies(origin);
+  const page = context.pages()[0] || (await context.newPage());
+  const agent = await page.evaluate(() => navigator.userAgent);
+  return {
+    cookie: cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; "),
+    "user-agent": agent.replace("HeadlessChrome", "Chrome"),
+    "accept-language": "en-US,en;q=0.9",
+  };
 }
 /** Average watch time is play time over plays, replays included, as Studio shows it. A private or unplayed video has none. */
 export function tiktokRetention(id, data) {
@@ -226,6 +242,19 @@ export async function collectAnalytics(
         if (data.gallery?.uri !== uri) throw new Error("Gallery not found");
         metrics = counts({ likes: data.gallery.favCount, comments: data.gallery.commentCount });
       }
+    } else if (target.platform === "tiktok") {
+      // Studio's insight endpoint answers the session's cookies with the post's counts and watch time, so no TikTok
+      // page loads: the profile that publishes runs TikTok's scripts only to publish, never headless.
+      context = await open(join(stateDir, target.platform), true);
+      const response = await fetcher(tiktokInsights(id), {
+        headers: await sessionHeaders(context, "https://www.tiktok.com"),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) throw new Error("Metrics request failed");
+      const data = await response.json();
+      metrics = tiktokCounts(id, data);
+      // Photo posts have no watch time.
+      if (!new URL(url).pathname.includes("/photo/")) Object.assign(metrics, tiktokRetention(id, data));
     } else if (target.platform === "xiaohongshu") {
       context = await open(join(stateDir, target.platform), true);
       const page = context.pages()[0] || (await context.newPage());
@@ -309,7 +338,6 @@ export async function collectAnalytics(
       const hosts = {
         twitter: /^(?:[^.]+\.)?(?:x|twitter)\.com$/,
         instagram: /(^|\.)instagram\.com$/,
-        tiktok: /(^|\.)tiktok\.com$/,
         xiaohongshu: /(^|\.)(?:xiaohongshu|rednote)\.com$/,
       };
       const structured = (response) => {
@@ -378,15 +406,6 @@ export async function collectAnalytics(
             /^https:\/\/(?:[\w-]+\.)?x\.com\/i\/api\/graphql\/[\w-]+\/videoDetailsProviderQuery/,
           );
           Object.assign(metrics, xRetention(videoKey, reply));
-        } catch {
-          // The post's own counts still stand.
-        }
-      }
-      // Studio answers its own unsigned request with the session's cookies, without loading Studio.
-      if (target.platform === "tiktok" && metrics.views && !new URL(url).pathname.includes("/photo/")) {
-        try {
-          const response = await context.request.get(tiktokInsights(id), { timeout: 20_000 });
-          Object.assign(metrics, tiktokRetention(id, await response.json()));
         } catch {
           // The post's own counts still stand.
         }

@@ -67,9 +67,19 @@ export function spotIn(box, random = Math.random) {
 // Playwright doesn't say where the mouse is; each page's is remembered from the last move.
 const pointers = new WeakMap();
 
+/** The page's size: the one Playwright set, or the window's own when nothing overrides it (stealth.mjs). */
+async function viewportOf(page) {
+  return (
+    page.viewportSize() ??
+    (await page
+      .evaluate(() => ({ width: innerWidth, height: innerHeight }))
+      .catch(() => ({ width: 1280, height: 900 })))
+  );
+}
+
 /** Moves the mouse there along a hand's path. */
 export async function moveTo(page, x, y) {
-  const viewport = page.viewportSize() ?? { width: 1280, height: 900 };
+  const viewport = await viewportOf(page);
   const from = pointers.get(page) ?? { x: between(0.2, 0.8) * viewport.width, y: between(0.2, 0.8) * viewport.height };
   for (const point of mousePath(from, { x, y })) {
     await page.mouse.move(point.x, point.y);
@@ -106,7 +116,7 @@ export async function humanType(page, text) {
 
 /** Looks the page over: a pause, the mouse drifting to a spot or two, now and then a small scroll that comes back. */
 export async function lookAround(page) {
-  const viewport = page.viewportSize() ?? { width: 1280, height: 900 };
+  const viewport = await viewportOf(page);
   await pause(page, 900, 2400);
   for (let i = Math.round(between(1, 3)); i > 0; i--) {
     await moveTo(page, between(0.15, 0.85) * viewport.width, between(0.15, 0.85) * viewport.height);

@@ -1,9 +1,10 @@
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { Innertube } from "youtubei.js";
 import { humanClick, humanType, lookAround, pause } from "./human.mjs";
 import { rejected } from "./protocol.mjs";
+import { openStealthProfile } from "./stealth.mjs";
 
 export const destinations = {
   twitter: "https://x.com/home",
@@ -221,6 +222,21 @@ export async function discardUnsaved(page) {
   }
   await pause(page, 800, 2000);
 }
+/**
+ * Once a video is up, TikTok checks its music (about 30 seconds) and its For You eligibility ("Content check lite",
+ * about 10 minutes), and asks "Continue to post?" if Post comes first. A person waits for them to finish; so does the
+ * helper, for up to 12 minutes, glancing over the page now and then. A check TikTok won't run today (its daily limit)
+ * doesn't hold it up.
+ */
+export async function waitForTikTokChecks(page, { timeout = 12 * 60_000 } = {}) {
+  const running = page.getByText(/^Checking in progress/).filter({ visible: true });
+  const deadline = Date.now() + timeout;
+  await pause(page, 2000, 4000);
+  while (Date.now() < deadline && (await running.count()) > 0) {
+    await pause(page, 8000, 15_000);
+    if (Math.random() < 0.3) await lookAround(page);
+  }
+}
 /** TikTok's Photos tab takes the whole set at once, in order, and says how many it has once they're up. */
 export async function addTikTokPhotos(page, files) {
   await chooseFiles(page, /^Select photos?$/, 'input[type="file"][accept*="image"]', files);
@@ -331,7 +347,9 @@ export async function composeYoutubePost(page, files, caption) {
   await dialog.locator("#contenteditable-root").first().fill(caption);
   return dialog.locator('button[aria-label="Post"]:not([disabled])').first();
 }
+/** TikTok's profile opens in Chrome driven without a trace (stealth.mjs); every other platform's in Playwright's. */
 export async function openProfile(path, headless = false) {
+  if (basename(path) === "tiktok") return openStealthProfile(path, headless);
   return chromium.launchPersistentContext(path, {
     channel: "chrome",
     // Match ordinary Chrome so saved login cookies use the same OS keychain.
@@ -563,11 +581,12 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
         const saved = await confirmTikTokDraft(page, post.caption, profile);
         return { ...saved, message: [saved.message, ...notes].join(" ") };
       }
+      await waitForTikTokChecks(page);
       submitting = true;
       await humanClick(page, postButton);
     }
     const deadline = Date.now() + 120_000;
-    // TikTok asks "Continue to post?" while its content check is still running: Post now goes ahead.
+    // TikTok asks "Continue to post?" while a check is still running, as after 12 minutes: Post now goes ahead.
     const postNow = page.getByRole("button", { name: "Post now", exact: true });
     while (!publishedUrl && Date.now() < deadline) {
       if (platform === "tiktok" && (await postNow.isVisible().catch(() => false)))
