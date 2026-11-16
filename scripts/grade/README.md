@@ -111,5 +111,6 @@ both against the preview: mean 0.6 and 0.5 of 255, 95% within 2.
 
 Edit with the files in `~/Movies/Exported/`: the originals may only exist on the camera. `exports.json` says what
 each was made with; a clip is current when its record's `key` matches `gradeKey(resolveGrade(grades.json's entry))`,
-which the app shows as "graded" and otherwise as "changed since export". Regrading and exporting again replaces the
-file under the same name, so trims and captions in a film stay valid.
+which the app shows as "graded" and otherwise as "changed since export". A clip graded in the app but never exported
+shows as "grade not exported"; one with no export and the starting grade shows as "not graded". Regrading and exporting
+again replaces the file under the same name, so trims and captions in a film stay valid.
