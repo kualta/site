@@ -304,7 +304,9 @@ piece to Posted and records the post, and the card then links to the post's numb
 Moving a posted piece back to an earlier stage drops that record. Cancelling the post before it
 goes out moves the piece back to Edit ready. Pieces marked Posted by hand have no post recorded.
 Posted shows the latest 30. Pieces live in D1 (`publisher_content`, `0012_publisher_content.sql`),
-and the tab reads them when it opens, never on a timer.
+and the tab reads them when it opens, never on a timer. `0013_publisher_content_backfill.sql` put
+every post that had gone out before the Pipeline existed into Posted. Each is named as History
+names it and dated by its first destination to finish.
 
 ## History and deleting publications
 
