@@ -284,8 +284,22 @@ export function tikTokCaptionParts(caption) {
   return parts;
 }
 /**
+ * The hashtag to pick from TikTok's suggestions for one typed: the tag itself, else the top suggestion that starts with
+ * it (#recipe gets #recipetok), since a linked tag beats plain text. Null when no suggestion does. The list also offers
+ * searches ("#cookie recipe easy and quick"), which aren't hashtags and are never picked.
+ */
+export function pickHashtag(offered, tag) {
+  const names = offered.map((name) => name.trim().replace(/^#/, "")).filter((name) => /^[\p{L}\p{N}_]+$/u.test(name));
+  const wanted = tag.toLowerCase();
+  return (
+    names.find((name) => name.toLowerCase() === wanted) ??
+    names.find((name) => name.toLowerCase().startsWith(wanted)) ??
+    null
+  );
+}
+/**
  * Writes TikTok's caption over the file name it fills in on upload, picking each hashtag from its list so it links.
- * Throws, before anything is posted, if the editor doesn't read back the caption.
+ * Throws, before anything is posted, if the editor doesn't read back the caption with the hashtags it picked.
  */
 export async function writeTikTokCaption(page, caption) {
   const editor = page.locator('[contenteditable="true"]').first();
@@ -308,39 +322,56 @@ export async function writeTikTokCaption(page, caption) {
   await pause(page, 400, 1200);
   const linked = editor.locator('[data-testid="mentionText"]');
   const list = page.locator(".mention-list-popover");
+  const offers = list.locator(".hash-tag-topic");
   const parts = tikTokCaptionParts(caption);
+  // What the editor should read back: the text, and each hashtag as picked.
+  const written = [];
+  const swapped = [];
   for (const part of parts) {
     if (part.text !== undefined) {
       await humanType(page, part.text);
+      written.push(part.text);
       continue;
     }
     const before = await linked.count();
     await humanType(page, `#${part.tag}`);
+    // The list fills in as TikTok looks the tag up: the tag itself is taken as soon as it shows; the top suggestion
+    // only after six seconds without it, once the list has stayed the same for two.
+    let chosen = null;
+    let previous = "";
+    for (let tick = 1, steady = 0; tick <= 20; tick++) {
+      await page.waitForTimeout(500);
+      const offered = await offers.allInnerTexts().catch(() => []);
+      chosen = pickHashtag(offered, part.tag);
+      if (chosen?.toLowerCase() === part.tag.toLowerCase()) break;
+      const listed = offered.join("\n");
+      steady = listed && listed === previous ? steady + 1 : 0;
+      previous = listed;
+      if (tick >= 12 && steady >= 4) break;
+    }
     try {
-      await humanClick(
-        page,
-        list
-          .locator(".hash-tag-topic")
-          .filter({ hasText: new RegExp(`^#${part.tag}$`, "iu") })
-          .first(),
-        { timeout: 10_000 },
-      );
+      if (!chosen) throw new Error(`TikTok offered no #${part.tag}`);
+      // pickHashtag only names letters, digits and _, which need no escaping.
+      await humanClick(page, offers.filter({ hasText: new RegExp(`^#${chosen}$`, "iu") }).first(), { timeout: 10_000 });
       await linked.nth(before).waitFor({ timeout: 5000 });
       await pause(page, 200, 700);
       if (!part.space) await page.keyboard.press("Backspace");
+      written.push(`#${chosen}`);
+      if (chosen.toLowerCase() !== part.tag.toLowerCase()) swapped.push([part.tag, chosen]);
     } catch {
       // Left as typed: it shows, unlinked. Enter would pick from a list still open.
       if (await list.isVisible()) await page.keyboard.press("Escape");
       if (part.space) await page.keyboard.type(" ");
+      written.push(`#${part.tag}`);
     }
   }
   const flat = (text) => text.replace(/\s+/g, "").toLowerCase();
   const shown = await editor.innerText();
-  if (flat(shown) !== flat(caption))
+  if (flat(shown) !== flat(written.join("")))
     throw rejected(
       `TikTok's caption came out as "${shown.replace(/\s+/g, " ").trim().slice(0, 80)}", so nothing was posted.`,
     );
-  return { linked: await linked.count(), tags: parts.filter((part) => part.tag !== undefined).length };
+  return { linked: await linked.count(), tags: parts.filter((part) => part.tag !== undefined).length, swapped };
 }
 /**
  * Fills a post on the signed-in channel's Posts tab, whose composer takes up to 10 images, and returns its Post
@@ -587,7 +618,8 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
       await discardUnsaved(page);
       if (post.kind === "photo") await addTikTokPhotos(page, files);
       else await chooseFiles(page, /^Select video$/, 'input[type="file"]', files);
-      const { linked, tags } = await writeTikTokCaption(page, post.caption);
+      const { linked, tags, swapped } = await writeTikTokCaption(page, post.caption);
+      for (const [tag, chosen] of swapped) notes.push(`TikTok had no #${tag}, so it got #${chosen}.`);
       if (linked < tags) notes.push(`TikTok linked ${linked} of ${tags} hashtags.`);
       await finishTour(page);
       if (cover)

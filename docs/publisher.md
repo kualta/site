@@ -187,6 +187,11 @@ contain original metadata until the helper prepares each destination's copy.
 - A newly signed-in profile gets TikTok's uploader tour ("Preview your video on your phone",
   **Got it**), whose overlay covers the caption until it's answered. The helper reads each
   step and takes its button (Escape if it has none) before the caption, the cover and **Post**.
+- A TikTok hashtag links only when picked from the editor's list. The helper picks the tag
+  itself as soon as TikTok lists it. After six seconds without it, once the list has settled,
+  it picks the top suggestion that starts with it (#recipe gets #recipetok) and says so in
+  the result. Searches the list offers ("#cookie recipe easy and quick") are never picked,
+  and a tag with no such suggestion stays as typed, unlinked.
 - After the upload the helper waits, up to 12 minutes, for TikTok's music check and its
   For You eligibility check ("Content check lite", about 10 minutes) to finish before
   **Post**, as a person would. If TikTok still asks **Continue to post?**, it answers
