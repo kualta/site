@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from "
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { archiveProject, listArchived, projectFiles, restoreProject, skipped } from "./archive.mjs";
+import { archiveProject, listArchived, projectContents, restoreProject, skipped } from "./archive.mjs";
 import { archiveResponse } from "../../src/lib/publisher/archive.ts";
 import { memoryArchive, memoryMedia } from "../../src/lib/publisher/memory-archive.ts";
 
@@ -62,6 +62,8 @@ async function project(root) {
     await writeFile(join(dir, path), body);
   }
   await utimes(join(dir, "film.html"), new Date(), new Date(1_700_000_000_000));
+  // Git, which Studio's history is, needs some of its folders even empty.
+  await mkdir(join(dir, ".film/history/refs/heads"), { recursive: true });
   return dir;
 }
 
@@ -78,7 +80,9 @@ test("a project is archived once per file, its caches cleared, and restored as i
   try {
     const dir = await project(root);
     const { auth, archive, requests } = site();
-    expect((await projectFiles(dir)).map((f) => f.path)).toEqual([
+    // zh/.film holds only Studio's cache, which stays out, so it's kept as an empty folder.
+    expect((await projectContents(dir)).folders).toEqual([".film/history/refs/heads", "zh/.film"]);
+    expect((await projectContents(dir)).files.map((f) => f.path)).toEqual([
       ".film/id",
       ".film/opened",
       "014-test-film.mp4",
@@ -103,7 +107,8 @@ test("a project is archived once per file, its caches cleared, and restored as i
     const dest = join(root, "restored");
     const back = await restoreProject("014-test-film", { ...auth, dest });
     expect(back.files).toBe(7);
-    for (const file of await projectFiles(dir))
+    expect((await stat(join(dest, ".film/history/refs/heads"))).isDirectory()).toBe(true);
+    for (const file of (await projectContents(dir)).files)
       expect(await readFile(join(dest, file.path), "utf8")).toBe(await readFile(file.abs, "utf8"));
     expect((await stat(join(dest, "film.html"))).mtimeMs).toBe(1_700_000_000_000);
     expect(await readdir(join(dest, "zh/assets"))).toEqual(["clip.mp4"]);

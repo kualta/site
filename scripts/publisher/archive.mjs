@@ -24,10 +24,16 @@ export function skipped(path) {
   return basename(path) === ".DS_Store" || /(^|\/)\.film\/cache(\/|$)/.test(path);
 }
 
-/** A project's files: each by its path in it with `/` between folders, its size and when it last changed. */
-export async function projectFiles(root) {
+/**
+ * A project's files, each by its path in it with `/` between folders, its size and when it last changed; and its
+ * folders that hold nothing kept, which can matter empty (git needs Studio's history's `objects` and `refs`).
+ */
+export async function projectContents(root) {
   const files = [];
+  const folders = [];
+  /** Walks `dir` and says how many things in it are kept. */
   async function walk(dir) {
+    let kept = 0;
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const abs = join(dir, entry.name);
       const path = abs
@@ -38,15 +44,20 @@ export async function projectFiles(root) {
       // A link to media kept elsewhere is archived as what it leads to; one that leads nowhere is left out.
       const info = entry.isSymbolicLink() ? await stat(abs).catch(() => null) : entry;
       if (!info) continue;
-      if (info.isDirectory()) await walk(abs);
-      else if (info.isFile()) {
+      if (info.isDirectory()) {
+        if (!(await walk(abs))) folders.push(path);
+        kept++;
+      } else if (info.isFile()) {
         const { size, mtimeMs } = await stat(abs);
         files.push({ path, abs, size, mtime: Math.round(mtimeMs) });
+        kept++;
       }
     }
+    return kept;
   }
   await walk(root);
-  return files.sort((a, b) => a.path.localeCompare(b.path));
+  const byPath = (a, b) => a.localeCompare(b);
+  return { files: files.sort((a, b) => byPath(a.path, b.path)), folders: folders.sort(byPath) };
 }
 
 export async function hashFile(abs) {
@@ -138,7 +149,7 @@ export async function archiveProject(
   const name = basename(root);
   if (!isName(name)) throw new Error(`${name} isn't a name the archive takes: letters, digits, . _ and - only`);
   const request = archiveClient({ origin, token, fetcher });
-  const files = await projectFiles(root);
+  const { files, folders } = await projectContents(root);
   if (!files.length) throw new Error(`${root} holds no files to archive`);
   const total = files.reduce((sum, file) => sum + file.size, 0);
   log(`${name}: hashing ${files.length} files, ${gb(total)}`);
@@ -164,7 +175,7 @@ export async function archiveProject(
   }
   const saved = await request(`projects/${name}`, {
     method: "PUT",
-    json: { files: files.map(({ path, sha256, size, mtime }) => ({ path, sha256, size, mtime })) },
+    json: { files: files.map(({ path, sha256, size, mtime }) => ({ path, sha256, size, mtime })), folders },
   });
   let cleared = 0;
   if (!keepCache)
@@ -212,10 +223,14 @@ export async function restoreProject(name, { dest, at, origin, token, fetcher = 
   if (present.some((entry) => entry !== ".DS_Store")) throw new Error(`${root} isn't empty; name another folder`);
   const total = manifest.files.reduce((sum, file) => sum + file.size, 0);
   log(`${name}: restoring ${manifest.files.length} files, ${gb(total)}, archived ${manifest.archivedAt}`);
+  const inside = (path) => {
+    const target = resolve(root, path);
+    if (!target.startsWith(root + sep)) throw new Error(`The manifest names a path outside the project: ${path}`);
+    return target;
+  };
   const fetched = new Map();
   for (const file of manifest.files) {
-    const target = resolve(root, file.path);
-    if (!target.startsWith(root + sep)) throw new Error(`The manifest names a file outside the project: ${file.path}`);
+    const target = inside(file.path);
     await mkdir(dirname(target), { recursive: true });
     const copy = fetched.get(file.sha256);
     if (copy) await copyFile(copy, target, constants.COPYFILE_FICLONE);
@@ -235,6 +250,8 @@ export async function restoreProject(name, { dest, at, origin, token, fetcher = 
     }
     await utimes(target, new Date(), new Date(file.mtime));
   }
+  // Manifests from before empty folders were kept have none.
+  for (const folder of manifest.folders ?? []) await mkdir(inside(folder), { recursive: true });
   return { name, dest: root, files: manifest.files.length, bytes: total, archivedAt: manifest.archivedAt };
 }
 

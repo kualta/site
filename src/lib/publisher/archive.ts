@@ -217,12 +217,25 @@ export async function getBlob(archive: ArchiveBucket, hash: string) {
   return archive.get(blobKey(hash));
 }
 
-/** A project's files as archived: each by its path in the project, with `/` between folders. */
+/**
+ * A project's files as archived: each by its path in the project, with `/` between folders. `folders` are the ones that
+ * hold nothing, kept because a folder can matter empty: Studio's history is a git repository, and git needs its
+ * `objects` and `refs` folders there.
+ */
 export interface Manifest {
   name: string;
   archivedAt: string;
   files: { path: string; sha256: string; size: number; mtime: number }[];
+  folders: string[];
 }
+
+/** A path inside a project: relative, and never climbing out of it. */
+const isPath = (path: unknown): path is string =>
+  typeof path === "string" &&
+  path.length > 0 &&
+  path.length < 1000 &&
+  !path.startsWith("/") &&
+  !path.split("/").includes("..");
 
 /**
  * Keeps a project's manifest, once every file it names is in the archive, under the time it was archived. Refuses one
@@ -230,23 +243,22 @@ export interface Manifest {
  */
 export async function saveManifest(archive: ArchiveBucket, name: string, input: unknown, now = new Date()) {
   if (!isProjectName(name)) throw new ArchiveError("Invalid project name");
-  const files = (input as { files?: unknown })?.files;
+  const { files, folders = [] } = (input ?? {}) as { files?: unknown; folders?: unknown };
   const valid =
     Array.isArray(files) &&
     files.length <= 50_000 &&
     files.every(
       (f) =>
         f &&
-        typeof f.path === "string" &&
-        f.path.length > 0 &&
-        f.path.length < 1000 &&
-        !f.path.startsWith("/") &&
-        !f.path.split("/").includes("..") &&
+        isPath(f.path) &&
         isHash(f.sha256) &&
         Number.isSafeInteger(f.size) &&
         f.size >= 0 &&
         Number.isFinite(f.mtime),
-    );
+    ) &&
+    Array.isArray(folders) &&
+    folders.length <= 50_000 &&
+    folders.every(isPath);
   if (!valid) throw new ArchiveError("Invalid manifest");
   const listed = files as Manifest["files"];
   const missing = await missingBlobs(
@@ -258,6 +270,7 @@ export async function saveManifest(archive: ArchiveBucket, name: string, input: 
     name,
     archivedAt: now.toISOString(),
     files: listed.map(({ path, sha256, size, mtime }) => ({ path, sha256, size, mtime })),
+    folders: folders as string[],
   };
   const key = `projects/${name}/${manifest.archivedAt}.json`;
   await archive.put(key, JSON.stringify(manifest), { httpMetadata: { contentType: "application/json" } });
