@@ -347,6 +347,11 @@ type Piece = {
   created_at: number;
   stage_at: number;
   thumbnail: number | null;
+  post: {
+    kind: string;
+    media: string[];
+    targets: { id: string; platform: string; url: string | null; deleted: boolean; metrics: Record<string, number> | null }[];
+  } | null;
 };
 const piece = (n: number, title: string, stage: string, daysAgo: number, notes = ""): Piece => ({
   id: `00000000-0000-4000-8000-0000000c0${String(n).padStart(3, "0")}`,
@@ -357,6 +362,7 @@ const piece = (n: number, title: string, stage: string, daysAgo: number, notes =
   created_at: Date.now() - (daysAgo + 3) * day,
   stage_at: Date.now() - daysAgo * day,
   thumbnail: null,
+  post: null,
 });
 let pieces: Piece[] = [
   piece(1, "Lorax wisdom, part 8", "idea", 0),
@@ -370,7 +376,44 @@ let pieces: Piece[] = [
   ),
   piece(4, "Night market walk", "footage", 2, "42 clips on the Pocket, graded."),
   piece(5, "Square windows", "edit", 0, "Final cut is in OpenFilm."),
-  { ...piece(6, "this, too, is modern art", "posted", 0), job_id: history.posts[0].id },
+  // Posted: a photo post with its thumbnail kept, and a video whose picture is its YouTube still, read on two platforms.
+  {
+    ...piece(6, "this, too, is modern art", "posted", 0),
+    job_id: history.posts[0].id,
+    thumbnail: 1_761_900_000_000,
+    post: {
+      kind: "photo",
+      media: ["m-photo-1", "m-photo-2"],
+      targets: [
+        { id: "grain-art", platform: "grain", url: "https://example.invalid/grain/post", deleted: false, metrics: { likes: 4 } },
+        { id: "bluesky-art", platform: "bluesky", url: null, deleted: true, metrics: null },
+      ],
+    },
+  },
+  {
+    ...piece(7, "Lorax wisdom, part 7", "posted", 1),
+    job_id: "00000000-0000-4000-8000-000000000008",
+    post: {
+      kind: "video",
+      media: ["m-lorax"],
+      targets: [
+        {
+          id: "youtube-lorax",
+          platform: "youtube",
+          url: "https://www.youtube.com/shorts/CJs864wmjB0",
+          deleted: false,
+          metrics: { views: 1213, likes: 30, comments: 4 },
+        },
+        {
+          id: "instagram-lorax",
+          platform: "instagram",
+          url: "https://www.instagram.com/reel/abc/",
+          deleted: false,
+          metrics: { views: 310, likes: 41 },
+        },
+      ],
+    },
+  },
 ];
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -488,6 +531,7 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
         stage_at: stage === found.stage ? found.stage_at : Date.now(),
         stage,
         job_id: stage === "posted" ? body.job ?? found.job_id : null,
+        post: stage === "posted" && !body.job ? found.post : null,
       });
     }
     return json(found);

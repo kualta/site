@@ -2,7 +2,15 @@ import { expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import type { NewsletterDB } from "../newsletter/types";
-import { createContent, deleteContent, listContent, readContent, releaseJob, updateContent } from "./content";
+import {
+  createContent,
+  deleteContent,
+  listContent,
+  readContent,
+  releaseJob,
+  updateContent,
+  type PiecePost,
+} from "./content";
 
 function fixture() {
   const sql = new Database(":memory:");
@@ -122,6 +130,45 @@ test("the list has every piece on its way and only the latest posted, newest arr
   expect(list[0].thumbnail).toBe(41);
   expect(list.find((piece) => piece.id === early.id)?.thumbnail).toBeNull();
   expect((await readContent(db, late.id))?.title).toBe("Late idea");
+});
+
+test("a posted piece carries its post's picture sources and each destination's latest counts", async () => {
+  const { db, sql } = fixture();
+  const job = crypto.randomUUID();
+  const [video, cover] = [crypto.randomUUID(), crypto.randomUUID()];
+  sql
+    .query("INSERT INTO publisher_jobs VALUES (?, ?, 1)")
+    .run(job, JSON.stringify({ kind: "video", media: [video], cover, caption: "unused" }));
+  const target = sql.query("INSERT INTO publisher_targets (id, job_id, platform, state, url) VALUES (?, ?, ?, ?, ?)");
+  target.run("youtube", job, "youtube", "succeeded", "https://www.youtube.com/shorts/CJs864wmjB0");
+  target.run("tiktok", job, "tiktok", "succeeded", "https://www.tiktok.com/@_/video/1");
+  target.run("instagram", job, "instagram", "failed", null);
+  const snapshot = sql.query("INSERT INTO publisher_metric_snapshots VALUES (?, ?, ?)");
+  snapshot.run("youtube", 10, JSON.stringify({ views: 100 }));
+  snapshot.run("youtube", 20, JSON.stringify({ views: 1213, likes: 30 }));
+  sql.query("INSERT INTO publisher_deletions (target_id, state, requested_at) VALUES ('tiktok', 'deleted', 5)").run();
+  const piece = await createContent(db, { title: "Square windows", stage: "edit" });
+  expect(piece.post).toBeNull();
+  await updateContent(db, piece.id, { job });
+  const expected: PiecePost = {
+    kind: "video",
+    media: [video],
+    cover,
+    targets: [
+      {
+        id: "youtube",
+        platform: "youtube",
+        url: "https://www.youtube.com/shorts/CJs864wmjB0",
+        deleted: false,
+        metrics: { views: 1213, likes: 30 },
+      },
+      { id: "tiktok", platform: "tiktok", url: "https://www.tiktok.com/@_/video/1", deleted: true, metrics: null },
+    ],
+  };
+  expect((await readContent(db, piece.id))?.post).toEqual(expected);
+  expect((await listContent(db)).find((item) => item.id === piece.id)?.post).toEqual(expected);
+  // Moved back, it lets go of its post and shows none.
+  expect((await updateContent(db, piece.id, { stage: "edit" }))?.post).toBeNull();
 });
 
 test("cancelling its post puts the piece back at Edit ready, so the post can be deleted", async () => {

@@ -1147,61 +1147,148 @@ try {
     await context.close();
   }
 
-  // The Pipeline holds each piece of content in a column for its stage. A piece moves on a stage at a time and opens to
-  // edit; composed from Edit ready and queued, it moves to Posted, linked to its post.
+  // The Pipeline holds each piece of content in a column for its stage, on a board the size of the window. A posted
+  // piece is its post's picture with what it is on top. A card drags to another column to change its stage, and opens
+  // to the post's stats and its fields; composed from Edit ready and queued, it moves to Posted, linked to its post.
   for (const [width, name] of [
     [1280, "desktop"],
     [390, "mobile"],
   ]) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     const page = await context.newPage();
+    // Kept thumbnails are vertical frames; YouTube stills are 4:3.
+    const frame = (w, h, fill) =>
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="${fill}"/></svg>`;
+    await page.route("**/api/publisher/thumbnails/**", (route) =>
+      route.fulfill({ contentType: "image/svg+xml", body: frame(270, 480, "#8a8f99") }),
+    );
+    await page.route("https://i.ytimg.com/**", (route) =>
+      route.fulfill({ contentType: "image/svg+xml", body: frame(480, 360, "#6d7380") }),
+    );
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("http://127.0.0.1:8797/publisher.html/pipeline");
+    // Dark on the desktop, light on the phone.
+    await page.goto(`http://127.0.0.1:8797/publisher.html/pipeline?theme=${width > 700 ? "dark" : "light"}`);
     const board = page.getByRole("region", { name: "Pipeline" });
     const column = (stage) => board.getByRole("region", { name: stage, exact: true });
     const card = (stage, title) => column(stage).getByRole("listitem").filter({ hasText: title });
-    await card("Posted", "this, too, is modern art").waitFor();
-    // Side by side when there's room; a phone takes them one under another, in order.
-    const [first, last] = [await column("Idea").boundingBox(), await column("Posted").boundingBox()];
-    assert.ok(width > 900 ? first.y === last.y && first.x < last.x : last.y > first.y, `columns at ${width}px`);
-    assert.equal(
-      await card("Posted", "this, too, is modern art").getByRole("link", { name: "Stats" }).getAttribute("href"),
-      "/publisher.html/analytics?post=00000000-0000-4000-8000-000000000001",
+    const open = (stage, title) => card(stage, title).getByRole("button").click();
+    const lorax = card("Posted", "Lorax wisdom, part 7");
+    await lorax.waitFor();
+    // The board spans the window and reaches its bottom, so the page doesn't scroll; a phone swipes between columns.
+    const layout = await page.evaluate(() => {
+      const grid = document.querySelector(".publisher-pipeline-board");
+      const box = grid.getBoundingClientRect();
+      return {
+        width: box.width,
+        bottom: box.bottom,
+        swipes: grid.scrollWidth > grid.clientWidth,
+        pageFits: document.documentElement.scrollWidth <= innerWidth,
+        pageScrolls: document.documentElement.scrollHeight > innerHeight + 1,
+      };
+    });
+    assert.deepEqual(
+      { ...layout, width: Math.round(layout.width), bottom: Math.round(layout.bottom) },
+      { width: width > 700 ? width - 96 : width, bottom: 900 - 24, swipes: width <= 700, pageFits: true, pageScrolls: false },
     );
+    // Posted, a piece is its picture with its title, when it went out and its views over the top.
+    assert.equal(await lorax.getAttribute("data-picture"), "true");
+    await lorax.locator("img").evaluate((img) => img.complete || new Promise((done) => (img.onload = done)));
+    assert.match(await lorax.textContent(), /^Lorax wisdom, part 7Yesterday · 1\.5K views$/);
+    assert.equal(await card("Posted", "this, too, is modern art").getAttribute("data-picture"), "true");
+    assert.equal(await card("Idea", "Why Bogotá has no seasons").getAttribute("data-picture"), null);
+    if (shots) await page.screenshot({ path: path.join(shots, `pipeline-board-${name}.png`) });
     const idea = board.getByRole("textbox", { name: "New idea" });
     await idea.fill("Hammock physics");
     await board.getByRole("button", { name: "Add" }).click();
     await card("Idea", "Hammock physics").waitFor();
     assert.equal(await idea.inputValue(), "");
-    assert.equal(await column("Idea").locator(".publisher-pipeline-open").first().textContent(), "Hammock physics");
-    await board.getByRole("button", { name: "Move “Hammock physics” to Script ready" }).click();
-    await card("Script ready", "Hammock physics").waitFor();
-    assert.equal(await card("Idea", "Hammock physics").count(), 0);
-    // Opened, it takes its script and can move to any stage.
-    await card("Script ready", "Hammock physics").getByRole("button", { name: "Hammock physics", exact: true }).click();
+    assert.match(await column("Idea").getByRole("listitem").first().textContent(), /^Hammock physics/);
+    const patches = (id) =>
+      page.evaluate(
+        (path) => window.publisherRequests.filter((r) => r.method === "PATCH" && r.path === path).map((r) => r.body),
+        `content/${id}`,
+      );
+    // Dragged over another column, that column takes it; its own doesn't.
+    const drag = async (from, to) => {
+      await from.hover();
+      await page.mouse.down();
+      const goal = await column(to).boundingBox();
+      await page.mouse.move(goal.x + 10, goal.y + 10, { steps: 4 });
+      await page.mouse.move(goal.x + goal.width / 2, goal.y + goal.height / 2, { steps: 4 });
+    };
+    if (width > 700) {
+      await drag(card("Idea", "Hammock physics").getByRole("button"), "Footage ready");
+      assert.equal(await column("Footage ready").getAttribute("data-drop"), "true");
+      assert.equal(await column("Posted").getAttribute("data-droppable"), "true");
+      assert.equal(await column("Idea").getAttribute("data-droppable"), null);
+      if (shots) {
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: path.join(shots, "pipeline-drag-desktop.png") });
+      }
+      await page.mouse.up();
+      await card("Footage ready", "Hammock physics").waitFor();
+      assert.equal(await card("Idea", "Hammock physics").count(), 0);
+      await page.waitForFunction(() =>
+        window.publisherRequests.some(
+          (r) => r.method === "PATCH" && r.path.startsWith("content/") && r.body.stage === "footage",
+        ),
+      );
+      const hammock = await card("Footage ready", "Hammock physics").evaluate((li) => li.textContent);
+      assert.match(hammock, /^Hammock physicsToday$/);
+      // A posted piece dragged out would let go of its post, so that asks first; kept, nothing changes.
+      page.once("dialog", (dialog) => dialog.dismiss());
+      await drag(lorax.getByRole("button"), "Edit ready");
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+      assert.equal(await lorax.count(), 1);
+      assert.deepEqual(await patches("00000000-0000-4000-8000-0000000c0007"), []);
+    }
+    // Opened, a piece takes its script and can move to any stage.
+    await open(width > 700 ? "Footage ready" : "Idea", "Hammock physics");
     const editor = page.getByRole("dialog", { name: "Hammock physics" });
     const save = editor.getByRole("button", { name: "Save" });
     assert.ok(await save.isDisabled());
+    assert.equal(await editor.getByRole("region", { name: "Stats" }).count(), 0);
     await editor.getByLabel("Notes").fill("Why you sag in the middle.\nCatenary, not parabola.");
     await editor.getByLabel("Stage").selectOption("footage");
     assert.ok(await save.isEnabled());
-    if (shots) {
-      await page.waitForTimeout(300); // let Save fade in
-      await page.screenshot({ path: path.join(shots, `pipeline-editor-${name}.png`) });
-    }
     await save.click();
     await editor.waitFor({ state: "hidden" });
     await card("Footage ready", "Hammock physics").getByText("Why you sag in the middle.").waitFor();
-    if (shots) await page.screenshot({ path: path.join(shots, `pipeline-${name}.png`), fullPage: true });
+    if (shots) await page.screenshot({ path: path.join(shots, `pipeline-${name}.png`) });
+    // A posted piece opens to each platform's numbers, linked to the post there, above its fields.
+    await lorax.getByRole("button").click();
+    const stats = page.getByRole("dialog", { name: "Lorax wisdom, part 7" }).getByRole("region", { name: "Stats" });
+    const rows = await stats.locator("tr").evaluateAll((trs) =>
+      trs.map((tr) => [...tr.children].map((cell) => cell.textContent.trim())),
+    );
+    assert.deepEqual(rows, [
+      ["Platform", "Views", "Likes", "Comments", "Shares"],
+      ["YouTube", "1,213", "30", "4", "—"],
+      ["Instagram", "310", "41", "—", "—"],
+      ["Total", "1,523", "71", "4", "—"],
+    ]);
+    assert.equal(
+      await stats.getByRole("link", { name: "YouTube" }).getAttribute("href"),
+      "https://www.youtube.com/shorts/CJs864wmjB0",
+    );
+    assert.equal(
+      await stats.getByRole("link", { name: "Analytics" }).getAttribute("href"),
+      "/publisher.html/analytics?post=00000000-0000-4000-8000-000000000008",
+    );
+    if (shots) await page.screenshot({ path: path.join(shots, `pipeline-stats-${name}.png`) });
+    await page.keyboard.press("Escape");
+    await stats.waitFor({ state: "hidden" });
     page.once("dialog", (dialog) => dialog.accept());
-    await card("Footage ready", "Hammock physics").getByRole("button", { name: "Hammock physics", exact: true }).click();
+    await open("Footage ready", "Hammock physics");
     await editor.getByRole("button", { name: "Delete" }).click();
     await editor.waitFor({ state: "hidden" });
     assert.equal(await board.getByText("Hammock physics").count(), 0);
-    // Composed, the composer links it, offering only the pieces not yet posted.
+    // Composed from its editor, the composer links it, offering only the pieces not yet posted.
     const squareWindows = "00000000-0000-4000-8000-0000000c0005";
-    await board.getByRole("button", { name: "Compose “Square windows”" }).click();
+    await open("Edit ready", "Square windows");
+    await page.getByRole("dialog", { name: "Square windows" }).getByRole("button", { name: "Compose" }).click();
     const link = page.getByRole("combobox", { name: /^Pipeline/ });
     await page.getByText("Moves to Posted once the post is queued.").waitFor();
     assert.equal(new URL(page.url()).search, `?content=${squareWindows}`);
@@ -1217,7 +1304,6 @@ try {
     // A reload keeps the link.
     await page.reload();
     await page.getByText("Moves to Posted once the post is queued.").waitFor();
-    if (shots) await page.screenshot({ path: path.join(shots, `pipeline-compose-${name}.png`), fullPage: true });
     await page
       .getByRole("navigation", { name: "Presets" })
       .getByRole("button", { name: "Text post", exact: true })
@@ -1236,10 +1322,7 @@ try {
     await page.waitForFunction(() => location.search === "");
     assert.equal(await link.inputValue(), "");
     await page.getByRole("button", { name: "Pipeline", exact: true }).click();
-    assert.equal(
-      await card("Posted", "Square windows").getByRole("link", { name: "Stats" }).getAttribute("href"),
-      `/publisher.html/analytics?post=${linked.job}`,
-    );
+    await card("Posted", "Square windows").waitFor();
     assert.equal(await card("Edit ready", "Square windows").count(), 0);
     assert.deepEqual(errors, []);
     await context.close();

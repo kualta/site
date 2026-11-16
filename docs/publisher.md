@@ -291,20 +291,32 @@ necessary before relying on the browser upload adapters, and on Farcaster and Le
 ## Pipeline
 
 The Pipeline tab, at post.kualta.dev/pipeline, tracks each piece of content from idea to post.
-Its stages run **Idea**, **Script ready**, **Footage ready**, **Edit ready** and **Posted**, and
-each stage is a column with the piece that most recently reached it at the top. Type a title under
-**New idea** to add one. The button on a card moves it to the next stage. Clicking its title opens
-its title, its notes (script, shots, links) and its stage, which can be set to any stage, plus
-**Delete**.
+Its stages run **Idea**, **Script ready**, **Footage ready**, **Edit ready** and **Posted**. The
+board takes the whole window, one column per stage with the piece that most recently reached it
+at the top, and each column scrolls on its own. A phone shows one column at a time and swipes to
+the next. Type a title under **New idea** to add one.
 
-**Compose** on an Edit ready card opens the composer linked to that piece (`?content=<id>`). The
+A posted piece's card is its post's picture: its kept thumbnail, cover, YouTube still or first
+upload, whichever loads. Vertical for a video, 4:5 for photos, with the title, when it went out
+and its views over the top. A piece without a picture shows its title and the start of its notes.
+
+Drag a card to another column to change its stage; the columns that would take it are outlined.
+Dragging a posted card out of Posted asks first, since it then lets go of its post. Clicking a
+card opens it. A posted piece shows each platform's latest views, likes, comments and shares
+first, each linked to the post there, with a total and a link to Analytics. Below are its title,
+notes (script, shots, links) and stage, plus **Delete**, and **Compose** at Edit ready. Changing
+the stage there works on a phone, where cards don't drag.
+
+**Compose** opens the composer linked to that piece (`?content=<id>`), saving any edits first. The
 composer's **Pipeline** field shows the link, and it can link any piece that isn't posted yet,
 including from a draft. A draft saved from the composer keeps its link. Queueing the post moves the
-piece to Posted and records the post, and the card then links to the post's numbers in Analytics.
-Moving a posted piece back to an earlier stage drops that record. Cancelling the post before it
-goes out moves the piece back to Edit ready. Pieces marked Posted by hand have no post recorded.
-Posted shows the latest 30. Pieces live in D1 (`publisher_content`, `0012_publisher_content.sql`),
-and the tab reads them when it opens, never on a timer. `0013_publisher_content_backfill.sql` put
+piece to Posted and records the post. Moving a posted piece back to an earlier stage drops that
+record. Cancelling the post before it goes out moves the piece back to Edit ready. Pieces marked
+Posted by hand have no post recorded.
+
+Posted shows the latest 30. Pieces live in D1 (`publisher_content`, `0012_publisher_content.sql`).
+The list brings each posted piece's post and each destination's latest counts in two more reads,
+and the tab reads it when it opens, never on a timer. `0013_publisher_content_backfill.sql` put
 every post that had gone out before the Pipeline existed into Posted. Each is named as History
 names it and dated by its first destination to finish.
 
