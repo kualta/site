@@ -356,7 +356,8 @@ instagram-stories "<folder>"` brings it back.
 to the Bluesky account with no text, its photo or video (prepared as for any Bluesky post), and the hidden tag
 `pinkleapStory`, which makes Pinkleap show it as a story. On Bluesky it's an ordinary post that stays on the profile; a
 story's 24 hours are Pinkleap's doing, and nothing deletes it. It's dated when it's sent, on the clock the story was
-posted with (`2026-11-16T09:31:20.880-05:00`). Its record key comes from the story's id, so a run stopped after posting
+posted with (`2026-11-16T09:31:20.880-05:00`), and never at the same moment as the story before it: Bluesky's author
+feed, which the site reads, shows only one of several posts sharing a time. Its record key comes from the story's id, so a run stopped after posting
 finds the post instead of posting it twice; `index.json` notes each post. Stories older than a day when the helper first
 sees them, such as those saved before this existed, are kept but not sent.
 

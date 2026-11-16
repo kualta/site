@@ -237,6 +237,7 @@ export async function crosspostStories({
   atproto = publishAtproto,
   fetcher = fetch,
   now = Date.now(),
+  clock = Date.now,
   log = console.log,
 } = {}) {
   const indexFile = join(root, "index.json");
@@ -248,6 +249,8 @@ export async function crosspostStories({
   const authorization = await oauth.agent();
   const temp = await mkdtemp(join(tmpdir(), "kualta-story-"));
   let posted = 0;
+  // Bluesky's author feed shows one of the posts sharing a time and drops the rest, so each story's time follows the last.
+  let sentAt = 0;
   try {
     for (const story of due) {
       const id = `story-${story.id}`;
@@ -266,13 +269,14 @@ export async function crosspostStories({
             maxBytes: 1_900_000,
           });
           const zone = story.posted.match(/[+-]\d\d:\d\d$/)?.[0] ?? "";
+          sentAt = Math.max(clock(), sentAt + 1);
           await atproto("bluesky", authorization, [output], [info], {
             id,
             kind,
             caption: "",
             alt: "",
             tags: pinkleapTags,
-            createdAt: clockTime(now, zone),
+            createdAt: clockTime(sentAt, zone),
           });
         }
         story.pinkleap = `https://bsky.app/profile/${owner}/post/${rkey}`;
