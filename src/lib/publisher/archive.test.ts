@@ -7,6 +7,7 @@ import {
   archiveRecentPosts,
   archiveResponse,
   archiveUploads,
+  sized,
   withArchive,
 } from "./archive";
 import { memoryArchive, memoryMedia } from "./memory-archive";
@@ -96,6 +97,28 @@ describe("a queued post's uploads", () => {
   });
 });
 
+test("a body goes to R2 as a stream of its declared length, never read by the Worker", async () => {
+  expect(sized(null, 0)).toBeInstanceOf(ArrayBuffer);
+  // Outside a Worker there's no FixedLengthStream, and the stream goes as it is.
+  const plain = new Response("hello").body as ReadableStream;
+  expect(sized(plain, 5)).toBe(plain);
+  const lengths: number[] = [];
+  const worker = globalThis as { FixedLengthStream?: unknown };
+  worker.FixedLengthStream = class extends TransformStream {
+    constructor(length: number) {
+      super();
+      lengths.push(length);
+    }
+  };
+  try {
+    const held = sized(new Response("hello").body, 5) as ReadableStream;
+    expect(lengths).toEqual([5]);
+    expect(await new Response(held).text()).toBe("hello");
+  } finally {
+    worker.FixedLengthStream = undefined;
+  }
+});
+
 describe("the laptop's archive requests", () => {
   const setup = () => {
     const { db } = database();
@@ -135,6 +158,8 @@ describe("the laptop's archive requests", () => {
     });
     expect((await call(`blobs/${a}`, { method: "PUT", bytes: "hello" })).status).toBe(201);
     expect((await body(`blobs/${a}`, { method: "PUT", bytes: "" })).status).toBe(400);
+    // A body streams on at its declared length, so it must have one.
+    expect((await body(`blobs/${a}`, { method: "PUT", body: "hello" })).data).toEqual({ error: "Send its length" });
     // An empty file is a file too.
     const empty = await sha256("");
     expect((await call(`blobs/${empty}`, { method: "PUT", bytes: "" })).status).toBe(201);

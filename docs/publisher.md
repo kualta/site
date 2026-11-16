@@ -310,7 +310,11 @@ the archive existed.
 cost nothing more. A manifest at `projects/<name>/<time>.json` names every file with its size
 and modified time, and every empty folder (git, which Studio's history is, needs some of its
 folders even empty). The archive keeps it only once every file it names is there. Files up to
-64 MiB go up whole, checked against their hash by R2, and larger ones in 64 MiB parts. Studio's
+64 MiB go up whole, checked against their hash by R2, and larger ones in 64 MiB parts. The
+Worker streams each one on to R2 without reading it, and copies a post's uploads to the archive
+the same way. On Workers Free a request gets 10 ms of CPU, and reading a 64 MiB part took about
+200 ms: an archive run that read its parts made Cloudflare answer other requests, the helper's
+among them, with 503s (error 1102) on 2026-11-16. Studio's
 `.film/cache` is left out, and once the manifest is kept, the command deletes it from the
 laptop; `--keep-cache` keeps it. Archiving again sends only what changed.
 
