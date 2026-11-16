@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from "
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { archiveProject, listArchived, projectContents, restoreProject, skipped } from "./archive.mjs";
+import { archiveProject, cleanupProject, listArchived, projectContents, restoreProject, skipped } from "./archive.mjs";
 import { archiveResponse } from "../../src/lib/publisher/archive.ts";
 import { memoryArchive, memoryMedia } from "../../src/lib/publisher/memory-archive.ts";
 
@@ -27,6 +27,7 @@ function site() {
     },
   };
   const archive = memoryArchive();
+  const media = memoryMedia();
   const requests = [];
   const fetcher = async (url, init = {}) => {
     const { pathname } = new URL(url);
@@ -36,9 +37,23 @@ function site() {
     const headers = new Headers(init.headers);
     if (init.body !== undefined) headers.set("Content-Length", String(Buffer.byteLength(init.body)));
     const request = new Request(url, { method: init.method, headers, body: init.body });
-    return archiveResponse(rest, request, { db, media: memoryMedia().bucket, archive: archive.bucket });
+    return archiveResponse(rest, request, { db, media: media.bucket, archive: archive.bucket });
   };
-  return { fetcher, archive, requests, auth: { origin: "https://post.kualta.dev", token: "token", fetcher } };
+  /** A post of `bytes` as its video, with each platform in the state given, as the composer queues it. */
+  const post = async (bytes, states) => {
+    const upload = crypto.randomUUID();
+    await media.bucket.put(upload, bytes, { httpMetadata: { contentType: "video/mp4" } });
+    const job = crypto.randomUUID();
+    sqlite
+      .query("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)")
+      .run(job, JSON.stringify({ kind: "video", media: [upload] }), Date.now());
+    for (const [platform, state] of Object.entries(states))
+      sqlite
+        .query("INSERT INTO publisher_targets (id, job_id, platform, state) VALUES (?, ?, ?, ?)")
+        .run(crypto.randomUUID(), job, platform, state);
+    return job;
+  };
+  return { fetcher, archive, requests, post, auth: { origin: "https://post.kualta.dev", token: "token", fetcher } };
 }
 
 async function project(root) {
@@ -117,6 +132,90 @@ test("a project is archived once per file, its caches cleared, and restored as i
     await expect(restoreProject("014-nothing", { ...auth, dest: join(root, "none") })).rejects.toThrow(
       "No such archived project",
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** The grade app's export folder: the clip the project copied, one exported again since, and one no project used. */
+async function exports(root) {
+  const dir = join(root, "Exported");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "clip.mp4"), "x".repeat(250));
+  await writeFile(join(dir, "regraded.mp4"), "graded again");
+  await writeFile(join(dir, "unused.mp4"), "not in any film");
+  return dir;
+}
+
+test("a posted film's project and the exported clips the archive holds come off the laptop, and come back", async () => {
+  const root = await mkdtemp(join(tmpdir(), "archive-"));
+  try {
+    const dir = await project(root);
+    await writeFile(join(dir, "assets/regraded.mp4"), "graded once");
+    const exported = await exports(root);
+    const { auth, post } = site();
+    const job = await post("rendered", { instagram: "succeeded", tiktok: "queued", x: "failed" });
+
+    const plan = await cleanupProject(dir, { ...auth, exported, dryRun: true });
+    expect(plan.clips.map((clip) => clip.name).sort()).toEqual(["clip.mp4", "regraded.mp4"]);
+    await stat(join(dir, "film.html"));
+
+    const done = await cleanupProject(dir, { ...auth, exported });
+    expect(done.posts.map((p) => p.job)).toEqual([job]);
+    expect(done.posts[0].platforms).toContainEqual({ platform: "tiktok", state: "queued" });
+    expect(done.deleted.map((clip) => clip.name)).toEqual(["clip.mp4"]);
+    // Exported again after the project copied it: those bytes aren't in the archive.
+    expect(done.kept.map((clip) => clip.name)).toEqual(["regraded.mp4"]);
+    expect((await readdir(exported)).sort()).toEqual(["regraded.mp4", "unused.mp4"]);
+    await expect(stat(dir)).rejects.toThrow();
+
+    const back = await restoreProject("014-test-film", { ...auth, dest: join(root, "back") });
+    expect(await readFile(join(back.dest, "assets/clip.mp4"), "utf8")).toBe("x".repeat(250));
+    expect(await readFile(join(back.dest, "014-test-film.mp4"), "utf8")).toBe("rendered");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a film no post went out as stays, unless the owner vouches for it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "archive-"));
+  try {
+    const dir = await project(root);
+    const exported = await exports(root);
+    const { auth, post, requests } = site();
+    // Every destination failed: it never went out.
+    await post("rendered", { instagram: "failed", youtube: "failed" });
+    // Another film's post.
+    await post("another render", { instagram: "succeeded" });
+
+    const kept = await cleanupProject(dir, { ...auth, exported });
+    expect(kept.kept).toContain("014-test-film.mp4");
+    expect(requests.filter((r) => !r.endsWith("posted"))).toEqual([]);
+    await stat(join(dir, "film.html"));
+    expect((await readdir(exported)).length).toBe(3);
+
+    const vouched = await cleanupProject(dir, { ...auth, exported, posted: true });
+    expect(vouched.posts).toEqual([]);
+    expect(vouched.deleted.map((clip) => clip.name)).toEqual(["clip.mp4"]);
+    await expect(stat(dir)).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("only a project folder is taken, and the posted check wants MD5s", async () => {
+  const root = await mkdtemp(join(tmpdir(), "archive-"));
+  try {
+    const dir = await project(root);
+    const { auth, fetcher } = site();
+    await expect(cleanupProject(join(dir, "zh"), auth)).rejects.toThrow("isn't an OpenFilm project");
+    await expect(cleanupProject(join(dir, "assets"), auth)).rejects.toThrow("isn't an OpenFilm project");
+    const response = await fetcher("https://post.kualta.dev/api/publisher/helper/archive/posted", {
+      method: "POST",
+      headers: { Authorization: "Bearer token", "Content-Type": "application/json" },
+      body: JSON.stringify({ md5s: ["not a hash"] }),
+    });
+    expect(response.status).toBe(400);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

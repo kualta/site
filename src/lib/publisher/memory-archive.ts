@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ArchiveBucket } from "./archive";
 import type { MediaBucket } from "./server";
 
@@ -12,6 +13,12 @@ const toBytes = (body: ArrayBuffer | ArrayBufferView | string) =>
       : new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
 
 const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((n) => n.toString(16).padStart(2, "0")).join("");
+
+/** What R2's head says of an object put whole: its size and the MD5 it computes for it. */
+const headOf = (object: Stored) => {
+  const md5 = createHash("md5").update(object.bytes).digest();
+  return { size: object.bytes.byteLength, checksums: { md5: new Uint8Array(md5).buffer as ArrayBuffer } };
+};
 
 function read(objects: Map<string, Stored>, key: string) {
   const object = objects.get(key);
@@ -44,7 +51,8 @@ export function memoryMedia() {
       return read(objects, key);
     },
     async head(key) {
-      return objects.has(key) ? {} : null;
+      const object = objects.get(key);
+      return object ? headOf(object) : null;
     },
     async delete(keys) {
       for (const key of [keys].flat()) objects.delete(key);
@@ -72,7 +80,7 @@ export function memoryArchive() {
     },
     async head(key) {
       const object = objects.get(key);
-      return object ? { size: object.bytes.byteLength } : null;
+      return object ? headOf(object) : null;
     },
     async delete(keys) {
       for (const key of [keys].flat()) objects.delete(key);
