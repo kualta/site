@@ -57,6 +57,7 @@
     "motion": "^13.2.0",
     "multiformats": "^14.0.5",
     "ox": "^1.8.3",
+    "patchright": "1.64.2",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-email": "^6.9.3",

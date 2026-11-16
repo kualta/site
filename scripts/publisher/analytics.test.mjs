@@ -4,6 +4,7 @@ import {
   collectAnalytics,
   extractMetrics,
   reelsOwner,
+  tiktokCounts,
   tiktokInsights,
   tiktokRetention,
   tweetVideoKey,
@@ -31,12 +32,6 @@ test("browser metrics match only the exact post and keep absent counts unknown",
       edge_media_to_comment: { count: 3 },
     }),
   ).toEqual({ likes: 12, comments: 3 });
-  expect(
-    extractMetrics("tiktok", "12345", {
-      id: "12345",
-      stats: { playCount: 100, diggCount: 10, shareCount: 2, commentCount: 4, collectCount: 1 },
-    }),
-  ).toEqual({ views: 100, likes: 10, shares: 2, comments: 4, saves: 1 });
   expect(
     extractMetrics("xiaohongshu", "abcde", {
       noteId: "abcde",
@@ -238,7 +233,7 @@ test("only a video's owner is looked up, and only with a real username", () => {
 test("browser collection reads embedded counts without clicking or publishing", async () => {
   let closed = false;
   const result = await collectAnalytics(
-    { platform: "tiktok", job_id: "fixture", url: "https://www.tiktok.com/@kualta/video/123456789" },
+    { platform: "twitter", job_id: "fixture", url: "https://x.com/kualta/status/123456789" },
     {
       stateDir: "/unused",
       open: async () => ({
@@ -246,8 +241,8 @@ test("browser collection reads embedded counts without clicking or publishing", 
           {
             setDefaultTimeout: () => {},
             on: () => {},
-            goto: async (url) => expect(url).toBe("https://www.tiktok.com/@kualta/video/123456789"),
-            evaluate: async () => ({ item: { id: "123456789", stats: { playCount: 100, diggCount: 5 } } }),
+            goto: async (url) => expect(url).toBe("https://x.com/kualta/status/123456789"),
+            evaluate: async () => ({ rest_id: "123456789", views: { count: "100" }, legacy: { favorite_count: 5 } }),
             waitForTimeout: async () => {},
           },
         ],
@@ -399,42 +394,63 @@ test("TikTok retention is Studio's average watch time, never a private or unplay
     aweme_id: "77",
   });
 });
-test("TikTok retention is read with the session's cookies after the post's counts, and only for videos", async () => {
+test("TikTok counts and watch time come from one insight reply with the session's cookies, no TikTok page loaded", async () => {
   const read = async (url) => {
     const asked = [];
+    let closed = false;
     const result = await collectAnalytics(
       { platform: "tiktok", job_id: "fixture", url },
       {
         stateDir: "/unused",
-        open: async () => ({
-          pages: () => [
-            {
-              setDefaultTimeout: () => {},
-              on: () => {},
-              goto: async () => {},
-              evaluate: async () => ({ item: { id: "123456789", stats: { playCount: 3, diggCount: 1 } } }),
-              waitForTimeout: async () => {},
+        open: async (_path, headless) => {
+          expect(headless).toBe(true);
+          return {
+            cookies: async () => [
+              { name: "sessionid", value: "s" },
+              { name: "msToken", value: "m" },
+            ],
+            pages: () => [
+              {
+                goto: async () => {
+                  throw new Error("must not load a TikTok page");
+                },
+                evaluate: async () => "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 HeadlessChrome/157.0.0.0 Safari/537.36",
+              },
+            ],
+            close: async () => {
+              closed = true;
             },
-          ],
-          request: {
-            get: async (url) => {
-              asked.push(url);
-              return { json: async () => tiktokInsight("123456789", 3, 6.06) };
-            },
-          },
-          close: async () => {},
-        }),
+          };
+        },
+        fetcher: async (address, init) => {
+          asked.push({ address, headers: init.headers });
+          const reply = tiktokInsight("123456789", 3, 6.06);
+          reply.video_info.statistics = { play_count: 3, digg_count: 1, comment_count: 0, share_count: 2, collect_count: 1 };
+          return Response.json(reply);
+        },
       },
     );
-    return { result, asked };
+    return { result, asked, closed };
   };
   const video = await read("https://www.tiktok.com/@_/video/123456789");
-  expect(video.result).toEqual({ metrics: { views: 3, likes: 1, average_watch_ms: 6060, duration_ms: 28075 } });
+  expect(video.result).toEqual({
+    metrics: { views: 3, likes: 1, comments: 0, shares: 2, saves: 1, average_watch_ms: 6060, duration_ms: 28075 },
+  });
   expect(video.asked).toHaveLength(1);
-  expect(new URL(video.asked[0]).pathname).toBe("/aweme/v2/data/insight/");
+  expect(new URL(video.asked[0].address).pathname).toBe("/aweme/v2/data/insight/");
+  expect(video.asked[0].headers.cookie).toBe("sessionid=s; msToken=m");
+  expect(video.asked[0].headers["user-agent"]).toBe(
+    "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/157.0.0.0 Safari/537.36",
+  );
+  expect(video.closed).toBe(true);
   const photo = await read("https://www.tiktok.com/@_/photo/123456789");
-  expect(photo.result).toEqual({ metrics: { views: 3, likes: 1 } });
-  expect(photo.asked).toEqual([]);
+  expect(photo.result).toEqual({ metrics: { views: 3, likes: 1, comments: 0, shares: 2, saves: 1 } });
+});
+test("TikTok counts belong to exactly the post asked about", () => {
+  const reply = { status_code: 0, video_info: { aweme_id: "77", statistics: { play_count: 9, digg_count: 2 } } };
+  expect(tiktokCounts("77", reply)).toEqual({ views: 9, likes: 2 });
+  expect(tiktokCounts("78", reply)).toEqual({});
+  expect(tiktokCounts("77", { ...reply, status_code: 8 })).toEqual({});
 });
 /** X's video analytics reply for one video. */
 const xDashboard = (key, starts, average) => ({

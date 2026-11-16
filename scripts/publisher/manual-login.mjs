@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+export const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 // Chrome writes cookies to disk about every 30 seconds and skips that write on SIGTERM,
 // so a sign-in finished moments before confirming would be lost without one more write.
 export const SAVE_COOKIES_MS = 31_000;

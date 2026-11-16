@@ -174,10 +174,19 @@ contain original metadata until the helper prepares each destination's copy.
   never a café nearby. Xiaohongshu lists places by their Chinese names, so its section
   takes its own **Location** under its title (e.g. 波哥大); without one it searches the location above.
   Recent places are offered in the field.
-- TikTok asks **Continue to post?** while its content check is still running; the helper
-  answers **Post now**.
-- TikTok gave the helper's uploads no views while the same videos posted from the phone got
-  them, so its uploader runs at a person's pace (`scripts/publisher/human.mjs`): uneven pauses
+- TikTok gave no views to videos the helper uploaded from an automated browser, while the same
+  upload by hand from ordinary Chrome got them. So TikTok's profile opens in Chrome driven
+  without a trace (`scripts/publisher/stealth.mjs`): ordinary Chrome started as the sign-in
+  window is, with only a debugging port at random and AutomationControlled off, and Patchright
+  attached over it, so none of Playwright's switches, its Runtime.enable leak or a window-size,
+  language or user-agent override reach TikTok. rebrowser's bot detector finds nothing on it.
+  Its metrics load no TikTok page (see Analytics), so TikTok's scripts run in that profile only
+  while publishing, and never headless.
+- After the upload the helper waits, up to 12 minutes, for TikTok's music check and its
+  For You eligibility check ("Content check lite", about 10 minutes) to finish before
+  **Post**, as a person would. If TikTok still asks **Continue to post?**, it answers
+  **Post now**.
+- The uploader also runs at a person's pace (`scripts/publisher/human.mjs`): uneven pauses
   between steps, the mouse travelling on curves to a spot inside each control, the video
   picked through **Select video** and its file picker, and the caption typed with uneven gaps.
   A video left unsaved by a stopped post is discarded first. `publishBrowser`'s `draft` option
@@ -376,7 +385,8 @@ Collector coverage:
 - Lens: reactions, comments, reposts plus quotes, and bookmarks from the public API; no views/reach field.
 - Grain: gallery favorites and comments from `social.grain.unspecced.getGallery`; no views/reach field.
 - YouTube: views, likes and comments from a public read through the existing YouTube client. Signed-in replies leave out the like count, so the saved session is only the fallback for a video the public can't read. A video with views then opens its YouTube Studio analytics page in the saved session for its lifetime average view duration and length, which give Studio's average percentage viewed; headless Chrome is let in with `approve_browser_access=true`. Studio takes up to two days to process retention, and until its retention curve appears the video has no watch time. A failed Studio read leaves the public counts standing. A YouTube post has likes and replies from its public page, or the saved session's when that page can't be read; a rounded count such as 1.2K stays unknown.
-- X/Twitter and TikTok: exact-post views and available engagement counters from the saved-session page's structured data. TikTok's numbers match TikTok Studio, including a real 0 views for a video it hasn't distributed. For a TikTok video with views, the saved session's cookies also read TikTok Studio's real-time average watch time and the video's length from `/aweme/v2/data/insight/`, without loading Studio. TikTok averages over plays, replays included. Private videos and photo posts have none. For an X video with views, the post's own reply names its video, and the video's page in X's account analytics (`/i/account_analytics/video/<id>`, part of Premium) gives its lifetime average watch time per start, autoplay included, and its length. Without Premium the post keeps its counts and has no watch time.
+- TikTok: views, likes, comments, shares and saves, and for a video with views TikTok Studio's real-time average watch time and the video's length, all from one `/aweme/v2/data/insight/` reply. It's asked with the saved session's cookies and Chrome's own user agent, read from the profile without loading any TikTok page, so TikTok's scripts never run in a headless copy of the publishing profile. The numbers match TikTok Studio, including a real 0 views for a video it hasn't distributed. TikTok averages watch time over plays, replays included; photo posts have none.
+- X/Twitter: exact-post views and available engagement counters from the saved-session page's structured data. For an X video with views, the post's own reply names its video, and the video's page in X's account analytics (`/i/account_analytics/video/<id>`, part of Premium) gives its lifetime average watch time per start, autoplay included, and its length. Without Premium the post keeps its counts and has no watch time.
 - Instagram: likes and comments from the post's page, and plays for videos from the owner's Reels tab, since the post's page leaves them out; photos have no view count. Instagram's web insights, and with them reel watch time, are only open to professional accounts, so there's no watch time.
 - Xiaohongshu: views and engagement from the creator center's note list. For a video note with views, the note manager also asks the data center for its average watch time (`/api/galaxy/creator/datacenter/note/base`), signed by the page's own signer since no RedNote page asks for it. It answers -1 until the account has data access, and the note then has no watch time; when it fills, it covers up to the day before.
 
