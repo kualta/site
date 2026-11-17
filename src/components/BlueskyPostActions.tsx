@@ -4,6 +4,7 @@ import { CommentIcon, HeartIcon, RepeatIcon } from "@/components/icons";
 import { getBlueskyAgent, getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import {
   fetchInteractionPost,
+  fetchPublicPost,
   replyToPost,
   RepostRemovedError,
   repostAgain,
@@ -13,12 +14,14 @@ import {
 import { usePopoverMenu } from "@/lib/popover-menu";
 
 import BlueskyComposer from "./BlueskyComposer";
+import { BlueskyLoginDialog } from "./BlueskyLogin";
 import type { ComposerAttachment } from "@/lib/bluesky/media";
 
 // icons sit at the start of equal slots, and the row is pulled back by the
 // slot's inset, so the first icon lines up with the post text above it
 const reactionClass =
-  "inline-flex h-6 min-w-[2.75rem] items-center justify-start gap-1 rounded-lg border border-[color:transparent] px-[7px] text-xs hover:opacity-60 focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50";
+  "inline-flex h-8 min-w-[3.25rem] items-center justify-start gap-1.5 rounded-lg border border-[color:transparent] px-[7px] text-sm hover:opacity-60 focus-visible:border-[color:currentColor] focus-visible:outline-none disabled:opacity-50";
+const reactionIconSize = 17;
 
 // the palette pink is a background tint, so light mode keeps its hue at ink depth
 const pressedClass = "text-[color:oklch(from_var(--primary)_0.62_0.14_h)] dark:text-primary";
@@ -38,24 +41,43 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
   const [text, setText] = useState("");
   const inputId = useId();
   const [images, setImages] = useState<ComposerAttachment[]>([]);
+  const login = useRef<HTMLDialogElement>(null);
+  const [loginMounted, setLoginMounted] = useState(false);
+  // a remembered account is still restoring: wait for its own counts and viewer state
+  const restoringAccount = auth.restoring && !!auth.profile;
+  const signedOut = !auth.agent && !restoringAccount;
 
   useEffect(() => {
     let active = true;
+    const agent = auth.agent;
     setPost(null);
     setError("");
-    if (auth.agent) {
-      fetchInteractionPost(auth.agent, uri)
+    if (!restoringAccount) {
+      (agent ? fetchInteractionPost(agent, uri) : fetchPublicPost(uri))
         .then((value) => {
           if (active) setPost(value);
         })
         .catch(() => {
-          if (active) setError("Could not load your reactions. You can retry an action.");
+          // signed out, the row just goes without counts
+          if (active && agent) setError("Could not load your reactions. You can retry an action.");
         });
     }
     return () => {
       active = false;
     };
-  }, [auth.agent, uri]);
+  }, [auth.agent, restoringAccount, uri]);
+
+  // the dialog mounts on the first signed-out click, so rows nobody touches carry none
+  useEffect(() => {
+    if (loginMounted) login.current?.showModal();
+  }, [loginMounted]);
+
+  async function askToLogIn() {
+    // a session restored from storage after the click needs no login
+    if (await getBlueskyAgent()) return;
+    if (login.current) login.current.showModal();
+    else setLoginMounted(true);
+  }
 
   async function act(action: "like" | "repost" | "repost-again" | "reply") {
     if (acting.current || (action !== "reply" && !post)) return;
@@ -104,7 +126,7 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
     }
   }
 
-  if (!auth.agent) return null;
+  const reactionDisabled = !signedOut && (busy || auth.loading || !post);
 
   return (
     <div className="px-4 pb-3" aria-label="Bluesky post actions">
@@ -115,22 +137,22 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           aria-label={post?.viewer?.like ? "Unlike post" : "Like post"}
           title={post?.viewer?.like ? "Unlike post" : "Like post"}
           aria-pressed={!!post?.viewer?.like}
-          disabled={busy || auth.loading || !post}
-          onClick={() => void act("like")}
+          disabled={reactionDisabled}
+          onClick={() => void (signedOut ? askToLogIn() : act("like"))}
         >
           <HeartIcon
-            size={14}
+            size={reactionIconSize}
             strokeWidth={reactionStroke}
             aria-hidden="true"
             className={post?.viewer?.like ? `fill-current ${pressedClass}` : ""}
-          />{" "}
-          {post?.likeCount ? ` ${post.likeCount}` : ""}
+          />
+          <ReactionCount value={post?.likeCount} />
         </button>
         <RepostButton
           reposted={!!post?.viewer?.repost}
           count={post?.repostCount}
-          disabled={busy || auth.loading || !post}
-          onRepost={() => void act("repost")}
+          disabled={reactionDisabled}
+          onRepost={() => void (signedOut ? askToLogIn() : act("repost"))}
           onRepostAgain={() => void act("repost-again")}
         />
         <button
@@ -140,13 +162,14 @@ export default function BlueskyPostActions({ uri }: { uri: string }) {
           title="Reply"
           aria-expanded={replyOpen}
           aria-controls={`${inputId}-form`}
-          disabled={busy || auth.loading || post?.viewer?.replyDisabled}
-          onClick={() => setReplyOpen(!replyOpen)}
+          disabled={!signedOut && (busy || auth.loading || post?.viewer?.replyDisabled)}
+          onClick={() => (signedOut ? void askToLogIn() : setReplyOpen(!replyOpen))}
         >
-          <CommentIcon size={14} strokeWidth={reactionStroke} aria-hidden="true" />
-          {post?.replyCount ? ` ${post.replyCount}` : ""}
+          <CommentIcon size={reactionIconSize} strokeWidth={reactionStroke} aria-hidden="true" />
+          <ReactionCount value={post?.replyCount} />
         </button>
       </div>
+      {loginMounted && <BlueskyLoginDialog ref={login} />}
       {replyOpen && auth.agent && (
         <div id={`${inputId}-form`} className="pt-2">
           <BlueskyComposer
@@ -223,8 +246,13 @@ function RepostButton({
         disabled={disabled}
         onClick={reposted ? undefined : onRepost}
       >
-        <RepeatIcon size={14} strokeWidth={reactionStroke} aria-hidden="true" className={reposted ? pressedClass : ""} />
-        {count ? ` ${count}` : ""}
+        <RepeatIcon
+          size={reactionIconSize}
+          strokeWidth={reactionStroke}
+          aria-hidden="true"
+          className={reposted ? pressedClass : ""}
+        />
+        <ReactionCount value={count} />
       </button>
       <div ref={panel} id={id} popover="auto" className="post-menu-panel" role="group" aria-label="Repost options">
         <button type="button" onClick={() => choose(onRepostAgain)}>
@@ -236,4 +264,8 @@ function RepostButton({
       </div>
     </>
   );
+}
+
+function ReactionCount({ value }: { value?: number }) {
+  return value ? <span className="font-semibold tabular-nums">{value}</span> : null;
 }

@@ -8,6 +8,57 @@ export async function fetchInteractionPost(agent: Agent, uri: string) {
   return post;
 }
 
+/** The most URIs app.bsky.feed.getPosts accepts in one call. */
+const GET_POSTS_LIMIT = 25;
+
+type PostWaiter = { resolve: (post: AppBskyFeedDefs.PostView) => void; reject: (cause: unknown) => void };
+
+/**
+ * Queue URIs for `windowMs`, then load them in shared getPosts calls, so a feed's
+ * rows mounting together cost a request or two rather than one each.
+ */
+export function createPostLoader(getPosts: (uris: string[]) => Promise<AppBskyFeedDefs.PostView[]>, windowMs = 10) {
+  let queue = new Map<string, PostWaiter[]>();
+  function flush() {
+    const batch = queue;
+    queue = new Map();
+    const uris = [...batch.keys()];
+    for (let start = 0; start < uris.length; start += GET_POSTS_LIMIT) {
+      const chunk = uris.slice(start, start + GET_POSTS_LIMIT);
+      // each chunk settles on its own, so a failed call only costs its own rows
+      Promise.resolve()
+        .then(() => getPosts(chunk))
+        .then(
+          (posts) => {
+            for (const uri of chunk) {
+              const post = posts.find((candidate) => candidate.uri === uri);
+              for (const waiter of batch.get(uri) ?? []) {
+                if (post) waiter.resolve(post);
+                else waiter.reject(new Error("This post is no longer available."));
+              }
+            }
+          },
+          (cause) => {
+            for (const uri of chunk) for (const waiter of batch.get(uri) ?? []) waiter.reject(cause);
+          },
+        );
+    }
+  }
+  return (uri: string) =>
+    new Promise<AppBskyFeedDefs.PostView>((resolve, reject) => {
+      if (!queue.size) setTimeout(flush, windowMs);
+      queue.set(uri, [...(queue.get(uri) ?? []), { resolve, reject }]);
+    });
+}
+
+let publicAgent: Agent | undefined;
+/** Counts for signed-out visitors, from the public AppView, with no viewer state. */
+export const fetchPublicPost = createPostLoader(async (uris) => {
+  publicAgent ??= new Agent({ service: "https://public.api.bsky.app" });
+  const { data } = await publicAgent.getPosts({ uris });
+  return data.posts;
+});
+
 /** Resolve viewer state and CID at action time, not from the shared feed cache. */
 export async function togglePostLike(agent: Agent, uri: string, knownLike?: string | null) {
   const post = await fetchInteractionPost(agent, uri);
