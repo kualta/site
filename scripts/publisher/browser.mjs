@@ -440,7 +440,20 @@ const publishRequests = {
     ids: ["note_id", "noteId"],
   },
 };
-function findId(value, names) {
+/**
+ * A YouTube session's cookies as one header for YouTube's own API, or null without a signed-in session. Its requests
+ * sign with SAPISID, which Chrome sometimes keeps only as __Secure-3PAPISID.
+ */
+export function youtubeCookie(cookies) {
+  let cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  if (!cookies.some((c) => c.name === "SAPISID")) {
+    const fallback = cookies.find((c) => c.name === "__Secure-3PAPISID");
+    if (fallback) cookie += `; SAPISID=${fallback.value}`;
+  }
+  return cookie.includes("SAPISID=") ? cookie : null;
+}
+/** The first value under one of `names`, anywhere in a reply, that looks like an id. */
+export function findId(value, names) {
   if (!value || typeof value !== "object") return null;
   for (const [key, item] of Object.entries(value)) {
     if (names.includes(key) && typeof item === "string" && /^[\w-]{8,64}$/.test(item)) return item;
@@ -483,13 +496,8 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
     page.setDefaultTimeout(60_000);
     // Photos go to the channel's Posts tab in the browser below; a video goes up through YouTube's API.
     if (platform === "youtube" && post.kind === "video") {
-      const cookies = await context.cookies("https://www.youtube.com");
-      let cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-      if (!cookies.some((c) => c.name === "SAPISID")) {
-        const fallback = cookies.find((c) => c.name === "__Secure-3PAPISID");
-        if (fallback) cookie += `; SAPISID=${fallback.value}`;
-      }
-      if (!cookie.includes("SAPISID=")) throw new Error("Log in to YouTube first");
+      const cookie = youtubeCookie(await context.cookies("https://www.youtube.com"));
+      if (!cookie) throw new Error("Log in to YouTube first");
       const yt = await Innertube.create({
         cookie,
         retrieve_player: false,

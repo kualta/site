@@ -116,7 +116,8 @@ export function archiveClient({ origin, token, fetcher = fetch, log = () => {} }
   };
 }
 
-async function readRange(abs, offset, length) {
+/** `length` bytes of a file from `offset`; a file that's shorter by then changed underneath. */
+export async function readRange(abs, offset, length) {
   const file = await open(abs);
   try {
     const bytes = Buffer.alloc(length);

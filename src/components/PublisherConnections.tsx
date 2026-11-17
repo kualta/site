@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { platforms, platformNames, type Platform } from "@/lib/publisher/presets";
+import {
+  type Account,
+  type ArchiveAccount,
+  archiveAccountNames,
+  archiveAccounts,
+  platforms,
+  platformNames,
+} from "@/lib/publisher/presets";
 
 export interface Connection {
   id: string;
-  platform: Platform;
+  platform: Account;
   action: "connect" | "disconnect";
   state: "queued" | "working" | "succeeded" | "failed" | "cancelled";
   confirmed: number;
@@ -11,11 +18,19 @@ export interface Connection {
 }
 interface Props {
   online: boolean;
-  connected: Platform[];
+  connected: Account[];
   connections: Connection[];
   request: (path: string, body?: unknown) => Promise<unknown>;
   refresh: () => Promise<void>;
   onError: (message: string) => void;
+}
+function isArchive(account: Account): account is ArchiveAccount {
+  return (archiveAccounts as readonly Account[]).includes(account);
+}
+function labelOf(account: Account): string {
+  if (account === "grain") return "Grain / Bluesky";
+  if (isArchive(account)) return archiveAccountNames[account];
+  return platformNames[account];
 }
 /** What the laptop is asking the owner to do, with its address copyable and its link clickable. */
 function HelperMessage({ text }: { text: string }) {
@@ -53,77 +68,89 @@ export default function PublisherConnections({ online, connected, connections, r
   return (
     <section className="publisher-accounts" aria-label="Publishing accounts">
       <h1 className="publisher-hidden">Accounts</h1>
-      {platforms
-        .filter((p) => p !== "bluesky")
-        .map((platform) => {
-          const label = platform === "grain" ? "Grain / Bluesky" : platformNames[platform];
-          const ready = connected.includes(platform);
-          const latest = connections.find(
-            (c) => c.platform === platform || (platform === "grain" && c.platform === "bluesky"),
-          );
-          const current =
-            active && (active.platform === platform || (platform === "grain" && active.platform === "bluesky"));
-          let status = ready ? "Connected" : "Not connected";
-          let tone: "ok" | "busy" | undefined = ready ? "ok" : undefined;
-          if (current) {
-            status = "Connecting…";
-            tone = "busy";
-            if (active.state === "queued") status = "Waiting for laptop…";
-            else if (active.action === "disconnect") status = "Disconnecting…";
-          }
-          const connecting = current && active.state === "working" && active.action === "connect";
-          return (
-            <div className="publisher-account" key={platform}>
-              <div className="publisher-account-row">
-                <span>{label}</span>
-                <span className="publisher-note publisher-account-status" data-tone={tone}>
-                  {status}
-                </span>
-                <button
-                  disabled={!online || busy || !!active}
-                  onClick={() => {
-                    if (ready) {
-                      if (confirm(`Disconnect ${label}? Queued posts wait until you reconnect.`))
-                        void send("accounts", { platform, action: "disconnect" });
-                    } else void send("accounts", { platform, action: "connect" });
-                  }}
-                >
-                  {ready ? "Disconnect" : "Connect"}
+      {[...platforms.filter((p) => p !== "bluesky"), ...archiveAccounts].map((platform: Account) => {
+        const label = labelOf(platform);
+        const ready = connected.includes(platform);
+        const latest = connections.find(
+          (c) => c.platform === platform || (platform === "grain" && c.platform === "bluesky"),
+        );
+        const current =
+          active && (active.platform === platform || (platform === "grain" && active.platform === "bluesky"));
+        let status = ready ? "Connected" : "Not connected";
+        let tone: "ok" | "busy" | undefined = ready ? "ok" : undefined;
+        if (current) {
+          status = "Connecting…";
+          tone = "busy";
+          if (active.state === "queued") status = "Waiting for laptop…";
+          else if (active.action === "disconnect") status = "Disconnecting…";
+        }
+        const connecting = current && active.state === "working" && active.action === "connect";
+        return (
+          <div className="publisher-account" key={platform}>
+            <div className="publisher-account-row">
+              <span>{label}</span>
+              <span className="publisher-note publisher-account-status" data-tone={tone}>
+                {status}
+              </span>
+              <button
+                disabled={!online || busy || !!active}
+                onClick={() => {
+                  if (ready) {
+                    const after = isArchive(platform)
+                      ? "Uploads stop until you reconnect."
+                      : "Queued posts wait until you reconnect.";
+                    if (confirm(`Disconnect ${label}? ${after}`))
+                      void send("accounts", { platform, action: "disconnect" });
+                  } else void send("accounts", { platform, action: "connect" });
+                }}
+              >
+                {ready ? "Disconnect" : "Connect"}
+              </button>
+            </div>
+            {current && (
+              <div className="publisher-account-actions">
+                {connecting && platform === "grain" && (
+                  <p className="publisher-note">Authorize Grain and Bluesky in the browser window on your laptop.</p>
+                )}
+                {connecting && platform === "farcaster" && (
+                  <p className="publisher-note">Approve the posting key in the Chrome window on your laptop.</p>
+                )}
+                {connecting && platform === "lens" && active.message && <HelperMessage text={active.message} />}
+                {connecting && !["grain", "farcaster", "lens"].includes(platform) && (
+                  <>
+                    <p className="publisher-note">
+                      {isArchive(platform)
+                        ? "Sign in in the Chrome window on your laptop and switch to the archive channel, not the one you post to, then finish here."
+                        : "Sign in in the Chrome window on your laptop, then finish here."}
+                    </p>
+                    <button
+                      disabled={busy || !!active.confirmed}
+                      onClick={() => void send(`accounts/${active.id}`, { action: "finish" })}
+                    >
+                      {active.confirmed ? "Saving session…" : "Finish sign-in"}
+                    </button>
+                  </>
+                )}
+                <button disabled={busy} onClick={() => void send(`accounts/${active.id}`, { action: "cancel" })}>
+                  Cancel
                 </button>
               </div>
-              {current && (
-                <div className="publisher-account-actions">
-                  {connecting && platform === "grain" && (
-                    <p className="publisher-note">Authorize Grain and Bluesky in the browser window on your laptop.</p>
-                  )}
-                  {connecting && platform === "farcaster" && (
-                    <p className="publisher-note">Approve the posting key in the Chrome window on your laptop.</p>
-                  )}
-                  {connecting && platform === "lens" && active.message && <HelperMessage text={active.message} />}
-                  {connecting && !["grain", "farcaster", "lens"].includes(platform) && (
-                    <>
-                      <p className="publisher-note">Sign in in the Chrome window on your laptop, then finish here.</p>
-                      <button
-                        disabled={busy || !!active.confirmed}
-                        onClick={() => void send(`accounts/${active.id}`, { action: "finish" })}
-                      >
-                        {active.confirmed ? "Saving session…" : "Finish sign-in"}
-                      </button>
-                    </>
-                  )}
-                  <button disabled={busy} onClick={() => void send(`accounts/${active.id}`, { action: "cancel" })}>
-                    Cancel
-                  </button>
-                </div>
-              )}
-              {!current && latest?.state === "failed" && (
-                <p role="status" className="publisher-problem">
-                  {latest.message}
-                </p>
-              )}
-            </div>
-          );
-        })}
+            )}
+            {!current && latest?.state === "failed" && (
+              <p role="status" className="publisher-problem">
+                {latest.message}
+              </p>
+            )}
+            {isArchive(platform) && !current && (
+              <p className="publisher-note">
+                {ready && latest?.state === "succeeded" && latest.message
+                  ? latest.message
+                  : "Every graded clip goes up unlisted to a channel of its own, a few a day."}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </section>
   );
 }

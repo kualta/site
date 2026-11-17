@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { connectAccount, hasSession } from "./connections.mjs";
 
 function browserFixture(cookies) {
@@ -213,4 +216,75 @@ test("disconnecting a keyed account leaves other destinations connected", async 
   expect(result.state).toBe("succeeded");
   expect(disconnected).toBe(true);
   expect(fixture.config.platforms).toEqual(["bluesky"]);
+});
+
+/** Chrome profiles that each land on a YouTube channel, by the profile's folder. */
+function channels(byProfile) {
+  const opened = [];
+  const open = async (path) => {
+    opened.push(path);
+    let url = "https://www.youtube.com/";
+    const page = {
+      goto: async (to) => {
+        url = to === "https://www.youtube.com/profile" ? `https://www.youtube.com/${byProfile[path]}` : to;
+      },
+      waitForURL: async () => {},
+      url: () => url,
+      evaluate: async () => (path.endsWith("youtube-footage") ? "103745" : null),
+    };
+    return {
+      pages: () => [page],
+      cookies: async () => [{ name: "SAPISID", value: "x", expires: -1 }],
+      close: async () => {},
+    };
+  };
+  return { open, opened };
+}
+
+test("the footage archive keeps the channel its window is on, never the one posts go to", async () => {
+  const fixture = browserFixture([]);
+  fixture.config.platforms.push("youtube");
+  const { open } = channels({ "/unused/youtube-footage": "@kualta-footage", "/unused/youtube": "@kualta" });
+  const result = await connectAccount(
+    { id: "fixture", platform: "youtube-footage", action: "connect" },
+    {
+      ...fixture.deps,
+      open,
+    },
+  );
+  expect(result).toEqual({
+    state: "succeeded",
+    message: "Every graded clip goes up unlisted to youtube.com/@kualta-footage",
+  });
+  expect(fixture.config.footage).toEqual({ channel: "@kualta-footage", pageId: "103745" });
+  expect(fixture.config.platforms).toEqual(["youtube", "youtube-footage"]);
+
+  const same = browserFixture([]);
+  same.config.platforms.push("youtube");
+  const both = channels({ "/unused/youtube-footage": "@kualta", "/unused/youtube": "@kualta" });
+  const refused = await connectAccount(
+    { id: "fixture", platform: "youtube-footage", action: "connect" },
+    {
+      ...same.deps,
+      open: both.open,
+    },
+  );
+  expect(refused.state).toBe("failed");
+  expect(refused.message).toContain("is the channel you post to");
+  expect(same.config.platforms).toEqual(["youtube"]);
+  expect(same.config.footage).toBeUndefined();
+  expect(same.saved()).toBe(false);
+});
+
+test("disconnecting the footage archive forgets its channel", async () => {
+  const fixture = browserFixture([]);
+  fixture.config.platforms.push("youtube-footage");
+  fixture.config.footage = { channel: "@kualta-footage", pageId: "103745", daily: 5 };
+  const result = await connectAccount(
+    { id: "fixture", platform: "youtube-footage", action: "disconnect" },
+    { ...fixture.deps, stateDir: await mkdtemp(join(tmpdir(), "footage-")) },
+  );
+  expect(result.state).toBe("succeeded");
+  expect(fixture.config.platforms).toEqual([]);
+  expect(fixture.config.footage).toBeUndefined();
 });

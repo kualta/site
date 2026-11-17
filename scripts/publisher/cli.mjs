@@ -12,6 +12,7 @@ import ffprobe from "ffprobe-static";
 import { deletePublication } from "./delete.mjs";
 import { createDraft } from "./draft.mjs";
 import {
+  archiveClient,
   archiveProject,
   archiveRecentMedia,
   cleanupProject,
@@ -21,6 +22,7 @@ import {
 } from "./archive.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
+import { DAILY, FOOTAGE, dueClips, readState, uploadFootage } from "./footage.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
@@ -124,6 +126,23 @@ if (command === "connect") {
       .catch((error) => console.error(`Chrome copy cleanup failed: ${error.message}`));
   void sweep();
   setInterval(sweep, 10 * 60_000).unref();
+  // Graded clips go up to the footage archive's channel beside the publishing, every half hour while it's connected: a
+  // multi-gigabyte clip takes a while, and posts don't wait for it.
+  void (async () => {
+    while (true) {
+      try {
+        const current = JSON.parse(await readFile(configFile, "utf8"));
+        if (current.platforms?.includes(FOOTAGE)) {
+          const request = archiveClient({ origin: current.origin, token: current.token });
+          const done = await uploadFootage({ stateDir, config: current, request, log: (line) => console.log(line) });
+          if (done.uploaded) console.log(`Footage archive: ${done.uploaded} clips up, ${done.left} to go`);
+        }
+      } catch (error) {
+        console.error(`Footage archive: ${error.message}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30 * 60_000));
+    }
+  })();
   // Instagram's story archive is copied to disk on start, then hourly when nothing else is waiting, so new stories
   // reach Pinkleap while they're still up. The folder goes to the Cloudflare archive on start and after any change.
   let storiesDue = 0;
@@ -330,6 +349,41 @@ if (command === "connect") {
     console.error(error.message);
     process.exitCode = 1;
   }
+} else if (command === "footage") {
+  try {
+    if (!config.token) throw new Error("Connect the helper first");
+    const args = process.argv.slice(3);
+    const at = args.indexOf("--daily");
+    if (at !== -1) {
+      const daily = Number(args[at + 1]);
+      if (!Number.isInteger(daily) || daily < 1) throw new Error("--daily takes how many clips a day, 1 or more");
+      config.footage = { ...config.footage, daily };
+      await save();
+    }
+    if (!config.platforms.includes(FOOTAGE))
+      throw new Error("Connect the YouTube footage archive in the composer's Accounts first");
+    const request = archiveClient({ origin: config.origin, token: config.token });
+    if (args.includes("--now")) {
+      const done = await uploadFootage({ stateDir, config, request, log: (line) => console.error(line) });
+      if (done.busy) console.log("The helper is putting clips up right now");
+      else console.log(`${done.uploaded} clips up, ${done.left} to go`);
+    }
+    const state = await readState(stateDir);
+    const due = await dueClips(state, { request });
+    const exported = due.filter((clip) => clip.from === "exported").length;
+    const today = state.days[new Date().toISOString().slice(0, 10)] ?? 0;
+    const videos = Object.values(state.clips).flat().length;
+    console.log(
+      `youtube.com/${config.footage?.channel}: ${videos} videos of ${Object.keys(state.clips).length} clips up, ` +
+        `${today} of ${config.footage?.daily ?? DAILY} today. ` +
+        `Waiting: ${exported} in Exported, ${due.length - exported} only in the archive.`,
+    );
+    if (state.pausedUntil > Date.now())
+      console.log(`Paused until ${new Date(state.pausedUntil).toLocaleString()} after: ${state.lastError?.message}`);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 } else if (command === "oauth-key") {
   const file = join(stateDir, "oauth/client-key.json");
   const { created, jwk } = await ensureClientKey(file, `publisher-${new Date().toISOString().slice(0, 10)}`);
@@ -343,5 +397,5 @@ if (command === "connect") {
   console.log(
     "Usage: bun run publisher connect | start | install | uninstall | draft <post.json> | oauth-key |\n" +
       "  archive <project folder>… [--keep-cache] | restore <project> [folder] [--at <time>] | archives | archive-media |\n" +
-      "  cleanup <project folder>… | --all [--posted] [--dry-run]",
+      "  cleanup <project folder>… | --all [--posted] [--dry-run] | footage [--now] [--daily <clips>]",
   );

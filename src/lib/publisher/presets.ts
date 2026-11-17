@@ -10,6 +10,16 @@ export const platforms = [
   "tiktok",
 ] as const;
 export type Platform = (typeof platforms)[number];
+/**
+ * Accounts the laptop keeps that posts don't go to: a YouTube channel that gets every graded clip, unlisted, as a
+ * second archive of the footage.
+ */
+export const archiveAccounts = ["youtube-footage"] as const;
+export type ArchiveAccount = (typeof archiveAccounts)[number];
+export const archiveAccountNames: Record<ArchiveAccount, string> = { "youtube-footage": "YouTube footage archive" };
+/** Everything the composer can connect: the destinations, then the archive accounts. */
+export const accounts = [...platforms, ...archiveAccounts] as const;
+export type Account = (typeof accounts)[number];
 /** What a post carries, decided by its attachments: none, photos, one video, or photos and videos together. */
 export const kinds = ["text", "photo", "video", "mixed"] as const;
 export type PostKind = (typeof kinds)[number];

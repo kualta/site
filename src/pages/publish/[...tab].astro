@@ -5,7 +5,7 @@ import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?ur
 import Publisher from "@/components/Publisher";
 import { env } from "cloudflare:workers";
 import { publisherSession } from "@/lib/publisher/auth";
-import { platforms, type Platform } from "@/lib/publisher/presets";
+import { accounts, type Account } from "@/lib/publisher/presets";
 import "@/styles/globals.css";
 export const prerender = false;
 // The composer, or another tab by its path; the tab then keeps its own place in the query.
@@ -16,7 +16,7 @@ if (tab && initialTab === "compose") return new Response("Not found", { status: 
 Astro.response.headers.set("Cache-Control", "no-store");
 // Check access while rendering, so the page opens straight into the composer or the sign-in prompt.
 let access: "owner" | "signin" | "denied" | undefined;
-let helper: { online: boolean; platforms: Platform[] } | undefined;
+let helper: { online: boolean; platforms: Account[] } | undefined;
 try {
   const { session, allowed } = await publisherSession(Astro.request);
   // A refresh rotates the session, so its cookies must reach the browser.
@@ -30,7 +30,7 @@ try {
     const connected: unknown = JSON.parse(row?.platforms || "[]");
     helper = {
       online: Boolean(row?.last_seen && Date.now() - row.last_seen < 90_000),
-      platforms: platforms.filter((p) => Array.isArray(connected) && connected.includes(p)),
+      platforms: accounts.filter((a) => Array.isArray(connected) && connected.includes(a)),
     };
   }
 } catch {
