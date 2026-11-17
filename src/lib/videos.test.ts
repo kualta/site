@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ActivityFetch } from "./activity/types";
 import {
+  calendarMonths,
   formatDuration,
   getVideoLibrary,
   getWatchVideo,
@@ -239,7 +240,7 @@ test("stories are photos or videos of the account's own tagged posts, never list
   expect(normalizeStoryPost({ ...video, labels: [{ val: "porn" }] })).toBeUndefined();
 });
 
-test("stories group by the day they were posted, on the clock they were posted with", () => {
+test("stories group by the day they were posted, on the clock they were posted with, earliest day first", () => {
   const stories = [
     normalizeStoryPost(story("late", "2026-11-14T23:30:00-05:00"))!,
     normalizeStoryPost(story("next", "2026-11-15T08:00:00-05:00"))!,
@@ -249,10 +250,39 @@ test("stories group by the day they were posted, on the clock they were posted w
   // 23:30 in Bogotá is already the 15th in UTC; it stays on the 14th
   const days = storyDays(stories, Date.parse("2026-11-16T12:00:00Z"));
   expect(days.map((day) => [day.day, day.label, day.stories.map((s) => s.rkey)])).toEqual([
-    ["2026-11-15", "Nov 15", ["next"]],
-    ["2026-11-14", "Nov 14", ["early", "late"]],
     ["2025-12-31", "Dec 31, 2025", ["lastyear"]],
+    ["2026-11-14", "Nov 14", ["early", "late"]],
+    ["2026-11-15", "Nov 15", ["next"]],
   ]);
+});
+
+test("the calendar has every month from the first day with stories to the last, weeks starting on Monday", () => {
+  const months = calendarMonths(["2026-11-16", "2025-12-31", "2026-02-03"]);
+  expect(months.map((month) => month.month)).toEqual([
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08",
+    "2026-09",
+    "2026-10",
+    "2026-11",
+  ]);
+  const [december] = months;
+  // 1 December 2025 was a Monday; 1 November 2026 is a Sunday
+  expect([december.label, december.lead, december.days.length, december.days.at(-1)]).toEqual([
+    "December 2025",
+    0,
+    31,
+    "2025-12-31",
+  ]);
+  expect([months.at(-1)!.label, months.at(-1)!.lead, months.at(-1)!.days.length]).toEqual(["November 2026", 6, 30]);
+  expect(months.find((month) => month.month === "2026-02")!.days.length).toBe(28);
+  expect(calendarMonths([])).toEqual([]);
 });
 
 test("the library carries stories from the media feed, and keeps the last ones when that read fails", async () => {

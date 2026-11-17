@@ -367,16 +367,20 @@ story's id, so a run stopped after posting finds the post instead of posting it 
 **On the site.** kualta.dev/videos reads the account's media posts and keeps those tagged as stories (`pinkleapStory`
 or Pinksky's `pinkskyStory`) out of the videos; the activity feed leaves them out too. Everyone sees the stories still
 up (under a day old) as one ring with the account's picture, above the videos. **Log in with Bluesky** sits beside it,
-using the site's Bluesky sign-in; signed in as kualta, the row goes on into every day of past stories, read page by page
-from Bluesky in the owner's browser, and signing out takes them away again. The data is public on Bluesky anyway; this
-only decides what the page shows. On /feed the same picture sits left of the header. Its ring is colored while a story
-still up hasn't been watched in that browser, grey once all have, and gone without one: Instagram's style in this
-site's own colors (lime through cyan to blue), the one place the site uses color as decoration. A ring opens a
-full-screen viewer like Instagram's: a bar per story, photos for five seconds and videos for their length, tap the
-right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to close, and on into
-the next day. Its header says how long ago each story went up, as Instagram does (now, 12m, 5h, 3d, 2w, 1y), with the
-exact time, on the clock it was posted with, on hover. Each browser remembers which stories it has seen. Stories are
-grouped by the date written in the post, so a story posted at 23:30 in Bogotá stays on that day.
+using the site's Bluesky sign-in; signed in as kualta, the row shows every day of past stories, read page by page from
+Bluesky in the owner's browser: the earliest day on the left and the stories still up at the right end, where the row
+opens, so going right is always going later. **Calendar** beside it lays the same days out by month, as Instagram's
+archive does: a grid per month from the first day with stories to the last, each such day showing its picture and
+opening its stories. The browser remembers whether the calendar was left open. Signing out takes all of it away again.
+The data is public on Bluesky anyway; this only decides what the page shows. On /feed the same picture sits left of the
+header. Its ring is colored while a story still up hasn't been watched in that browser, grey once all have, and gone
+without one: Instagram's style in this site's own colors (lime through cyan to blue), the one place the site uses color
+as decoration. A ring or a calendar day opens a full-screen viewer like Instagram's, over the page dimmed and blurred,
+the story growing out of what was pressed: a bar per story, photos for five seconds and videos for their length, tap
+the right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to close, and on
+into the next, later day. Its header says how long ago each story went up, as Instagram does (now, 12m, 5h, 3d, 2w,
+1y), with the exact time, on the clock it was posted with, on hover. Each browser remembers which stories it has seen.
+Stories are grouped by the date written in the post, so a story posted at 23:30 in Bogotá stays on that day.
 
 TikTok stories can't be sent: TikTok's posting API has none, and its web uploader isn't known to offer them.
 

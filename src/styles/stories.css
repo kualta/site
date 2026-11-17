@@ -35,16 +35,32 @@
 .story-day-label { max-width: 100%; font-size: 12px; color: var(--secondary-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* the row of rings on /videos, with the Bluesky sign-in beside it */
-.stories { display: flex; align-items: flex-start; gap: 16px; margin: 0 0 40px; }
+.stories-block { margin: 0 0 40px; }
+.stories { display: flex; align-items: flex-start; gap: 16px; }
 .stories-tray { display: flex; flex: 1; min-width: 0; gap: 14px; margin: 0; padding: 4px 2px 8px; list-style: none; overflow-x: auto; scrollbar-width: none; }
 .stories-tray::-webkit-scrollbar { display: none; }
-.stories-account { flex: none; margin-left: auto; }
+.stories-account { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
 .stories-status { align-self: center; font-size: 12px; color: var(--secondary-text); white-space: nowrap; }
 
+/* the owner's calendar, as Instagram's archive lays stories out: a month to a grid, each day with stories showing one */
+.stories-calendar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 32px 28px; margin-top: 20px; }
+.stories-calendar[hidden] { display: none; }
+.story-month h2 { margin: 0 0 10px; font-size: 14px; font-weight: 400; }
+.story-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.story-weekday { padding-bottom: 4px; font-size: 11px; text-align: center; color: var(--secondary-text); }
+.story-date { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--secondary-text); }
+.story-date-has { overflow: hidden; padding: 0; border: 0; background: rgb(128 128 128 / 10%); color: #fff; cursor: pointer; }
+.story-date-has img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 150ms; }
+.story-date-has span { position: relative; font-weight: 600; text-shadow: 0 1px 3px rgb(0 0 0 / 70%); }
+.story-date-has:hover img { opacity: .8; }
+
+/* The viewer dims the page rather than hiding it, and opens with the story growing out of the ring that was pressed. */
 html[data-story-open] { overflow: hidden; }
-.story-viewer { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: 20px; background: #000; color: #f4f1ed; outline: none; }
+.story-viewer { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: 20px; background: rgb(0 0 0 / 80%); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: #f4f1ed; outline: none; animation: story-dim 200ms var(--ease-out); }
 .story-viewer[hidden] { display: none; }
-.story-frame { position: relative; height: min(100svh - 32px, 900px); max-width: 100vw; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 12px; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.story-frame { position: relative; height: min(100svh - 32px, 900px); max-width: 100vw; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 12px; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; animation: story-grow 300ms var(--ease-out); }
+@keyframes story-dim { from { opacity: 0; } }
+@keyframes story-grow { from { opacity: 0; transform: scale(.6); } }
 .story-media, .story-media img, .story-media video { position: absolute; inset: 0; width: 100%; height: 100%; }
 .story-media img, .story-media video { object-fit: contain; pointer-events: none; }
 .story-media[data-fit="cover"] img, .story-media[data-fit="cover"] video { object-fit: cover; }
@@ -64,7 +80,7 @@ html[data-story-open] { overflow: hidden; }
 .story-step { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 14%); color: inherit; cursor: pointer; transition: background 150ms; }
 .story-step:hover { background: rgb(255 255 255 / 26%); }
 @media (max-width: 760px) {
-  .stories { margin-bottom: 28px; }
+  .stories-block { margin-bottom: 28px; }
   .stories-tray { gap: 12px; }
   .story-day { width: 68px; }
   .stories .story-ring { --ring-size: 64px; }
@@ -72,4 +88,7 @@ html[data-story-open] { overflow: hidden; }
   .story-frame { width: 100%; height: 100%; border-radius: 0; aspect-ratio: auto; }
   .story-step { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .story-step { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .story-step, .story-date-has img { transition: none; }
+  .story-viewer, .story-frame { animation: none; }
+}
