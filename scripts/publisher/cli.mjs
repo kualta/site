@@ -210,8 +210,8 @@ if (command === "connect") {
         if (saved) console.log(`Saved ${saved} Instagram stories (${total} in ${storiesRoot})`);
         storiesChanged ||= saved > 0;
         if (config.platforms.includes("bluesky")) {
-          const { posted } = await crosspostStories({ oauth });
-          if (posted) console.log(`Sent ${posted} Instagram stories to Pinkleap`);
+          const { posted, left } = await crosspostStories({ oauth });
+          if (posted) console.log(`Sent ${posted} Instagram stories to Pinkleap${left ? ` (${left} to go)` : ""}`);
           storiesChanged ||= posted > 0;
         }
         if (storiesChanged) {

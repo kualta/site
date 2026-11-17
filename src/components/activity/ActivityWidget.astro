@@ -2,6 +2,10 @@
 import { formatLastSeenTime, PRESENCE_BANDS, PRESENCE_PARTS, type ActivityFeed } from "@/lib/activity";
 import MediaViewer from "./MediaViewer.astro";
 import ActivityRows from "./ActivityRows.astro";
+import StoryAvatar from "@/components/StoryAvatar.astro";
+import StoryViewer from "@/components/StoryViewer.astro";
+import type { BlueskyActivity } from "@/lib/activity/types";
+import identity from "../../../atproto.config.json";
 
 interface Props {
   feed?: ActivityFeed;
@@ -12,8 +16,14 @@ const lastSeenText = feed?.lastSeenAt ? formatLastSeenTime(feed.lastSeenAt) : nu
 const presence = PRESENCE_PARTS[feed?.presence ?? "unknown"];
 const currentBand = PRESENCE_BANDS.find(({ state }) => state === feed?.presence);
 const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked for a day";
+// The picture from one of kualta's own posts in the feed; without one, the story ring's script reads it from Bluesky.
+const ownPost = feed?.events.find(
+  (event): event is BlueskyActivity => event.source === "bluesky" && event.post.author.did === identity.did,
+);
+const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
 ---
 <MediaViewer />
+<StoryViewer />
 <section
   class="flex w-full min-w-0 flex-col gap-3"
   aria-labelledby="activity-presence"
@@ -33,34 +43,39 @@ const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked 
     ))}
   </div>
   <div class="min-w-0" data-activity-content hidden={!feed}>
-    <h2 id="activity-presence" class="text-balance text-base font-bold">
-      <span class="presence-trigger relative inline-block">
-        <span
-          class="cursor-help"
-          tabindex="0"
-          aria-describedby="presence-explainer"
-        >
-          <span data-presence-lead>{presence.lead}</span>{" "}
-          <span class="presence-live" data-presence-status>{presence.status}</span>
-        </span>
-        <span
-          id="presence-explainer"
-          role="tooltip"
-          class="presence-tooltip rounded-xl bg-secondary p-3 text-xs font-normal
-                 text-secondary-text drop-shadow-sm dark:bg-dark-secondary"
-        >
-          When was kualta last seen
-          <span class="mt-1 block text-text dark:text-dark-text" data-presence-detail>
-            {presenceDetail}
+    <div class="flex min-w-0 items-center gap-3">
+      <StoryAvatar author={author} size={52} />
+      <div class="min-w-0">
+        <h2 id="activity-presence" class="text-balance text-base font-bold">
+          <span class="presence-trigger relative inline-block">
+            <span
+              class="cursor-help"
+              tabindex="0"
+              aria-describedby="presence-explainer"
+            >
+              <span data-presence-lead>{presence.lead}</span>{" "}
+              <span class="presence-live" data-presence-status>{presence.status}</span>
+            </span>
+            <span
+              id="presence-explainer"
+              role="tooltip"
+              class="presence-tooltip rounded-xl bg-secondary p-3 text-xs font-normal
+                     text-secondary-text drop-shadow-sm dark:bg-dark-secondary"
+            >
+              When was kualta last seen
+              <span class="mt-1 block text-text dark:text-dark-text" data-presence-detail>
+                {presenceDetail}
+              </span>
+            </span>
           </span>
-        </span>
-      </span>
-    </h2>
-    <div class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-secondary-text">
-      <time datetime={feed?.lastSeenAt ?? undefined} class="tabular-nums" data-activity-last-seen hidden={!lastSeenText}>
-        {lastSeenText}
-      </time>
-      <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>
+        </h2>
+        <div class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-secondary-text">
+          <time datetime={feed?.lastSeenAt ?? undefined} class="tabular-nums" data-activity-last-seen hidden={!lastSeenText}>
+            {lastSeenText}
+          </time>
+          <span hidden={!feed?.delayed} data-signals-delayed>signals delayed</span>
+        </div>
+      </div>
     </div>
   </div>
   <ol class="flex w-full flex-col gap-3" aria-label="Recent activity, newest first" data-activity-list>

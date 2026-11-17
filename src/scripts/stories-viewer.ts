@@ -1,7 +1,8 @@
 import type Hls from "hls.js";
 import { createPreviewStream } from "./activity-video-stream";
 
-interface Story {
+/** A story as a page hands it over: what `Story` in lib/videos holds. */
+export interface ViewerStory {
   rkey: string;
   url: string;
   date: string;
@@ -12,13 +13,13 @@ interface Story {
   width: number;
   height: number;
 }
-interface Day {
-  day: string;
-  label: string;
-  stories: Story[];
+/** Whose stories they are, for the viewer's header. */
+export interface StoryAuthor {
+  name: string;
+  avatar?: string;
 }
 interface Showing {
-  story: Story;
+  story: ViewerStory;
   element: HTMLImageElement | HTMLVideoElement;
   hls?: Hls;
   /** a photo counts down only once it has loaded */
@@ -35,48 +36,87 @@ const SEEN_KEY = "stories-seen";
 
 /** Sound is asked for once a page; after that the viewer keeps what the viewer or the browser settled on. */
 let muted: boolean | undefined;
+let watched: Set<string> | undefined;
 
-function readSeen(): Set<string> {
+/** The stories this browser has watched, read once a page. */
+function seen(): Set<string> {
+  if (watched) return watched;
   try {
     const list: unknown = JSON.parse(localStorage.getItem(SEEN_KEY) ?? "[]");
-    return new Set(Array.isArray(list) ? list.filter((item): item is string => typeof item === "string") : []);
+    watched = new Set(Array.isArray(list) ? list.filter((item): item is string => typeof item === "string") : []);
   } catch {
-    return new Set();
+    watched = new Set();
   }
+  return watched;
 }
 
-function writeSeen(seen: Set<string>): void {
+/** Whether every one of these has been watched here; a ring then turns grey, as on Instagram. */
+function allSeen(stories: { rkey: string }[]): boolean {
+  const list = seen();
+  return stories.every((story) => list.has(story.rkey));
+}
+
+/** Notes a story as watched and tells every ring on the page. */
+function markSeen(rkey: string): void {
+  const list = seen();
+  if (list.has(rkey)) return;
+  list.add(rkey);
   try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-2000)));
+    localStorage.setItem(SEEN_KEY, JSON.stringify([...list].slice(-2000)));
   } catch {}
+  document.dispatchEvent(new CustomEvent("stories:seen"));
+}
+
+/** How a ring around these stories looks: colored with one left to watch here, grey once all are, none without any. */
+export function ringState(stories: { rkey: string }[]): "none" | "seen" | "unseen" {
+  if (!stories.length) return "none";
+  return allSeen(stories) ? "seen" : "unseen";
+}
+
+/** Fetches the video player as a pointer or focus reaches a ring, so a story can play the moment it opens. */
+export function warmWhenNear(ring: HTMLElement, signal?: AbortSignal): void {
+  for (const event of ["pointerenter", "focus", "touchstart"])
+    ring.addEventListener(event, () => void import("hls.js"), { once: true, passive: true, signal });
+}
+
+const dayLabel = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** "Nov 16, 13:40": the date and time written in the story, on the clock it was posted with. */
+export function storyTime(date: string): string {
+  const day = new Date(`${date.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(day.getTime()) ? "" : `${dayLabel.format(day)}, ${date.slice(11, 16)}`;
+}
+
+type Open = (groups: ViewerStory[][], group: number, opener: HTMLElement | null, author: StoryAuthor) => void;
+let mounted: Open | undefined;
+
+/** Opens the page's story viewer on a group of stories; the groups after it follow on. */
+export function openStories(...args: Parameters<Open>): void {
+  mounted?.(...args);
 }
 
 /**
- * Stories the way Instagram shows them: one day at a time, a bar per story along the top, photos for five seconds and
- * videos for their length, tapping the right side for the next and the left third for the one before, holding to
- * pause, and swiping down to close. Days follow on from one another.
+ * The page's story viewer, shown the way Instagram shows stories: a bar per story along the top, photos for five
+ * seconds and videos for their length, tapping the right side for the next and the left third for the one before,
+ * holding to pause, and swiping down to close. A group starts at its first story not watched yet.
  */
-export function mountStories(root: HTMLElement): () => void {
-  let days: Day[] = [];
-  try {
-    days = JSON.parse(root.querySelector("[data-stories-data]")?.textContent || "{}").days ?? [];
-  } catch {}
-  const viewer = root.querySelector<HTMLElement>("[data-story-viewer]");
-  const frame = root.querySelector<HTMLElement>("[data-story-frame]");
-  const media = root.querySelector<HTMLElement>("[data-story-media]");
-  const bars = root.querySelector<HTMLElement>("[data-story-bars]");
-  const time = root.querySelector<HTMLTimeElement>("[data-story-time]");
-  const link = root.querySelector<HTMLAnchorElement>("[data-story-link]");
-  const pauseButton = root.querySelector<HTMLButtonElement>("[data-story-pause]");
-  const muteButton = root.querySelector<HTMLButtonElement>("[data-story-mute]");
-  const trayButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-story-day]")];
-  if (!viewer || !frame || !media || !bars || !time || !link || !days.length) return () => {};
+export function mountStoryViewer(viewer: HTMLElement): () => void {
+  const frame = viewer.querySelector<HTMLElement>("[data-story-frame]");
+  const media = viewer.querySelector<HTMLElement>("[data-story-media]");
+  const bars = viewer.querySelector<HTMLElement>("[data-story-bars]");
+  const time = viewer.querySelector<HTMLTimeElement>("[data-story-time]");
+  const link = viewer.querySelector<HTMLAnchorElement>("[data-story-link]");
+  const authorImage = viewer.querySelector<HTMLImageElement>("[data-story-author-avatar]");
+  const authorName = viewer.querySelector<HTMLElement>("[data-story-name]");
+  const pauseButton = viewer.querySelector<HTMLButtonElement>("[data-story-pause]");
+  const muteButton = viewer.querySelector<HTMLButtonElement>("[data-story-mute]");
+  if (!frame || !media || !bars || !time || !link) return () => {};
   viewer.tabIndex = -1;
 
   const listeners = new AbortController();
   const options = { signal: listeners.signal };
-  const seen = readSeen();
-  let day = -1;
+  let groups: ViewerStory[][] = [];
+  let group = -1;
   let index = 0;
   let paused = false;
   let elapsed = 0;
@@ -85,11 +125,6 @@ export function mountStories(root: HTMLElement): () => void {
   let generation = 0;
   let showing: Showing | undefined;
   let opener: HTMLElement | null = null;
-
-  function markTray(): void {
-    for (const [position, button] of trayButtons.entries())
-      button.dataset.seen = String(days[position]?.stories.every((story) => seen.has(story.rkey)) ?? false);
-  }
 
   function showSound(): void {
     frame!.dataset.muted = String(muted === true);
@@ -152,10 +187,10 @@ export function mountStories(root: HTMLElement): () => void {
     if (!paused) playVideo(video);
   }
 
-  function show(dayIndex: number, storyIndex: number): void {
+  function show(groupIndex: number, storyIndex: number): void {
     release();
-    const list = days[dayIndex].stories;
-    if (dayIndex !== day || bars!.children.length !== list.length)
+    const list = groups[groupIndex];
+    if (groupIndex !== group || bars!.children.length !== list.length)
       bars!.replaceChildren(
         ...list.map(() => {
           const bar = document.createElement("span");
@@ -163,22 +198,18 @@ export function mountStories(root: HTMLElement): () => void {
           return bar;
         }),
       );
-    day = dayIndex;
+    group = groupIndex;
     index = storyIndex;
     elapsed = 0;
     const story = list[storyIndex];
-    seen.add(story.rkey);
-    writeSeen(seen);
-    markTray();
+    markSeen(story.rkey);
     time!.dateTime = story.date;
-    // the clock it was posted on, as written in its date
-    time!.textContent = `${days[dayIndex].label}, ${story.date.slice(11, 16)}`;
+    time!.textContent = storyTime(story.date);
     link!.href = story.url;
     // A story shaped like the frame fills it, cropping its sides as Instagram does: a 9:16 story is about 22% wider than
     // a 19.5:9 phone screen. Any other shape, a square or 4:5 photo, shows whole.
     const frameRatio = frame!.clientWidth / frame!.clientHeight || 9 / 16;
-    const fit = Math.abs(story.width / story.height - frameRatio) / frameRatio < 0.3 ? "cover" : "contain";
-    media!.dataset.fit = fit;
+    media!.dataset.fit = Math.abs(story.width / story.height - frameRatio) / frameRatio < 0.3 ? "cover" : "contain";
     if (story.kind === "photo") {
       const image = new Image();
       image.alt = story.alt;
@@ -204,22 +235,22 @@ export function mountStories(root: HTMLElement): () => void {
       void attach(video, entry, story.src);
     }
     // the next photo is fetched while this one is up, so it shows at once
-    const following = list[storyIndex + 1] ?? days[dayIndex + 1]?.stories[0];
+    const following = list[storyIndex + 1] ?? groups[groupIndex + 1]?.[0];
     if (following?.kind === "photo") new Image().src = following.src;
   }
 
   function next(): void {
-    if (day < 0) return;
-    if (index + 1 < days[day].stories.length) show(day, index + 1);
-    else if (day + 1 < days.length) show(day + 1, 0);
+    if (group < 0) return;
+    if (index + 1 < groups[group].length) show(group, index + 1);
+    else if (group + 1 < groups.length) show(group + 1, 0);
     else close();
   }
 
   function previous(): void {
-    if (day < 0) return;
-    if (index > 0) show(day, index - 1);
-    else if (day > 0) show(day - 1, days[day - 1].stories.length - 1);
-    else show(day, 0);
+    if (group < 0) return;
+    if (index > 0) show(group, index - 1);
+    else if (group > 0) show(group - 1, groups[group - 1].length - 1);
+    else show(group, 0);
   }
 
   function setPaused(value: boolean): void {
@@ -244,31 +275,40 @@ export function mountStories(root: HTMLElement): () => void {
     }
     progress(share);
     if (showing?.story.kind === "photo" && elapsed >= PHOTO_MS) next();
-    if (day >= 0) frameRequest = requestAnimationFrame(tick);
+    if (group >= 0) frameRequest = requestAnimationFrame(tick);
   }
 
-  function open(dayIndex: number, from: HTMLElement | null): void {
+  function open(list: ViewerStory[][], groupIndex: number, from: HTMLElement | null, author: StoryAuthor): void {
+    if (!list[groupIndex]?.length) return;
+    release();
+    groups = list;
+    group = -1;
     opener = from;
-    viewer!.hidden = false;
+    if (authorName) authorName.textContent = author.name;
+    if (authorImage) {
+      authorImage.hidden = !author.avatar;
+      if (author.avatar) authorImage.src = author.avatar;
+    }
+    viewer.hidden = false;
     document.documentElement.dataset.storyOpen = "";
     paused = false;
     showPaused();
     showSound();
     last = 0;
-    // a day starts at its first story not seen yet, or from the beginning once all have been
-    const unseen = days[dayIndex].stories.findIndex((story) => !seen.has(story.rkey));
-    show(dayIndex, unseen < 0 ? 0 : unseen);
+    // a group starts at its first story not seen yet, or from the beginning once all have been
+    const unseen = groups[groupIndex].findIndex((story) => !seen().has(story.rkey));
+    show(groupIndex, unseen < 0 ? 0 : unseen);
     cancelAnimationFrame(frameRequest);
     frameRequest = requestAnimationFrame(tick);
-    viewer!.focus();
+    viewer.focus();
   }
 
   function close(): void {
-    if (day < 0) return;
+    if (group < 0) return;
     release();
-    day = -1;
+    group = -1;
     cancelAnimationFrame(frameRequest);
-    viewer!.hidden = true;
+    viewer.hidden = true;
     delete document.documentElement.dataset.storyOpen;
     opener?.focus();
   }
@@ -316,15 +356,9 @@ export function mountStories(root: HTMLElement): () => void {
   // a long press on a phone would otherwise open the image menu
   frame.addEventListener("contextmenu", (event) => event.preventDefault(), options);
 
-  for (const button of trayButtons) {
-    button.addEventListener("click", () => open(Number(button.dataset.storyDay), button), options);
-    // the player is fetched as the pointer or focus arrives, so a video can start as soon as its day opens
-    for (const event of ["pointerenter", "focus", "touchstart"])
-      button.addEventListener(event, () => void import("hls.js"), { ...options, once: true, passive: true });
-  }
-  root.querySelector("[data-story-previous]")?.addEventListener("click", previous, options);
-  root.querySelector("[data-story-next]")?.addEventListener("click", next, options);
-  root.querySelector("[data-story-close]")?.addEventListener("click", close, options);
+  viewer.querySelector("[data-story-previous]")?.addEventListener("click", previous, options);
+  viewer.querySelector("[data-story-next]")?.addEventListener("click", next, options);
+  viewer.querySelector("[data-story-close]")?.addEventListener("click", close, options);
   pauseButton?.addEventListener("click", () => setPaused(!paused), options);
   muteButton?.addEventListener(
     "click",
@@ -340,7 +374,7 @@ export function mountStories(root: HTMLElement): () => void {
   document.addEventListener(
     "keydown",
     (event) => {
-      if (day < 0 || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (group < 0 || event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
       if (key === "arrowright") next();
       else if (key === "arrowleft") previous();
@@ -352,11 +386,12 @@ export function mountStories(root: HTMLElement): () => void {
     },
     options,
   );
-  document.addEventListener("visibilitychange", () => document.hidden && day >= 0 && setPaused(true), options);
-  markTray();
+  document.addEventListener("visibilitychange", () => document.hidden && group >= 0 && setPaused(true), options);
+  mounted = open;
 
   return () => {
     close();
     listeners.abort();
+    if (mounted === open) mounted = undefined;
   };
 }

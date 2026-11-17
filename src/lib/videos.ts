@@ -276,6 +276,16 @@ const dayLabelWithYear = new Intl.DateTimeFormat("en", {
   timeZone: "UTC",
 });
 
+/** How long a story is up for everyone, as on Instagram and Pinkleap. */
+export const STORY_LIFE_MS = 24 * 60 * 60 * 1000;
+
+/** The stories still up: posted in the last day, in the order they were posted. */
+export function liveStories(stories: Story[], now = Date.now()): Story[] {
+  return stories
+    .filter((story) => now - Date.parse(story.date) < STORY_LIFE_MS)
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+
 /**
  * Stories by the day they were posted, newest day first and each day in posting order. A story's date is written with
  * the offset of the phone that posted it, so its own date part is that day, wherever the page is read.
@@ -374,11 +384,15 @@ async function addDurations(videos: Video[], known: Map<string, number>, fetcher
   );
 }
 
-async function fetchStories(fetcher: ActivityFetch): Promise<Story[]> {
+/**
+ * The account's stories from its media posts, newest first, reading up to `pages` pages of a hundred. The page reads
+ * the full history this way from the owner's own browser, where no Worker's limits apply.
+ */
+export async function readStories(fetcher: ActivityFetch, pages = STORY_PAGES): Promise<Story[]> {
   const stories: Story[] = [];
   const seen = new Set<string>();
   let cursor: string | undefined;
-  for (let page = 0; page < STORY_PAGES; page++) {
+  for (let page = 0; page < pages; page++) {
     const url = new URL(`${APPVIEW}/app.bsky.feed.getAuthorFeed`);
     url.searchParams.set("actor", identity.did);
     url.searchParams.set("filter", "posts_with_media");
@@ -408,7 +422,7 @@ async function fetchLibrary(
   lastStories: Story[] = [],
 ): Promise<VideoLibrary> {
   // Stories are a side shelf: when they can't be read, the last ones read stay up and the videos still load.
-  const stories = fetchStories(fetcher).catch(() => lastStories);
+  const stories = readStories(fetcher).catch(() => lastStories);
   const videos: Video[] = [];
   const seen = new Set<string>();
   let channel: VideoChannel | undefined;

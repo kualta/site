@@ -212,21 +212,22 @@ async function savedStories(stories) {
 }
 const pds = { agent: { did: "did:plc:jhvnnnd3adml7t6anu3ay7ip" }, pdsUrl: new URL("https://pds.example") };
 
-test("stories still up go to Pinkleap once, oldest first, as tagged posts dated on their own clock", async () => {
+test("every story goes to Pinkleap once, those still up first, each dated when it went up on Instagram", async () => {
   const now = Date.parse("2026-11-16T14:00:00Z");
   const root = await savedStories([
     { id: "3", posted: "2026-11-16T08:00:00-05:00", file: "2026/11/2026-11-16 08.00.00.mp4" },
     { id: "2", posted: "2026-11-15T20:00:00-05:00", file: "2026/11/2026-11-15 20.00.00.jpg" },
-    // a day and more ago: gone from Instagram, so not sent on
+    // past their day: they go too, a few a run, oldest first
     { id: "1", posted: "2026-11-14T20:00:00-05:00", file: "2026/11/2026-11-14 20.00.00.mp4" },
+    { id: "twin", posted: "2026-11-14T20:00:00-05:00", file: "2026/11/2026-11-14 20.00.00 (2).mp4" },
+    { id: "0", posted: "2026-11-13T09:00:00-05:00", file: "2026/11/2026-11-13 09.00.00.mp4" },
   ]);
   const prepared = [];
   const posts = [];
   const options = {
     root,
     now,
-    // a clock that doesn't move, as when two photos go out within a millisecond
-    clock: () => now,
+    backlog: 2,
     oauth: { agent: async () => pds },
     process: async (input, output, settings) => {
       prepared.push([input.slice(root.length + 1), settings]);
@@ -243,40 +244,66 @@ test("stories still up go to Pinkleap once, oldest first, as tagged posts dated 
     },
     log: () => {},
   };
-  expect(await crosspostStories(options)).toEqual({ posted: 2 });
+  expect(await crosspostStories(options)).toEqual({ posted: 4, left: 1 });
   expect(prepared).toEqual([
     ["2026/11/2026-11-15 20.00.00.jpg", { kind: "photo", policy: "remove-all", maxBytes: 1_900_000 }],
     ["2026/11/2026-11-16 08.00.00.mp4", { kind: "video", policy: "remove-all", maxBytes: 1_900_000 }],
+    ["2026/11/2026-11-13 09.00.00.mp4", { kind: "video", policy: "remove-all", maxBytes: 1_900_000 }],
+    ["2026/11/2026-11-14 20.00.00.mp4", { kind: "video", policy: "remove-all", maxBytes: 1_900_000 }],
   ]);
+  const story = (id, kind, createdAt) => ({
+    id: `story-${id}`,
+    kind,
+    caption: "",
+    alt: "",
+    tags: pinkleapTags,
+    createdAt,
+  });
   expect(posts).toEqual([
-    {
-      id: "story-2",
-      kind: "photo",
-      caption: "",
-      alt: "",
-      tags: pinkleapTags,
-      createdAt: "2026-11-16T09:00:00.000-05:00",
-    },
-    {
-      id: "story-3",
-      kind: "video",
-      caption: "",
-      alt: "",
-      tags: pinkleapTags,
-      // never the same time as the story before: Bluesky's author feed would show only one of them
-      createdAt: "2026-11-16T09:00:00.001-05:00",
-    },
+    story("2", "photo", "2026-11-15T20:00:00.000-05:00"),
+    story("3", "video", "2026-11-16T08:00:00.000-05:00"),
+    story("0", "video", "2026-11-13T09:00:00.000-05:00"),
+    story("1", "video", "2026-11-14T20:00:00.000-05:00"),
   ]);
   const index = JSON.parse(await readFile(join(root, "index.json"), "utf8"));
   const link = (id) =>
     `https://bsky.app/profile/did:plc:jhvnnnd3adml7t6anu3ay7ip/post/${recordKey(`publisher:bluesky:story-${id}`)}`;
-  expect(index.stories.map((story) => story.pinkleap)).toEqual([link("3"), link("2"), undefined]);
+  expect(index.stories.map((story) => story.pinkleap)).toEqual([link("3"), link("2"), link("1"), undefined, link("0")]);
+
+  // The next run sends the rest. A story posted in the same second as another is a millisecond after it, since
+  // Bluesky's author feed shows only one of several posts sharing a time.
+  posts.length = 0;
+  expect(await crosspostStories(options)).toEqual({ posted: 1, left: 0 });
+  expect(posts).toEqual([story("twin", "video", "2026-11-14T20:00:00.001-05:00")]);
 
   // Sent stories aren't sent again, and with nothing due the account isn't even asked for.
   posts.length = 0;
   const noOauth = { agent: async () => Promise.reject(new Error("must not sign in")) };
-  expect(await crosspostStories({ ...options, oauth: noOauth })).toEqual({ posted: 0 });
+  expect(await crosspostStories({ ...options, oauth: noOauth })).toEqual({ posted: 0, left: 0 });
   expect(posts).toEqual([]);
+});
+
+test("Bluesky's daily video limit ends a run, leaving the rest for the next", async () => {
+  const now = Date.parse("2026-11-16T14:00:00Z");
+  const root = await savedStories([
+    { id: "a", posted: "2026-11-10T07:00:00-05:00", file: "a.mp4" },
+    { id: "b", posted: "2026-11-11T08:00:00-05:00", file: "b.mp4" },
+  ]);
+  const posts = [];
+  const result = await crosspostStories({
+    root,
+    now,
+    oauth: { agent: async () => pds },
+    process: async () => ({ width: 720, height: 1280 }),
+    atproto: async (platform, authorization, files, infos, post) => {
+      posts.push(post.id);
+      throw new Error("Bluesky video upload failed (400: Daily upload limit exceeded)");
+    },
+    fetcher: async () => new Response("", { status: 400 }),
+    log: () => {},
+  });
+  expect(result).toEqual({ posted: 0, left: 2 });
+  expect(posts).toEqual(["story-a"]);
 });
 
 test("a story already posted is noted rather than posted twice, and a failed one waits for the next run", async () => {
@@ -301,7 +328,7 @@ test("a story already posted is noted rather than posted twice, and a failed one
       new Response("{}", { status: url.includes(recordKey("publisher:bluesky:story-a")) ? 200 : 400 }),
     log: (line) => logged.push(line),
   });
-  expect(result).toEqual({ posted: 1 });
+  expect(result).toEqual({ posted: 1, left: 1 });
   expect(posts).toEqual(["story-b"]);
   expect(logged).toEqual(["Story b not sent to Pinkleap: Bluesky video processing failed"]);
   const index = JSON.parse(await readFile(join(root, "index.json"), "utf8"));

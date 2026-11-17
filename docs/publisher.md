@@ -352,21 +352,30 @@ only what's new. Instagram's "Save story to archive" must stay on.
 as the project `instagram-stories` (see Archive): only files the archive lacks go up. `bun run publisher restore
 instagram-stories "<folder>"` brings it back.
 
-**Sent to Pinkleap.** With Grain / Bluesky connected, each saved story under 24 hours old that hasn't gone yet is posted
-to the Bluesky account with no text, its photo or video (prepared as for any Bluesky post), and the hidden tag
-`pinkleapStory`, which makes Pinkleap show it as a story. On Bluesky it's an ordinary post that stays on the profile; a
-story's 24 hours are Pinkleap's doing, and nothing deletes it. It's dated when it's sent, on the clock the story was
-posted with (`2026-11-16T09:31:20.880-05:00`), and never at the same moment as the story before it: Bluesky's author
-feed, which the site reads, shows only one of several posts sharing a time. Its record key comes from the story's id, so a run stopped after posting
-finds the post instead of posting it twice; `index.json` notes each post. Stories older than a day when the helper first
-sees them, such as those saved before this existed, are kept but not sent.
+**Sent to Pinkleap.** With Grain / Bluesky connected, every saved story that hasn't gone yet is posted to the Bluesky
+account with no text, its photo or video (prepared as for any Bluesky post), and the hidden tag `pinkleapStory`, which
+makes Pinkleap show it as a story. On Bluesky it's an ordinary post that stays on the profile, and nothing deletes it.
+It's dated when it went up on Instagram, on the clock it was posted with (`2026-11-15T15:51:17.000-05:00`). Pinkleap
+shows a story only while that date is under 24 hours old, so a story is up there exactly as long as on Instagram, and
+older ones are past stories; Bluesky files a post at the earlier of its date and its arrival, so a backlog lands at its
+own dates instead of on anyone's timeline. Stories posted in the same second are a millisecond apart: Bluesky's author
+feed, which the site reads, shows only one of several posts sharing a time. A run sends the stories still up first, then
+up to twelve older ones, oldest first, so a backlog goes over a few hours without holding the helper up. Bluesky takes
+only so many videos a day; reaching that ends the run and the next one carries on. Its record key comes from the
+story's id, so a run stopped after posting finds the post instead of posting it twice; `index.json` notes each post.
 
-**On the site.** kualta.dev/videos reads the account's media posts and shows those tagged as stories (`pinkleapStory`
-or Pinksky's `pinkskyStory`) as a row of days above the videos, never among them; the activity feed leaves them out
-too. A day opens a full-screen viewer like Instagram's: a bar per story, photos for five seconds and videos for their
-length, tap the right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to
-close, and on into the next day. Each browser remembers which stories it has seen. Stories are grouped by the date
-written in the post, so a story posted at 23:30 in Bogotá stays on that day.
+**On the site.** kualta.dev/videos reads the account's media posts and keeps those tagged as stories (`pinkleapStory`
+or Pinksky's `pinkskyStory`) out of the videos; the activity feed leaves them out too. Everyone sees the stories still
+up (under a day old) as one ring with the account's picture, above the videos. **Log in with Bluesky** sits beside it,
+using the site's Bluesky sign-in; signed in as kualta, the row goes on into every day of past stories, read page by page
+from Bluesky in the owner's browser, and signing out takes them away again. The data is public on Bluesky anyway; this
+only decides what the page shows. On /feed the same picture sits left of the header. Its ring is colored while a story
+still up hasn't been watched in that browser, grey once all have, and gone without one: Instagram's style in this
+site's own colors (lime through cyan to blue), the one place the site uses color as decoration. A ring opens a
+full-screen viewer like Instagram's: a bar per story, photos for five seconds and videos for their length, tap the
+right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to close, and on into
+the next day. Each browser remembers which stories it has seen. Stories are grouped by the date written in the post, so
+a story posted at 23:30 in Bogotá stays on that day.
 
 TikTok stories can't be sent: TikTok's posting API has none, and its web uploader isn't known to offer them.
 
