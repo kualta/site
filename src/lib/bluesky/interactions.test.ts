@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent } from "@atproto/api";
-import { RepostRemovedError, replyToPost, repostAgain, togglePostLike, togglePostRepost } from "./interactions";
+import type { AppBskyFeedDefs } from "@atproto/api";
+import {
+  createPostLoader,
+  RepostRemovedError,
+  replyToPost,
+  repostAgain,
+  togglePostLike,
+  togglePostRepost,
+} from "./interactions";
 
 const uri = "at://did:plc:author/app.bsky.feed.post/post";
 function mockAgent(viewer: Record<string, unknown> = {}, reply?: unknown) {
@@ -117,5 +125,33 @@ describe("Bluesky interactions", () => {
     const { agent, calls } = mockAgent({ replyDisabled: true });
     await expect(replyToPost(agent, uri, "Hello")).rejects.toThrow("disabled");
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("public post loader", () => {
+  const postAt = (index: number) => `at://did:plc:author/app.bsky.feed.post/${index}`;
+  const view = (postUri: string) => ({ uri: postUri, likeCount: 1 }) as unknown as AppBskyFeedDefs.PostView;
+
+  test("rows mounting together share getPosts calls of at most 25", async () => {
+    const calls: string[][] = [];
+    const load = createPostLoader(async (uris) => {
+      calls.push(uris);
+      return uris.map(view);
+    }, 0);
+    const uris = Array.from({ length: 30 }, (_, index) => postAt(index));
+    const posts = await Promise.all([...uris, uris[0]].map(load));
+    expect(calls.map((chunk) => chunk.length)).toEqual([25, 5]);
+    expect(posts.map((post) => post.uri)).toEqual([...uris, uris[0]]);
+  });
+  test("a missing post or failed call rejects only its own rows", async () => {
+    const load = createPostLoader(async (uris) => {
+      if (uris.includes(postAt(99))) throw new Error("AppView down");
+      return uris.filter((value) => value !== postAt(2)).map(view);
+    }, 0);
+    const [found, missing] = await Promise.allSettled([load(postAt(1)), load(postAt(2))]);
+    expect(found).toMatchObject({ status: "fulfilled", value: { uri: postAt(1) } });
+    expect(missing).toMatchObject({ status: "rejected", reason: { message: "This post is no longer available." } });
+    await expect(load(postAt(99))).rejects.toThrow("AppView down");
+    await expect(load(postAt(1))).resolves.toMatchObject({ uri: postAt(1) });
   });
 });
