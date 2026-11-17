@@ -1058,33 +1058,25 @@ input[type="checkbox"]:checked {
   }
 }
 
-/* The signup form shares the bottom corners’ page anchor. */
+/* The bell shares the bottom corners’ page anchor and leads to /links. */
 .newsletter-dock {
-  --newsletter-control-size: 2.75rem;
   position: absolute;
   z-index: 110;
   left: calc(1.5rem + env(safe-area-inset-left));
   bottom: calc(1.5rem + env(safe-area-inset-bottom));
   display: flex;
-  align-items: flex-start;
   padding: 0.25rem;
   background: transparent;
 }
 .newsletter-toggle {
   display: grid;
   place-items: center;
-  width: var(--newsletter-control-size);
-  height: var(--newsletter-control-size);
+  width: 2.75rem;
+  height: 2.75rem;
   flex-shrink: 0;
   border-radius: 0.85rem;
 }
 .newsletter-toggle:hover { opacity: 0.65; }
-.newsletter-expand { overflow: hidden; padding-block: 4px; margin-block: -4px; }
-.newsletter-panel { width: min(21rem, calc(100vw - 7rem - env(safe-area-inset-left) - env(safe-area-inset-right))); padding: 0 0.5rem 0 0.25rem; }
-.newsletter-dock .newsletter-fields :is(input, button) {
-  height: var(--newsletter-control-size);
-  padding-block: 0;
-}
 .newsletter-form { width: 100%; min-width: 0; }
 .newsletter-fields { display: flex; gap: 0.4rem; }
 .newsletter-fields input,
