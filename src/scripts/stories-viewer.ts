@@ -87,6 +87,20 @@ export function storyTime(date: string): string {
   return Number.isNaN(day.getTime()) ? "" : `${dayLabel.format(day)}, ${date.slice(11, 16)}`;
 }
 
+/** How long ago a story went up, the way Instagram writes it: now, 12m, 5h, 3d, 2w, 1y. */
+export function storyAge(date: string, now = Date.now()): string {
+  const minutes = Math.floor(Math.max(0, now - Date.parse(date)) / 60_000);
+  if (!Number.isFinite(minutes)) return "";
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 365) return `${Math.floor(days / 7)}w`;
+  return `${Math.floor(days / 365)}y`;
+}
+
 type Open = (groups: ViewerStory[][], group: number, opener: HTMLElement | null, author: StoryAuthor) => void;
 let mounted: Open | undefined;
 
@@ -203,8 +217,10 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     elapsed = 0;
     const story = list[storyIndex];
     markSeen(story.rkey);
+    // how long ago, as Instagram shows it; the exact time, on the clock it was posted with, on hover
     time!.dateTime = story.date;
-    time!.textContent = storyTime(story.date);
+    time!.textContent = storyAge(story.date);
+    time!.title = storyTime(story.date);
     link!.href = story.url;
     // A story shaped like the frame fills it, cropping its sides as Instagram does: a 9:16 story is about 22% wider than
     // a 19.5:9 phone screen. Any other shape, a square or 4:5 photo, shows whole.

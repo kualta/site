@@ -374,8 +374,9 @@ still up hasn't been watched in that browser, grey once all have, and gone witho
 site's own colors (lime through cyan to blue), the one place the site uses color as decoration. A ring opens a
 full-screen viewer like Instagram's: a bar per story, photos for five seconds and videos for their length, tap the
 right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to close, and on into
-the next day. Each browser remembers which stories it has seen. Stories are grouped by the date written in the post, so
-a story posted at 23:30 in Bogotá stays on that day.
+the next day. Its header says how long ago each story went up, as Instagram does (now, 12m, 5h, 3d, 2w, 1y), with the
+exact time, on the clock it was posted with, on hover. Each browser remembers which stories it has seen. Stories are
+grouped by the date written in the post, so a story posted at 23:30 in Bogotá stays on that day.
 
 TikTok stories can't be sent: TikTok's posting API has none, and its web uploader isn't known to offer them.
 
