@@ -1,0 +1,39 @@
+---
+import type { Story } from "@/lib/videos";
+import "@/styles/stories.css";
+
+interface Props {
+  author: { name: string; avatar?: string };
+  /** The stories still up, when the page has them; without them the browser reads them from Bluesky. */
+  stories?: Story[];
+  /** The ring's size in pixels. */
+  size?: number;
+  label?: string;
+}
+
+const { author, stories, size = 72, label } = Astro.props;
+// Read by the script; `<` is escaped so no text in it can close the script element.
+const data = JSON.stringify({ author, stories: stories ?? null }).replace(/</g, "\\u003c");
+---
+<span class="story-avatar" data-story-avatar style={`--ring-size: ${size}px`}>
+  <button
+    type="button"
+    class="story-day"
+    data-state={stories?.length ? "unseen" : "none"}
+    disabled={!stories?.length}
+    aria-label={stories?.length ? `${author.name}'s story` : author.name}
+  >
+    <span class="story-ring">
+      {author.avatar && <img src={author.avatar} alt="" width={size} height={size} decoding="async" />}
+    </span>
+    {label && <span class="story-day-label">{label}</span>}
+  </button>
+  <script type="application/json" data-story-avatar-data set:html={data} />
+</span>
+
+<script>
+  import { mountOnEachPage } from "@/scripts/page-mount";
+  import { mountStoryAvatar } from "@/scripts/story-avatar";
+
+  mountOnEachPage("[data-story-avatar]", mountStoryAvatar);
+</script>

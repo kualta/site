@@ -117,7 +117,10 @@ export async function publishAtproto(platform, authorization, files, infos, post
     });
     let job = await response.json();
     job = job.jobStatus || job;
-    if (!response.ok && !job.blob && !job.jobId) throw new Error(`Bluesky video upload failed (${response.status})`);
+    // Bluesky's reason, such as its daily video limit, is kept so the caller can tell.
+    const reason = job.message || job.error;
+    if (!response.ok && !job.blob && !job.jobId)
+      throw new Error(`Bluesky video upload failed (${response.status}${reason ? `: ${reason}` : ""})`);
     for (let attempt = 0; !job.blob && attempt < 180; attempt++) {
       if (job.error || job.state === "JOB_STATE_FAILED") throw new Error("Bluesky video processing failed");
       await wait(5000);

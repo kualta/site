@@ -211,10 +211,12 @@ export async function archiveStories({
   }
 }
 
-/** Pinkleap shows a Bluesky post with this tag as a story. */
+/** Pinkleap shows a Bluesky post with this tag as a story, for 24 hours from the date the post gives. */
 export const pinkleapTags = ["pinkleapStory"];
-/** How long a story is up on Instagram, and so how long after posting it's still worth sending on. */
+/** How long a story is up, on Instagram and on Pinkleap alike. */
 const STORY_LIFE_MS = 24 * 60 * 60_000;
+/** Stories past their day go a few at a time, so a backlog never holds the helper up for long. */
+export const BACKLOG_PER_RUN = 12;
 
 /** `now` on the clock of the `zone` (as in -05:00), written the way AT Protocol dates are. */
 export function clockTime(now, zone) {
@@ -225,9 +227,21 @@ export function clockTime(now, zone) {
 }
 
 /**
- * Sends each saved story that's still up on Instagram, and hasn't gone yet, to Pinkleap: a post on the Bluesky account
- * with no text, the story's photo or video, and Pinkleap's story tag. On Bluesky itself it's an ordinary post. It's
- * dated when it's sent, on the clock the story was posted with, so the site files it under that day. index.json notes
+ * The date a story's post gives: when it went up on Instagram, on the clock it was posted with. Pinkleap shows it for 24
+ * hours from then, as Instagram did, and an older one only among past stories; Bluesky files it at that time too, so a
+ * backlog never floods anyone's timeline. Stories posted in the same second are a millisecond apart, since Bluesky's
+ * author feed shows only one of several posts sharing a time.
+ */
+export function storyDate(story, stories) {
+  const twins = stories.filter((other) => other.posted === story.posted);
+  const zone = story.posted.match(/[+-]\d\d:\d\d$/)?.[0] ?? "";
+  return clockTime(Date.parse(story.posted) + twins.indexOf(story), zone);
+}
+
+/**
+ * Sends each saved story that hasn't gone yet to Pinkleap: a post on the Bluesky account with no text, the story's photo
+ * or video, and Pinkleap's story tag. On Bluesky itself it's an ordinary post. Stories still up go first, then up to
+ * `backlog` older ones, oldest first; Bluesky's daily video limit ends a run, and the next carries on. index.json notes
  * each one's post, and a run stopped after posting finds the post by its fixed key rather than posting it twice.
  */
 export async function crosspostStories({
@@ -237,20 +251,20 @@ export async function crosspostStories({
   atproto = publishAtproto,
   fetcher = fetch,
   now = Date.now(),
-  clock = Date.now,
+  backlog = BACKLOG_PER_RUN,
   log = console.log,
 } = {}) {
   const indexFile = join(root, "index.json");
   const index = await readIndex(indexFile);
-  const due = index.stories
-    .filter((story) => !story.pinkleap && now - Date.parse(story.posted) < STORY_LIFE_MS)
+  const unsent = index.stories
+    .filter((story) => !story.pinkleap)
     .sort((a, b) => Date.parse(a.posted) - Date.parse(b.posted));
-  if (!due.length) return { posted: 0 };
+  const live = unsent.filter((story) => now - Date.parse(story.posted) < STORY_LIFE_MS);
+  const due = [...live, ...unsent.filter((story) => !live.includes(story)).slice(0, backlog)];
+  if (!due.length) return { posted: 0, left: 0 };
   const authorization = await oauth.agent();
   const temp = await mkdtemp(join(tmpdir(), "kualta-story-"));
   let posted = 0;
-  // Bluesky's author feed shows one of the posts sharing a time and drops the rest, so each story's time follows the last.
-  let sentAt = 0;
   try {
     for (const story of due) {
       const id = `story-${story.id}`;
@@ -268,15 +282,13 @@ export async function crosspostStories({
             policy: "remove-all",
             maxBytes: 1_900_000,
           });
-          const zone = story.posted.match(/[+-]\d\d:\d\d$/)?.[0] ?? "";
-          sentAt = Math.max(clock(), sentAt + 1);
           await atproto("bluesky", authorization, [output], [info], {
             id,
             kind,
             caption: "",
             alt: "",
             tags: pinkleapTags,
-            createdAt: clockTime(sentAt, zone),
+            createdAt: storyDate(story, index.stories),
           });
         }
         story.pinkleap = `https://bsky.app/profile/${owner}/post/${rkey}`;
@@ -284,10 +296,12 @@ export async function crosspostStories({
         await writeIndex(indexFile, index);
       } catch (error) {
         log(`Story ${story.id} not sent to Pinkleap: ${error.message}`);
+        // Bluesky takes so many videos a day; the rest wait for a later run.
+        if (/limit|exceeded|\b429\b/i.test(error.message)) break;
       }
     }
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
-  return { posted };
+  return { posted, left: unsent.length - posted };
 }

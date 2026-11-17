@@ -5,9 +5,11 @@ import {
   getVideoLibrary,
   getWatchVideo,
   isShort,
+  liveStories,
   normalizeStoryPost,
   normalizeVideoPost,
   playlistDuration,
+  readStories,
   richText,
   splitTitle,
   storyDays,
@@ -272,4 +274,34 @@ test("the library carries stories from the media feed, and keeps the last ones w
   const later = await getVideoLibrary({ cache, fetch: fetcher(true), now: now + 10 * 60_000 });
   expect(later.stories.map((s) => s.rkey)).toEqual(["s1"]);
   expect(later.videos.map((video) => video.rkey)).toEqual(["v"]);
+});
+
+test("stories still up are the last day's, in the order they were posted", () => {
+  const now = Date.parse("2026-11-16T20:00:00Z");
+  const stories = [
+    normalizeStoryPost(story("newer", "2026-11-16T13:40:00-05:00"))!,
+    normalizeStoryPost(story("older", "2026-11-15T16:00:00-05:00"))!,
+    // a day and a minute ago
+    normalizeStoryPost(story("gone", "2026-11-15T14:59:00-05:00"))!,
+  ];
+  expect(liveStories(stories, now).map((s) => s.rkey)).toEqual(["older", "newer"]);
+});
+
+test("the whole history is read page by page, up to the pages allowed", async () => {
+  const pages = [
+    { feed: [{ post: story("c", "2026-11-16T09:00:00-05:00") }, { post: post("v", "not a story") }], cursor: "2" },
+    { feed: [{ post: story("b", "2026-11-10T09:00:00-05:00", "photo") }], cursor: "3" },
+    { feed: [{ post: story("a", "2026-09-14T09:00:00-05:00") }] },
+  ];
+  const asked: (string | null)[] = [];
+  const fetcher: ActivityFetch = async (input) => {
+    const cursor = new URL(String(input)).searchParams.get("cursor");
+    asked.push(cursor);
+    return Response.json(pages[cursor ? Number(cursor) - 1 : 0]);
+  };
+  expect((await readStories(fetcher, 50)).map((s) => s.rkey)).toEqual(["c", "b", "a"]);
+  expect(asked).toEqual([null, "2", "3"]);
+  asked.length = 0;
+  expect((await readStories(fetcher, 2)).map((s) => s.rkey)).toEqual(["c", "b"]);
+  expect(asked).toEqual([null, "2"]);
 });
