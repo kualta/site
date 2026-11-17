@@ -335,6 +335,29 @@ up), each clip in `~/Movies/Exported` the project copied (by name) is deleted wh
 holds its exact bytes, so a clip exported again since stays, and the project's folder goes.
 `--dry-run` says what would go, without archiving or deleting.
 
+## Footage archive
+
+Every graded clip also goes up, unlisted, to a YouTube channel of its own: a second copy beside
+the Cloudflare archive, re-encoded by YouTube but there to watch years on. Connect it as **YouTube
+footage archive** in the composer's Accounts. It signs in with a Chrome profile of its own
+(`.publisher/youtube-footage`): in that window, switch to the archive channel (or sign in with its
+own account) before Finish. The helper keeps the channel the window is on, with the page id that
+picks it among a Google account's channels, and refuses the channel the YouTube destination posts to.
+
+While it's connected, the helper uploads every half hour beside its other work, 10 clips a day by
+default (`bun run publisher footage --daily <clips>` changes it): first the grade app's exports in
+`~/Movies/Exported` (only files `exports.json` records, unchanged for two minutes), then graded
+clips the laptop has let go of, fetched from the archive's projects and checked against their hash.
+A clip graded again goes up again as a new video. Each goes in 64 MiB parts through YouTube's
+resumable upload, from where YouTube says it stopped when a part fails or the helper restarts, titled
+by the camera's clock (`2026-11-15 22:46:28 · clip 0313`) and described by its source and grade. A
+failure stops the run and waits half an hour, then twice as long each time up to a day, which also
+waits out YouTube's daily limit. What went up is in `.publisher/footage.json`;
+`bun run publisher footage` sums it up and `footage --now` runs a batch at once.
+
+YouTube takes videos over 15 minutes only from a verified channel: verify the archive channel's
+phone number at youtube.com/verify, or longer clips fail to process.
+
 ## Instagram stories
 
 The helper keeps the stories posted on Instagram (`scripts/publisher/stories.mjs`), on start and then hourly when

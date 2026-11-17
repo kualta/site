@@ -30,6 +30,7 @@ import {
   type VideoShape,
   type Preferences,
   type Preset,
+  type Account,
   type Platform,
   type PostKind,
 } from "@/lib/publisher/presets";
@@ -143,7 +144,7 @@ type Access = "loading" | "owner" | "signin" | "denied";
 /** What the page already knows from rendering on the server; without it the composer asks from the browser. */
 interface Props {
   initialAccess?: Access;
-  initialHelper?: { online: boolean; platforms: Platform[] };
+  initialHelper?: { online: boolean; platforms: Account[] };
   /** The tab the server rendered, from the path; the browser reads the address itself. */
   initialTab?: Tab;
 }
@@ -230,7 +231,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const [submitted, setSubmitted] = useState(false);
   const [token, setToken] = useState("");
   const [helperOnline, setHelperOnline] = useState(initialHelper?.online ?? false);
-  const [connectedPlatforms, setConnectedPlatforms] = useState<Platform[]>(initialHelper?.platforms ?? []);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Account[]>(initialHelper?.platforms ?? []);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [dragging, setDragging] = useState(false);
   const submission = useRef<{

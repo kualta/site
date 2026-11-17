@@ -55,7 +55,7 @@ import {
   saveDraft,
 } from "@/lib/publisher/drafts";
 import { EXPIRY_MARGIN, UPLOAD_LIFETIME, WEEK } from "@/lib/publisher/schedule";
-import { platforms } from "@/lib/publisher/presets";
+import { type Account, accounts, platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { calendarPosts } from "@/lib/publisher/calendar";
 import {
@@ -226,11 +226,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
     }
     if (path === "accounts" && request.method === "POST") {
       const data = (await request.json()) as {
-        platform: (typeof platforms)[number];
+        platform: Account;
         action: string;
         credentials?: unknown;
       };
-      if (!platforms.includes(data.platform) || !["connect", "disconnect"].includes(data.action))
+      if (!accounts.includes(data.platform) || !["connect", "disconnect"].includes(data.action))
         return json({ error: "Invalid connection" }, 400);
       if (data.credentials !== undefined) return json({ error: "Refresh the composer to connect with OAuth" }, 400);
       const helper = await db
@@ -489,10 +489,12 @@ export const ALL: APIRoute = async ({ request, params }) => {
         /** The helper publishes photo posts to TikTok and YouTube, and mixed posts to Farcaster and Lens. */
         carousels?: boolean;
       };
-      const supported = platforms.filter((p) => Array.isArray(input.platforms) && input.platforms.includes(p));
+      const connected = accounts.filter((a) => Array.isArray(input.platforms) && input.platforms.includes(a));
+      // Posts go only to destinations; the archive accounts are listed as connected, for the composer to show.
+      const supported = platforms.filter((p) => connected.includes(p));
       await db
         .prepare("UPDATE publisher_helper SET last_seen = ?, platforms = ? WHERE id = 1")
-        .bind(Date.now(), JSON.stringify(supported))
+        .bind(Date.now(), JSON.stringify(connected))
         .run();
       const connection = await claimConnection(db);
       if (connection) return json({ connection, target: null });
