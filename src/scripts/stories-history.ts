@@ -1,18 +1,25 @@
 import { getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import { readStories, storyDays, type StoryDay } from "@/lib/videos";
+import { dayName, renderCalendar } from "./stories-calendar";
 import { openStories, ringState, type StoryAuthor, warmWhenNear } from "./stories-viewer";
 
 /** History is read a hundred media posts a page; this many reach back years. */
 const HISTORY_PAGES = 50;
+/** Whether the owner left the calendar open, kept in this browser. */
+const CALENDAR_KEY = "stories-calendar";
 
 /**
- * Signed in as the owner, the row of stories goes on past the ones still up into every day of past stories, read from
- * Bluesky in the owner's own browser. Signing out takes them away again.
+ * Signed in as the owner, the row of stories shows every day of past stories, earliest on the left and the stories still
+ * up at the right end, so going right is always going later; a calendar lays the same days out by month. Both are read
+ * from Bluesky in the owner's own browser, and signing out takes them away again.
  */
 export function mountStoryHistory(root: HTMLElement): () => void {
   const list = root.querySelector<HTMLElement>("[data-stories-list]");
+  const calendar = root.querySelector<HTMLElement>("[data-stories-calendar]");
+  const toggle = root.querySelector<HTMLButtonElement>("[data-stories-calendar-toggle]");
   const owner = root.dataset.owner;
   if (!list || !owner) return () => {};
+  const live = list.querySelector<HTMLElement>("li");
   const author: StoryAuthor = {
     name: root.dataset.authorName || "kualta",
     avatar: root.dataset.authorAvatar || undefined,
@@ -22,6 +29,16 @@ export function mountStoryHistory(root: HTMLElement): () => void {
   let items: HTMLElement[] = [];
   let loading: AbortController | undefined;
 
+  /** Plays the day at `position`; the days after it follow on. */
+  function openDay(position: number, from: HTMLElement): void {
+    openStories(
+      days.map((day) => day.stories),
+      position,
+      from,
+      author,
+    );
+  }
+
   function paint(): void {
     for (const [position, item] of items.entries()) {
       const button = item.querySelector<HTMLElement>("button");
@@ -29,15 +46,21 @@ export function mountStoryHistory(root: HTMLElement): () => void {
     }
   }
 
+  function showCalendar(open: boolean): void {
+    if (!calendar || !toggle) return;
+    calendar.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    try {
+      localStorage.setItem(CALENDAR_KEY, open ? "open" : "closed");
+    } catch {}
+  }
+
   function dayItem(day: StoryDay, position: number): HTMLElement {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
     button.className = "story-day";
-    button.setAttribute(
-      "aria-label",
-      `${day.label}: ${day.stories.length} ${day.stories.length === 1 ? "story" : "stories"}`,
-    );
+    button.setAttribute("aria-label", dayName(day));
     const ring = document.createElement("span");
     ring.className = "story-ring";
     const cover = day.stories.at(-1)?.thumbnail;
@@ -45,7 +68,8 @@ export function mountStoryHistory(root: HTMLElement): () => void {
       const image = new Image();
       image.alt = "";
       image.decoding = "async";
-      image.loading = position < 8 ? "eager" : "lazy";
+      // the row opens at its latest end
+      image.loading = position >= days.length - 8 ? "eager" : "lazy";
       image.src = cover;
       ring.append(image);
     }
@@ -53,14 +77,7 @@ export function mountStoryHistory(root: HTMLElement): () => void {
     label.className = "story-day-label";
     label.textContent = day.label;
     button.append(ring, label);
-    button.addEventListener("click", () =>
-      openStories(
-        days.map((each) => each.stories),
-        position,
-        button,
-        author,
-      ),
-    );
+    button.addEventListener("click", () => openDay(position, button));
     warmWhenNear(button);
     item.append(button);
     return item;
@@ -72,6 +89,11 @@ export function mountStoryHistory(root: HTMLElement): () => void {
     for (const item of items) item.remove();
     items = [];
     days = [];
+    if (toggle) toggle.hidden = true;
+    if (calendar) {
+      calendar.hidden = true;
+      calendar.replaceChildren();
+    }
   }
 
   async function load(): Promise<void> {
@@ -95,7 +117,19 @@ export function mountStoryHistory(root: HTMLElement): () => void {
       days = storyDays(stories);
       items = days.map(dayItem);
       list!.append(...items);
+      // the stories still up are the latest, so they close the row
+      if (live) list!.append(live);
+      list!.scrollLeft = list!.scrollWidth;
       paint();
+      if (calendar && toggle) {
+        renderCalendar(calendar, days, openDay);
+        toggle.hidden = false;
+        let open = false;
+        try {
+          open = localStorage.getItem(CALENDAR_KEY) === "open";
+        } catch {}
+        showCalendar(open);
+      }
     } catch {
       // Bluesky couldn't be read; the stories still up stay, and the next sign-in tries again.
     } finally {
@@ -110,6 +144,7 @@ export function mountStoryHistory(root: HTMLElement): () => void {
     else if (!isOwner && (loading || items.length)) clear();
   }
 
+  toggle?.addEventListener("click", () => showCalendar(calendar?.hidden ?? false), { signal: listeners.signal });
   const unsubscribe = subscribeBlueskyAuth(follow);
   follow();
   document.addEventListener("stories:seen", paint, { signal: listeners.signal });

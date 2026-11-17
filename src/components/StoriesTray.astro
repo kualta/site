@@ -13,23 +13,36 @@ interface Props {
 
 const { live, channel } = Astro.props;
 ---
-<section
-  class="stories"
+<div
+  class="stories-block"
   data-stories-tray
   data-owner={identity.did}
   data-author-name={channel.name}
   data-author-avatar={channel.avatar}
-  aria-label="Stories"
 >
-  <ol class="stories-tray" data-stories-list>
-    <li hidden={!live.length}>
-      <StoryAvatar author={{ name: channel.name, avatar: channel.avatar }} stories={live} label={channel.name} />
-    </li>
-  </ol>
-  <div class="stories-account">
-    <BlueskyLogin client:idle compact />
+  <section class="stories" aria-label="Stories">
+    <ol class="stories-tray" data-stories-list>
+      <li hidden={!live.length}>
+        <StoryAvatar author={{ name: channel.name, avatar: channel.avatar }} stories={live} label={channel.name} />
+      </li>
+    </ol>
+    <div class="stories-account">
+      <button
+        type="button"
+        class="rounded-lg bg-secondary px-3 py-2 text-sm tracking-normal hover:opacity-80 dark:bg-dark-secondary"
+        data-stories-calendar-toggle
+        aria-controls="stories-calendar"
+        aria-expanded="false"
+        hidden
+      >
+        Calendar
+      </button>
+      <BlueskyLogin client:idle compact />
+    </div>
+  </section>
+  <div id="stories-calendar" class="stories-calendar" data-stories-calendar role="region" aria-label="Stories by day" hidden>
   </div>
-</section>
+</div>
 
 <script>
   import { mountOnEachPage } from "@/scripts/page-mount";

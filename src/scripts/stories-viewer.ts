@@ -306,6 +306,14 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
       if (author.avatar) authorImage.src = author.avatar;
     }
     viewer.hidden = false;
+    // the story grows out of the ring that was pressed
+    if (from) {
+      const ring = from.getBoundingClientRect();
+      const box = frame!.getBoundingClientRect();
+      frame!.style.transformOrigin = `${ring.left + ring.width / 2 - box.left}px ${
+        ring.top + ring.height / 2 - box.top
+      }px`;
+    }
     document.documentElement.dataset.storyOpen = "";
     paused = false;
     showPaused();
