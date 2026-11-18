@@ -63,8 +63,8 @@ html[data-story-open] { overflow: hidden; }
 .story-viewer {
   --story-height: min(100svh - 32px, 900px);
   --peek-scale: .55;
-  /* from the middle to a neighbour's middle: half the story, a gap past the arrows, half the neighbour */
-  --peek-offset: calc(var(--story-height) * 9 / 16 * (1 + var(--peek-scale)) / 2 + 96px);
+  /* from the middle to a neighbour's middle: half the story, a gap, half the neighbour */
+  --peek-offset: calc(var(--story-height) * 9 / 16 * (1 + var(--peek-scale)) / 2 + 40px);
   position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: 20px; overflow: hidden; background: rgb(0 0 0 / 80%); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: #f4f1ed; outline: none; animation: story-dim 200ms var(--ease-out);
 }
 .story-viewer[hidden] { display: none; }
@@ -93,8 +93,11 @@ html[data-story-open] { overflow: hidden; }
 .story-controls button:hover, .story-controls a:hover { background: rgb(255 255 255 / 14%); }
 .story-frame[data-paused="true"] [data-pause-icon], .story-frame:not([data-paused="true"]) [data-play-icon] { display: none; }
 .story-frame[data-muted="true"] [data-volume-icon], .story-frame:not([data-muted="true"]) [data-muted-icon] { display: none; }
-.story-step { position: relative; z-index: 1; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 14%); color: inherit; cursor: pointer; transition: background 150ms; }
+/* the arrows keep to the edges of the screen, clear of the story and its neighbours */
+.story-step { position: absolute; top: 50%; z-index: 2; translate: 0 -50%; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: rgb(255 255 255 / 14%); color: inherit; cursor: pointer; transition: background 150ms; }
 .story-step:hover { background: rgb(255 255 255 / 26%); }
+.story-step-previous { left: 24px; }
+.story-step-next { right: 24px; }
 @media (max-width: 760px) {
   .stories-block { margin-bottom: 28px; }
   .stories-tray { gap: 12px; }

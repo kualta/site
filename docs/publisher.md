@@ -402,7 +402,10 @@ as decoration. A ring or a calendar day opens a full-screen viewer like Instagra
 the story growing out of what was pressed and shrinking back into it on closing. On a screen wider than 1000 px the
 stories before and after wait at either side, small and dim, and clicking one goes to it; each step slides like a
 carousel, the new story growing out of the side it waited on and the old one shrinking into the other (a phone, with no
-room for them, slides the story in). Reduced motion turns all of this off. Inside it: a bar per story, photos for five seconds and videos for their length, tap
+room for them, slides the story in). A neighbour gets a new image whenever its story changes, since an image given a
+new source keeps showing the old picture until the new one loads; the pictures two stories away are fetched ahead, and
+one still loading stays hidden until it can fade in. The previous and next arrows keep to the edges of the screen.
+Reduced motion turns all of this off. Inside it: a bar per story, photos for five seconds and videos for their length, tap
 the right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to close, and on
 into the next, later day. Its header says how long ago each story went up, as Instagram does (now, 12m, 5h, 3d, 2w,
 1y), with the exact time, on the clock it was posted with, on hover. Each browser remembers which stories it has seen.
