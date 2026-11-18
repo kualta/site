@@ -397,8 +397,9 @@ archive does: a grid per month from the first day with stories to the last, each
 opening its stories. The browser remembers whether the calendar was left open. Signing out takes all of it away again.
 The data is public on Bluesky anyway; this only decides what the page shows. On /feed the same picture sits left of the
 header. Its ring is colored while a story still up hasn't been watched in that browser, grey once all have, and gone
-without one: Instagram's style in this site's own colors (lime through cyan to blue), the one place the site uses color
-as decoration. A ring or a calendar day opens a full-screen viewer like Instagram's, over the page dimmed and blurred,
+without one: Instagram's style in the brand's pink (`--primary`) and deeper pinks of its hue, the one place the site uses
+color as decoration. That pink is a tint near white, so on the light page the ring ends on a deeper shade of it instead.
+A focused ring draws its outline round the picture, not around the button and its caption. A ring or a calendar day opens a full-screen viewer like Instagram's, over the page dimmed and blurred,
 the story growing out of what was pressed and shrinking back into it on closing. On a screen wider than 1000 px the
 stories before and after wait at either side, small and dim, and clicking one goes to it; each step slides like a
 carousel, the new story growing out of the side it waited on and the old one shrinking into the other (a phone, with no

@@ -1,12 +1,20 @@
 /* Stories: rings that open a full-screen viewer the way Instagram's stories play. */
 
 /*
- * A ring as Instagram draws one: a band of color with a gap of page around the picture. The colors are this site's own
- * (the one place it uses color as decoration, on the owner's say): lime through cyan to blue. Once every story in a
- * ring has been watched it turns grey, and with nothing to watch there's none.
+ * A ring as Instagram draws one: a band of color with a gap of page around the picture. Its colors are the brand's pink
+ * (--primary) and deeper pinks of the same hue: the one place the site uses color as decoration, on the owner's say.
+ * That pink is a tint near white, so on the light page, where it would vanish, the ring ends on a deeper shade of it, as
+ * the table of contents does. Once every story in a ring has been watched it turns grey, and with nothing to watch
+ * there's none.
  */
 .story-ring {
   --ring: transparent;
+  --ring-pink: linear-gradient(
+    45deg,
+    oklch(from var(--primary) 0.58 0.2 h),
+    oklch(from var(--primary) 0.72 0.15 h) 50%,
+    var(--ring-end, oklch(from var(--primary) 0.84 0.09 h))
+  );
   display: block;
   flex: none;
   width: var(--ring-size, 72px);
@@ -24,9 +32,14 @@
   object-fit: cover;
   background: rgb(128 128 128 / 10%);
 }
+.dark .story-ring { --ring-end: var(--primary); }
 .dark .story-ring img { border-color: var(--bg-dark); }
-[data-state="unseen"] > .story-ring { --ring: linear-gradient(45deg, #a3e635, #34d399 35%, #22d3ee 65%, #3b82f6); }
+[data-state="unseen"] > .story-ring { --ring: var(--ring-pink); }
 [data-state="seen"] > .story-ring { --ring: var(--secondary-text); }
+/* the focus ring follows the round picture, not the button around it and its caption */
+.story-day:focus-visible { outline: none; }
+.story-day:focus-visible > .story-ring { outline: 2px solid var(--text); outline-offset: 2px; }
+.dark .story-day:focus-visible > .story-ring { outline-color: var(--text-dark); }
 .story-day { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 76px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
 .story-day:disabled { cursor: default; }
 /* a picture without a caption under it, as beside the feed's header, takes only its ring's width */
