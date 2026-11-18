@@ -12,6 +12,13 @@ import {
 import "@/styles/stories.css";
 ---
 <div class="story-viewer" data-story-viewer role="dialog" aria-modal="true" aria-label="Stories" hidden>
+  <!-- the stories before and after, waiting beside this one; the arrows do the same for the keyboard -->
+  <button type="button" class="story-peek story-peek-previous" data-story-peek="previous" data-empty tabindex="-1" aria-hidden="true">
+    <img alt="" />
+  </button>
+  <button type="button" class="story-peek story-peek-next" data-story-peek="next" data-empty tabindex="-1" aria-hidden="true">
+    <img alt="" />
+  </button>
   <button type="button" class="story-step story-step-previous" data-story-previous aria-label="Previous story">
     <ChevronLeftIcon size={22} />
   </button>
