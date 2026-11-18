@@ -109,6 +109,15 @@ export function openStories(...args: Parameters<Open>): void {
   mounted?.(...args);
 }
 
+/** The site's ease-out (--ease-out), for moves that settle. */
+const SETTLE = "cubic-bezier(0.23, 1, 0.32, 1)";
+/** An ease-in, for leaving. */
+const LEAVE = "cubic-bezier(0.4, 0, 1, 1)";
+
+function centre(rect: DOMRect): { x: number; y: number } {
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
 /**
  * The page's story viewer, shown the way Instagram shows stories: a bar per story along the top, photos for five
  * seconds and videos for their length, tapping the right side for the next and the left third for the one before,
@@ -124,8 +133,11 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   const authorName = viewer.querySelector<HTMLElement>("[data-story-name]");
   const pauseButton = viewer.querySelector<HTMLButtonElement>("[data-story-pause]");
   const muteButton = viewer.querySelector<HTMLButtonElement>("[data-story-mute]");
+  const previousPeek = viewer.querySelector<HTMLButtonElement>("[data-story-peek='previous']");
+  const nextPeek = viewer.querySelector<HTMLButtonElement>("[data-story-peek='next']");
   if (!frame || !media || !bars || !time || !link) return () => {};
   viewer.tabIndex = -1;
+  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const listeners = new AbortController();
   const options = { signal: listeners.signal };
@@ -139,6 +151,65 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   let generation = 0;
   let showing: Showing | undefined;
   let opener: HTMLElement | null = null;
+  /** the animations of a close under way */
+  let closing: Animation[] = [];
+
+  /** The story before or after the one up, going across days. */
+  function neighbour(step: 1 | -1): ViewerStory | undefined {
+    const list = groups[group];
+    if (step > 0) return list[index + 1] ?? groups[group + 1]?.[0];
+    return list[index - 1] ?? groups[group - 1]?.at(-1);
+  }
+
+  /** A neighbour waits beside the story, small and dim, as on Instagram's desktop viewer. */
+  function showPeek(peek: HTMLButtonElement | null, story: ViewerStory | undefined): void {
+    if (!peek) return;
+    const image = peek.querySelector("img");
+    const picture = story?.thumbnail ?? (story?.kind === "photo" ? story.src : undefined);
+    if (image && picture) image.src = picture;
+    else image?.removeAttribute("src");
+    if (story) delete peek.dataset.empty;
+    else peek.dataset.empty = "";
+  }
+
+  /**
+   * Steps like a carousel: the story now up grows out of the side it waited on, the one left behind shrinks into the
+   * other side, and a new neighbour comes in from beyond. With no neighbours on screen, as on a phone, it slides in.
+   */
+  function slide(direction: 1 | -1, before: { frame: DOMRect; from?: DOMRect }): void {
+    /** Moves `element` from where `rect` was drawn to where it stands, growing or shrinking on the way. */
+    function travel(element: HTMLElement, rect: DOMRect, opacity = 1): void {
+      const now = element.getBoundingClientRect();
+      const offset = centre(rect).x - centre(now).x;
+      element.animate(
+        [
+          { transform: `translateX(${offset}px) scale(${rect.width / now.width})`, opacity },
+          { transform: "none", opacity: 1 },
+        ],
+        { duration: 320, easing: SETTLE },
+      );
+    }
+    /** Fades `element` in from a little way off to the side it came from. */
+    function arrive(element: HTMLElement, percent: number, duration: number): void {
+      element.animate(
+        [
+          { transform: `translateX(${direction * percent}%)`, opacity: 0 },
+          { transform: "none", opacity: 1 },
+        ],
+        { duration, easing: SETTLE },
+      );
+    }
+    const shown = (peek: HTMLElement | null): peek is HTMLElement =>
+      !!peek?.offsetWidth && peek.dataset.empty === undefined;
+
+    frame!.style.transformOrigin = "50% 50%";
+    if (before.from?.width) travel(frame!, before.from, 0.6);
+    else arrive(frame!, 25, 260);
+    const behind = direction > 0 ? previousPeek : nextPeek;
+    const ahead = direction > 0 ? nextPeek : previousPeek;
+    if (shown(behind)) travel(behind, before.frame);
+    if (shown(ahead)) arrive(ahead, 30, 320);
+  }
 
   function showSound(): void {
     frame!.dataset.muted = String(muted === true);
@@ -201,7 +272,16 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     if (!paused) playVideo(video);
   }
 
-  function show(groupIndex: number, storyIndex: number): void {
+  /** Puts up one story; `direction` says whether it was reached going later (1) or earlier (-1), for the slide. */
+  function show(groupIndex: number, storyIndex: number, direction: 0 | 1 | -1 = 0): void {
+    // where the frame and the neighbour it now shows stood, for the slide to start from
+    const before =
+      direction && !motion.matches
+        ? {
+            frame: frame!.getBoundingClientRect(),
+            from: (direction > 0 ? nextPeek : previousPeek)?.getBoundingClientRect(),
+          }
+        : undefined;
     release();
     const list = groups[groupIndex];
     if (groupIndex !== group || bars!.children.length !== list.length)
@@ -251,21 +331,24 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
       void attach(video, entry, story.src);
     }
     // the next photo is fetched while this one is up, so it shows at once
-    const following = list[storyIndex + 1] ?? groups[groupIndex + 1]?.[0];
+    const following = neighbour(1);
     if (following?.kind === "photo") new Image().src = following.src;
+    showPeek(previousPeek, neighbour(-1));
+    showPeek(nextPeek, following);
+    if (before && direction) slide(direction, before);
   }
 
   function next(): void {
-    if (group < 0) return;
-    if (index + 1 < groups[group].length) show(group, index + 1);
-    else if (group + 1 < groups.length) show(group + 1, 0);
+    if (group < 0 || closing.length) return;
+    if (index + 1 < groups[group].length) show(group, index + 1, 1);
+    else if (group + 1 < groups.length) show(group + 1, 0, 1);
     else close();
   }
 
   function previous(): void {
-    if (group < 0) return;
-    if (index > 0) show(group, index - 1);
-    else if (group > 0) show(group - 1, groups[group - 1].length - 1);
+    if (group < 0 || closing.length) return;
+    if (index > 0) show(group, index - 1, -1);
+    else if (group > 0) show(group - 1, groups[group - 1].length - 1, -1);
     else show(group, 0);
   }
 
@@ -296,6 +379,7 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
 
   function open(list: ViewerStory[][], groupIndex: number, from: HTMLElement | null, author: StoryAuthor): void {
     if (!list[groupIndex]?.length) return;
+    if (closing.length) finishClose();
     release();
     groups = list;
     group = -1;
@@ -327,7 +411,10 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     viewer.focus();
   }
 
-  function close(): void {
+  /** Takes the viewer down: how a close ends, or all of it when motion is reduced or the page is going. */
+  function finishClose(): void {
+    for (const animation of closing) animation.cancel();
+    closing = [];
     if (group < 0) return;
     release();
     group = -1;
@@ -335,6 +422,34 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     viewer.hidden = true;
     delete document.documentElement.dataset.storyOpen;
     opener?.focus();
+  }
+
+  /** The story shrinks back into the ring it came out of while the page brightens again. */
+  function close(): void {
+    if (group < 0 || closing.length) return;
+    if (motion.matches) return finishClose();
+    if (showing?.element instanceof HTMLVideoElement) showing.element.pause();
+    const box = frame!.getBoundingClientRect();
+    const ring = opener?.isConnected ? opener.getBoundingClientRect() : undefined;
+    const target = ring?.width
+      ? `translate(${centre(ring).x - centre(box).x}px, ${centre(ring).y - centre(box).y}px) scale(${
+          ring.width / box.width
+        })`
+      : "scale(0.9)";
+    frame!.style.transformOrigin = "50% 50%";
+    const timing: KeyframeAnimationOptions = { duration: 240, easing: LEAVE, fill: "forwards" };
+    closing = [
+      frame!.animate(
+        [
+          { transform: "none", opacity: 1 },
+          { transform: target, opacity: 0 },
+        ],
+        timing,
+      ),
+      viewer.animate([{ opacity: 1 }, { opacity: 0 }], timing),
+    ];
+    // a close cut short by opening again is finished already
+    void Promise.all(closing.map((animation) => animation.finished)).then(finishClose, () => {});
   }
 
   // A tap goes forward or back; a hold pauses until let go; a drag down closes.
@@ -382,6 +497,19 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
 
   viewer.querySelector("[data-story-previous]")?.addEventListener("click", previous, options);
   viewer.querySelector("[data-story-next]")?.addEventListener("click", next, options);
+  // a neighbour steps to its story; focus stays on the viewer, so a key pressed after draws no ring around it
+  for (const [peek, step] of [
+    [previousPeek, previous],
+    [nextPeek, next],
+  ] as const)
+    peek?.addEventListener(
+      "click",
+      () => {
+        step();
+        viewer.focus({ preventScroll: true });
+      },
+      options,
+    );
   viewer.querySelector("[data-story-close]")?.addEventListener("click", close, options);
   pauseButton?.addEventListener("click", () => setPaused(!paused), options);
   muteButton?.addEventListener(
@@ -414,7 +542,7 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   mounted = open;
 
   return () => {
-    close();
+    finishClose();
     listeners.abort();
     if (mounted === open) mounted = undefined;
   };

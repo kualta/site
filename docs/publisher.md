@@ -399,7 +399,10 @@ The data is public on Bluesky anyway; this only decides what the page shows. On 
 header. Its ring is colored while a story still up hasn't been watched in that browser, grey once all have, and gone
 without one: Instagram's style in this site's own colors (lime through cyan to blue), the one place the site uses color
 as decoration. A ring or a calendar day opens a full-screen viewer like Instagram's, over the page dimmed and blurred,
-the story growing out of what was pressed: a bar per story, photos for five seconds and videos for their length, tap
+the story growing out of what was pressed and shrinking back into it on closing. On a screen wider than 1000 px the
+stories before and after wait at either side, small and dim, and clicking one goes to it; each step slides like a
+carousel, the new story growing out of the side it waited on and the old one shrinking into the other (a phone, with no
+room for them, slides the story in). Reduced motion turns all of this off. Inside it: a bar per story, photos for five seconds and videos for their length, tap
 the right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to close, and on
 into the next, later day. Its header says how long ago each story went up, as Instagram does (now, 12m, 5h, 3d, 2w,
 1y), with the exact time, on the clock it was posted with, on hover. Each browser remembers which stories it has seen.
