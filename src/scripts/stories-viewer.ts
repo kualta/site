@@ -154,20 +154,42 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   /** the animations of a close under way */
   let closing: Animation[] = [];
 
-  /** The story before or after the one up, going across days. */
-  function neighbour(step: 1 | -1): ViewerStory | undefined {
-    const list = groups[group];
-    if (step > 0) return list[index + 1] ?? groups[group + 1]?.[0];
-    return list[index - 1] ?? groups[group - 1]?.at(-1);
+  /** The story `offset` stories after the one up (before, when negative), going across days. */
+  function nearby(offset: number): ViewerStory | undefined {
+    let at = group;
+    let position = index + offset;
+    while (at >= 0 && at < groups.length) {
+      if (position < 0) {
+        at--;
+        if (at >= 0) position += groups[at].length;
+      } else if (position >= groups[at].length) {
+        position -= groups[at].length;
+        at++;
+      } else return groups[at][position];
+    }
+    return undefined;
+  }
+
+  /** The small picture a neighbour shows. */
+  function picture(story: ViewerStory | undefined): string | undefined {
+    return story?.thumbnail ?? (story?.kind === "photo" ? story.src : undefined);
   }
 
   /** A neighbour waits beside the story, small and dim, as on Instagram's desktop viewer. */
   function showPeek(peek: HTMLButtonElement | null, story: ViewerStory | undefined): void {
     if (!peek) return;
-    const image = peek.querySelector("img");
-    const picture = story?.thumbnail ?? (story?.kind === "photo" ? story.src : undefined);
-    if (image && picture) image.src = picture;
-    else image?.removeAttribute("src");
+    // A new image each time: one whose source changes keeps showing its old picture until the new one has loaded, so a
+    // neighbour sliding in would show the story it replaces and then change.
+    const src = picture(story);
+    if (src) {
+      const image = new Image();
+      image.alt = "";
+      image.decoding = "sync";
+      image.src = src;
+      peek.replaceChildren(image);
+    } else peek.replaceChildren();
+    // one still waiting for an earlier picture shows this one instead
+    peek.style.opacity = "";
     if (story) delete peek.dataset.empty;
     else peek.dataset.empty = "";
   }
@@ -208,7 +230,22 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     const behind = direction > 0 ? previousPeek : nextPeek;
     const ahead = direction > 0 ? nextPeek : previousPeek;
     if (shown(behind)) travel(behind, before.frame);
-    if (shown(ahead)) arrive(ahead, 30, 320);
+    if (shown(ahead)) {
+      // the neighbour coming in waits for its picture, so it never fades in empty
+      const image = ahead.querySelector("img");
+      if (!image || image.complete) arrive(ahead, 30, 320);
+      else {
+        ahead.style.opacity = "0";
+        const reveal = (): void => {
+          // a later step has put another picture there; that one comes in on its own
+          if (!ahead.contains(image)) return;
+          ahead.style.opacity = "";
+          arrive(ahead, 30, 320);
+        };
+        image.addEventListener("load", reveal, { once: true });
+        image.addEventListener("error", reveal, { once: true });
+      }
+    }
   }
 
   function showSound(): void {
@@ -331,10 +368,15 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
       void attach(video, entry, story.src);
     }
     // the next photo is fetched while this one is up, so it shows at once
-    const following = neighbour(1);
+    const following = nearby(1);
     if (following?.kind === "photo") new Image().src = following.src;
-    showPeek(previousPeek, neighbour(-1));
+    showPeek(previousPeek, nearby(-1));
     showPeek(nextPeek, following);
+    // so are the pictures two away, which the neighbours show after the next step
+    for (const offset of [-2, 2]) {
+      const src = picture(nearby(offset));
+      if (src) new Image().src = src;
+    }
     if (before && direction) slide(direction, before);
   }
 
