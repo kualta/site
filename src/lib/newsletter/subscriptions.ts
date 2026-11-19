@@ -1,16 +1,24 @@
+import { readFormToken } from "./form-token";
 import { notifyNewsletter, type WaitUntil } from "./notifications";
 import { digest, json, normalizeEmail, readJson, record, sign } from "./security";
 import { rateLimit } from "./store";
 import type { NewsletterEnv } from "./types";
 
 const accepted = () => json(200, { message: "You’re subscribed." });
+// Bots get the same answer as people, so they can't tell which check caught them.
+function blocked(reason: string): Response {
+  console.info("newsletter_signup_blocked", { reason });
+  return accepted();
+}
 export async function subscribe(request: Request, env: NewsletterEnv, waitUntil?: WaitUntil): Promise<Response> {
   const requestOrigin = request.headers.get("Origin");
   if (requestOrigin && requestOrigin !== new URL(request.url).origin)
     return json(403, { message: "Please subscribe from this site." });
+  let body: Record<string, unknown>;
   let email: string | null;
   try {
-    email = normalizeEmail(record(await readJson(request, 2048)).email);
+    body = record(await readJson(request, 2048));
+    email = normalizeEmail(body.email);
   } catch {
     return json(400, { message: "Please enter a valid email address." });
   }
@@ -19,9 +27,23 @@ export async function subscribe(request: Request, env: NewsletterEnv, waitUntil?
   const secret = env.NEWSLETTER_TOKEN_SECRET;
   if (!db || !secret || secret.length < 32)
     return json(503, { message: "Signup is temporarily unavailable. Please try again later." });
+  // Every browser sends Origin with a POST; plain HTTP scripts usually don't.
+  if (!requestOrigin) return blocked("no_origin");
+  // A hidden field people never see, so never fill in.
+  if (typeof body.website === "string" && body.website.trim()) return blocked("honeypot");
+  // navigator.webdriver, set by Puppeteer, Playwright and Selenium.
+  if (body.automated === true) return blocked("automated");
+  const form = await readFormToken(secret, body.token);
+  if (typeof form === "string") return blocked(form);
   const now = Math.floor(Date.now() / 1000);
   try {
     await db.prepare("DELETE FROM newsletter_rate_limits WHERE expires_at < ?").bind(now).run();
+    const used = await db
+      .prepare(`INSERT INTO newsletter_rate_limits(key,count,expires_at) VALUES (?,1,?)
+      ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count`)
+      .bind(`form:${form.id}`, form.expiresAt)
+      .first<{ count: number }>();
+    if (!used || used.count > 1) return blocked("token_reused");
     const ip = request.headers.get("CF-Connecting-IP") || "local";
     if (
       !(await rateLimit(db, `ip:${await sign(secret, "ip", ip)}`, 5, 3600, now)) ||

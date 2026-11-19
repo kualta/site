@@ -26,6 +26,16 @@ than IP addresses. Missing configuration fails closed. Existing active or suppre
 addresses get the same success response. Suppressed addresses cannot
 reactivate through the public form.
 
+Bots are filtered without a captcha. When the email field is focused, the form fetches
+a signed, single-use token from `GET /api/subscribe`; a signup is only stored when
+its token is between two seconds and an hour old. The form waits out the rest of the
+two seconds itself. A signup is also dropped when it has no `Origin` header, when
+the hidden `website` honeypot field is filled in, or when the browser reports
+`navigator.webdriver`. Dropped signups get the same **You’re subscribed.** answer
+but are never stored or announced on Discord; the Worker logs
+`newsletter_signup_blocked` with the reason (`no_origin`, `honeypot`, `automated`,
+`token_missing`, `token_invalid`, `token_early`, `token_expired`, `token_reused`).
+
 Every newsletter has a signed, site-owned unsubscribe URL and the RFC 8058
 `List-Unsubscribe` / `List-Unsubscribe-Post` headers. GET shows a confirmation;
 POST unsubscribes, including one-click requests from mail clients. Unsubscribe
