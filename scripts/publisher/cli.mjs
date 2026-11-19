@@ -225,13 +225,15 @@ if (command === "connect") {
         );
       } else if (config.platforms.includes("instagram") && Date.now() >= storiesDue) {
         storiesDue = Date.now() + 60 * 60_000;
-        const { saved, total } = await archiveStories({ stateDir });
+        const { saved, removed, total } = await archiveStories({ stateDir });
         if (saved) console.log(`Saved ${saved} Instagram stories (${total} in ${storiesRoot})`);
-        storiesChanged ||= saved > 0;
+        if (removed) console.log(`${removed} saved Instagram stories were deleted there; their files stay`);
+        storiesChanged ||= saved > 0 || removed > 0;
         if (config.platforms.includes("bluesky")) {
-          const { posted, left } = await crosspostStories({ oauth });
+          const { posted, left, unposted } = await crosspostStories({ oauth });
           if (posted) console.log(`Sent ${posted} Instagram stories to Pinkleap${left ? ` (${left} to go)` : ""}`);
-          storiesChanged ||= posted > 0;
+          if (unposted) console.log(`Took ${unposted} stories deleted on Instagram off Pinkleap`);
+          storiesChanged ||= posted > 0 || unposted > 0;
         }
         if (storiesChanged) {
           const { sent } = await archiveProject(storiesRoot, {

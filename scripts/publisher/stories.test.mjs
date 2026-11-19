@@ -96,8 +96,8 @@ test("the archive is saved by posting date, once, with the song noted", async ()
     "/api/v1/archive/reel/day_shells/?timezone_offset=-18000",
     {
       items: [
-        { id: "archiveDay:2", media_count: 2 },
-        { id: "archiveDay:1", media_count: 1 },
+        { id: "archiveDay:2", media_count: 2, latest_reel_media: 1794713400 },
+        { id: "archiveDay:1", media_count: 1, latest_reel_media: 1789387200 },
       ],
       more_available: false,
     },
@@ -121,13 +121,19 @@ test("the archive is saved by posting date, once, with the song noted", async ()
     [shells, reply("/api/v1/feed/reels_media/", { reels: { "archiveDay:2": { id: "archiveDay:2", items: newest } } })],
     [reply("/api/v1/feed/reels_media/", { reels: { "archiveDay:1": { id: "archiveDay:1", items: older } } })],
   ]);
-  expect(await archiveStories({ ...options, open: first.open })).toEqual({ saved: 3, total: 3 });
+  expect(await archiveStories({ ...options, open: first.open })).toEqual({ saved: 3, removed: 0, total: 3 });
   expect(first.seen).toEqual({ scrolls: 1, closed: true });
   const index = JSON.parse(await readFile(join(root, "index.json"), "utf8"));
   expect(index.stories).toEqual([
-    { id: "3986126615415459488", posted: "2026-09-14T07:00:00-05:00", file: "2026/09/2026-09-14 07.00.00.jpg" },
+    {
+      id: "3986126615415459488",
+      day: "archiveDay:1",
+      posted: "2026-09-14T07:00:00-05:00",
+      file: "2026/09/2026-09-14 07.00.00.jpg",
+    },
     {
       id: "4030127951811103297",
+      day: "archiveDay:2",
       posted: "2026-11-14T22:30:00-05:00",
       file: "2026/11/2026-11-14 22.30.00.mp4",
       song: "Riders on the Storm",
@@ -135,11 +141,13 @@ test("the archive is saved by posting date, once, with the song noted", async ()
     },
     {
       id: "4030127951811103298",
+      day: "archiveDay:2",
       posted: "2026-11-14T22:30:00-05:00",
       file: "2026/11/2026-11-14 22.30.00 (2).mp4",
     },
   ]);
-  expect(index.days).toEqual({ "archiveDay:2": 2, "archiveDay:1": 1 });
+  // a day is known by its count and its latest story
+  expect(index.days).toEqual({ "archiveDay:2": "2/1794713400", "archiveDay:1": "1/1789387200" });
   const saved = join(root, "2026/11/2026-11-14 22.30.00.mp4");
   expect(await readFile(saved, "utf8")).toBe("bytes of https://cdn.example/4030127951811103297.mp4");
   expect((await stat(saved)).mtimeMs).toBe(1794713400 * 1000);
@@ -149,7 +157,7 @@ test("the archive is saved by posting date, once, with the song noted", async ()
   // Finished days aren't fetched again: the next run neither scrolls nor downloads.
   downloads.length = 0;
   const again = archive([[shells]]);
-  expect(await archiveStories({ ...options, open: again.open })).toEqual({ saved: 0, total: 3 });
+  expect(await archiveStories({ ...options, open: again.open })).toEqual({ saved: 0, removed: 0, total: 3 });
   expect(again.seen.scrolls).toBe(0);
   expect(downloads).toEqual([]);
 });
@@ -169,6 +177,7 @@ test("a story that fails to download is tried again on the next run", async () =
   const flaky = async (url) => (url.endsWith("/2.mp4") ? new Response("", { status: 403 }) : new Response("ok"));
   expect(await archiveStories({ ...options, open: archive([replies()]).open, fetcher: flaky })).toEqual({
     saved: 1,
+    removed: 0,
     total: 1,
   });
   expect(logged).toEqual(["Story 2 not saved: download failed (403)"]);
@@ -178,6 +187,7 @@ test("a story that fails to download is tried again on the next run", async () =
   const fixed = async (url) => (fetched.push(url), new Response("ok"));
   expect(await archiveStories({ ...options, open: archive([replies()]).open, fetcher: fixed })).toEqual({
     saved: 1,
+    removed: 0,
     total: 2,
   });
   expect(fetched).toEqual(["https://cdn.example/2.mp4"]);
@@ -244,7 +254,7 @@ test("every story goes to Pinkleap once, those still up first, each dated when i
     },
     log: () => {},
   };
-  expect(await crosspostStories(options)).toEqual({ posted: 4, left: 1 });
+  expect(await crosspostStories(options)).toEqual({ posted: 4, left: 1, unposted: 0 });
   expect(prepared).toEqual([
     ["2026/11/2026-11-15 20.00.00.jpg", { kind: "photo", policy: "remove-all", maxBytes: 1_900_000 }],
     ["2026/11/2026-11-16 08.00.00.mp4", { kind: "video", policy: "remove-all", maxBytes: 1_900_000 }],
@@ -273,13 +283,13 @@ test("every story goes to Pinkleap once, those still up first, each dated when i
   // The next run sends the rest. A story posted in the same second as another is a millisecond after it, since
   // Bluesky's author feed shows only one of several posts sharing a time.
   posts.length = 0;
-  expect(await crosspostStories(options)).toEqual({ posted: 1, left: 0 });
+  expect(await crosspostStories(options)).toEqual({ posted: 1, left: 0, unposted: 0 });
   expect(posts).toEqual([story("twin", "video", "2026-11-14T20:00:00.001-05:00")]);
 
   // Sent stories aren't sent again, and with nothing due the account isn't even asked for.
   posts.length = 0;
   const noOauth = { agent: async () => Promise.reject(new Error("must not sign in")) };
-  expect(await crosspostStories({ ...options, oauth: noOauth })).toEqual({ posted: 0, left: 0 });
+  expect(await crosspostStories({ ...options, oauth: noOauth })).toEqual({ posted: 0, left: 0, unposted: 0 });
   expect(posts).toEqual([]);
 });
 
@@ -302,7 +312,7 @@ test("Bluesky's daily video limit ends a run, leaving the rest for the next", as
     fetcher: async () => new Response("", { status: 400 }),
     log: () => {},
   });
-  expect(result).toEqual({ posted: 0, left: 2 });
+  expect(result).toEqual({ posted: 0, left: 2, unposted: 0 });
   expect(posts).toEqual(["story-a"]);
 });
 
@@ -328,9 +338,197 @@ test("a story already posted is noted rather than posted twice, and a failed one
       new Response("{}", { status: url.includes(recordKey("publisher:bluesky:story-a")) ? 200 : 400 }),
     log: (line) => logged.push(line),
   });
-  expect(result).toEqual({ posted: 1, left: 1 });
+  expect(result).toEqual({ posted: 1, left: 1, unposted: 0 });
   expect(posts).toEqual(["story-b"]);
   expect(logged).toEqual(["Story b not sent to Pinkleap: Bluesky video processing failed"]);
   const index = JSON.parse(await readFile(join(root, "index.json"), "utf8"));
   expect(index.stories.map((story) => Boolean(story.pinkleap))).toEqual([true, false]);
+});
+
+/** The archive's list of days: [id, story count, latest story's time] each. */
+const shellsReply = (days, more = false) =>
+  reply("/api/v1/archive/reel/day_shells/", {
+    items: days.map(([id, count, latest]) => ({ id, media_count: count, latest_reel_media: latest })),
+    more_available: more,
+  });
+const reelsReply = (id, items) => reply("/api/v1/feed/reels_media/", { reels: { [id]: { id, items } } });
+/** A stories folder holding these saved stories, with the archive's days as last seen. */
+async function savedArchive(stories, days) {
+  const root = await savedStories(stories);
+  await writeFile(join(root, "index.json"), JSON.stringify({ days, stories }));
+  return root;
+}
+const readIndex = async (root) => JSON.parse(await readFile(join(root, "index.json"), "utf8"));
+const archiveOptions = (root, extra) => ({
+  stateDir: "/state",
+  root,
+  tag: async () => {},
+  fetcher: async (url) => new Response(`bytes of ${url}`),
+  log: () => {},
+  now: Date.parse("2026-11-19T12:00:00Z"),
+  ...extra,
+});
+
+test("a story deleted on Instagram is marked removed once, and keeps its file", async () => {
+  const root = await savedArchive(
+    [
+      { id: "a", day: "D", posted: "2026-11-18T08:00:00-05:00", file: "a.mp4" },
+      { id: "b", day: "D", posted: "2026-11-18T09:00:00-05:00", file: "b.mp4" },
+    ],
+    { D: "2/1795524400" },
+  );
+  // the day holds one story now: b was deleted
+  const page = archive([[shellsReply([["D", 1, 1795520800]]), reelsReply("D", [story("a", 1795520800)])]]);
+  expect(await archiveStories(archiveOptions(root, { open: page.open }))).toEqual({ saved: 0, removed: 1, total: 2 });
+  const index = await readIndex(root);
+  expect(index.stories.map((s) => [s.id, s.removed])).toEqual([
+    ["a", undefined],
+    ["b", "2026-11-19T12:00:00.000Z"],
+  ]);
+  expect(index.days).toEqual({ D: "1/1795520800" });
+  expect(await readFile(join(root, "b.mp4"), "utf8")).toBe("bytes of b");
+  const again = archive([[shellsReply([["D", 1, 1795520800]])]]);
+  expect(await archiveStories(archiveOptions(root, { open: again.open }))).toEqual({ saved: 0, removed: 0, total: 2 });
+  expect(again.seen.scrolls).toBe(0);
+});
+
+test("a story deleted and another posted the same day still change the day", async () => {
+  const root = await savedArchive([{ id: "a", day: "D", posted: "2026-11-18T08:00:00-05:00", file: "a.mp4" }], {
+    D: "1/1795520800",
+  });
+  // still one story, but a later one
+  const page = archive([[shellsReply([["D", 1, 1795528000]]), reelsReply("D", [story("c", 1795528000)])]]);
+  expect(await archiveStories(archiveOptions(root, { open: page.open }))).toEqual({ saved: 1, removed: 1, total: 2 });
+  const index = await readIndex(root);
+  expect(index.stories.map((s) => [s.id, s.day, Boolean(s.removed)])).toEqual([
+    ["a", "D", true],
+    ["c", "D", false],
+  ]);
+});
+
+test("a day gone from the archive takes its stories with it, once the list of days was read to its end", async () => {
+  const root = await savedArchive(
+    [
+      { id: "a", day: "D1", posted: "2026-11-17T08:00:00-05:00", file: "a.mp4" },
+      { id: "b", day: "D2", posted: "2026-11-18T08:00:00-05:00", file: "b.mp4" },
+    ],
+    { D1: "1/1", D2: "1/2" },
+  );
+  // more days to come: D2 may just not have been listed yet
+  const partial = archive([[shellsReply([["D1", 1, 1]], true)]]);
+  expect(await archiveStories(archiveOptions(root, { open: partial.open }))).toEqual({
+    saved: 0,
+    removed: 0,
+    total: 2,
+  });
+  const whole = archive([[shellsReply([["D1", 1, 1]])]]);
+  expect(await archiveStories(archiveOptions(root, { open: whole.open }))).toEqual({ saved: 0, removed: 1, total: 2 });
+  const index = await readIndex(root);
+  expect(index.stories.map((s) => [s.id, Boolean(s.removed)])).toEqual([
+    ["a", false],
+    ["b", true],
+  ]);
+  expect(index.days).toEqual({ D1: "1/1" });
+});
+
+test("stories saved before days were noted are placed by reading the archive whole once", async () => {
+  const root = await savedArchive(
+    [
+      { id: "p", posted: "2026-11-17T08:00:00-05:00", file: "p.mp4" },
+      { id: "q", posted: "2026-11-18T08:00:00-05:00", file: "q.mp4" },
+      { id: "r", posted: "2026-11-18T09:00:00-05:00", file: "r.mp4" },
+    ],
+    // days remembered by their count alone, as before
+    { D1: 1, D2: 1 },
+  );
+  const downloads = [];
+  const page = archive([
+    [
+      shellsReply([
+        ["D2", 1, 2],
+        ["D1", 1, 1],
+      ]),
+      reelsReply("D2", [story("q", 2)]),
+    ],
+    [reelsReply("D1", [story("p", 1)])],
+  ]);
+  const options = archiveOptions(root, {
+    open: page.open,
+    fetcher: async (url) => (downloads.push(url), new Response("")),
+  });
+  expect(await archiveStories(options)).toEqual({ saved: 0, removed: 1, total: 3 });
+  expect(downloads).toEqual([]);
+  const index = await readIndex(root);
+  // r is in no day the archive has
+  expect(index.stories.map((s) => [s.id, s.day, Boolean(s.removed)])).toEqual([
+    ["p", "D1", false],
+    ["q", "D2", false],
+    ["r", undefined, true],
+  ]);
+  expect(index.days).toEqual({ D1: "1/1", D2: "1/2" });
+});
+
+test("a story the archive shows under a new day has moved, not gone", async () => {
+  const root = await savedArchive([{ id: "a", day: "old", posted: "2026-11-18T23:30:00-05:00", file: "a.mp4" }], {
+    old: "1/1",
+  });
+  // the laptop's time zone changed, and Instagram cut its days anew
+  const page = archive([[shellsReply([["new", 1, 1]]), reelsReply("new", [story("a", 1)])]]);
+  expect(await archiveStories(archiveOptions(root, { open: page.open }))).toEqual({ saved: 0, removed: 0, total: 1 });
+  const index = await readIndex(root);
+  expect(index.stories.map((s) => [s.id, s.day, s.removed])).toEqual([["a", "new", undefined]]);
+  expect(index.days).toEqual({ new: "1/1" });
+});
+
+test("a run that would take down most saved stories takes down none", async () => {
+  const saved = Array.from({ length: 8 }, (_, i) => ({
+    id: `s${i}`,
+    day: "D",
+    posted: `2026-11-18T0${i}:00:00-05:00`,
+    file: `s${i}.mp4`,
+  }));
+  const root = await savedArchive(saved, { D: "8/8" });
+  const logged = [];
+  const page = archive([[shellsReply([["D", 1, 1]]), reelsReply("D", [story("s0", 1)])]]);
+  const result = await archiveStories(archiveOptions(root, { open: page.open, log: (line) => logged.push(line) }));
+  expect(result).toEqual({ saved: 0, removed: 0, total: 8 });
+  expect(logged).toEqual([
+    "Instagram's archive is missing 7 of 8 saved stories; none were marked removed, in case its page came back incomplete",
+  ]);
+  // the day isn't remembered as seen, so the next run looks again
+  expect((await readIndex(root)).days).toEqual({ D: "8/8" });
+});
+
+test("a story deleted on Instagram comes off Pinkleap and is never sent", async () => {
+  const removed = "2026-11-19T12:00:00.000Z";
+  const root = await savedStories([
+    { id: "x", posted: "2026-11-18T08:00:00-05:00", file: "x.mp4", pinkleap: "https://bsky.app/x", removed },
+    { id: "y", posted: "2026-11-18T09:00:00-05:00", file: "y.mp4", removed },
+  ]);
+  const deleted = [];
+  const session = {
+    agent: {
+      did: "did:plc:jhvnnnd3adml7t6anu3ay7ip",
+      com: { atproto: { repo: { deleteRecord: async (args) => deleted.push(args) } } },
+    },
+    pdsUrl: new URL("https://pds.example"),
+  };
+  const result = await crosspostStories({
+    root,
+    now: Date.parse("2026-11-19T12:00:00Z"),
+    oauth: { agent: async () => session },
+    atproto: async () => {
+      throw new Error("must not post");
+    },
+    log: () => {},
+  });
+  expect(result).toEqual({ posted: 0, left: 0, unposted: 1 });
+  expect(deleted).toEqual([
+    {
+      repo: "did:plc:jhvnnnd3adml7t6anu3ay7ip",
+      collection: "app.bsky.feed.post",
+      rkey: recordKey("publisher:bluesky:story-x"),
+    },
+  ]);
+  expect((await readIndex(root)).stories.map((s) => s.pinkleap)).toEqual([undefined, undefined]);
 });

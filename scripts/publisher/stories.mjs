@@ -62,6 +62,11 @@ export function dateTags({ date, time, zone }, ext) {
   ];
 }
 
+/** A story's id from the archive. pk outgrows JavaScript's numbers; id is the same number as text, followed by _<owner>. */
+function storyId(item) {
+  return String(item.id ?? "").split("_")[0];
+}
+
 /** Instagram's web replies sometimes open with a for(;;); guard and wrap their data in a payload. */
 function parse(text) {
   const data = JSON.parse(text.replace(/^for \(;;\);/, ""));
@@ -88,11 +93,20 @@ async function readIndex(file) {
   }
 }
 
+/** A run would take down more than this share of the saved stories only if Instagram's page came back incomplete. */
+const MOST_REMOVED = 0.5;
+
 /**
  * Saves every story in the signed-in account's Instagram archive that isn't saved yet, as
- * <root>/YYYY/MM/YYYY-MM-DD HH.MM.SS.mp4 dated to when it was posted. The archive page loads its days as it
- * scrolls, so this reads the replies the page asks for and scrolls only until every unsaved day has arrived.
- * index.json in the root lists each saved story and remembers finished days so later runs skip them.
+ * <root>/YYYY/MM/YYYY-MM-DD HH.MM.SS.mp4 dated to when it was posted, and notes the ones deleted there since. The
+ * archive page loads its days as it scrolls, so this reads the replies the page asks for and scrolls only until every
+ * day that changed has arrived. A day is known by its story count and its latest story, so a story deleted and another
+ * posted the same day still change it. index.json in the root lists each saved story with its archive day, and
+ * remembers each day as last seen so later runs skip the unchanged ones.
+ *
+ * A saved story that has gone from its day, or whose day has gone, was deleted on Instagram and is marked `removed`:
+ * its file stays, and crosspostStories takes it off Pinkleap. Stories saved before days were noted are placed by
+ * reading the archive whole once. A run that would mark more than half the saved stories marks none, and says so.
  */
 export async function archiveStories({
   stateDir,
@@ -101,10 +115,12 @@ export async function archiveStories({
   fetcher = fetch,
   tag = (args) => exec("exiftool", args),
   log = console.log,
+  now = Date.now(),
 } = {}) {
   const indexFile = join(root, "index.json");
   const index = await readIndex(indexFile);
-  const savedIds = new Set(index.stories.map((story) => story.id));
+  const byId = new Map(index.stories.map((story) => [story.id, story]));
+  const fullScan = index.stories.some((story) => !story.removed && !story.day);
   const days = new Map();
   const reels = new Map();
   let more = false;
@@ -119,7 +135,7 @@ export async function archiveStories({
         if (!response.ok() || !(shells || pathname.startsWith("/api/v1/feed/reels_media/"))) return;
         const data = parse(await response.text());
         if (shells) {
-          for (const day of data.items ?? []) days.set(day.id, day.media_count);
+          for (const day of data.items ?? []) days.set(day.id, `${day.media_count}/${day.latest_reel_media ?? ""}`);
           more = Boolean(data.more_available);
         } else
           for (const reel of data.reels ? Object.values(data.reels) : data.reels_media ?? [])
@@ -135,25 +151,35 @@ export async function archiveStories({
       await page.waitForTimeout(500);
     }
     if (!days.size) throw new Error("Instagram's story archive didn't load. Log in to Instagram in the crossposter.");
-    const unsaved = () => [...days].filter(([id, count]) => index.days[id] !== count).map(([id]) => id);
+    const changed = () => [...days].filter(([id, mark]) => fullScan || index.days[id] !== mark).map(([id]) => id);
     for (let idle = 0, seen = replies; idle < 10; ) {
       const oldest = [...days.keys()].at(-1);
-      const reachedSaved = !more || index.days[oldest] === days.get(oldest);
-      if (reachedSaved && unsaved().every((id) => reels.has(id))) break;
+      const reachedSaved = !more || (!fullScan && index.days[oldest] === days.get(oldest));
+      if (reachedSaved && changed().every((id) => reels.has(id))) break;
       await page.mouse.wheel(0, 4000);
       await page.waitForTimeout(1500);
       idle = replies === seen ? idle + 1 : 0;
       seen = replies;
     }
     let saved = 0;
-    for (const day of unsaved()) {
+    /** saved stories Instagram no longer has */
+    const gone = [];
+    /** days to remember as seen, once this run's removals stand */
+    const marks = new Map();
+    for (const day of changed()) {
       const items = reels.get(day);
       if (!items) continue;
       let complete = true;
+      const present = new Set();
       for (const item of items) {
-        // pk outgrows JavaScript's numbers; id is the same number as text, followed by _<owner>.
-        const id = String(item.id ?? "").split("_")[0];
-        if (!id || savedIds.has(id)) continue;
+        const id = storyId(item);
+        if (!id) continue;
+        present.add(id);
+        const known = byId.get(id);
+        if (known) {
+          known.day = day;
+          continue;
+        }
         try {
           const media = storyMedia(item);
           if (!media) throw new Error("no media");
@@ -184,13 +210,15 @@ export async function archiveStories({
             await rm(partial, { force: true });
           }
           const music = item.story_music_stickers?.[0]?.music_asset_info;
-          index.stories.push({
+          const entry = {
             id,
+            day,
             posted: `${when.date}T${when.time}${when.zone}`,
             file: file.slice(root.length + 1),
             ...(music?.title ? { song: music.title, artist: music.display_artist } : {}),
-          });
-          savedIds.add(id);
+          };
+          index.stories.push(entry);
+          byId.set(id, entry);
           saved++;
           index.stories.sort((a, b) => a.posted.localeCompare(b.posted));
           await writeIndex(indexFile, index);
@@ -200,12 +228,35 @@ export async function archiveStories({
           log(`Story ${id} not saved: ${error.message}`);
         }
       }
-      if (complete) {
-        index.days[day] = days.get(day);
-        await writeIndex(indexFile, index);
-      }
+      // what this day held before and no longer holds was deleted on Instagram
+      gone.push(...index.stories.filter((story) => story.day === day && !story.removed && !present.has(story.id)));
+      if (complete) marks.set(day, days.get(day));
+      await writeIndex(indexFile, index);
     }
-    return { saved, total: index.stories.length };
+    // Only a list of days read to its end shows which have gone, and only an archive read whole shows that a story
+    // never placed in a day isn't there at all.
+    const vanished = more ? [] : Object.keys(index.days).filter((day) => !days.has(day));
+    for (const day of vanished) gone.push(...index.stories.filter((story) => story.day === day && !story.removed));
+    if (fullScan && !more && [...days.keys()].every((day) => reels.has(day)))
+      gone.push(...index.stories.filter((story) => !story.day && !story.removed));
+    // A story the page showed anywhere is still there: Instagram cuts days by the laptop's time zone, so a trip can
+    // move stories into days with new ids.
+    const shown = new Set([...reels.values()].flatMap((items) => items.map(storyId)));
+    const missing = [...new Set(gone)].filter((story) => !shown.has(story.id));
+    const kept = index.stories.filter((story) => !story.removed).length;
+    let removed = 0;
+    if (missing.length > 5 && missing.length > kept * MOST_REMOVED)
+      log(
+        `Instagram's archive is missing ${missing.length} of ${kept} saved stories; none were marked removed, in case its page came back incomplete`,
+      );
+    else {
+      for (const story of missing) story.removed = new Date(now).toISOString();
+      removed = missing.length;
+      for (const [day, mark] of marks) index.days[day] = mark;
+      for (const day of vanished) delete index.days[day];
+    }
+    await writeIndex(indexFile, index);
+    return { saved, removed, total: index.stories.length };
   } finally {
     await context.close().catch(() => {});
   }
@@ -243,6 +294,8 @@ export function storyDate(story, stories) {
  * or video, and Pinkleap's story tag. On Bluesky itself it's an ordinary post. Stories still up go first, then up to
  * `backlog` older ones, oldest first; Bluesky's daily video limit ends a run, and the next carries on. index.json notes
  * each one's post, and a run stopped after posting finds the post by its fixed key rather than posting it twice.
+ * A story deleted on Instagram (marked `removed` by archiveStories) isn't sent, and if it went already, its post is
+ * deleted, which takes it off Pinkleap and the site.
  */
 export async function crosspostStories({
   root = storiesRoot,
@@ -257,12 +310,29 @@ export async function crosspostStories({
   const indexFile = join(root, "index.json");
   const index = await readIndex(indexFile);
   const unsent = index.stories
-    .filter((story) => !story.pinkleap)
+    .filter((story) => !story.pinkleap && !story.removed)
     .sort((a, b) => Date.parse(a.posted) - Date.parse(b.posted));
   const live = unsent.filter((story) => now - Date.parse(story.posted) < STORY_LIFE_MS);
   const due = [...live, ...unsent.filter((story) => !live.includes(story)).slice(0, backlog)];
-  if (!due.length) return { posted: 0, left: 0 };
+  const withdrawn = index.stories.filter((story) => story.removed && story.pinkleap);
+  if (!due.length && !withdrawn.length) return { posted: 0, left: 0, unposted: 0 };
   const authorization = await oauth.agent();
+  let unposted = 0;
+  for (const story of withdrawn) {
+    try {
+      await authorization.agent.com.atproto.repo.deleteRecord({
+        repo: owner,
+        collection: "app.bsky.feed.post",
+        rkey: recordKey(`publisher:bluesky:story-${story.id}`),
+      });
+      delete story.pinkleap;
+      unposted++;
+      await writeIndex(indexFile, index);
+    } catch (error) {
+      log(`Story ${story.id} not taken off Pinkleap: ${error.message}`);
+    }
+  }
+  if (!due.length) return { posted: 0, left: unsent.length, unposted };
   const temp = await mkdtemp(join(tmpdir(), "kualta-story-"));
   let posted = 0;
   try {
@@ -303,5 +373,5 @@ export async function crosspostStories({
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
-  return { posted, left: unsent.length - posted };
+  return { posted, left: unsent.length - posted, unposted };
 }
