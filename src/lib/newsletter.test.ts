@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { admin } from "./newsletter/admin";
 import { feedback } from "./newsletter/feedback";
+import { formToken, issueFormToken, readFormToken } from "./newsletter/form-token";
 import { parseIssue, prepareIssue, sendBatch } from "./newsletter/issues";
 import { notifyNewsletter } from "./newsletter/notifications";
 import { plunkSender, SendError } from "./newsletter/plunk";
@@ -56,11 +57,16 @@ function setup() {
   }
   return { db, sqlite, env, seed };
 }
-function signup(body: unknown = { email: "reader@example.com" }, ip = "127.0.0.1") {
+// What the signup form sends: the address, an empty honeypot and a token fetched `age` ms ago.
+async function signup(body: unknown = { email: "reader@example.com" }, ip = "127.0.0.1", age = 5000) {
+  const fields =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? { website: "", token: await formToken("t".repeat(64), Date.now() - age), automated: false, ...body }
+      : body;
   return new Request("https://kualta.dev/api/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "https://kualta.dev", "CF-Connecting-IP": ip },
-    body: JSON.stringify(body),
+    body: JSON.stringify(fields),
   });
 }
 function adminRequest(env: NewsletterEnv, body: unknown) {
@@ -81,7 +87,7 @@ const issue = {
 describe("newsletter subscriptions", () => {
   test("activates immediately without sending email or requiring Plunk", async () => {
     const { env, sqlite } = setup();
-    const response = await subscribe(signup({ email: " Reader@Example.com " }), {
+    const response = await subscribe(await signup({ email: " Reader@Example.com " }), {
       ...env,
       PLUNK_SECRET_KEY: undefined,
     });
@@ -102,12 +108,12 @@ describe("newsletter subscriptions", () => {
   test.each([{}, null, { email: "bad" }, { email: 42 }, { email: "a@b.c\ninject" }])(
     "rejects malformed input %j",
     async (value) => {
-      expect((await subscribe(signup(value), setup().env)).status).toBe(400);
+      expect((await subscribe(await signup(value), setup().env)).status).toBe(400);
     },
   );
   test("fails closed without configured database and rejects foreign origins", async () => {
-    expect((await subscribe(signup(), {})).status).toBe(503);
-    const req = new Request(signup(), {
+    expect((await subscribe(await signup(), {})).status).toBe(503);
+    const req = new Request(await signup(), {
       headers: { Origin: "https://evil.example", "Content-Type": "application/json" },
     });
     expect((await subscribe(req, setup().env)).status).toBe(403);
@@ -116,8 +122,8 @@ describe("newsletter subscriptions", () => {
     for (const state of ["active", "suppressed", "pending", "unsubscribed"]) {
       const { env, seed, sqlite } = setup();
       seed(state);
-      expect((await subscribe(signup(), env)).status).toBe(200);
-      expect((await subscribe(signup(), env)).status).toBe(200);
+      expect((await subscribe(await signup(), env)).status).toBe(200);
+      expect((await subscribe(await signup(), env)).status).toBe(200);
       expect(sqlite.query("SELECT status FROM newsletter_subscribers").get()).toEqual({
         status: state === "suppressed" ? "suppressed" : "active",
       });
@@ -126,8 +132,71 @@ describe("newsletter subscriptions", () => {
   });
   test("rate limits across different emails at the same IP", async () => {
     const { env } = setup();
-    for (let i = 0; i < 5; i++) expect((await subscribe(signup({ email: `r${i}@example.com` }), env)).status).toBe(200);
-    expect((await subscribe(signup({ email: "six@example.com" }), env)).status).toBe(429);
+    for (let i = 0; i < 5; i++)
+      expect((await subscribe(await signup({ email: `r${i}@example.com` }), env)).status).toBe(200);
+    expect((await subscribe(await signup({ email: "six@example.com" }), env)).status).toBe(429);
+  });
+  test("issues form tokens that need two seconds and expire after an hour", async () => {
+    const response = await issueFormToken(setup().env);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    const { token } = (await response.json()) as { token: string };
+    const issuedAt = Number(token.split(".")[0]);
+    const secret = "t".repeat(64);
+    expect(await readFormToken(secret, token, issuedAt + 1999)).toBe("token_early");
+    expect(await readFormToken(secret, token, issuedAt + 2000)).toMatchObject({ id: token.split(".", 2).join(".") });
+    expect(await readFormToken(secret, token, issuedAt + 3600_001)).toBe("token_expired");
+    expect(await readFormToken("x".repeat(64), token, issuedAt + 5000)).toBe("token_invalid");
+    expect((await issueFormToken({})).status).toBe(503);
+  });
+  const bots: [string, () => Promise<Request>][] = [
+    [
+      "no_origin",
+      async () => {
+        const request = await signup();
+        const headers = new Headers(request.headers);
+        headers.delete("Origin");
+        return new Request(request, { headers });
+      },
+    ],
+    ["honeypot", () => signup({ email: "reader@example.com", website: "https://spam.example" })],
+    ["automated", () => signup({ email: "reader@example.com", automated: true })],
+    ["token_missing", () => signup({ email: "reader@example.com", token: undefined })],
+    [
+      "token_invalid",
+      () => signup({ email: "reader@example.com", token: `${Date.now() - 5000}.${"0".repeat(36)}.${"0".repeat(64)}` }),
+    ],
+    ["token_early", () => signup(undefined, undefined, 500)],
+    ["token_expired", () => signup(undefined, undefined, 3600_001)],
+  ];
+  test.each(bots)("answers bots (%s) like people but stores and announces nothing", async (reason, request) => {
+    const { env, sqlite } = setup();
+    const notify = mockFetch(async () => Response.json({ id: "message" }));
+    const log = spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
+      const response = await subscribe(await request(), configured);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ message: "You’re subscribed." });
+      expect(sqlite.query("SELECT COUNT(*) n FROM newsletter_subscribers").get()).toEqual({ n: 0 });
+      expect(notify).not.toHaveBeenCalled();
+      expect(log).toHaveBeenCalledWith("newsletter_signup_blocked", { reason });
+    } finally {
+      notify.mockRestore();
+      log.mockRestore();
+    }
+  });
+  test("a form token signs up once", async () => {
+    const { env, sqlite } = setup();
+    const log = spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const token = await formToken("t".repeat(64), Date.now() - 5000);
+      expect((await subscribe(await signup({ email: "one@example.com", token }), env)).status).toBe(200);
+      expect((await subscribe(await signup({ email: "two@example.com", token }), env)).status).toBe(200);
+      expect(sqlite.query("SELECT email FROM newsletter_subscribers").all()).toEqual([{ email: "one@example.com" }]);
+      expect(log).toHaveBeenCalledWith("newsletter_signup_blocked", { reason: "token_reused" });
+    } finally {
+      log.mockRestore();
+    }
   });
   test("unsubscribe is idempotent, invalidates confirmation and never lifts suppression", async () => {
     const { env, sqlite, seed } = setup();
@@ -348,16 +417,16 @@ describe("subscription notifications", () => {
     });
     const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
     try {
-      expect((await subscribe(signup(), configured)).status).toBe(200);
+      expect((await subscribe(await signup(), configured)).status).toBe(200);
       sqlite.exec("DELETE FROM newsletter_rate_limits");
-      await subscribe(signup(), configured);
+      await subscribe(await signup(), configured);
       const { id } = sqlite.query("SELECT id FROM newsletter_subscribers").get() as { id: string };
       await unsubscribe(configured, id);
       await unsubscribe(configured, id);
       sqlite.exec("DELETE FROM newsletter_rate_limits");
-      await subscribe(signup(), configured);
+      await subscribe(await signup(), configured);
       const blocked = seed("suppressed", "blocked@example.com");
-      await subscribe(signup({ email: "blocked@example.com" }), configured);
+      await subscribe(await signup({ email: "blocked@example.com" }), configured);
       await unsubscribe(configured, blocked);
       const legacy = seed("pending", "legacy@example.com");
       const confirmation = `${crypto.randomUUID()}${crypto.randomUUID()}`;
@@ -388,7 +457,7 @@ describe("subscription notifications", () => {
     const log = spyOn(console, "error").mockImplementation(() => {});
     const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
     try {
-      expect((await subscribe(signup(), configured)).status).toBe(200);
+      expect((await subscribe(await signup(), configured)).status).toBe(200);
       const { id } = sqlite.query("SELECT id FROM newsletter_subscribers").get() as { id: string };
       await unsubscribe(configured, id);
       expect(sqlite.query("SELECT status FROM newsletter_subscribers").get()).toEqual({ status: "unsubscribed" });
@@ -470,9 +539,7 @@ describe("email open notifications", () => {
       } else await Promise.all([pixel(), provider()]);
       await Promise.all([pixel(), provider(), pixel()]);
       expect(request).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(String(request.mock.calls[0][1]?.body)).content).toBe(
-        "`reader@example.com` opened `An essay`",
-      );
+      expect(JSON.parse(String(request.mock.calls[0][1]?.body)).content).toBe("`reader@example.com` opened `An essay`");
       expect(
         (sqlite.query("SELECT opened_at FROM newsletter_deliveries").get() as { opened_at: number }).opened_at,
       ).toBeGreaterThan(0);

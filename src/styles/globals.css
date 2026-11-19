@@ -1194,6 +1194,16 @@ body[data-kaomoji-results] > main {
 .dark .newsletter-fields button { background: var(--text-dark); color: var(--bg-dark); }
 .newsletter-fields button:disabled { opacity: 0.65; cursor: default; }
 .newsletter-fields button:not(:disabled):hover { opacity: 0.8; }
+/* The signup honeypot: in the DOM for bots, off screen and out of reach for people. */
+.newsletter-trap {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
 .newsletter-message { margin: 0.5rem 0 0; font-size: 0.75rem; line-height: 1.4; opacity: 0.75; }
 .newsletter-message:empty { display: none; }
 .newsletter-message[data-error="true"] { opacity: 1; }
