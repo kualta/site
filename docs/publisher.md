@@ -368,8 +368,17 @@ reads the replies the page fetches as it scrolls, and saves each new story to `~
 `YYYY/MM/YYYY-MM-DD HH.MM.SS.mp4` (photo stories without music stay `.jpg`). The video Instagram serves has a music
 sticker's song mixed into its sound. Each story is dated on the clock of the phone that posted it, from the UTC offset
 Instagram keeps on it: in its name, its QuickTime or EXIF dates, and its file times, which Photos and Finder go by.
-`index.json` lists each story with its song and remembers finished archive days, so a run loads the page once and fetches
-only what's new. Instagram's "Save story to archive" must stay on.
+`index.json` lists each story with its song and its archive day, and remembers each day by its story count and latest
+story, so a run loads the page once and reads only the days that changed. Instagram's "Save story to archive" must stay
+on.
+
+**Deleted on Instagram.** A saved story that has gone from its archive day, or whose day has gone from the archive, was
+deleted there. It's marked `removed` in `index.json` and its post comes off Pinkleap (and so off the site); its file stays
+on the laptop and in the Cloudflare archive. A day counts as gone only once the list of days was read to its end, and a
+story the page shows under any day is never taken for deleted: Instagram cuts days by the laptop's time zone, so a trip
+can move stories into new days. Stories saved before days were noted are placed by reading the archive whole once; one
+found in no day is gone. A run that would mark more than half the saved stories (and more than five) marks none and
+says so in the log, in case Instagram's page came back incomplete; it looks again next run.
 
 **Archived to Cloudflare.** On start and after a run that saved or sent anything, the folder goes to the archive bucket
 as the project `instagram-stories` (see Archive): only files the archive lacks go up. `bun run publisher restore
