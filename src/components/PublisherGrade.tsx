@@ -26,8 +26,14 @@ export default function PublisherGrade({ open, active }: Props) {
   const box = useRef<HTMLElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "away">("loading");
   const [attempt, setAttempt] = useState(0);
-  // The first clip asked for goes in the address; later ones by message, so the app isn't loaded again.
-  const [src] = useState(() => `${GRADE_APP}/${open ? `#clip=${encodeURIComponent(open.clip)}` : ""}`);
+  // The composer's light or dark and the first clip asked for go in the address, set once in the browser; later clips
+  // and themes go by message, so the app isn't loaded again. With the theme known from the start, the frame is never
+  // drawn opaque in the other one before the app hears it.
+  const [src, setSrc] = useState<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the address is the first clip's, set once
+  useEffect(() => {
+    setSrc(`${GRADE_APP}/?theme=${theme()}${open ? `#clip=${encodeURIComponent(open.clip)}` : ""}`);
+  }, []);
   const post = (message: unknown) => frame.current?.contentWindow?.postMessage(message, GRADE_APP);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new attempt is the trigger to wait again
@@ -85,14 +91,16 @@ export default function PublisherGrade({ open, active }: Props) {
           </button>
         </div>
       )}
-      <iframe
-        key={attempt}
-        ref={frame}
-        src={src}
-        title="Grade app"
-        allow="local-network-access; fullscreen"
-        hidden={state === "away"}
-      />
+      {src && (
+        <iframe
+          key={attempt}
+          ref={frame}
+          src={src}
+          title="Grade app"
+          allow="local-network-access; fullscreen"
+          hidden={state === "away"}
+        />
+      )}
     </section>
   );
 }

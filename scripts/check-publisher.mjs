@@ -1754,7 +1754,11 @@ try {
     await sent("DELETE");
     const frame = page.locator('iframe[title="Grade app"]');
     assert.equal(await frame.getAttribute("allow"), "local-network-access; fullscreen");
-    assert.equal(await frame.getAttribute("src"), "http://127.0.0.1:4777/#clip=DJI_20261121101500_0402_D.MP4");
+    // The composer's light or dark goes in the address, so the app has it before it first paints.
+    assert.equal(
+      await frame.getAttribute("src"),
+      `http://127.0.0.1:4777/?theme=${theme}#clip=DJI_20261121101500_0402_D.MP4`,
+    );
     // This browser isn't the Mac's: the grade app never says it's there.
     // The Grade tab fills the window below the tabs, edge to edge, and the page doesn't scroll.
     const filled = await page.evaluate(() => {

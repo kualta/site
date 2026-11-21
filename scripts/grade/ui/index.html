@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark light">
+<script>
+  // Before the first paint: framed in the composer, its page shows through, and the composer's light or dark
+  // (?theme=) is the app's. A frame whose scheme differs from the page around it is drawn opaque.
+  {
+    if (window.parent !== window) document.documentElement.classList.add("framed");
+    const theme = new URLSearchParams(location.search).get("theme");
+    if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  }
+</script>
 <title>Grade</title>
 <link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/ui/style.css">
