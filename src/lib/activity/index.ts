@@ -9,8 +9,10 @@ export {
   formatAbsoluteTime,
   formatDay,
   formatLastSeenTime,
+  formatPresenceChance,
   formatRelativeTime,
-  PRESENCE_BANDS,
+  getPresenceChance,
+  getPresenceTier,
   PRESENCE_PARTS,
 } from "./presence";
 export type { ActivityGroup } from "./group";

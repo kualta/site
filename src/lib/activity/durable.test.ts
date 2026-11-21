@@ -203,7 +203,7 @@ test("a busy object falls back to the last head this data centre served, judged 
     const now = Date.now();
     const at = (offset: number) => new Date(now + offset).toISOString();
     const head: ActivityFeed = {
-      events: [], lastSeenAt: at(-60_000), presence: "definitely-alive",
+      events: [], lastSeenAt: at(-60_000), presence: "almost-certain",
       sources: { github: { status: "fresh", fetchedAt: at(-10 * 60_000) }, bluesky: { status: "fresh", fetchedAt: at(-10 * 60_000) } },
       delayed: false, freshUntil: at(-5 * 60_000), trustedUntil: at(60_000),
       completeSince: null, coverageLimitedBy: null, cursor: null,
@@ -223,7 +223,7 @@ test("a busy object falls back to the last head this data centre served, judged 
     const feed = await getSharedActivityFeed(env, false, edge);
     expect(performance.now() - start).toBeLessThan(500);
     expect(feed.lastSeenAt).toBe(head.lastSeenAt);
-    expect(feed.presence).toBe("definitely-alive");
+    expect(feed.presence).toBe("almost-certain");
     expect(feed.delayed).toBe(true);
 
     kept.set("https://kualta.dev/_activity/last-head", Response.json({ ...head, trustedUntil: at(-1) }));

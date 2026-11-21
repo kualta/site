@@ -14,45 +14,74 @@ const DATED_DAY_FORMATTER = new Intl.DateTimeFormat("en", {
   timeZone: "UTC",
 });
 
+/**
+ * Even odds after a week of silence. Gaps between a person's public activity
+ * are heavy-tailed (Barabási, "The origin of bursts and heavy tails in human
+ * dynamics", 2005), so the chance follows a log-logistic survival curve: it
+ * falls quickly over the first days, then ever more slowly, and never reaches 0.
+ */
+const PRESENCE_MEDIAN_SILENCE = 7 * DAY;
+const PRESENCE_SHAPE = 1.5;
+
 /** split so the half that actually changes can be styled on its own */
 export const PRESENCE_PARTS: Record<PresenceState, { lead: string; status: string }> = {
-  "definitely-alive": { lead: "kualta is", status: "definitely alive" },
-  "most-likely-alive": { lead: "kualta is", status: "most likely alive" },
-  "somewhere-else": { lead: "kualta is", status: "somewhere else" },
-  "kinda-lost": { lead: "kualta is", status: "kinda lost" },
-  "not-around": { lead: "kualta is", status: "not around" },
-  "most-likely-dead": { lead: "kualta is", status: "most likely dead" },
+  "almost-certain": { lead: "kualta is", status: "almost certainly around" },
+  "very-likely": { lead: "kualta is", status: "very likely around" },
+  likely: { lead: "kualta is", status: "likely around" },
+  "even-odds": { lead: "kualta is", status: "as likely around as not" },
+  unlikely: { lead: "kualta is", status: "unlikely to be around" },
+  "very-unlikely": { lead: "kualta is", status: "very unlikely to be around" },
+  "almost-no-chance": { lead: "kualta is", status: "almost certainly not around" },
   unknown: { lead: "kualta's whereabouts are", status: "unknown" },
 };
 
-/** `within` is the same threshold in words, so the two cannot drift apart */
-export const PRESENCE_BANDS: ReadonlyArray<{
-  maximumAge: number;
+/**
+ * The bands of US Intelligence Community Directive 203, by the lowest whole
+ * percentage each one covers; a shared edge belongs to the band above.
+ */
+const PRESENCE_TIERS: ReadonlyArray<{
+  minimumPercent: number;
   state: Exclude<PresenceState, "unknown">;
-  within: string;
 }> = [
-  { maximumAge: 6 * HOUR, state: "definitely-alive", within: "< 6h" },
-  { maximumAge: 2 * DAY, state: "most-likely-alive", within: "< 2d" },
-  { maximumAge: 7 * DAY, state: "somewhere-else", within: "< 1w" },
-  { maximumAge: 14 * DAY, state: "kinda-lost", within: "< 2w" },
-  { maximumAge: 60 * DAY, state: "not-around", within: "< 2mo" },
-  { maximumAge: Number.POSITIVE_INFINITY, state: "most-likely-dead", within: "> 2mo" },
+  { minimumPercent: 95, state: "almost-certain" },
+  { minimumPercent: 80, state: "very-likely" },
+  { minimumPercent: 55, state: "likely" },
+  { minimumPercent: 45, state: "even-odds" },
+  { minimumPercent: 20, state: "unlikely" },
+  { minimumPercent: 5, state: "very-unlikely" },
+  { minimumPercent: 0, state: "almost-no-chance" },
 ];
+
+/** the chance, from 0 to 1, that kualta is around after this long without a public sign */
+export function getPresenceChance(lastSeenAt: string | null, now: Date | number = Date.now()): number {
+  if (!lastSeenAt) return 0;
+
+  const occurredAt = Date.parse(lastSeenAt);
+  if (!Number.isFinite(occurredAt)) return 0;
+
+  const nowMs = typeof now === "number" ? now : now.getTime();
+  const age = Math.max(0, nowMs - occurredAt);
+  return 1 / (1 + (age / PRESENCE_MEDIAN_SILENCE) ** PRESENCE_SHAPE);
+}
+
+/** the words follow the shown percentage, so "95%" never sits beside "very likely" */
+export function getPresenceTier(chance: number): Exclude<PresenceState, "unknown"> {
+  const percent = Math.round(chance * 100);
+  return PRESENCE_TIERS.find(({ minimumPercent }) => percent >= minimumPercent)?.state ?? "almost-no-chance";
+}
 
 export function getPresenceState(
   lastSeenAt: string | null,
   now: Date | number = Date.now(),
 ): Exclude<PresenceState, "unknown"> {
-  if (!lastSeenAt) return "most-likely-dead";
+  return getPresenceTier(getPresenceChance(lastSeenAt, now));
+}
 
-  const occurredAt = Date.parse(lastSeenAt);
-  if (!Number.isFinite(occurredAt)) return "most-likely-dead";
-
-  const nowMs = typeof now === "number" ? now : now.getTime();
-  const age = Math.max(0, nowMs - occurredAt);
-  const band = PRESENCE_BANDS.find(({ maximumAge }) => age <= maximumAge);
-
-  return band?.state ?? "most-likely-dead";
+/** 0 and 1 are not probabilities, so the ends read as ">99%" and "<1%" */
+export function formatPresenceChance(chance: number): string {
+  if (chance > 0.99) return ">99%";
+  if (chance < 0.01) return "<1%";
+  return `${Math.round(chance * 100)}%`;
 }
 
 export function formatRelativeTime(occurredAt: string, now: number = Date.now()): string {

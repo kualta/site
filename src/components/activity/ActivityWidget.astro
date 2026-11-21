@@ -1,5 +1,12 @@
 ---
-import { formatLastSeenTime, PRESENCE_BANDS, PRESENCE_PARTS, type ActivityFeed } from "@/lib/activity";
+import {
+  formatLastSeenTime,
+  formatPresenceChance,
+  getPresenceChance,
+  getPresenceTier,
+  PRESENCE_PARTS,
+  type ActivityFeed,
+} from "@/lib/activity";
 import MediaViewer from "./MediaViewer.astro";
 import ActivityRows from "./ActivityRows.astro";
 import StoryAvatar from "@/components/StoryAvatar.astro";
@@ -13,9 +20,10 @@ interface Props {
 
 const { feed } = Astro.props;
 const lastSeenText = feed?.lastSeenAt ? formatLastSeenTime(feed.lastSeenAt) : null;
-const presence = PRESENCE_PARTS[feed?.presence ?? "unknown"];
-const currentBand = PRESENCE_BANDS.find(({ state }) => state === feed?.presence);
-const presenceDetail = currentBand ? `${currentBand.within} ago` : "not checked for a day";
+// The tier comes from lastSeenAt, not feed.presence, so a head stored under older tier names still renders.
+const presenceChance = feed && feed.presence !== "unknown" ? getPresenceChance(feed.lastSeenAt) : null;
+const presence = PRESENCE_PARTS[presenceChance === null ? "unknown" : getPresenceTier(presenceChance)];
+const presenceDetail = presenceChance === null ? "not checked for a day" : formatPresenceChance(presenceChance);
 // The picture from one of kualta's own posts in the feed; without one, the story ring's script reads it from Bluesky.
 const ownPost = feed?.events.find(
   (event): event is BlueskyActivity => event.source === "bluesky" && event.post.author.did === identity.did,
@@ -62,10 +70,11 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
               class="presence-tooltip rounded-xl bg-secondary p-3 text-xs font-normal
                      text-secondary-text drop-shadow-sm dark:bg-dark-secondary"
             >
-              When was kualta last seen
-              <span class="mt-1 block text-text dark:text-dark-text" data-presence-detail>
+              Chance kualta is around
+              <span class="mt-1 block tabular-nums text-text dark:text-dark-text" data-presence-detail>
                 {presenceDetail}
               </span>
+              <span class="mt-1 block">falls the longer kualta is quiet on GitHub and Bluesky</span>
             </span>
           </span>
         </h2>
@@ -165,11 +174,12 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
   import { uniqueHistoricalRows, mergeNewestRows } from "@/lib/activity/rows";
   import {
     formatLastSeenTime,
+    formatPresenceChance,
     formatRelativeTime,
-    getPresenceState,
+    getPresenceChance,
+    getPresenceTier,
     isActivityDelayed,
     createServerClock,
-    PRESENCE_BANDS,
     PRESENCE_PARTS,
   } from "@/lib/activity/presence";
   import type { PresenceState } from "@/lib/activity/types";
@@ -348,13 +358,10 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
     }
   }
 
-  /** the tooltip quotes the band the status currently sits in, so it moves with it */
-  function describePresence(widget: HTMLElement, state: PresenceState): void {
+  /** the tooltip gives the chance itself, which keeps falling while the words hold still */
+  function describePresence(widget: HTMLElement, chance: number | null): void {
     const detail = widget.querySelector<HTMLElement>("[data-presence-detail]");
-    if (!detail) return;
-
-    const band = PRESENCE_BANDS.find((candidate) => candidate.state === state);
-    detail.textContent = band ? `${band.within} ago` : "not checked for a day";
+    if (detail) detail.textContent = chance === null ? "not checked for a day" : formatPresenceChance(chance);
   }
 
   /** only the status half carries the sweep, so the two halves are set apart */
@@ -375,7 +382,7 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
 
     if (!Number.isFinite(trustedUntil) || now > trustedUntil) {
       writePresence(widget, "unknown");
-      describePresence(widget, "unknown");
+      describePresence(widget, null);
       if (delayed) delayed.hidden = false;
       return;
     }
@@ -383,9 +390,9 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
     const lastSeenAt = widget.dataset.lastSeen;
     if (!lastSeenAt) return;
 
-    const state = getPresenceState(lastSeenAt, now);
-    writePresence(widget, state);
-    describePresence(widget, state);
+    const chance = getPresenceChance(lastSeenAt, now);
+    writePresence(widget, getPresenceTier(chance));
+    describePresence(widget, chance);
   }
 
   /** Crossfade over the old words so the status never disappears between values. */
