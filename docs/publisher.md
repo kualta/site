@@ -399,14 +399,14 @@ story's id, so a run stopped after posting finds the post instead of posting it 
 **On the site.** kualta.dev reads the account's media posts and keeps those tagged as stories (`pinkleapStory` or
 Pinksky's `pinkskyStory`) out of /videos and the activity feed. They have their own page, kualta.dev/stories. Everyone
 sees the stories still up (under a day old) there, as one ring with the account's picture. The Bluesky account sits in
-the top-right corner as a round button, inside that corner's bracket and at the bell's inset: a person before signing
+the top-right corner as a round button, inside that corner's bracket and at the bell's inset: a log-in arrow before signing
 in, the account's picture after, opening the site's Bluesky sign-in. Signed in as kualta, a calendar of every day with
 stories follows, read page by page from Bluesky in the owner's browser and laid out like an Apple Photos library: every
 day from the first with stories to the last is a square, oldest first and filling each row, a day with stories showing
 the picture of its first story and opening its stories. It zooms like Photos too: a pinch on a trackpad or touch screen, Ctrl or ⌘ with the
 wheel, the − and + buttons, or the - and + keys change how many squares fit a row, from 1 or 2 up to 40, each square
 gliding to its new place and the one under the fingers keeping its height. The browser remembers the zoom. The bar above
-stays in view and names the month there, and the page opens on the newest days. Signing out takes the calendar away again. The data is public on Bluesky anyway; this only decides what the page shows. On /feed the same picture sits left of the
+stays in view, see-through, and names the month there, and the page opens on the newest days. While the days are read, blank squares with a faint sweeping sheen hold their place. Signing out takes the calendar away again. The data is public on Bluesky anyway; this only decides what the page shows. On /feed the same picture sits left of the
 header. Its ring is colored while a story still up hasn't been watched in that browser, grey once all have, and gone
 without one: Instagram's style in the brand's pink (`--primary`) and deeper pinks of its hue, the one place the site uses
 color as decoration. That pink is a tint near white, so on the light page the ring ends on a deeper shade of it instead.

@@ -71,6 +71,47 @@ function storeColumns(columns: number): void {
   }
 }
 
+/** How many squares a row holds as the calendar opens: as this browser last zoomed it, or about 140 pixels each. */
+function openingColumns(width: number): number {
+  return nearestStep(width, storedColumns() ?? width / OPENING);
+}
+
+/** Sets how many squares a row holds and the gap between them. */
+function layColumns(grid: HTMLElement, columns: number): void {
+  grid.style.setProperty("--columns", String(columns));
+  grid.style.setProperty("--gap", `${gapFor(columns)}px`);
+}
+
+/**
+ * Holds the calendar's place while its days are read: blank squares, as large as the calendar will open with, filling
+ * whole rows to most of the screen's height. The calendar, once mounted, takes their place.
+ */
+export function showSuspense(root: HTMLElement): void {
+  const grid = root.querySelector<HTMLElement>("[data-calendar-grid]");
+  if (!grid) return;
+  const width = grid.clientWidth;
+  const columns = openingColumns(width);
+  const rows = Math.min(40, Math.max(2, Math.ceil((innerHeight * 0.7) / (width / columns))));
+  root.setAttribute("aria-busy", "true");
+  root.setAttribute("data-loading", "");
+  layColumns(grid, columns);
+  grid.replaceChildren(
+    ...Array.from({ length: columns * rows }, () => {
+      const placeholder = document.createElement("span");
+      placeholder.className = "story-date story-date-suspense";
+      return placeholder;
+    }),
+  );
+}
+
+/** Takes the placeholders away when no calendar follows them, after a failed read or signing out. */
+export function hideSuspense(root: HTMLElement): void {
+  if (!root.hasAttribute("data-loading")) return;
+  root.querySelector("[data-calendar-grid]")?.replaceChildren();
+  root.removeAttribute("aria-busy");
+  root.removeAttribute("data-loading");
+}
+
 /**
  * Fills `root` with the stories calendar, laid out the way Apple Photos lays out a library: every day from the first
  * with stories to the last is a square, in order and filling each row, and a day with stories shows its picture and
@@ -95,10 +136,11 @@ export function mountCalendar(
   const positions = new Map(days.map((day, position) => [day.day, position]));
   const calendar = calendarDays(days.map((day) => day.day));
   const squares = calendar.map(square);
+  hideSuspense(root);
   grid.replaceChildren(...squares);
 
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-  let columns = nearestStep(grid.clientWidth, storedColumns() ?? grid.clientWidth / OPENING);
+  let columns = openingColumns(grid.clientWidth);
   let gliding: Animation[] = [];
   let frame = 0;
 
@@ -138,8 +180,7 @@ export function mountCalendar(
   /** Sets the row length, and with it the gap, the buttons' limits and the month in view. */
   function lay(): void {
     const steps = zoomSteps(grid.clientWidth);
-    grid.style.setProperty("--columns", String(columns));
-    grid.style.setProperty("--gap", `${gapFor(columns)}px`);
+    layColumns(grid, columns);
     if (zoomIn) zoomIn.disabled = columns <= steps[0];
     if (zoomOut) zoomOut.disabled = columns >= (steps.at(-1) ?? columns);
     nameMonth();

@@ -1,4 +1,4 @@
-import { CloseIcon, UserIcon } from "@/components/icons";
+import { CloseIcon, LoginIcon } from "@/components/icons";
 import { type RefObject, useId, useRef, useState, useSyncExternalStore } from "react";
 import {
   getBlueskyAuthSnapshot,
@@ -16,7 +16,7 @@ export default function BlueskyLogin({
 }: {
   compact?: boolean;
   fullWidth?: boolean;
-  /** a round button showing the signed-in account's picture, or a person before signing in */
+  /** a round button showing the signed-in account's picture, or a log-in arrow before signing in */
   icon?: boolean;
   label?: string;
 }) {
@@ -35,7 +35,7 @@ export default function BlueskyLogin({
           {auth.profile?.avatar ? (
             <img src={auth.profile.avatar} alt="" className="size-full object-cover" />
           ) : (
-            <UserIcon size={22} aria-hidden="true" />
+            <LoginIcon size={22} aria-hidden="true" />
           )}
         </button>
         <BlueskyLoginDialog ref={dialog} />

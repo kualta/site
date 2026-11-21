@@ -96,9 +96,9 @@ export const ArchiveIcon = icon(
     <path d="M4.5 8.5v8a4 4 0 0 0 4 4h7a4 4 0 0 0 4-4v-8M10 12.5h4" />
   </>,
 );
-export const UserIcon = icon(
-  "UserIcon",
-  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5c1.2-3.6 4.1-5.5 7.5-5.5s6.3 1.9 7.5 5.5" />,
+export const LoginIcon = icon(
+  "LoginIcon",
+  <path d="M14 4h3.5A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H14M10 16.5l4.5-4.5L10 7.5M14.5 12H4" />,
 );
 
 export const BellIcon = icon(
