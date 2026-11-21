@@ -1,0 +1,308 @@
+import { useEffect, useState } from "react";
+
+/** A graded clip as the laptop reports it: up on the footage channel, waiting, or going up now. */
+export interface FootageClip {
+  name: string;
+  title: string;
+  size: number;
+  from: "exported" | "archive";
+  state: "up" | "due" | "uploading";
+  /** The clip's video, or for a clip graded again since, its earlier grade's. */
+  video: string | null;
+  uploadedAt: string | null;
+}
+export interface FootageStatus {
+  at: number;
+  channel: string | null;
+  daily: number;
+  today: number;
+  state: "uploading" | "waiting" | "done" | "limit" | "paused" | "busy";
+  pausedUntil: number | null;
+  lastError: { clip: string; message: string; at: string } | null;
+  current: { name: string; title: string; size: number; sent: number; from: string } | null;
+  /** Bytes a second over the last minute of parts. */
+  speed: number | null;
+  totals: { up: number; upBytes: number; due: number; dueBytes: number; today: number; todayBytes: number };
+  clips: FootageClip[];
+}
+interface Reply {
+  watching: boolean;
+  /** How long ago the laptop sent the status. */
+  age: number | null;
+  status: FootageStatus | null;
+}
+interface Props {
+  request: (path: string, body?: unknown, method?: string) => Promise<any>;
+  online: boolean;
+  /** Whether the YouTube footage archive is connected in Accounts. */
+  connected: boolean;
+  onAccounts: () => void;
+}
+
+/** The laptop reports every 5 seconds during an upload and every 10 otherwise; older than this, it hasn't started. */
+const FRESH = 30_000;
+
+const size = (bytes: number) =>
+  bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${Math.max(0, Math.round(bytes / 1e6))} MB`;
+/** Network speed in the unit an internet plan states it in. */
+function rate(bytesPerSecond: number) {
+  const mbit = (bytesPerSecond * 8) / 1e6;
+  return `${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`;
+}
+function duration(seconds: number) {
+  if (seconds < 60) return "under a minute";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`;
+}
+function when(ms: number) {
+  const date = new Date(ms);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return sameDay
+    ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** What's holding the uploads, or what they're doing, in a line; null while a clip goes up and the bar says it. */
+function noticeFor(
+  { connected, online, reply, failed }: { connected: boolean; online: boolean; reply: Reply | null; failed: boolean },
+  fresh: boolean,
+): { text: string; tone?: "ok" | "bad"; accounts?: boolean } | null {
+  if (!connected) return { text: "Not connected.", accounts: true };
+  if (!online) return { text: "Laptop offline." };
+  if (!reply) return failed ? { text: "Couldn't load. Retrying…" } : null;
+  const status = reply.status;
+  if (!status || !fresh) return { text: "Waiting for the laptop…" };
+  switch (status.state) {
+    case "paused": {
+      const until = `Paused until ${when(status.pausedUntil ?? Date.now())}`;
+      return { text: status.lastError ? `${until}: ${status.lastError.message}` : until, tone: "bad" };
+    }
+    case "limit":
+      return { text: "Daily limit reached. More tomorrow." };
+    case "busy":
+      return { text: "Uploading from the terminal." };
+    case "done":
+      return { text: "All clips are up.", tone: "ok" };
+    case "waiting":
+      return { text: "Starting…" };
+    default:
+      return null;
+  }
+}
+
+/** `live`: the status is the laptop's latest, so a clip it says is going up still is. */
+function ClipState({ clip, status, live }: { clip: FootageClip; status: FootageStatus; live: boolean }) {
+  if (clip.state === "up" && clip.video)
+    return (
+      <a
+        className="publisher-archive-state"
+        data-state="up"
+        href={`https://youtu.be/${clip.video}`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        On YouTube
+      </a>
+    );
+  if (clip.state === "uploading" && live && status.current) {
+    const share = status.current.size ? Math.floor((status.current.sent / status.current.size) * 100) : 0;
+    return (
+      <span className="publisher-archive-state" data-state="uploading">
+        Uploading {share}%
+      </span>
+    );
+  }
+  return (
+    <span className="publisher-archive-state" data-state="due">
+      {clip.video ? (
+        <>
+          Waiting ·{" "}
+          <a href={`https://youtu.be/${clip.video}`} target="_blank" rel="noreferrer">
+            earlier grade
+          </a>
+        </>
+      ) : (
+        "Waiting"
+      )}
+    </span>
+  );
+}
+
+/**
+ * The composer's Archive tab: graded footage going up to the footage archive's channel. The laptop uploads only while
+ * this tab is open, so it says so on opening and every 30 seconds, and says it closed on leaving.
+ */
+export default function PublisherArchive({ request, online, connected, onAccounts }: Props) {
+  const [reply, setReply] = useState<Reply | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const watch = () => request("footage/watch", {}).catch(() => {});
+    // A hidden tab keeps the uploads going but reads nothing; it catches up once it's shown.
+    const read = async () => {
+      if (document.hidden) return;
+      try {
+        const next = (await request("footage")) as Reply;
+        if (!active) return;
+        setReply(next);
+        setFailed(false);
+      } catch {
+        if (active) setFailed(true);
+      }
+    };
+    // Sent as the page goes away, so it has to outlive it.
+    const leave = () => {
+      void fetch("/api/publisher/footage/watch", { method: "DELETE", keepalive: true }).catch(() => {});
+    };
+    const shown = (event: PageTransitionEvent) => {
+      if (event.persisted) void watch().then(read);
+    };
+    const visible = () => {
+      if (!document.hidden) void read();
+    };
+    void watch().then(read);
+    const beat = window.setInterval(watch, 30_000);
+    const poll = window.setInterval(read, 4_000);
+    window.addEventListener("pagehide", leave);
+    window.addEventListener("pageshow", shown);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      active = false;
+      clearInterval(beat);
+      clearInterval(poll);
+      window.removeEventListener("pagehide", leave);
+      window.removeEventListener("pageshow", shown);
+      document.removeEventListener("visibilitychange", visible);
+      leave();
+    };
+  }, [request]);
+
+  const status = reply?.status ?? null;
+  const fresh = status !== null && typeof reply?.age === "number" && reply.age < FRESH;
+  const notice = noticeFor({ connected, online, reply, failed }, fresh);
+  const current = fresh && online ? status?.current : null;
+  const speed = status?.speed ?? null;
+  const share = current?.size ? Math.min(100, Math.floor((current.sent / current.size) * 100)) : 0;
+  const clipLeft = current && speed ? (current.size - current.sent) / speed : null;
+  const todayLeft = current && speed && status && status.totals.today > 1 ? status.totals.todayBytes / speed : null;
+  const listed = status ? status.clips.length : 0;
+  const counted = status ? status.totals.up + status.totals.due : 0;
+
+  return (
+    <section className="publisher-archive" aria-label="Footage archive">
+      <div className="publisher-heading">
+        <h1>Footage archive</h1>
+        {status?.channel && (
+          <a
+            className="publisher-archive-channel"
+            href={`https://www.youtube.com/${status.channel}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Channel
+          </a>
+        )}
+      </div>
+      {notice && (
+        <p className="publisher-archive-notice" data-tone={notice.tone} role="status">
+          {notice.text}
+          {notice.accounts && (
+            <button type="button" onClick={onAccounts}>
+              Open Accounts
+            </button>
+          )}
+        </p>
+      )}
+      {current && status && (
+        <div className="publisher-archive-current">
+          <div className="publisher-archive-current-head">
+            <h2>{current.title}</h2>
+            <span>{share}%</span>
+          </div>
+          <div
+            className="publisher-archive-bar"
+            role="progressbar"
+            aria-label={`Uploading ${current.title}`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={share}
+          >
+            <span style={{ width: `${share}%` }} />
+          </div>
+          <dl className="publisher-archive-figures">
+            <div>
+              <dt>Sent</dt>
+              <dd>
+                {size(current.sent)} of {size(current.size)}
+              </dd>
+            </div>
+            <div>
+              <dt>Speed</dt>
+              <dd>{speed ? rate(speed) : "Measuring…"}</dd>
+            </div>
+            <div>
+              <dt>Time left</dt>
+              <dd>{clipLeft !== null ? duration(clipLeft) : "Measuring…"}</dd>
+            </div>
+            {todayLeft !== null && (
+              <div>
+                <dt>Today's {status.totals.today} clips</dt>
+                <dd>{duration(todayLeft)}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
+      {status && (
+        <>
+          <dl className="publisher-archive-totals">
+            <div>
+              <dt>Up</dt>
+              <dd>
+                {status.totals.up} {status.totals.up === 1 ? "clip" : "clips"} · {size(status.totals.upBytes)}
+              </dd>
+            </div>
+            <div>
+              <dt>Waiting</dt>
+              <dd>
+                {status.totals.due} {status.totals.due === 1 ? "clip" : "clips"} · {size(status.totals.dueBytes)}
+              </dd>
+            </div>
+            <div>
+              <dt>Today</dt>
+              <dd>
+                {status.today} of {status.daily}
+              </dd>
+            </div>
+          </dl>
+          {!fresh && <p className="publisher-note">As of {when(status.at)}</p>}
+          {status.clips.length ? (
+            <ul className="publisher-archive-clips" aria-label="Graded clips">
+              {status.clips.map((clip) => (
+                <li key={clip.name}>
+                  <div>
+                    <span>{clip.title}</span>
+                    <small>
+                      {size(clip.size)}
+                      {clip.from === "archive" ? " · Cloudflare archive" : ""}
+                    </small>
+                  </div>
+                  <ClipState clip={clip} status={status} live={Boolean(current)} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="publisher-note">No graded clips yet.</p>
+          )}
+          {listed < counted && (
+            <p className="publisher-note">
+              Newest {listed} of {counted}
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}

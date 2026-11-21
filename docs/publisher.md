@@ -344,16 +344,31 @@ footage archive** in the composer's Accounts. It signs in with a Chrome profile 
 own account) before Finish. The helper keeps the channel the window is on, with the page id that
 picks it among a Google account's channels, and refuses the channel the YouTube destination posts to.
 
-While it's connected, the helper uploads every half hour beside its other work, 10 clips a day by
-default (`bun run publisher footage --daily <clips>` changes it): first the grade app's exports in
-`~/Movies/Exported` (only files `exports.json` records, unchanged for two minutes), then graded
-clips the laptop has let go of, fetched from the archive's projects and checked against their hash.
-A clip graded again goes up again as a new video. Each goes in 64 MiB parts through YouTube's
-resumable upload, from where YouTube says it stopped when a part fails or the helper restarts, titled
-by the camera's clock (`2026-11-15 22:46:28 · clip 0313`) and described by its source and grade. A
-failure stops the run and waits half an hour, then twice as long each time up to a day, which also
-waits out YouTube's daily limit. What went up is in `.publisher/footage.json`;
-`bun run publisher footage` sums it up and `footage --now` runs a batch at once.
+The helper uploads only while the composer's **Archive** tab (post.kualta.dev/archive) is open, so
+the uploads never take the network unseen. The tab says it's open when it opens and every 30
+seconds after, and says it closed when it's left (another tab, a reload, the window closed); a tab
+that goes quiet without saying so counts as closed after 150 seconds. The helper asks every 10
+seconds and, while the tab is open, sends it what's up every 5 seconds during an upload: the clip
+going up with its progress, speed (over the last minute of parts) and time left, how long today's
+remaining clips take at that speed, every graded clip with its state, and why uploads wait when they
+do (a failure to wait out, the day's limit, an upload run from the terminal). Leaving the tab stops
+the part in flight; it isn't a failure, and the upload resumes from where YouTube says it stopped
+the next time the tab opens. If the site stops answering three times running the helper stops too,
+since it can't tell whether the tab is still open. Both the open marker and the status are small
+objects in the media bucket (`footage/watching`, `footage/status.json`), not D1 rows, so the polling
+costs no D1 reads beyond the helper's sign-in check.
+
+It puts up 10 clips a day by default (`bun run publisher footage --daily <clips>` changes it):
+first the grade app's exports in `~/Movies/Exported` (only files `exports.json` records, unchanged
+for two minutes), then graded clips the laptop has let go of, fetched from the archive's projects
+(listed once each time the tab opens) and checked against their hash. A clip graded again goes up
+again as a new video. Each goes in 16 MiB parts through YouTube's resumable upload, from where
+YouTube says it stopped when a part fails, the helper restarts or the tab closes, titled by the
+camera's clock (`2026-11-15 22:46:28 · clip 0313`) and described by its source and grade. A failure
+stops the run and waits half an hour, then twice as long each time up to a day, which also waits out
+YouTube's daily limit. What went up is in `.publisher/footage.json`; `bun run publisher footage`
+sums it up, and `footage --now` runs a batch at once from the terminal, whether the tab is open or
+not.
 
 YouTube takes videos over 15 minutes only from a verified channel: verify the archive channel's
 phone number at youtube.com/verify, or longer clips fail to process.

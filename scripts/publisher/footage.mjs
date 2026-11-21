@@ -1,6 +1,7 @@
 // The footage archive: every graded clip goes up, unlisted, to a YouTube channel of its own. It's a second copy beside
 // the Cloudflare archive, one that keeps playing years on. The helper uploads a few a day: clips in ~/Movies/Exported,
-// and clips the laptop has since let go of (after their film was posted) from the Cloudflare archive.
+// and clips the laptop has since let go of (after their film was posted) from the Cloudflare archive. It uploads only
+// while the composer's Archive tab is open, so the uploads never take the network without the owner seeing them.
 import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -21,15 +22,28 @@ export const EXPORTS = join(homedir(), "Library/Application Support/Grade/export
 export const DAILY = 10;
 /** A clip changed in the last two minutes may still be being written. */
 const SETTLE = 2 * 60_000;
-/** Each request carries this much of a file, so a dropped connection costs one part, not the clip. */
-const CHUNK = 64 * 1024 * 1024;
+/**
+ * Each request carries this much of a file, so a dropped connection costs one part, not the clip, and the Archive tab's
+ * progress and speed move every few seconds even on a slow uplink.
+ */
+const CHUNK = 16 * 1024 * 1024;
 const HOUR = 60 * 60_000;
 /** A Pocket 4P clip: the camera's clock in its name, then its number. */
 const CLIP = /^DJI_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_(\d{4})_D\.mp4$/i;
+/** A status lists at most this many clips, the newest first; its totals still count them all. */
+const LISTED = 300;
+
+/** Thrown when the Archive tab closes mid-upload. It isn't a failure, so nothing waits before the next try. */
+export class Stopped extends Error {
+  constructor() {
+    super("Stopped: the Archive tab closed");
+  }
+}
 
 const stem = (name) => name.replace(/\.[^.]+$/, "");
 const gb = (bytes) => `${(bytes / 1e9).toFixed(2)} GB`;
 const day = (ms) => new Date(ms).toISOString().slice(0, 10);
+const total = (clips) => clips.reduce((sum, clip) => sum + (clip.size || 0), 0);
 
 /** A clip's title: when the camera started it, and its number. */
 export function clipTitle(name) {
@@ -78,18 +92,26 @@ export async function exportedClips({ exported = EXPORTED, exportsFile = EXPORTS
   return clips;
 }
 
-/** Graded clips of archived projects that no version of has gone up yet: the ones cleaned off the laptop. */
-export async function archivedClips(request, state, records = new Map()) {
+/**
+ * Every graded clip the archive's projects hold, once each. Listing them takes a request per project, so the Archive
+ * tab's uploads ask once while it's open and reuse the answer.
+ */
+export async function archiveFootage(request, records = new Map()) {
   const clips = new Map();
   for (const { name: project } of (await request("projects")).projects) {
     for (const file of (await request(`projects/${project}`)).files) {
       const name = file.path.split("/").pop();
-      if (!/^(zh\/)?assets\//.test(file.path) || !CLIP.test(name) || state.clips[name] || clips.has(name)) continue;
+      if (!/^(zh\/)?assets\//.test(file.path) || !CLIP.test(name) || clips.has(name)) continue;
       const record = records.get(stem(name).toLowerCase());
       clips.set(name, { name, sha256: file.sha256, size: file.size, record, from: "archive", project });
     }
   }
   return [...clips.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Graded clips of archived projects that no version of has gone up yet: the ones cleaned off the laptop. */
+export async function archivedClips(request, state, records = new Map()) {
+  return (await archiveFootage(request, records)).filter((clip) => !state.clips[clip.name]);
 }
 
 /* ── what's up ─────────────────────────────────────────────────────────── */
@@ -122,17 +144,19 @@ export function isUp(state, clip) {
 }
 
 /**
- * The clips waiting to go up: the grade app's exports, then, with `request` (the Cloudflare archive's client), clips
- * only the archive still holds.
+ * The clips waiting to go up: the grade app's exports, then clips only the archive still holds, from `archived` (the
+ * archive's clips, already asked for) or else by asking `request` (the Cloudflare archive's client).
  */
 export async function dueClips(
   state,
-  { exported = EXPORTED, exportsFile = EXPORTS, request = null, now = Date.now() } = {},
+  { exported = EXPORTED, exportsFile = EXPORTS, request = null, archived = null, now = Date.now() } = {},
 ) {
   const local = (await exportedClips({ exported, exportsFile, now })).filter((clip) => !isUp(state, clip));
-  if (!request) return local;
-  const archived = await archivedClips(request, state, await exportRecords(exportsFile));
-  return [...local, ...archived.filter((clip) => !local.some((l) => l.name === clip.name))];
+  if (!archived && !request) return local;
+  const held = archived
+    ? archived.filter((clip) => !state.clips[clip.name])
+    : await archivedClips(request, state, await exportRecords(exportsFile));
+  return [...local, ...held.filter((clip) => !local.some((l) => l.name === clip.name))];
 }
 
 const alive = (pid) => {
@@ -164,6 +188,8 @@ async function takeLock(stateDir) {
 
 /* ── YouTube ───────────────────────────────────────────────────────────── */
 
+const either = (a, b) => (a && b ? AbortSignal.any([a, b]) : a ?? b);
+
 /**
  * The upload calls of a signed-in YouTube session: on the channel `pageId` names, when the Google account holds several,
  * else on the account's own channel.
@@ -173,7 +199,8 @@ export async function youtubeSession(cookie, pageId, signal) {
     cookie,
     retrieve_player: false,
     on_behalf_of_user: pageId || undefined,
-    fetch: (input, init) => fetch(input, { ...init, signal }),
+    // A part's own signal stops it when the Archive tab closes; the session's stops everything.
+    fetch: (input, init) => fetch(input, { ...init, signal: either(init?.signal, signal) }),
   });
   return {
     start: (payload) =>
@@ -226,6 +253,8 @@ async function received(client, session) {
 /**
  * Puts a file up as an unlisted video and says its id. The file goes in parts, each resent from where YouTube says it
  * stopped when one fails; `session` resumes an upload a restart cut short, and `save` keeps the one it starts.
+ * `progress` hears how many bytes YouTube holds, at the start and after each part. Aborting `signal` stops the part in
+ * flight and throws `Stopped`, the session kept to resume from.
  */
 export async function uploadVideo(
   client,
@@ -235,10 +264,13 @@ export async function uploadVideo(
     session = null,
     save = async () => {},
     log = () => {},
+    progress = () => {},
+    signal = null,
     chunk = CHUNK,
     wait = (ms) => new Promise((r) => setTimeout(r, ms)),
   } = {},
 ) {
+  if (signal?.aborted) throw new Stopped();
   let offset = session ? await received(client, session) : null;
   if (offset === null) {
     const frontendUploadId = `innertube_android:${randomUUID()}:0:v=3,api=1,cf=3`;
@@ -262,7 +294,9 @@ export async function uploadVideo(
   let result = null;
   let failures = 0;
   let told = 0;
+  progress(offset);
   while (!result) {
+    if (signal?.aborted) throw new Stopped();
     const length = Math.min(step, file.size - offset);
     const last = offset + length >= file.size;
     try {
@@ -274,18 +308,24 @@ export async function uploadVideo(
           "x-goog-upload-offset": String(offset),
         },
         body: await file.read(offset, length),
+        ...(signal ? { signal } : {}),
       });
       if (!response.ok) throw new Error(`YouTube refused part of the upload (${response.status})`);
       offset += length;
       failures = 0;
       if (last) result = await response.json();
-      else if (offset - told >= file.size / 4) {
-        told = offset;
-        log(`${Math.round((offset / file.size) * 100)}%`);
+      else {
+        progress(offset);
+        if (offset - told >= file.size / 4) {
+          told = offset;
+          log(`${Math.round((offset / file.size) * 100)}%`);
+        }
       }
     } catch (error) {
+      if (signal?.aborted) throw new Stopped();
       if (++failures > 5) throw error;
       await wait(5000 * failures);
+      if (signal?.aborted) throw new Stopped();
       const at = await received(client, session);
       if (at === null) throw error;
       offset = at;
@@ -308,14 +348,19 @@ export async function uploadVideo(
 }
 
 /** A clip of the archive, fetched to `dir` and checked against its hash. */
-async function download(request, clip, dir) {
+async function download(request, clip, dir, signal) {
   await mkdir(dir, { recursive: true });
   const target = join(dir, clip.name);
-  const response = await request(`blobs/${clip.sha256}`, { raw: true });
+  const response = await request(`blobs/${clip.sha256}`, { raw: true, signal });
   const hash = createHash("sha256");
   const body = Readable.fromWeb(response.body);
   body.on("data", (chunk) => hash.update(chunk));
-  await pipeline(body, createWriteStream(target));
+  try {
+    await pipeline(body, createWriteStream(target));
+  } catch (error) {
+    await rm(target, { force: true });
+    throw signal?.aborted ? new Stopped() : error;
+  }
   if (hash.digest("hex") !== clip.sha256) {
     await rm(target, { force: true });
     throw new Error(`${clip.name} came back from the archive different`);
@@ -325,17 +370,22 @@ async function download(request, clip, dir) {
 
 /**
  * Puts up the clips due, up to the day's limit: the grade app's exports first, then (with `request`, the Cloudflare
- * archive's client) clips only the archive still holds. A failure stops the run and waits longer each time before
- * the next: half an hour, then an hour, and so on up to a day, which is also how YouTube's daily limit is waited out.
+ * archive's client) clips only the archive still holds, from `archived` when they've been asked for already. A failure
+ * stops the run and waits longer each time before the next: half an hour, then an hour, and so on up to a day, which is
+ * also how YouTube's daily limit is waited out. Aborting `signal` stops the run where it is with nothing to wait out,
+ * and the upload in flight resumes from there next time; `progress` hears each clip's bytes as they go up.
  */
 export async function uploadFootage({
   stateDir,
   config,
   request = null,
+  archived = null,
   connect = footageSession,
   exported = EXPORTED,
   exportsFile = EXPORTS,
   log = () => {},
+  progress = () => {},
+  signal = null,
   now = () => Date.now(),
   daily = config.footage?.daily ?? DAILY,
   chunk,
@@ -348,17 +398,21 @@ export async function uploadFootage({
     if ((state.pausedUntil ?? 0) > now()) return { uploaded: 0, left: 0, pausedUntil: state.pausedUntil };
     const today = day(now());
     const room = daily - (state.days[today] ?? 0);
-    let queue = await dueClips(state, { exported, exportsFile, now: now() });
+    let queue = await dueClips(state, { exported, exportsFile, now: now(), archived });
     // The archive is only asked when today's room isn't already taken by exports.
-    if (request && room > queue.length) queue = await dueClips(state, { exported, exportsFile, now: now(), request });
+    if (request && !archived && room > queue.length)
+      queue = await dueClips(state, { exported, exportsFile, now: now(), request });
     if (!queue.length || room <= 0) return { uploaded: 0, left: queue.length };
+    if (signal?.aborted) return { uploaded: 0, left: queue.length, stopped: true };
     const client = await connect({ stateDir, config });
     let uploaded = 0;
     for (const clip of queue.slice(0, room)) {
+      if (signal?.aborted) return { uploaded, left: queue.length - uploaded, stopped: true };
       const version = clip.sha256 ?? `${clip.size}:${clip.mtime}`;
       let temp = null;
       try {
-        const abs = clip.abs ?? (temp = await download(request, clip, join(stateDir, "footage-download")));
+        progress({ name: clip.name, size: clip.size, sent: 0, from: clip.from });
+        const abs = clip.abs ?? (temp = await download(request, clip, join(stateDir, "footage-download"), signal));
         log(`Footage: putting up ${clip.name} (${gb(clip.size)})`);
         const resume = state.current?.name === clip.name && state.current.version === version;
         const video = await uploadVideo(
@@ -371,7 +425,9 @@ export async function uploadFootage({
               state.current = { name: clip.name, version, session };
               await writeState(stateDir, state);
             },
-            log: (progress) => log(`Footage: ${clip.name} ${progress}`),
+            log: (share) => log(`Footage: ${clip.name} ${share}`),
+            progress: (sent) => progress({ name: clip.name, size: clip.size, sent, from: clip.from }),
+            signal,
             chunk,
             wait,
           },
@@ -392,6 +448,11 @@ export async function uploadFootage({
         uploaded++;
         log(`Footage: ${clip.name} is up as https://youtu.be/${video}`);
       } catch (error) {
+        // The Archive tab closing isn't a failure: the upload resumes where YouTube says it stopped, next time.
+        if (error instanceof Stopped || signal?.aborted) {
+          log(`Footage: stopped ${clip.name}, the Archive tab closed`);
+          return { uploaded, left: queue.length - uploaded, stopped: true };
+        }
         state.failures = (state.failures ?? 0) + 1;
         state.pausedUntil = now() + Math.min(24 * HOUR, (HOUR / 2) * 2 ** (state.failures - 1));
         state.lastError = { clip: clip.name, message: error.message, at: new Date(now()).toISOString() };
@@ -404,5 +465,268 @@ export async function uploadFootage({
     return { uploaded, left: queue.length - uploaded };
   } finally {
     await lock.release();
+  }
+}
+
+/* ── the Archive tab ───────────────────────────────────────────────────── */
+
+/**
+ * The upload in flight and how fast it's going: bytes over the last minute of parts, so one slow part doesn't swing it.
+ * The speed carries over from clip to clip, so the next one has a speed from its start.
+ */
+export function progressMeter(now = () => Date.now()) {
+  let current = null;
+  let samples = [];
+  let speed = null;
+  return {
+    update({ name, size, sent, from }) {
+      const at = now();
+      if (current?.name !== name || sent < current.sent) samples = [];
+      current = { name, size, sent, from };
+      samples.push([at, sent]);
+      while (samples.length > 2 && at - samples[0][0] > 60_000) samples.shift();
+      const [first, latest] = [samples[0], samples.at(-1)];
+      if (latest[0] > first[0] && latest[1] > first[1])
+        speed = ((latest[1] - first[1]) / (latest[0] - first[0])) * 1000;
+    },
+    clear() {
+      current = null;
+      samples = [];
+    },
+    get current() {
+      return current;
+    },
+    /** Bytes a second, or null before any part has gone up. */
+    get speed() {
+      return speed;
+    },
+  };
+}
+
+/**
+ * What the Archive tab shows: every graded clip with whether it's up, waiting or going up now, today's uploads against
+ * the day's limit, why the uploads wait when they do, and the upload in flight with its speed.
+ */
+export async function footageStatus({
+  stateDir,
+  config,
+  exported = EXPORTED,
+  exportsFile = EXPORTS,
+  archived = [],
+  progress = null,
+  speed = null,
+  busy = false,
+  now = Date.now(),
+}) {
+  const state = await readState(stateDir);
+  const daily = config.footage?.daily ?? DAILY;
+  const today = state.days[day(now)] ?? 0;
+  const due = await dueClips(state, { exported, exportsFile, archived, now });
+  const clips = new Map();
+  for (const [name, versions] of Object.entries(state.clips)) {
+    const latest = versions.at(-1);
+    if (!latest) continue;
+    clips.set(name, {
+      name,
+      title: clipTitle(name),
+      size: latest.size,
+      from: latest.from,
+      state: "up",
+      video: latest.video,
+      uploadedAt: latest.uploadedAt,
+    });
+  }
+  // A clip graded again since it went up is waiting too, with its earlier grade's video.
+  for (const clip of due) {
+    const earlier = clips.get(clip.name);
+    clips.set(clip.name, {
+      name: clip.name,
+      title: clipTitle(clip.name),
+      size: clip.size,
+      from: clip.from,
+      state: progress?.name === clip.name ? "uploading" : "due",
+      video: earlier?.video ?? null,
+      uploadedAt: earlier?.uploadedAt ?? null,
+    });
+  }
+  const all = [...clips.values()];
+  const up = all.filter((clip) => clip.state === "up");
+  const waiting = all.filter((clip) => clip.state !== "up");
+  // Today's uploads are the queue's first clips, as many as the day has room for.
+  const todays = due.slice(0, Math.max(0, daily - today));
+  const sent = progress?.sent ?? 0;
+  const pausedUntil = (state.pausedUntil ?? 0) > now ? state.pausedUntil : null;
+  let phase = "limit";
+  if (busy) phase = "busy";
+  else if (progress) phase = "uploading";
+  else if (pausedUntil) phase = "paused";
+  else if (!due.length) phase = "done";
+  else if (todays.length) phase = "waiting";
+  return {
+    at: now,
+    channel: config.footage?.channel ?? null,
+    daily,
+    today,
+    state: phase,
+    pausedUntil,
+    lastError: pausedUntil ? state.lastError ?? null : null,
+    current: progress ? { ...progress, title: clipTitle(progress.name) } : null,
+    speed,
+    totals: {
+      up: up.length,
+      upBytes: total(up),
+      due: waiting.length,
+      dueBytes: Math.max(0, total(waiting) - sent),
+      today: todays.length,
+      todayBytes: Math.max(0, total(todays) - (todays.some((clip) => clip.name === progress?.name) ? sent : 0)),
+    },
+    clips: all.sort((a, b) => b.name.localeCompare(a.name)).slice(0, LISTED),
+  };
+}
+
+/** Waits `ms`, or less once `signal` aborts. */
+const pause = (ms, signal) =>
+  new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
+
+/**
+ * One stretch of the Archive tab being open: the helper reports what's up (every `every` while a clip goes up, every
+ * `poll` otherwise) and puts clips up until the tab closes. `ask(status)` sends the site the status and answers whether
+ * the tab is still open. When it isn't, or the site doesn't answer three times running (so there's no telling), the
+ * upload stops mid-part, kept to resume where YouTube says it stopped.
+ */
+export async function watchedFootage({
+  stateDir,
+  config,
+  ask,
+  request = null,
+  connect = footageSession,
+  exported = EXPORTED,
+  exportsFile = EXPORTS,
+  log = () => {},
+  now = () => Date.now(),
+  poll = 10_000,
+  every = 5_000,
+  wait = pause,
+  signal = null,
+  chunk,
+}) {
+  const stop = new AbortController();
+  const end = () => stop.abort();
+  signal?.addEventListener("abort", end, { once: true });
+  const meter = progressMeter(now);
+  let busy = false;
+  let missed = 0;
+  let archived = [];
+  if (request)
+    archived = await archiveFootage(request, await exportRecords(exportsFile)).catch((error) => {
+      log(`Footage archive: couldn't list the Cloudflare archive (${error.message})`);
+      return [];
+    });
+  const report = async () => {
+    try {
+      const status = await footageStatus({
+        stateDir,
+        config,
+        exported,
+        exportsFile,
+        archived,
+        progress: meter.current,
+        speed: meter.speed,
+        busy,
+        now: now(),
+      });
+      const { watching } = await ask(status);
+      missed = 0;
+      if (!watching) stop.abort();
+    } catch (error) {
+      if (++missed >= 3) {
+        log(`Footage archive: the site didn't answer (${error.message}); stopping`);
+        stop.abort();
+      }
+    }
+  };
+  await report();
+  const reporting = (async () => {
+    while (!stop.signal.aborted) {
+      await wait(meter.current ? every : poll, stop.signal);
+      if (!stop.signal.aborted) await report();
+    }
+  })();
+  try {
+    while (!stop.signal.aborted) {
+      let done;
+      try {
+        done = await uploadFootage({
+          stateDir,
+          config,
+          request,
+          archived,
+          connect,
+          exported,
+          exportsFile,
+          log,
+          now,
+          chunk,
+          signal: stop.signal,
+          progress: (upload) => meter.update(upload),
+        });
+      } catch (error) {
+        log(`Footage archive: ${error.message}`);
+        done = { uploaded: 0 };
+      }
+      meter.clear();
+      busy = Boolean(done.busy);
+      if (done.uploaded) log(`Footage archive: ${done.uploaded} clips up, ${done.left} to go`);
+      if (stop.signal.aborted) break;
+      await report();
+      // Nothing more to put up now (all up, today's room taken, a failure to wait out): look again in a while.
+      if (!done.uploaded) await wait(poll, stop.signal);
+    }
+  } finally {
+    signal?.removeEventListener("abort", end);
+    stop.abort();
+    await reporting;
+    meter.clear();
+  }
+  // The tab sees where the uploads stopped when it opens again.
+  if (missed < 3) await report();
+}
+
+/**
+ * The helper's footage uploads: every `poll` it asks the site whether the composer's Archive tab is open (`ask(null)`),
+ * and uploads only while it is. `client(config)` is the Cloudflare archive's client; `signal` ends the loop.
+ */
+export async function watchFootage({
+  loadConfig,
+  ask,
+  client = () => null,
+  log = () => {},
+  poll = 10_000,
+  wait = pause,
+  signal = null,
+  ...rest
+}) {
+  // A site that's down fails the same way every 10 seconds: the log says so once, and again when it changes.
+  let failing = null;
+  while (!signal?.aborted) {
+    try {
+      const config = await loadConfig();
+      if (config.platforms?.includes(FOOTAGE) && (await ask(null)).watching)
+        await watchedFootage({ ...rest, config, ask, request: client(config), log, poll, wait, signal });
+      failing = null;
+    } catch (error) {
+      if (error.message !== failing) log(`Footage archive: ${error.message}`);
+      failing = error.message;
+    }
+    await wait(poll, signal);
   }
 }

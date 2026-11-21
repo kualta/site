@@ -7,7 +7,18 @@ import { join } from "node:path";
 import { archiveResponse } from "../../src/lib/publisher/archive.ts";
 import { memoryArchive, memoryMedia } from "../../src/lib/publisher/memory-archive.ts";
 import { archiveClient, archiveProject } from "./archive.mjs";
-import { clipDescription, clipTitle, exportedClips, readState, uploadFootage, uploadVideo } from "./footage.mjs";
+import {
+  clipDescription,
+  clipTitle,
+  exportedClips,
+  footageStatus,
+  progressMeter,
+  readState,
+  uploadFootage,
+  uploadVideo,
+  watchedFootage,
+  watchFootage,
+} from "./footage.mjs";
 
 const HOUR = 60 * 60_000;
 const record = {
@@ -280,4 +291,268 @@ test("a clip only the archive still holds goes up from there, checked against it
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+/** Lets the timers of a test run go by at once. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
+/** A part that hangs until its own signal aborts, as one in flight when the Archive tab closes. */
+const hangs = (init) =>
+  new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+const first = "DJI_20261111161230_0258_D.mp4";
+const second = "DJI_20261111161344_0259_D.mp4";
+
+test("the Archive tab closing stops a part in flight, with nothing to wait out, and the upload resumes there", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    const yt = youtube();
+    const send = yt.client.send;
+    const stop = new AbortController();
+    yt.client.send = (url, init) => {
+      if (init.signal && init.headers["x-goog-upload-offset"] === "4") {
+        setTimeout(() => stop.abort(), 1);
+        return hangs(init);
+      }
+      return send(url, init);
+    };
+    const heard = [];
+    const run = (extra = {}) =>
+      uploadFootage({
+        stateDir,
+        config: {},
+        connect: async () => yt.client,
+        exported,
+        exportsFile,
+        chunk: 4,
+        ...extra,
+      });
+    expect(await run({ signal: stop.signal, progress: (p) => heard.push([p.name, p.sent]) })).toEqual({
+      uploaded: 0,
+      left: 2,
+      stopped: true,
+    });
+    expect(heard).toEqual([
+      [first, 0],
+      [first, 0],
+      [first, 4],
+    ]);
+    let state = await readState(stateDir);
+    expect(state.current.name).toBe(first);
+    expect(state.pausedUntil).toBeUndefined();
+    expect(state.failures).toBeUndefined();
+
+    yt.client.send = send;
+    const starts = yt.calls.filter(([call]) => call === "start").length;
+    expect(await run()).toEqual({ uploaded: 2, left: 0 });
+    // The first clip carried on from YouTube's 4 bytes; only the second started a new upload.
+    expect(yt.calls.filter(([call]) => call === "start").length).toBe(starts + 1);
+    state = await readState(stateDir);
+    expect(Object.keys(state.clips)).toEqual([first, second]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the speed is bytes over the last minute of parts, carried on to the next clip", () => {
+  let clock = 0;
+  const meter = progressMeter(() => clock);
+  meter.update({ name: "a", size: 10e6, sent: 0, from: "exported" });
+  expect(meter.speed).toBeNull();
+  clock = 2_000;
+  meter.update({ name: "a", size: 10e6, sent: 4e6, from: "exported" });
+  expect(meter.speed).toBe(2e6);
+  clock = 120_000;
+  meter.update({ name: "a", size: 10e6, sent: 5e6, from: "exported" });
+  // The minute-old part no longer counts: 1 MB in the last 118 seconds.
+  expect(Math.round(meter.speed)).toBe(Math.round(1e6 / 118));
+  meter.update({ name: "b", size: 10e6, sent: 0, from: "exported" });
+  expect(meter.current).toEqual({ name: "b", size: 10e6, sent: 0, from: "exported" });
+  expect(Math.round(meter.speed)).toBe(Math.round(1e6 / 118));
+  meter.clear();
+  expect(meter.current).toBeNull();
+});
+
+test("the tab's status lists every clip, the one going up, and what's left today", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    const yt = youtube({ granularity: 256 * 1024 });
+    const now = Date.parse("2026-11-21T10:00:00Z");
+    const config = { footage: { channel: "@archive", daily: 2 } };
+    await uploadFootage({
+      stateDir,
+      config,
+      connect: async () => yt.client,
+      exported,
+      exportsFile,
+      now: () => now,
+      daily: 1,
+    });
+    const archived = [{ name: "DJI_20261108122204_0086_D.mp4", sha256: "ab", size: 17, from: "archive" }];
+    const status = await footageStatus({
+      stateDir,
+      config,
+      exported,
+      exportsFile,
+      archived,
+      progress: { name: second, size: 11, sent: 3, from: "exported" },
+      speed: 2e6,
+      now,
+    });
+    expect(status).toMatchObject({
+      channel: "@archive",
+      daily: 2,
+      today: 1,
+      state: "uploading",
+      pausedUntil: null,
+      current: { name: second, sent: 3, title: "2026-11-11 16:13:44 · clip 0259" },
+      speed: 2e6,
+      // Today has room for one more: the export going up, 8 of its 11 bytes still to send.
+      totals: { up: 1, upBytes: 10, due: 2, dueBytes: 11 + 17 - 3, today: 1, todayBytes: 8 },
+    });
+    expect(status.clips.map((clip) => [clip.name, clip.state, clip.from])).toEqual([
+      [second, "uploading", "exported"],
+      [first, "up", "exported"],
+      ["DJI_20261108122204_0086_D.mp4", "due", "archive"],
+    ]);
+    expect(status.clips[1].video).toBe("abcDEF12345");
+
+    const idle = await footageStatus({ stateDir, config: { footage: { daily: 1 } }, exported, exportsFile, now });
+    expect(idle).toMatchObject({ state: "limit", current: null, totals: { due: 1, today: 0 } });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the helper uploads while the tab is open, reporting each part's progress and speed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    const yt = youtube();
+    const send = yt.client.send;
+    // Each part takes a few milliseconds, as parts take seconds on a real uplink.
+    yt.client.send = async (url, init) => {
+      if (init.signal) await new Promise((resolve) => setTimeout(resolve, 5));
+      return send(url, init);
+    };
+    const statuses = [];
+    const ask = async (status) => {
+      statuses.push(status);
+      return { watching: status.state !== "done" };
+    };
+    const config = { footage: { channel: "@archive" } };
+    await watchedFootage({
+      stateDir,
+      config,
+      ask,
+      connect: async () => yt.client,
+      exported,
+      exportsFile,
+      chunk: 4,
+      wait: tick,
+    });
+    expect(Object.keys((await readState(stateDir)).clips)).toEqual([first, second]);
+    expect(statuses[0]).toMatchObject({ state: "waiting", channel: "@archive", totals: { up: 0, due: 2 } });
+    expect(statuses.some((s) => s.state === "uploading" && s.current.sent > 0 && s.speed > 0)).toBe(true);
+    expect(statuses.at(-1)).toMatchObject({ state: "done", current: null, totals: { up: 2, due: 0 } });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("uploads stop when the site stops answering, since there's no telling whether the tab is open", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    const yt = youtube();
+    const send = yt.client.send;
+    yt.client.send = (url, init) => (init.signal ? hangs(init) : send(url, init));
+    let asks = 0;
+    const ask = async () => {
+      if (++asks > 1) throw new Error("fetch failed");
+      return { watching: true };
+    };
+    const logs = [];
+    await watchedFootage({
+      stateDir,
+      config: {},
+      ask,
+      connect: async () => yt.client,
+      exported,
+      exportsFile,
+      wait: tick,
+      log: (line) => logs.push(line),
+    });
+    expect(asks).toBe(4);
+    expect(logs.some((line) => line.includes("didn't answer"))).toBe(true);
+    const state = await readState(stateDir);
+    expect(state.current.name).toBe(first);
+    expect(state.pausedUntil).toBeUndefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("with the tab shut nothing goes up, and nothing is asked until the footage archive is connected", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    const connect = async () => {
+      throw new Error("nothing should go up");
+    };
+    const shut = new AbortController();
+    let asks = 0;
+    await watchFootage({
+      stateDir,
+      exported,
+      exportsFile,
+      connect,
+      loadConfig: async () => ({ platforms: ["youtube-footage"] }),
+      ask: async (status) => {
+        expect(status).toBeNull();
+        if (++asks === 3) shut.abort();
+        return { watching: false };
+      },
+      wait: tick,
+      signal: shut.signal,
+    });
+    expect(asks).toBe(3);
+
+    const unconnected = new AbortController();
+    let loads = 0;
+    await watchFootage({
+      stateDir,
+      connect,
+      loadConfig: async () => {
+        if (++loads === 3) unconnected.abort();
+        return { platforms: [] };
+      },
+      ask: async () => {
+        throw new Error("nothing should be asked");
+      },
+      wait: tick,
+      signal: unconnected.signal,
+    });
+    expect(loads).toBe(3);
+    expect((await readState(stateDir)).clips).toEqual({});
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a site that's down is logged once, not every time the helper asks", async () => {
+  const done = new AbortController();
+  const logs = [];
+  let asks = 0;
+  await watchFootage({
+    loadConfig: async () => ({ platforms: ["youtube-footage"] }),
+    ask: async () => {
+      if (++asks === 4) done.abort();
+      throw new Error(asks < 3 ? "fetch failed" : "Publisher request failed (503)");
+    },
+    log: (line) => logs.push(line),
+    wait: tick,
+    signal: done.signal,
+  });
+  expect(logs).toEqual(["Footage archive: fetch failed", "Footage archive: Publisher request failed (503)"]);
 });
