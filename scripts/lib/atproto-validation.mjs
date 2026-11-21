@@ -1,17 +1,19 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { Lexicons, jsonToLex } from "@atproto/lexicon";
+import { Lexicons, jsonToLex, parseLexiconDoc } from "@atproto/lexicon";
 import { schemas } from "@atproto/api";
 
-const directory = new URL("../lexicons/", import.meta.url);
-const readLexicon = (file) => JSON.parse(readFileSync(new URL(file, directory), "utf8"));
+const vendored = new URL("../lexicons/", import.meta.url);
+const readLexicon = (file, directory = vendored) => JSON.parse(readFileSync(new URL(file, directory), "utf8"));
 
-export function ownLexicons() {
+export function ownLexicons(directory = vendored) {
   return readdirSync(directory)
     .filter((file) => /^dev\.kualta\..+\.json$/.test(file))
     .sort()
     .map((file) => {
-      const lexicon = readLexicon(file);
+      const lexicon = readLexicon(file, directory);
       if (`${lexicon.id}.json` !== file) throw new Error(`Lexicon id does not match its filename: ${file}`);
+      // Lexicons.add accepts malformed definitions, and these documents are published as the public contract.
+      parseLexiconDoc(lexicon);
       return lexicon;
     });
 }

@@ -84,11 +84,10 @@ const gitLocation = (url) =>
 export function tangledRepoUri(repos, gitUrl) {
   if (!gitUrl) return undefined;
   const wanted = gitLocation(gitUrl);
-  return repos.find((entry) =>
-    [entry.value.source, ...(entry.value.description?.match(/https?:\/\/\S+/g) ?? [])].some(
-      (url) => typeof url === "string" && gitLocation(url) === wanted,
-    ),
-  )?.uri;
+  return repos.find((entry) => {
+    const mirrored = entry.value.description?.match(/^Mirror of (https?:\/\/\S+)/)?.[1];
+    return mirrored && gitLocation(mirrored) === wanted;
+  })?.uri;
 }
 
 export async function syncProfile(manifest, agent, { verifyOnly = false, log = console.log } = {}) {
@@ -122,6 +121,10 @@ export async function syncProfile(manifest, agent, { verifyOnly = false, log = c
       const existing = entries.find((entry) => entry.uri === item.uri);
       const record = { ...item.record };
       if (collection === PROJECT) {
+        if (existing && existing.value.name !== record.name)
+          throw new Error(
+            `Record key belongs to different content: ${item.uri} is "${existing.value.name}", not "${record.name}". Project ids are never reused; to rename a project, remove its AT record first`,
+          );
         const linked = tangled ? tangledRepoUri(tangled, record.gitUrl) : existing?.value.repo;
         if (linked) record.repo = linked;
       }

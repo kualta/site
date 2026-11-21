@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { Lexicons } from "@atproto/lexicon";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { linksRecord, projectRecord, schemaRecords, syncProfile, tangledRepoUri } from "./atproto-profile.mjs";
 import { ownLexicons, validateRecord } from "./atproto-validation.mjs";
 
@@ -97,7 +100,6 @@ describe("profile records", () => {
     const ids = lexicons.map((lexicon) => lexicon.id);
     expect(ids).toEqual(expect.arrayContaining(["dev.kualta.links", "dev.kualta.project"]));
     expect(ids.every((id) => id.startsWith("dev.kualta."))).toBe(true);
-    expect(() => new Lexicons(lexicons)).not.toThrow();
     const schemas = schemaRecords(config, lexicons);
     expect(schemas.map((schema) => schema.uri)).toEqual(
       ids.map((id) => `at://${config.did}/com.atproto.lexicon.schema/${id}`),
@@ -108,14 +110,36 @@ describe("profile records", () => {
     }
   });
 
-  test("a Tangled repo matches by its source or the URL in its description", () => {
-    const bySource = {
-      uri: "at://did:plc:x/sh.tangled.repo/pomo",
-      value: { source: "https://github.com/kualta/pomo" },
-    };
-    const repos = [tangledSite, bySource];
+  test("a malformed or misnamed lexicon document is refused", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "lexicons-"));
+    const url = pathToFileURL(`${directory}/`);
+    const doc = (type) => ({
+      lexicon: 1,
+      id: "dev.kualta.thing",
+      defs: { main: { type: "record", key: "tid", record: { type: "object", properties: { name: { type } } } } },
+    });
+    writeFileSync(path.join(directory, "dev.kualta.thing.json"), JSON.stringify(doc("string")));
+    writeFileSync(path.join(directory, "com.example.ignored.json"), "not json");
+    expect(ownLexicons(url).map((lexicon) => lexicon.id)).toEqual(["dev.kualta.thing"]);
+    writeFileSync(path.join(directory, "dev.kualta.thing.json"), JSON.stringify(doc("strng")));
+    expect(() => ownLexicons(url)).toThrow();
+    writeFileSync(
+      path.join(directory, "dev.kualta.thing.json"),
+      JSON.stringify({ ...doc("string"), id: "dev.kualta.other" }),
+    );
+    expect(() => ownLexicons(url)).toThrow("does not match its filename");
+  });
+
+  test("a Tangled repo matches only as a declared mirror of the git URL", () => {
+    const repo = (name, value) => ({ uri: `at://did:plc:x/sh.tangled.repo/${name}`, value });
+    const repos = [
+      repo("fork", { description: "Fork of https://github.com/kualta/site with patches" }),
+      repo("upstream", { source: "https://github.com/kualta/site" }),
+      tangledSite,
+      repo("pomo", { description: "Mirror of https://GitHub.com/kualta/pomo.git." }),
+    ];
     expect(tangledRepoUri(repos, "https://github.com/kualta/site.git")).toBe(tangledSite.uri);
-    expect(tangledRepoUri(repos, "https://GitHub.com/kualta/pomo/")).toBe(bySource.uri);
+    expect(tangledRepoUri(repos, "https://github.com/kualta/pomo/")).toBe(repos[3].uri);
     expect(tangledRepoUri(repos, "https://github.com/kualta/site-two")).toBeUndefined();
     expect(tangledRepoUri(repos, "https://github.com/kualta")).toBeUndefined();
     expect(tangledRepoUri(repos, null)).toBeUndefined();
@@ -166,13 +190,23 @@ describe("profile publishing", () => {
     await syncProfile(manifest, pds.agent, quiet);
     const writes = pds.writes();
     const removed = manifest.projects.pop();
-    manifest.links.record.links = [];
     await expect(syncProfile(manifest, pds.agent, quiet)).rejects.toThrow(removed.uri);
     manifest.projects.push(removed);
     const schema = manifest.schemas.pop();
     await expect(syncProfile(manifest, pds.agent, quiet)).rejects.toThrow(schema.uri);
     expect(pds.writes()).toBe(writes);
     expect(pds.records.has(removed.uri)).toBe(true);
+  });
+
+  test("refuses to write a project over the record of another project", async () => {
+    const pds = fakePds();
+    const manifest = snapshot();
+    await syncProfile(manifest, pds.agent, quiet);
+    const writes = pds.writes();
+    manifest.projects[0] = projectRecord(config, { ...project, name: "other" });
+    await expect(syncProfile(manifest, pds.agent, quiet)).rejects.toThrow("belongs to different content");
+    expect(pds.writes()).toBe(writes);
+    expect(pds.records.get(manifest.projects[0].uri).value.name).toBe("site");
   });
 
   test("leaves schemas of other namespaces alone", async () => {

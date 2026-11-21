@@ -56,12 +56,19 @@ A project record carries `name`, `fullName`, `description`, `status`, `date`, `u
 the account's `sh.tangled.repo` records name the same git URL, in `source` or in the
 description, the project also carries that record's AT URI as `repo`. The listing is
 read at sync time: no match omits the field, and a failed listing keeps the link
-already published. Never change a project's `id`: the record key is derived from it.
+already published. Because of that lookup, `bun run atproto:verify` reports a project
+as different after a Tangled mirror is added, until the next deploy.
+
+A project's `id` is a permanent key: never change it, and never reuse the `id` of a
+removed project. The sync refuses to write a project over a record with another
+`name`, so renaming a project also needs its record removed first.
 
 The links record holds the contact list in display order and the armored PGP public
 key, so it can be read without the website.
 
-These records are part of the generated manifest, so `bun run atproto:preview`
+They are synced by their own deployment step, `bun run atproto:publish:profile`,
+after the articles and music, so a problem here does not hold those back. These
+records are part of the generated manifest, so `bun run atproto:preview`
 lists them, `bun run atproto:verify` compares them with the PDS, and they are synced
 only once the deployed site serves the same snapshot. They follow the article
 rules: conditional writes, unchanged records left alone, a readback after every
@@ -70,8 +77,9 @@ the stale URIs; delete those records explicitly, then rerun the workflow. Adding
 lexicon file under `scripts/lexicons/` with a `dev.kualta.` name publishes its schema
 on the next deploy.
 
-Other apps resolve a `dev.kualta.*` lexicon through DNS. The owner adds this record
-once; nothing in the repository manages it:
+Other apps resolve a `dev.kualta.<name>` lexicon through DNS. The owner adds this
+record once; nothing in the repository manages it. A deeper name such as
+`dev.kualta.feed.post` would need its own record at `_lexicon.feed.kualta.dev`:
 
 ```
 _lexicon.kualta.dev  TXT  "did=did:plc:jhvnnnd3adml7t6anu3ay7ip"
