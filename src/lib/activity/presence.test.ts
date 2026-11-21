@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { formatLastSeenTime, formatRelativeTime, getPresenceState } from "./presence";
+import {
+  formatLastSeenTime,
+  formatPresenceChance,
+  formatRelativeTime,
+  getPresenceChance,
+  getPresenceState,
+  getPresenceTier,
+} from "./presence";
 
 const NOW = Date.parse("2026-08-30T12:00:00.000Z");
 const HOUR = 60 * 60 * 1000;
@@ -9,29 +16,77 @@ function seenAgo(age: number): string {
   return new Date(NOW - age).toISOString();
 }
 
-describe("getPresenceState", () => {
+describe("getPresenceChance", () => {
   test.each([
-    [6 * HOUR, "definitely-alive"],
-    [6 * HOUR + 1, "most-likely-alive"],
-    [2 * DAY, "most-likely-alive"],
-    [2 * DAY + 1, "somewhere-else"],
-    [7 * DAY, "somewhere-else"],
-    [7 * DAY + 1, "kinda-lost"],
-    [14 * DAY, "kinda-lost"],
-    [14 * DAY + 1, "not-around"],
-    [60 * DAY, "not-around"],
-    [60 * DAY + 1, "most-likely-dead"],
-  ] as const)("maps age %i to %s", (age, expected) => {
-    expect(getPresenceState(seenAgo(age), NOW)).toBe(expected);
+    [0, 1],
+    [6 * HOUR, 0.9933],
+    [2 * DAY, 0.8675],
+    [7 * DAY, 0.5],
+    [14 * DAY, 0.2612],
+    [60 * DAY, 0.0383],
+  ] as const)("gives an age of %i ms a chance of %d", (age, expected) => {
+    expect(getPresenceChance(seenAgo(age), NOW)).toBeCloseTo(expected, 4);
   });
 
-  test("clamps future activity to the newest band", () => {
-    expect(getPresenceState(new Date(NOW + HOUR).toISOString(), NOW)).toBe("definitely-alive");
+  test("falls with every minute of silence and never reaches 0", () => {
+    let previous = 1;
+    for (let age = HOUR; age <= 365 * DAY; age += HOUR) {
+      const chance = getPresenceChance(seenAgo(age), NOW);
+      expect(chance).toBeLessThan(previous);
+      expect(chance).toBeGreaterThan(0);
+      previous = chance;
+    }
   });
 
-  test("uses the oldest band when no valid event exists", () => {
-    expect(getPresenceState(null, NOW)).toBe("most-likely-dead");
-    expect(getPresenceState("not-a-date", NOW)).toBe("most-likely-dead");
+  test("treats future activity as just seen", () => {
+    expect(getPresenceChance(new Date(NOW + HOUR).toISOString(), NOW)).toBe(1);
+  });
+
+  test("gives no chance without a valid sign", () => {
+    expect(getPresenceChance(null, NOW)).toBe(0);
+    expect(getPresenceChance("not-a-date", NOW)).toBe(0);
+  });
+});
+
+describe("getPresenceTier", () => {
+  test.each([
+    [1, "almost-certain"],
+    [0.945, "almost-certain"],
+    [0.9449, "very-likely"],
+    [0.795, "very-likely"],
+    [0.7949, "likely"],
+    [0.545, "likely"],
+    [0.5449, "even-odds"],
+    [0.445, "even-odds"],
+    [0.4449, "unlikely"],
+    [0.195, "unlikely"],
+    [0.1949, "very-unlikely"],
+    [0.045, "very-unlikely"],
+    [0.0449, "almost-no-chance"],
+    [0, "almost-no-chance"],
+  ] as const)("puts a chance of %d in %s, matching the rounded percentage", (chance, expected) => {
+    expect(getPresenceTier(chance)).toBe(expected);
+  });
+
+  test("reads the tier straight from the time since last seen", () => {
+    expect(getPresenceState(seenAgo(HOUR), NOW)).toBe("almost-certain");
+    expect(getPresenceState(seenAgo(7 * DAY), NOW)).toBe("even-odds");
+    expect(getPresenceState(null, NOW)).toBe("almost-no-chance");
+  });
+});
+
+describe("formatPresenceChance", () => {
+  test.each([
+    [1, ">99%"],
+    [0.991, ">99%"],
+    [0.99, "99%"],
+    [0.5, "50%"],
+    [0.0383, "4%"],
+    [0.01, "1%"],
+    [0.0099, "<1%"],
+    [0, "<1%"],
+  ] as const)("shows a chance of %d as %s", (chance, expected) => {
+    expect(formatPresenceChance(chance)).toBe(expected);
   });
 });
 

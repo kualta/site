@@ -116,12 +116,13 @@ export type LinkPreview = Pick<AppBskyEmbedExternal.ViewExternal, "uri" | "title
 export type ActivityEvent = GitHubActivity | BlueskyActivity;
 
 export type PresenceState =
-  | "definitely-alive"
-  | "most-likely-alive"
-  | "somewhere-else"
-  | "kinda-lost"
-  | "not-around"
-  | "most-likely-dead"
+  | "almost-certain"
+  | "very-likely"
+  | "likely"
+  | "even-odds"
+  | "unlikely"
+  | "very-unlikely"
+  | "almost-no-chance"
   | "unknown";
 
 export interface SourceHealth {

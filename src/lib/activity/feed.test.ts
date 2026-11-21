@@ -210,7 +210,7 @@ describe("getActivityFeed", () => {
 
     expect(calls).toEqual({ github: 1, bluesky: 1 });
     expect(feed.delayed).toBe(false);
-    expect(feed.presence).toBe("definitely-alive");
+    expect(feed.presence).toBe("almost-certain");
   });
 
   test("uses a trusted stale snapshot when refresh fails", async () => {
@@ -532,7 +532,7 @@ test("cron tolerates a slow shared cache, while initial HTML remains bounded", a
   expect(initial.delayed).toBe(true);
   const recovered = await getInitialActivityFeed({ cache: slow, logger, now: NOW, cacheReadTimeoutMs: 2_000, requireReadableCache: true });
   expect(recovered.delayed).toBe(false);
-  expect(recovered.presence).toBe("definitely-alive");
+  expect(recovered.presence).toBe("almost-certain");
 });
 
 test("freshness survives a failed refresh and recovers only after successful scheduled work", async () => {
