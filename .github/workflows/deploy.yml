@@ -66,3 +66,9 @@ jobs:
         env:
           ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}
           PLYR_TOKEN: ${{ secrets.PLYR_TOKEN }}
+
+      # Last, so a removed project or lexicon stops here without skipping the steps above.
+      - name: Publish and verify projects, links and lexicons on ATProto
+        run: bun run atproto:publish:profile
+        env:
+          ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}

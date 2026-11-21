@@ -1,0 +1,55 @@
+{
+  "lexicon": 1,
+  "id": "dev.kualta.links",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "The account owner's contact points and profiles elsewhere, in display order.",
+      "key": "literal:self",
+      "record": {
+        "type": "object",
+        "required": ["links"],
+        "properties": {
+          "links": {
+            "type": "array",
+            "maxLength": 64,
+            "items": { "type": "ref", "ref": "#link" }
+          },
+          "pgpKey": {
+            "type": "string",
+            "maxLength": 20000,
+            "description": "ASCII-armored OpenPGP public key for encrypted contact."
+          }
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["platform", "label", "url"],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "maxLength": 640,
+          "maxGraphemes": 64,
+          "description": "Lowercase name of the service, such as email or github."
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 1280,
+          "maxGraphemes": 128,
+          "description": "The handle or address to display."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 3000,
+          "maxGraphemes": 300
+        }
+      }
+    }
+  }
+}

@@ -4,8 +4,8 @@ import { CID } from "multiformats/cid";
 import { sha256 } from "multiformats/hashes/sha2";
 import { validateRecord } from "./atproto-validation.mjs";
 
-const plain = (value) => JSON.parse(JSON.stringify(value));
-const key = (uri) => uri.split("/").at(-1);
+export const plain = (value) => JSON.parse(JSON.stringify(value));
+export const key = (uri) => uri.split("/").at(-1);
 
 export async function coverBlob(cover) {
   const bytes = Buffer.from(cover.base64, "base64");
@@ -26,6 +26,14 @@ export async function listRecords(repo, did, collection) {
     cursor = response.data.cursor;
   } while (cursor);
   return records;
+}
+
+export async function putVerified(repo, did, uri, record, existing, log) {
+  const [collection, rkey] = uri.split("/").slice(-2);
+  await repo.putRecord({ repo: did, collection, rkey, record, swapRecord: existing?.cid ?? null, validate: false });
+  const readback = await repo.getRecord({ repo: did, collection, rkey });
+  if (!isDeepStrictEqual(plain(readback.data.value), plain(record))) throw new Error(`Record readback differs: ${uri}`);
+  log(`Published and verified ${uri}`);
 }
 
 export async function verifyWebsite(manifest, fetcher = fetch) {
@@ -126,18 +134,7 @@ export async function syncRecords(manifest, agent, { verifyOnly = false, log = c
       if (!isDeepStrictEqual(plain(upload.data.blob), record.coverImage))
         throw new Error(`Cover upload differs: ${item.uri}`);
     }
-    await repo.putRecord({
-      repo: manifest.did,
-      collection,
-      rkey: key(item.uri),
-      record,
-      swapRecord: existing?.cid ?? null,
-      validate: false,
-    });
-    const readback = await repo.getRecord({ repo: manifest.did, collection, rkey: key(item.uri) });
-    if (!isDeepStrictEqual(plain(readback.data.value), plain(record)))
-      throw new Error(`Record readback differs: ${item.uri}`);
-    log(`Published and verified ${item.uri}`);
+    await putVerified(repo, manifest.did, item.uri, record, existing, log);
   }
   await put(
     manifest.publication,

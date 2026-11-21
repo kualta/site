@@ -1,14 +1,20 @@
 import { readFile } from "node:fs/promises";
 import { AtpAgent } from "@atproto/api";
+import { syncProfile } from "./lib/atproto-profile.mjs";
 import { syncRecords, verifyWebsite, waitForWebsite } from "./lib/atproto-publish.mjs";
 
 const args = process.argv.slice(2);
-if (args.some((arg) => !["--dry-run", "--verify"].includes(arg))) throw new Error("Use --dry-run or --verify");
+if (args.some((arg) => !["--dry-run", "--verify", "--articles", "--profile"].includes(arg)))
+  throw new Error("Use --dry-run or --verify, and --articles or --profile to sync only one part");
+const both = !args.includes("--articles") && !args.includes("--profile");
 const manifest = JSON.parse(await readFile("public/.well-known/site.standard.manifest.json", "utf8"));
 if (args.includes("--dry-run")) {
   console.log(`Publication: ${manifest.publication.uri}`);
   for (const doc of manifest.documents)
     console.log(`${doc.record.title}: ${doc.uri} (${Buffer.byteLength(doc.record.textContent)} text bytes)`);
+  for (const schema of manifest.schemas) console.log(`Lexicon schema: ${schema.uri}`);
+  for (const project of manifest.projects) console.log(`Project ${project.record.name}: ${project.uri}`);
+  console.log(`Links: ${manifest.links.uri} (${manifest.links.record.links.length} links)`);
 } else {
   const verifyOnly = args.includes("--verify");
   if (verifyOnly) await verifyWebsite(manifest);
@@ -22,5 +28,6 @@ if (args.includes("--dry-run")) {
   if (!pds || new URL(pds).protocol !== "https:") throw new Error("Identity has no HTTPS PDS");
   const agent = new AtpAgent({ service: pds });
   if (!verifyOnly) await agent.login({ identifier: manifest.did, password });
-  await syncRecords(manifest, agent, { verifyOnly });
+  if (both || args.includes("--articles")) await syncRecords(manifest, agent, { verifyOnly });
+  if (both || args.includes("--profile")) await syncProfile(manifest, agent, { verifyOnly });
 }
