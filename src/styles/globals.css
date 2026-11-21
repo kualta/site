@@ -1312,6 +1312,10 @@ body:has(.page-bottom[data-scrolled]) .feed-back-top:hover { opacity: 0.7; }
 @media (prefers-reduced-motion: reduce) {
   .feed-back-top, .feed-back-top-tooltip { transition: none; }
 }
+/* on phones it sits over the story avatar at the top of the feed */
+@media (max-width: 767px) {
+  .feed-back-top { display: none; }
+}
 
 /* A score replaces the platter and lyrics, leaving the record shelf alongside. */
 .music-score-deck {
