@@ -119,7 +119,8 @@ export function mountCalendar(
     button.type = "button";
     button.className = "story-date story-date-has";
     button.setAttribute("aria-label", dayName(day));
-    const cover = day.stories.at(-1)?.thumbnail;
+    // the day's first story, as it began
+    const cover = day.stories[0]?.thumbnail;
     if (cover) {
       const image = new Image();
       image.alt = "";

@@ -403,7 +403,7 @@ the top-right corner as a round button, inside that corner's bracket and at the 
 in, the account's picture after, opening the site's Bluesky sign-in. Signed in as kualta, a calendar of every day with
 stories follows, read page by page from Bluesky in the owner's browser and laid out like an Apple Photos library: every
 day from the first with stories to the last is a square, oldest first and filling each row, a day with stories showing
-its picture and opening its stories. It zooms like Photos too: a pinch on a trackpad or touch screen, Ctrl or ⌘ with the
+the picture of its first story and opening its stories. It zooms like Photos too: a pinch on a trackpad or touch screen, Ctrl or ⌘ with the
 wheel, the − and + buttons, or the - and + keys change how many squares fit a row, from 1 or 2 up to 40, each square
 gliding to its new place and the one under the fingers keeping its height. The browser remembers the zoom. The bar above
 stays in view and names the month there, and the page opens on the newest days. Signing out takes the calendar away again. The data is public on Bluesky anyway; this only decides what the page shows. On /feed the same picture sits left of the
