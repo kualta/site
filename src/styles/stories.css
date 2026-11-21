@@ -69,8 +69,7 @@ body:has(.stories-page-account) .live-visitors { right: calc(1.75rem + 2.75rem +
  */
 .stories-calendar { width: 100%; touch-action: pan-x pan-y; }
 .stories-calendar[hidden] { display: none; }
-.stories-calendar-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); }
-.dark .stories-calendar-bar { background: color-mix(in srgb, var(--bg-dark) 85%, transparent); }
+.stories-calendar-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; }
 .stories-calendar-month { margin: 0; font-size: 22px; }
 .stories-calendar-zoom { display: flex; gap: 6px; }
 .stories-calendar-zoom button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: rgb(128 128 128 / 12%); transition: opacity 150ms; }
@@ -85,6 +84,18 @@ body:has(.stories-page-account) .live-visitors { right: calc(1.75rem + 2.75rem +
 .story-date-has img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 150ms; }
 .story-date-has .story-date-label { font-weight: 600; text-shadow: 0 1px 3px rgb(0 0 0 / 70%); }
 .story-date-has:hover img { opacity: .8; }
+/* squares nearly touch, so the focus ring is drawn inside one rather than over its neighbours */
+.story-date:focus-visible { outline: none; }
+.story-date:focus-visible::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--text), inset 0 0 0 4px rgb(0 0 0 / 35%); pointer-events: none; }
+.dark .story-date:focus-visible::after { box-shadow: inset 0 0 0 2px var(--text-dark), inset 0 0 0 4px rgb(0 0 0 / 35%); }
+/*
+ * While the days are read, blank squares hold their place, a faint sheen sweeping across all of them at once (the
+ * sheen is fixed to the screen, so it runs on from one square into the next). The month and zoom wait with them.
+ */
+.story-date-suspense { background: linear-gradient(100deg, transparent 35%, rgb(128 128 128 / 9%) 50%, transparent 65%) 0 0 / 200% 100% fixed, rgb(128 128 128 / 7%); animation: story-suspense 1.6s linear infinite; }
+@keyframes story-suspense { from { background-position: 150% 0, 0 0; } to { background-position: -50% 0, 0 0; } }
+.stories-calendar[data-loading] .stories-calendar-month { width: 9em; height: 1.1em; border-radius: 6px; background: rgb(128 128 128 / 10%); }
+.stories-calendar[data-loading] .stories-calendar-zoom { visibility: hidden; }
 
 /*
  * The viewer dims the page rather than hiding it, and opens with the story growing out of the ring that was pressed.
@@ -144,6 +155,7 @@ html[data-story-open] { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
   .story-step, .story-date-has img, .story-peek img { transition: none; }
+  .story-date-suspense { animation: none; }
   .story-viewer, .story-frame { animation: none; }
   /* still, the line just shows: a dim bar the full width */
   .story-loader { transition: none; }

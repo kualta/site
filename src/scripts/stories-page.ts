@@ -1,6 +1,6 @@
 import { getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import { readStories, storyDays, type StoryDay } from "@/lib/videos";
-import { mountCalendar } from "./stories-calendar";
+import { hideSuspense, mountCalendar, showSuspense } from "./stories-calendar";
 import { openStories, type StoryAuthor } from "./stories-viewer";
 
 /** History is read a hundred media posts a page; this many reach back years. */
@@ -48,14 +48,23 @@ export function mountStoriesPage(root: HTMLElement): () => void {
     days = [];
     unmountCalendar?.();
     unmountCalendar = undefined;
+    noCalendar(resting);
+  }
+
+  /** Puts the page back as it was before the calendar, saying why there isn't one. */
+  function noCalendar(text: string): void {
+    hideSuspense(calendar);
     calendar.hidden = true;
-    say(resting);
+    say(text);
   }
 
   async function load(): Promise<void> {
     const controller = new AbortController();
     loading = controller;
-    say("Loading your stories…");
+    say("");
+    // shown first, so the placeholders and then the calendar can measure how many squares fit a row
+    calendar.hidden = false;
+    showSuspense(calendar);
     try {
       const stories = await readStories(
         (input, init) =>
@@ -67,12 +76,10 @@ export function mountStoriesPage(root: HTMLElement): () => void {
       );
       if (controller.signal.aborted) return;
       days = storyDays(stories);
-      // shown first, so the calendar can measure how many squares fit a row
-      calendar.hidden = false;
-      unmountCalendar = mountCalendar(calendar, days, openDay);
-      say(days.length ? "" : "No stories yet.");
+      if (days.length) unmountCalendar = mountCalendar(calendar, days, openDay);
+      else noCalendar("No stories yet.");
     } catch {
-      if (!controller.signal.aborted) say("Bluesky couldn't be read. Reload to try again.");
+      if (!controller.signal.aborted) noCalendar("Bluesky couldn't be read. Reload to try again.");
     } finally {
       if (loading === controller) loading = undefined;
     }
