@@ -3,7 +3,7 @@
   "client_name": "kualta.dev publisher",
   "client_uri": "https://kualta.dev",
   "redirect_uris": ["https://kualta.dev/auth/publisher"],
-  "scope": "atproto repo:app.bsky.feed.post?action=create&action=delete repo:social.grain.gallery?action=create&action=delete repo:social.grain.photo?action=create&action=delete repo:social.grain.photo.exif?action=create&action=delete repo:social.grain.gallery.item?action=create&action=delete blob:image/jpeg blob:video/mp4 rpc:com.atproto.repo.uploadBlob?aud=*",
+  "scope": "atproto repo:app.bsky.feed.post?action=create&action=delete repo:social.grain.gallery?action=create&action=delete repo:social.grain.photo?action=create&action=delete repo:social.grain.photo.exif?action=create&action=delete repo:social.grain.gallery.item?action=create&action=delete repo:dev.kualta.post?action=create&action=update&action=delete blob:image/jpeg blob:image/png blob:image/webp blob:video/mp4 rpc:com.atproto.repo.uploadBlob?aud=*",
   "grant_types": ["authorization_code", "refresh_token"],
   "response_types": ["code"],
   "application_type": "web",

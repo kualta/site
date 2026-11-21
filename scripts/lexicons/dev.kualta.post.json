@@ -1,0 +1,82 @@
+{
+  "lexicon": 1,
+  "id": "dev.kualta.post",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A post published through the kualta.dev publisher. This record is the original; each platform copy is listed under syndication.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["kind", "text", "createdAt", "syndication"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "What the post carries: no media, photos, one video, or photos and videos together.",
+            "knownValues": ["text", "photo", "video", "mixed"]
+          },
+          "title": { "type": "string", "maxLength": 300, "maxGraphemes": 100 },
+          "text": {
+            "type": "string",
+            "description": "The post's caption.",
+            "maxLength": 15000,
+            "maxGraphemes": 5000
+          },
+          "tags": {
+            "type": "array",
+            "description": "Without the leading #, most important first.",
+            "maxLength": 30,
+            "items": { "type": "string", "maxLength": 640, "maxGraphemes": 64 }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the first copy was published."
+          },
+          "thumbnail": {
+            "type": "blob",
+            "description": "A small picture of the post.",
+            "accept": ["image/jpeg", "image/png", "image/webp"],
+            "maxSize": 200000
+          },
+          "syndication": {
+            "type": "array",
+            "description": "The copies of this post that are up now.",
+            "items": { "type": "ref", "ref": "#copy" }
+          }
+        }
+      }
+    },
+    "copy": {
+      "type": "object",
+      "required": ["platform", "url"],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "knownValues": [
+            "bluesky",
+            "grain",
+            "instagram",
+            "twitter",
+            "youtube",
+            "tiktok",
+            "xiaohongshu",
+            "farcaster",
+            "lens"
+          ]
+        },
+        "url": { "type": "string", "format": "uri" },
+        "uri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "The copy's own record, when the platform keeps it in an AT Protocol repository."
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When this copy went up. Absent when it was published elsewhere and linked to the post later."
+        }
+      }
+    }
+  }
+}

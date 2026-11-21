@@ -279,7 +279,7 @@ export async function createOAuth(
         throw error;
       }
       if (session.did !== owner) throw new Error("Use kualta’s AT Protocol account");
-      return { agent: new Agent(session), pdsUrl: new URL(info.aud) };
+      return { agent: new Agent(session), pdsUrl: new URL(info.aud), scope: info.scope };
     },
     async hasSession() {
       return !!(await sessions.get(owner));

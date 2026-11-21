@@ -77,6 +77,10 @@ the stale URIs; delete those records explicitly, then rerun the workflow. Adding
 lexicon file under `scripts/lexicons/` with a `dev.kualta.` name publishes its schema
 on the next deploy.
 
+`dev.kualta.post` is one of those lexicons, so its schema is published here, but its
+records are not part of this sync: the publisher's laptop helper writes one per
+crosspost. See "Post records" in `docs/publisher.md`.
+
 Other apps resolve a `dev.kualta.<name>` lexicon through DNS. The owner adds this
 record once; nothing in the repository manages it. A deeper name such as
 `dev.kualta.feed.post` would need its own record at `_lexicon.feed.kualta.dev`:

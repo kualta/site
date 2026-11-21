@@ -15,3 +15,7 @@ Portable Markdown follows https://markpub.at/ (`at.markpub.markdown` containing 
 
 `dev.kualta.*.json` are this site's own lexicons, authored here. Each is published to the
 owner's repository as a `com.atproto.lexicon.schema` record on deploy; see `docs/atproto.md`.
+
+`dev.kualta.post` describes the records the publisher writes for each crosspost
+(`scripts/publisher/post-record.mjs`, `docs/publisher.md`); the site's deploy publishes its
+schema only.
