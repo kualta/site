@@ -1,0 +1,54 @@
+---
+import { env, waitUntil } from "cloudflare:workers";
+import BlueskyLogin from "@/components/BlueskyLogin";
+import StoryAvatar from "@/components/StoryAvatar.astro";
+import StoryViewer from "@/components/StoryViewer.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { getVideoLibrary, liveStories, type VideoLibrary } from "@/lib/videos";
+import identity from "../../atproto.config.json";
+import "@/styles/stories.css";
+export const prerender = false;
+
+let library: VideoLibrary | undefined;
+try {
+  library = await getVideoLibrary({ cache: env.ACTIVITY_CACHE, waitUntil });
+} catch {
+  // The calendar is read in the browser; only the ring of stories still up needs the library.
+}
+const channel = library?.channel ?? { handle: "kualta.dev", name: "kualta" };
+// Everyone sees the stories still up; signed in as the owner, the calendar of every past day follows.
+const live = liveStories(library?.stories ?? []);
+Astro.response.headers.set("cache-control", "public, max-age=60");
+---
+<BaseLayout title="stories" description="Stories by kualta, as they went up on Instagram.">
+  <section
+    class="stories-page"
+    data-stories-page
+    data-owner={identity.did}
+    data-author-name={channel.name}
+    data-author-avatar={channel.avatar}
+    aria-labelledby="stories-title"
+  >
+    <h1 id="stories-title" class="sr-only">stories</h1>
+    <div class="stories-page-account">
+      <BlueskyLogin client:idle icon />
+    </div>
+    {live.length > 0 && (
+      <div class="stories-page-live">
+        <StoryAvatar author={{ name: channel.name, avatar: channel.avatar }} stories={live} label="now" size={88} />
+      </div>
+    )}
+    <p class="stories-page-status" data-stories-status role="status" hidden={live.length > 0}>
+      {live.length ? "" : "No stories right now."}
+    </p>
+    <div class="stories-calendar" data-stories-calendar role="region" aria-label="Stories by day" hidden></div>
+  </section>
+  <StoryViewer />
+</BaseLayout>
+
+<script>
+  import { mountOnEachPage } from "@/scripts/page-mount";
+  import { mountStoriesPage } from "@/scripts/stories-page";
+
+  mountOnEachPage("[data-stories-page]", mountStoriesPage);
+</script>

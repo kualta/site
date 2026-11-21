@@ -47,22 +47,32 @@
 .story-day:not(:disabled):hover .story-ring img { opacity: .85; }
 .story-day-label { max-width: 100%; font-size: 12px; color: var(--secondary-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* the row of rings on /videos, with the Bluesky sign-in beside it */
-.stories-block { margin: 0 0 40px; }
-.stories { display: flex; align-items: flex-start; gap: 16px; }
-.stories-tray { display: flex; flex: 1; min-width: 0; gap: 14px; margin: 0; padding: 4px 2px 8px; list-style: none; overflow-x: auto; scrollbar-width: none; }
-.stories-tray::-webkit-scrollbar { display: none; }
-.stories-account { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
-.stories-status { align-self: center; font-size: 12px; color: var(--secondary-text); white-space: nowrap; }
+/* /stories: the stories still up, then for the owner a calendar of every day with stories */
+.stories-page { display: flex; flex-direction: column; align-items: center; gap: 28px; width: min(1040px, 100%); padding: 24px 40px 80px; align-self: center; flex: 1; }
+.stories-page-live { display: flex; justify-content: center; }
+.stories-page-status { margin: 0; font-size: 14px; color: var(--secondary-text); }
 
-/* the owner's calendar, as Instagram's archive lays stories out: a month to a grid, each day with stories showing one */
-.stories-calendar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 32px 28px; margin-top: 20px; }
+/*
+ * The account sits in the top-right corner, inside its bracket, at the bell's and the visitor count's inset. When the
+ * count shows, it steps in beside the picture rather than under it; on a phone the header links make room for both.
+ */
+.stories-page-account { position: absolute; z-index: 100; top: calc(1.75rem + env(safe-area-inset-top)); right: calc(1.75rem + env(safe-area-inset-right)); }
+body:has(.stories-page-account) .live-visitors { right: calc(1.75rem + 2.75rem + 0.5rem + env(safe-area-inset-right)); }
+@media (max-width: 639px) {
+  body:has(.stories-page-account) .site-header { padding-right: 4.5rem; }
+  body:has(.stories-page-account):has(.live-visitors[data-shown]) .site-header { padding-right: 8rem; }
+}
+
+/* the owner's calendar, as Instagram's archive lays stories out: a month to a grid, the newest first */
+.stories-calendar { display: grid; gap: 48px; width: 100%; }
 .stories-calendar[hidden] { display: none; }
-.story-month h2 { margin: 0 0 10px; font-size: 14px; font-weight: 400; }
-.story-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-.story-weekday { padding-bottom: 4px; font-size: 11px; text-align: center; color: var(--secondary-text); }
-.story-date { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--secondary-text); }
-.story-date-has { overflow: hidden; padding: 0; border: 0; background: rgb(128 128 128 / 10%); color: #fff; cursor: pointer; }
+.story-month h2 { margin: 0 0 14px; font-size: 22px; font-weight: 400; }
+.story-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.story-weekday { padding-bottom: 4px; font-size: 13px; text-align: center; color: var(--secondary-text); }
+/* a day is a tall cell like a story; its number sits in the corner */
+.story-date { position: relative; display: flex; align-items: flex-start; padding: 8px 10px; aspect-ratio: 3 / 4; border-radius: 12px; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--secondary-text); background: rgb(128 128 128 / 5%); }
+.story-month-grid > .story-date:empty { background: none; }
+.story-date-has { overflow: hidden; border: 0; color: #fff; cursor: pointer; background: rgb(128 128 128 / 12%); }
 .story-date-has img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 150ms; }
 .story-date-has span { position: relative; font-weight: 600; text-shadow: 0 1px 3px rgb(0 0 0 / 70%); }
 .story-date-has:hover img { opacity: .8; }
@@ -117,10 +127,12 @@ html[data-story-open] { overflow: hidden; }
 .story-step-previous { left: 24px; }
 .story-step-next { right: 24px; }
 @media (max-width: 760px) {
-  .stories-block { margin-bottom: 28px; }
-  .stories-tray { gap: 12px; }
-  .story-day { width: 68px; }
-  .stories .story-ring { --ring-size: 64px; }
+  .stories-page { padding: 12px 16px 60px; gap: 20px; }
+  .stories-calendar { gap: 36px; }
+  .story-month h2 { font-size: 18px; }
+  .story-month-grid { gap: 4px; }
+  .story-weekday { font-size: 11px; }
+  .story-date { padding: 4px 6px; border-radius: 8px; font-size: 12px; }
   /* a phone gives the story the whole screen */
   .story-frame { width: 100%; height: 100%; border-radius: 0; aspect-ratio: auto; }
   .story-step { display: none; }
