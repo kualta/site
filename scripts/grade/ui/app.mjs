@@ -1132,28 +1132,37 @@ function renderStatus() {
   $("status").title = $("status").textContent;
 }
 
-// ---- offload: originals to Cloudflare, then the card or the Mac cleared of them ----------------------------------------
+// ---- offload: the card to this Mac, this Mac to Cloudflare, each deleted once the next has it -------------------------
 
 const offloadMenu = $("offload-menu");
-/** The server's /api/offload answer: each place's clips, those not in Cloudflare yet, and those safe there. */
+/** The server's /api/offload answer: the card's clips, the Mac's not in Cloudflare yet, the room on the Mac. */
 let offloadInfo = null;
-/** A Clear waiting for its confirming second click: { button, timer }. */
-let clearArmed = null;
 const weight = (bytes) => (bytes ? fileSize(bytes) : "0 GB");
 const clipsAndSize = (count, bytes) => `${count} clip${count === 1 ? "" : "s"} · ${weight(bytes)}`;
 
-/** The status line while originals go to Cloudflare, or after a run that went wrong. */
+function timeLeft(seconds) {
+  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min left`;
+  return `${(seconds / 3600).toFixed(1)} h left`;
+}
+
+/** The status line while an offload goes, or after one that ran into something. */
 function offloadText(o) {
   if (!o) return "";
-  if (o.error && !o.running) return `Offload stopped: ${o.error}`;
-  if (!o.running) return "";
-  const parts = [`Offloading ${o.done} of ${o.total} · ${weight(o.bytes)} of ${weight(o.totalBytes)}`];
-  if (o.current) parts.push(`${o.current.hashing ? "checking" : "sending"} ${o.current.name.replace(/\.[^.]+$/, "")}`);
+  if (!o.running) {
+    if (o.error) return `Offload stopped: ${o.error}`;
+    if (o.copy.error) return `Offload: ${o.copy.error}`;
+    return "";
+  }
+  const parts = [];
+  if (!o.copy.ended) parts.push(`Off the camera ${o.copy.done} of ${o.copy.total}`);
+  else if (o.copy.error) parts.push(o.copy.error);
+  else if (o.copy.total) parts.push("Camera done: unplug it whenever");
+  parts.push(`To Cloudflare ${o.send.done} of ${o.send.total} · ${weight(o.sentBytes)} of ${weight(o.send.bytes)}`);
+  if (o.waiting === "room") parts.push("waiting for room on this Mac");
   if (o.speed) {
     const mbit = (o.speed * 8) / 1e6;
     parts.push(`${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`);
-    const left = (o.totalBytes - o.bytes) / o.speed;
-    parts.push(left < 3600 ? `${Math.max(1, Math.round(left / 60))} min left` : `${(left / 3600).toFixed(1)} h left`);
+    parts.push(timeLeft((o.send.bytes - o.sentBytes) / o.speed));
   }
   return parts.join(" · ");
 }
@@ -1161,25 +1170,14 @@ function offloadText(o) {
 function renderOffloadMenu() {
   const info = offloadInfo;
   if (!info) return;
-  const running = state.jobs?.offload?.running ?? info.run.running;
-  const set = (id, disabled, note) => {
-    const button = $(id);
-    button.disabled = disabled;
-    button.querySelector(".menu-note").textContent = note;
-  };
-  const { camera, mac } = info;
-  set(
-    "offload-camera",
-    running || !camera.mounted || !camera.pending,
-    !camera.mounted ? "Camera not plugged in" : camera.pending ? `${clipsAndSize(camera.pending, camera.pendingBytes)} to send` : "All in Cloudflare",
-  );
-  set("offload-mac", running || !mac.pending, mac.pending ? `${clipsAndSize(mac.pending, mac.pendingBytes)} to send` : "All in Cloudflare");
-  for (const [id, place, where] of [
-    ["clear-camera", camera, "the card"],
-    ["clear-mac", mac, "this Mac"],
-  ])
-    if (clearArmed?.button !== $(id))
-      set(id, running || !place.safe, place.safe ? `Deletes ${clipsAndSize(place.safe, place.safeBytes)} from ${where}` : "Nothing in Cloudflare yet");
+  const { camera, mac, room } = info;
+  $("offload-camera").textContent = camera.mounted ? clipsAndSize(camera.clips, camera.bytes) : "Not plugged in";
+  $("offload-mac").textContent = mac.clips ? `${clipsAndSize(mac.clips, mac.bytes)} to send` : "Nothing to send";
+  $("offload-room").textContent = `${weight(Math.max(0, room.free - room.keepFree))} (${weight(room.keepFree)} kept free)`;
+  const running = state.jobs?.offload?.running ?? info.run?.running;
+  const start = $("offload-start");
+  start.disabled = Boolean(running) || !(camera.clips || mac.clips);
+  start.textContent = running ? "Offloading…" : "Start offloading";
 }
 
 async function loadOffload() {
@@ -1199,40 +1197,17 @@ $("offload-open").addEventListener("click", () => setOffloadMenu(offloadMenu.hid
 document.addEventListener("pointerdown", (e) => {
   if (!offloadMenu.hidden && !e.target.closest("#offload-group")) setOffloadMenu(false);
 });
-offloadMenu.addEventListener("click", async (e) => {
-  const button = e.target.closest("button[data-action]");
-  if (!button || button.disabled) return;
-  const { scope, action } = button.dataset;
+$("offload-start").addEventListener("click", async () => {
+  const start = $("offload-start");
+  start.disabled = true;
+  start.textContent = "Starting…";
   try {
-    if (action === "offload") {
-      await api("/api/offload", { method: "POST", json: { scope } });
-      setOffloadMenu(false);
-      return poll();
-    }
-    // Deleting is for good: the first click asks, the second within four seconds deletes.
-    if (clearArmed?.button !== button) {
-      clearTimeout(clearArmed?.timer);
-      button.querySelector(".menu-note").textContent = "Click again to delete them";
-      clearArmed = {
-        button,
-        timer: setTimeout(() => {
-          clearArmed = null;
-          renderOffloadMenu();
-        }, 4000),
-      };
-      return;
-    }
-    clearTimeout(clearArmed.timer);
-    clearArmed = null;
-    const { cleared, bytes, kept } = await (await api("/api/clear", { method: "POST", json: { scope } })).json();
-    setStatus(`Cleared ${clipsAndSize(cleared, bytes)}${kept ? `; kept ${kept} Cloudflare didn't confirm` : ""}`, { first: true });
-    await loadOffload();
-    // The clips gone from the card or the Mac leave their day; open what's still there.
-    await loadLibrary();
-    const id = sourceInfo(state.source) ? state.source : defaultSource();
-    if (id) await openSource(id);
-  } catch (err) {
-    showError(err);
+    await api("/api/offload", { method: "POST" });
+    setOffloadMenu(false);
+    poll();
+  } catch (e) {
+    showError(e);
+    loadOffload();
   }
 });
 $("stop-offload").addEventListener("click", async () => {
@@ -1243,6 +1218,9 @@ $("stop-offload").addEventListener("click", async () => {
     showError(e);
   }
 });
+
+/** How far the offload has moved clips: when it changes, the days they left are read again. */
+const offloadMoves = (o) => (o ? `${o.copy.done}/${o.send.done}/${o.running}` : "");
 
 // ---- ledger and the composer ------------------------------------------------------------------------------------------
 // The ledger (every clip, its grade, where its copies are) is shown in the composer's Footage tab, post.kualta.dev/footage;
@@ -1326,6 +1304,7 @@ function sayReady() {
 
 let pollTimer = null;
 let lastDone = 0;
+let lastMoves = "";
 let libraryAt = 0;
 async function poll() {
   clearTimeout(pollTimer);
@@ -1335,13 +1314,21 @@ async function poll() {
     const done = jobs.export.done.length;
     const waiting = jobs.thumbs > 0 || state.clips.some((c) => c.proxy === "queued" || c.proxy === "working");
     // The library is re-read every few seconds, so the camera appears when it's plugged in and graded counts update.
-    if (Date.now() - libraryAt > 4000 || done !== lastDone) {
+    const moves = offloadMoves(jobs.offload);
+    if (Date.now() - libraryAt > 4000 || done !== lastDone || moves !== lastMoves) {
       libraryAt = Date.now();
       const wasMounted = state.library?.camera.mounted;
       state.library = await (await api("/api/library")).json();
       renderPicker();
+      const open = sourceInfo(state.source);
       if (!state.source && allSources().length) await openSource(defaultSource());
-      else if (state.source?.startsWith("camera:") && state.library.camera.mounted && !wasMounted && sourceInfo(state.source)) await openSource(state.source);
+      else if (state.source?.startsWith("camera:") && state.library.camera.mounted && !wasMounted && open) await openSource(state.source);
+      else if (moves !== lastMoves && state.source) {
+        // Clips the offload took off the card or the Mac leave the open day, or empty it.
+        if (open && open.clips !== state.clips.length) await openSource(state.source);
+        else if (!open && defaultSource()) await openSource(defaultSource());
+      }
+      lastMoves = moves;
     }
     // The ledger changes when the server looks again: every 30 seconds, and after exports.
     if (Date.now() - ledgerAt > 20000) await loadLedger();

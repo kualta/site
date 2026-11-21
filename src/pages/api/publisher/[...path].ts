@@ -103,7 +103,12 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return await archiveResponse(path.slice("helper/archive/".length), request, { db, media, archive });
     }
     // The Footage tab: the ledger, and the footage archive's uploads, which run only while it's open.
-    if (path === "footage" || path.startsWith("footage/") || path === "helper/footage") {
+    if (
+      path === "footage" ||
+      path.startsWith("footage/") ||
+      path === "helper/footage" ||
+      path === "helper/footage/watch"
+    ) {
       const response = await footageResponse(path, request, { media, archive });
       if (response) {
         // A session refreshed on the way in has to reach the browser, or its rotated sign-in is lost.
