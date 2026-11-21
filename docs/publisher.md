@@ -356,7 +356,9 @@ the part in flight; it isn't a failure, and the upload resumes from where YouTub
 the next time the tab opens. If the site stops answering three times running the helper stops too,
 since it can't tell whether the tab is still open. Both the open marker and the status are small
 objects in the media bucket (`footage/watching`, `footage/status.json`), not D1 rows, so the polling
-costs no D1 reads beyond the helper's sign-in check.
+costs no D1 reads beyond the helper's sign-in check. While an offload the owner started in the grade
+app goes, the grade app keeps the marker fresh too (`helper/footage/watch`, on the helper's pairing,
+every minute), so graded clips go up meanwhile; it lapses on its own once the offload ends.
 
 It puts up 10 clips a day by default (`bun run publisher footage --daily <clips>` changes it):
 first the grade app's exports in `~/Movies/Exported` (only files `exports.json` records, unchanged

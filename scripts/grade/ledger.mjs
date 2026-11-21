@@ -312,6 +312,18 @@ export async function ledgerCloud(publisherDir, fetcher = fetch) {
         throw new Error(data.error || `Saving the ledger failed (${response.status})`);
       }
     },
+    /**
+     * Counts the composer as watching the footage uploads for the next couple of minutes, so the helper puts graded
+     * clips up to YouTube while an offload the owner started goes.
+     */
+    async watchFootage() {
+      const response = await fetcher(`${origin}/api/publisher/helper/footage/watch`, {
+        method: "POST",
+        headers: auth,
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) throw new Error(`Keeping the footage uploads going failed (${response.status})`);
+    },
     /** A clip's small picture (JPEG bytes), for the composer's Footage tab. */
     async putThumb(clip, bytes) {
       const response = await fetcher(`${url}/thumbs/${encodeURIComponent(clip)}`, {

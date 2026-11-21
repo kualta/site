@@ -29,6 +29,13 @@ test("the Archive tab counts as open while it keeps saying so, and closes when i
   await answer(bucket, "footage/watch", "POST", {}, now);
   await answer(bucket, "footage/watch", "DELETE", undefined, now);
   expect(await ask(now)).toEqual({ watching: false });
+  // The grade app, on the helper's pairing, keeps it fresh while an offload goes; it lapses the same way after.
+  await answer(bucket, "helper/footage/watch", "POST", undefined, now);
+  expect(await ask(now + 60_000)).toEqual({ watching: true });
+  expect(await isWatched(bucket, now + WATCH_TTL + 1)).toBe(false);
+  expect(
+    await footageResponse("helper/footage/watch", call("helper/footage/watch", "DELETE"), { media: bucket }),
+  ).toBeNull();
 });
 
 test("the laptop's status reaches the tab as sent, with how long ago it came", async () => {

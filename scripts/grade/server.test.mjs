@@ -34,7 +34,7 @@ let server;
 // The site's archive as the ledger meets it: a film holding a clip no longer anywhere else, and the ledger it's sent.
 const publisher = join(root, "publisher");
 const token = "a".repeat(64);
-const site = { ledger: null, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map() };
+const site = { ledger: null, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0 };
 const bytesOf = async (req) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -47,7 +47,12 @@ const siteServer = createServer(async (req, res) => {
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(typeof body === "string" ? body : JSON.stringify(body));
   };
-  // The offload's originals: files by hash, and a manifest per shoot day.
+  // The offload keeps the composer counted as watching the footage uploads.
+  if (req.url === "/api/publisher/helper/footage/watch" && req.method === "POST") {
+    site.watched++;
+    return reply(200, { watching: true });
+  }
+  // The offload's originals: files by hash (whole, or in parts), and a manifest per shoot day.
   if (path === "missing" && req.method === "POST") {
     const { blobs } = JSON.parse(await bytesOf(req));
     return reply(200, { missing: blobs.filter((hash) => !site.blobs.has(hash)) });
@@ -55,6 +60,23 @@ const siteServer = createServer(async (req, res) => {
   if (path.startsWith("blobs/") && req.method === "PUT") {
     site.blobs.set(path.slice("blobs/".length), await bytesOf(req));
     return reply(201, { ok: true });
+  }
+  if (path === "uploads" && req.method === "POST") {
+    const { blob } = JSON.parse(await bytesOf(req));
+    site.uploads ??= new Map();
+    site.uploads.set(blob, []);
+    return reply(200, { upload: `up-${blob.slice(0, 8)}` });
+  }
+  const partOf = /^uploads\/(\w+)\/(\d+)\?/.exec(path);
+  if (partOf && req.method === "PUT") {
+    site.uploads.get(partOf[1])[Number(partOf[2]) - 1] = await bytesOf(req);
+    return reply(200, { partNumber: Number(partOf[2]), etag: `e${partOf[2]}` });
+  }
+  const completing = /^uploads\/(\w+)\/complete$/.exec(path)?.[1];
+  if (completing && req.method === "POST") {
+    await bytesOf(req);
+    site.blobs.set(completing, Buffer.concat(site.uploads.get(completing)));
+    return reply(200, { ok: true });
   }
   const day = /^projects\/(_originals-[\d-]+)(\?.*)?$/.exec(path)?.[1];
   if (day && req.method === "PUT") {
@@ -168,6 +190,7 @@ beforeAll(async () => {
       GRADE_PUBLISHER: publisher,
       GRADE_LEDGER_EVERY: "300",
       GRADE_DEFAULT_LOOK: "agx-punchy",
+      GRADE_KEEP_FREE: "1000000",
     },
     stdio: ["ignore", "pipe", "inherit"],
   });
@@ -438,51 +461,57 @@ test.if(usable)("exports below full quality at the share of the original's bitra
   expect(exportedFiles().every((f) => /\.(mp4|png)$/.test(f) && !f.startsWith("."))).toBe(true);
 }, 180_000);
 
-test.if(usable)("offloads this Mac's originals by day, gives ungraded log clips the default look, and clears what the archive holds", async () => {
+test.if(usable)("offloads the card through this Mac to the archive by day, deleting each once the next has it, with the default look", async () => {
   const kept = slowClips[1];
   const grades = () => JSON.parse(readFileSync(join(data, "grades.json"), "utf8")).clips;
   expect(grades()[movingClip]).toBeUndefined();
   const before = await json("/api/offload");
-  expect(before.mac).toMatchObject({ clips: 3, pending: 3, safe: 0 });
-  expect(before.camera.mounted).toBe(true);
-  // Clearing before anything's in Cloudflare deletes nothing.
-  expect(await (await api("/api/clear", { method: "POST", body: JSON.stringify({ scope: "mac" }) })).json()).toEqual({
-    cleared: 0,
-    bytes: 0,
-    kept: 0,
-  });
+  expect(before.camera).toMatchObject({ mounted: true, clips: 1 });
+  expect(before.mac).toMatchObject({ clips: 3 });
+  expect(before.room.keepFree).toBe(1_000_000);
+  expect(before.run).toBeNull();
 
-  expect((await api("/api/offload", { method: "POST", body: JSON.stringify({ scope: "mac" }) })).status).toBe(200);
+  expect((await api("/api/offload", { method: "POST" })).status).toBe(200);
   const after = await until(async () => {
     const summary = await json("/api/offload");
-    return !summary.run.running && summary.run.finished && summary;
+    return !summary.run.running && summary;
   });
-  expect(after.run).toMatchObject({ finished: "done", done: 3, total: 3, error: null });
-  expect(after.mac).toMatchObject({ pending: 0, safe: 3 });
+  expect(after.run).toMatchObject({ finished: "done", error: null, waiting: null });
+  expect(after.run.copy).toMatchObject({ total: 1, done: 1, ended: true, error: null });
+  expect(after.run.send).toMatchObject({ total: 4, done: 4, current: [] });
+  expect(after.camera.clips).toBe(0);
+  expect(after.mac.clips).toBe(0);
+  // Off the card, .LRF and all; through the Mac, leaving nothing behind.
+  expect(readdirSync(join(camera, "DJI_001"))).toEqual([]);
+  expect(readdirSync(original)).toEqual([]);
   expect([...site.manifests.keys()].sort()).toEqual([
     "_originals-2026-02-03",
+    "_originals-2026-02-05",
     "_originals-2026-02-07",
     "_originals-2026-02-13",
   ]);
-  expect(site.manifests.get("_originals-2026-02-03").files.map((f) => f.path)).toEqual([`assets/${name}`]);
-  expect(site.blobs.size).toBe(3);
-  // The clips without a grade got the default look; the graded one kept its own.
+  expect(site.manifests.get("_originals-2026-02-05").files.map((f) => f.path)).toEqual([`assets/${withStill}`]);
+  expect(site.blobs.size).toBe(4);
+  // The composer counted as watching meanwhile, so graded clips went up to YouTube too.
+  expect(site.watched).toBeGreaterThan(0);
+  // The log clips without a grade got the default look; the graded one kept its own, the Rec.709 one has none.
   expect(grades()[movingClip].base).toBe("agx-punchy");
   expect(grades()[kept].base).toBe("agx-punchy");
   expect(grades()[name].base).toBe("aces");
-  // Offloading again has nothing to send.
-  expect((await api("/api/offload", { method: "POST", body: JSON.stringify({ scope: "mac" }) })).status).toBe(200);
-  expect((await until(async () => !(await json("/api/offload")).run.running && (await json("/api/offload")))).run.total).toBe(0);
-
-  const sizes = [name, kept, movingClip].reduce((sum, n) => sum + statSync(join(original, n)).size, 0);
-  const cleared = await (await api("/api/clear", { method: "POST", body: JSON.stringify({ scope: "mac" }) })).json();
-  expect(cleared).toEqual({ cleared: 3, bytes: sizes, kept: 0 });
-  expect(readdirSync(original).filter((f) => /\.mp4$/i.test(f))).toEqual([]);
-  // The ledger has them as in Cloudflare, though they're gone from the Mac.
+  expect(grades()[withStill]).toBeUndefined();
+  // Nothing more to take.
+  expect((await api("/api/offload", { method: "POST" })).status).toBe(200);
+  const again = await until(async () => {
+    const summary = await json("/api/offload");
+    return !summary.run.running && summary;
+  });
+  expect(again.run.send.total).toBe(0);
+  // The ledger has them in Cloudflare, though they're on neither the card nor the Mac, and no day of them is a film.
   const ledger = await until(async () => {
     const body = await json("/api/ledger");
-    return body.ledger.clips.DJI_20260203101500_0007_D?.original.cloudflare && body.ledger;
+    return body.ledger.clips.DJI_20260205090000_0001_D?.original.cloudflare && body.ledger;
   });
+  expect(ledger.clips.DJI_20260205090000_0001_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(ledger.clips.DJI_20260203101500_0007_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(Object.keys(ledger.projects).some((film) => film.startsWith("_"))).toBe(false);
 }, 120_000);

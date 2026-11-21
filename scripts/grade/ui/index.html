@@ -45,11 +45,13 @@
   <div class="split" id="offload-group">
     <button id="offload-open" class="btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="offload-menu">Offload<svg><use href="#i-chevron"/></svg></button>
     <div class="menu" id="offload-menu" hidden>
-      <button id="offload-camera" class="menu-item" type="button" data-scope="camera" data-action="offload">Offload the camera<span class="menu-note"></span></button>
-      <button id="offload-mac" class="menu-item" type="button" data-scope="mac" data-action="offload">Offload this Mac's originals<span class="menu-note"></span></button>
-      <button id="clear-camera" class="menu-item" type="button" data-scope="camera" data-action="clear">Clear the camera<span class="menu-note"></span></button>
-      <button id="clear-mac" class="menu-item" type="button" data-scope="mac" data-action="clear">Clear this Mac's originals<span class="menu-note"></span></button>
-      <p class="menu-note menu-foot">Originals go to Cloudflare, each checked by its hash. Log clips without a grade get the Colorful look as settings. Clearing deletes only what Cloudflare holds.</p>
+      <div class="offload-places">
+        <div class="menu-row"><span>Camera</span><output id="offload-camera"></output></div>
+        <div class="menu-row"><span>This Mac</span><output id="offload-mac"></output></div>
+        <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
+      </div>
+      <button id="offload-start" class="btn primary" type="button">Start offloading</button>
+      <p class="menu-note menu-foot">Each clip is copied to this Mac, checked, and deleted from the camera, then sent to Cloudflare, checked by its hash, and deleted from this Mac. Graded clips go to YouTube meanwhile. Log clips without a grade get the Colorful look as settings.</p>
     </div>
   </div>
   <button id="stop-export" class="btn" type="button" hidden>Stop exporting</button>
