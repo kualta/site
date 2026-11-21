@@ -1642,6 +1642,37 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
+  // A Pipeline piece names its footage, a film or a shoot day before there's one, and its card says how that footage
+  // stands from the ledger: its clips, how many graded, how many at risk.
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto("http://127.0.0.1:8797/publisher.html/pipeline");
+    const board = page.getByRole("region", { name: "Pipeline" });
+    const card = (title) => board.getByRole("listitem").filter({ hasText: title });
+    await card("Square windows").getByText("014-walk · 2 clips · 2 graded · 1 at risk").waitFor();
+    await card("Night market walk").getByText(/· 1 clip · 1 graded · 1 at risk$/).waitFor();
+    await card("Why Bogotá has no seasons").getByRole("button").click();
+    const editor = page.getByRole("dialog");
+    await editor.getByRole("combobox", { name: /^Footage/ }).selectOption("project:013-maybe-later");
+    await editor.getByText("013-maybe-later · 2 clips · 2 graded", { exact: true }).waitFor();
+    await editor.getByRole("button", { name: "Save" }).click();
+    await page.waitForFunction(() =>
+      window.publisherRequests.some(
+        (r) =>
+          r.method === "PUT" &&
+          r.path === "footage/links/00000000-0000-4000-8000-0000000c0002" &&
+          r.body.project === "013-maybe-later",
+      ),
+    );
+    await card("Why Bogotá has no seasons").getByText("013-maybe-later · 2 clips · 2 graded").waitFor();
+    if (shots) await page.screenshot({ path: path.join(shots, "pipeline-footage.png") });
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+
   // The Footage tab (its old address, /archive, still opens it): the ledger of every clip, its grade and where its
   // copies are, under the graded footage going up to YouTube, which runs only while the tab is open, so it says so on
   // opening and again on leaving. A clip's Grade opens it in the Grade tab: the grade app on the Mac, in a frame allowed
@@ -1685,6 +1716,12 @@ try {
     await row("0258").getByRole("link", { name: "✓" }).waitFor();
     await row("0001").getByText("No copy left").waitFor();
     await row("IMG_4857").getByText("Not log").waitFor();
+    // Each clip names the films it's in; a film whose piece is posted links to the post's numbers.
+    await row("0402").getByText("· in 014-walk").waitFor();
+    assert.match(
+      await row("0258").getByRole("link", { name: "013-maybe-later" }).getAttribute("href"),
+      /\/analytics\?post=00000000-0000-4000-8000-000000000008$/,
+    );
     assert.equal(await row("0086").getByRole("button", { name: "Grade" }).isDisabled(), true);
     await ledger.locator("img.publisher-ledger-thumb").first().waitFor();
     assert.deepEqual(

@@ -505,6 +505,22 @@ const ledger = {
     DJI_20261101090000_0001_D: ledgerClip("DJI_20261101090000_0001_D.MP4", "2026-11-01T09:00:00", {}),
     IMG_4857: ledgerClip("IMG_4857.MOV", "2026-10-30T20:15:04", { profile: "rec709", original: original(false, true) }),
   },
+  // A film being made on the Mac, and one archived since it was posted.
+  projects: {
+    "013-maybe-later": {
+      clips: ["DJI_20261108122204_0086_D", "DJI_20261111161230_0258_D"],
+      local: false,
+      archived: true,
+    },
+    "014-walk": { clips: ["DJI_20261120183012_0399_D", "DJI_20261121101500_0402_D"], local: true, archived: false },
+  },
+};
+// Pipeline pieces' footage: a shoot day for the footage-ready walk, films for the edit and a posted piece.
+const pieceId = (n: number) => `00000000-0000-4000-8000-0000000c0${String(n).padStart(3, "0")}`;
+const links: Record<string, { project?: string; day?: string }> = {
+  [pieceId(4)]: { day: "2026-11-21" },
+  [pieceId(5)]: { project: "014-walk" },
+  [pieceId(7)]: { project: "013-maybe-later" },
 };
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -557,6 +573,14 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     });
   if (path === "footage/watch") return json({ watching: method !== "DELETE" });
   if (path === "footage/ledger") return json(ledger);
+  if (path === "footage/links") return json({ links });
+  if (path.startsWith("footage/links/") && method === "PUT") {
+    const id = path.slice("footage/links/".length);
+    if (body.project) links[id] = { project: body.project };
+    else if (body.day) links[id] = { day: body.day };
+    else delete links[id];
+    return json({ links });
+  }
   if (path === "footage") return json(footage());
   if (path === "history") return json(history);
   if (path === "drafts") return json({ drafts });

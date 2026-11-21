@@ -1181,6 +1181,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 setGradeClip({ clip, n: Date.now() });
                 openTab("grade");
               }}
+              statsHref={(job) => `${tabPath(base, "analytics")}?post=${job}`}
             />
           )}
           {/* Once opened, the grade app stays loaded while other tabs are shown, so coming back doesn't load it again. */}

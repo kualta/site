@@ -69,6 +69,7 @@ const blankGraded = () => ({ look: null, at: null, size: null, mac: false, cloud
  *   grades    the names of clips with a saved grade
  *   youtube   footage.json's uploads, by graded file name → versions; null when it can't be read
  *   archive   [{ name, size, sha256, project }]: the video files the archive's projects hold; null when not asked
+ *   projects  [{ name, files }]: the OpenFilm projects on this Mac, each with the video files in its assets
  *
  * What isn't looked at keeps its last value: the card's clips while it's unplugged, the archive between askings.
  * A graded copy in the archive or on YouTube is the current one when its size is the export's.
@@ -168,6 +169,34 @@ export function mergeLedger(previous, seen) {
     }
   }
 
+  // Films: the ledger's clips each OpenFilm project holds, on this Mac and in the archive. Between askings of the
+  // archive, its films are as last seen.
+  const projects = {};
+  const film = (name) => {
+    projects[name] ??= { clips: [], local: false, archived: false };
+    return projects[name];
+  };
+  const holds = (name, file) => {
+    const key = keys.get(keyOf(file));
+    if (key && !film(name).clips.includes(key)) film(name).clips.push(key);
+  };
+  for (const { name, files } of seen.projects ?? []) {
+    film(name).local = true;
+    for (const file of files) holds(name, file);
+  }
+  if (seen.archive)
+    for (const file of seen.archive) {
+      film(file.project).archived = true;
+      holds(file.project, file.name);
+    }
+  else
+    for (const [name, project] of Object.entries(previous?.projects ?? {}))
+      if (project.archived) {
+        film(name).archived = true;
+        for (const key of project.clips) holds(name, key);
+      }
+  for (const project of Object.values(projects)) project.clips.sort();
+
   const sorted = Object.fromEntries(Object.entries(clips).sort(([a], [b]) => a.localeCompare(b)));
   return {
     version: LEDGER_VERSION,
@@ -180,6 +209,7 @@ export function mergeLedger(previous, seen) {
     },
     archiveAt: seen.archive ? seen.at : previous?.archiveAt ?? null,
     clips: sorted,
+    projects: Object.fromEntries(Object.entries(projects).sort(([a], [b]) => a.localeCompare(b))),
   };
 }
 

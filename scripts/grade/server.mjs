@@ -40,6 +40,8 @@ const EXPORT_LUT_SIZE = 65;
 // The crossposter helper's folder in this checkout: its pairing reaches the site's archive, and its footage.json says
 // what went up to YouTube.
 const PUBLISHER = process.env.GRADE_PUBLISHER || join(here, "../../.publisher");
+/** OpenFilm's projects: the films, whose clips the ledger says. */
+const PROJECTS = process.env.GRADE_PROJECTS || join(MOVIES, "OpenFilm/Projects");
 const LEDGER = join(DATA, "ledger.json");
 /** How often the ledger looks again; the archive's projects are asked every 10 minutes of that. */
 const LEDGER_EVERY = Number(process.env.GRADE_LEDGER_EVERY || 30_000);
@@ -525,6 +527,19 @@ const ledger = {
 };
 
 /** The clips with a thumbnail in the cache, by name without extension, lowercase. */
+/** The OpenFilm projects on this Mac (folders holding a film.html), each with the video files in its assets. */
+async function localProjects() {
+  const found = [];
+  for (const entry of await readdir(PROJECTS, { withFileTypes: true }).catch(() => [])) {
+    const dir = join(PROJECTS, entry.name);
+    if (!entry.isDirectory() || !(await exists(join(dir, "film.html")))) continue;
+    const files = [];
+    for (const assets of ["assets", "zh/assets"]) files.push(...(await readdir(join(dir, assets)).catch(() => [])).filter(isVideo));
+    found.push({ name: entry.name, files });
+  }
+  return found;
+}
+
 async function thumbStems() {
   return new Set((await thumbFiles()).keys());
 }
@@ -632,6 +647,7 @@ async function observe(cloud) {
     grades: Object.keys(await readClips(GRADES)),
     youtube: await youtubeUploads(PUBLISHER),
     archive,
+    projects: await localProjects(),
   };
   const moreToProbe = unknown.length > batch.length && batch.length > 0;
   const moreToPicture = unpictured.length > pictures.length && pictures.length > 0;

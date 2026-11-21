@@ -1,5 +1,6 @@
-import { type ArchiveBucket, isClipName, LEDGER, ledgerThumbKey } from "./archive";
-import type { MediaBucket } from "./server";
+import { type ArchiveBucket, isClipName, isProjectName, LEDGER, ledgerThumbKey } from "./archive";
+import type { FootageLink } from "./ledger";
+import { type MediaBucket, validId } from "./server";
 
 /*
  * The Footage tab shows the footage ledger the grade app keeps in the archive (every clip, whether it's graded and
@@ -36,19 +37,51 @@ async function readStatus(media: MediaBucket, now: number) {
 }
 
 /**
+ * Which footage each Pipeline piece is (a film, or a shoot day before there's a film), by the piece's id: one small
+ * document in the archive, so pieces gained it without a new D1 column. Only the owner writes it, a piece at a time.
+ */
+const LINKS = "pipeline/footage-links.json";
+const isDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+async function readLinks(archive: Pick<ArchiveBucket, "get">): Promise<Record<string, FootageLink>> {
+  const object = await archive.get(LINKS);
+  return object ? ((await new Response(object.body).json()) as Record<string, FootageLink>) : {};
+}
+
+/**
  * The Footage tab's routes, with the caller already checked: `footage` (what's up with the uploads), `footage/watch`
  * (POST keeps the tab counted as open, DELETE says it closed), `footage/ledger` and `footage/thumbs/<clip>.jpg` (the
- * ledger and its pictures, from the archive), and `helper/footage` (the laptop asks whether the tab is open, and with
- * a POST sends its status). Anything else is null.
+ * ledger and its pictures, from the archive), `footage/links` (each Pipeline piece's footage; PUT
+ * `footage/links/<piece>` sets one), and `helper/footage` (the laptop asks whether the tab is open, and with a POST
+ * sends its status). Anything else is null.
  */
 export async function footageResponse(
   path: string,
   request: Request,
-  { media, archive = null }: { media: MediaBucket; archive?: Pick<ArchiveBucket, "get"> | null },
+  { media, archive = null }: { media: MediaBucket; archive?: Pick<ArchiveBucket, "get" | "put"> | null },
   now = Date.now(),
 ): Promise<Response | null> {
   const headers = { "Cache-Control": "no-store" };
   const json = (data: unknown, status = 200) => Response.json(data, { status, headers });
+  if (path === "footage/links" && request.method === "GET")
+    return json({ links: archive ? await readLinks(archive) : {} });
+  const piece = path.match(/^footage\/links\/(.+)$/)?.[1];
+  if (piece !== undefined && request.method === "PUT") {
+    if (!archive) return json({ error: "The archive bucket isn't configured" }, 503);
+    if (!validId(piece)) return json({ error: "Invalid piece" }, 400);
+    const { project = null, day = null } = (await request.json().catch(() => ({}))) as FootageLink;
+    if ((project !== null && !isProjectName(project)) || (day !== null && !isDay(day)) || (project && day))
+      return json({ error: "Name a film or a shoot day" }, 400);
+    const links = await readLinks(archive);
+    if (project) links[piece] = { project };
+    else if (day) links[piece] = { day };
+    else delete links[piece];
+    await archive.put(LINKS, JSON.stringify(links), {
+      httpMetadata: { contentType: "application/json" },
+      storageClass: "Standard",
+    });
+    return json({ links });
+  }
   // Both streamed as they're stored: the ledger runs to hundreds of kilobytes, and the Worker has 10 ms to spend.
   if (path === "footage/ledger" && request.method === "GET") {
     const object = archive ? await archive.get(LEDGER) : null;
