@@ -225,4 +225,19 @@ describe("the laptop's archive requests", () => {
     expect((await body("media", { method: "POST" })).data).toEqual({ posts: 0, copied: 0, gone: 0 });
     expect((await body("nothing")).status).toBe(404);
   });
+
+  test("the footage ledger is kept whole, replaced by the next, and read back as sent", async () => {
+    const { call, body, archive } = setup();
+    expect((await body("ledger")).status).toBe(404);
+    const first = JSON.stringify({ version: 1, clips: { DJI_20261111161230_0258_D: { graded: null } } });
+    expect((await body("ledger", { method: "PUT", bytes: first })).data).toEqual({ ok: true });
+    const second = JSON.stringify({ version: 1, clips: {} });
+    await body("ledger", { method: "PUT", bytes: second });
+    const read = await call("ledger");
+    expect(read.response.headers.get("Content-Type")).toBe("application/json");
+    expect(await read.response.text()).toBe(second);
+    expect(await text(await archive.bucket.get("ledger/footage.json"))).toBe(second);
+    // Like the archive's files, it says its length.
+    expect((await body("ledger", { method: "PUT", body: second })).status).toBe(400);
+  });
 });

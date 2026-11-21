@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ffmpegStatic from "ffmpeg-static";
@@ -30,6 +31,29 @@ const noStill = "DJI_20260205090100_0002_D.MP4";
 const slow = "mac:2026-02-07";
 const slowClips = ["DJI_20260207100000_0001_D.MP4", "DJI_20260207100100_0002_D.MP4"];
 let server;
+// The site's archive as the ledger meets it: a film holding a clip no longer anywhere else, and the ledger it's sent.
+const publisher = join(root, "publisher");
+const token = "a".repeat(64);
+const site = { ledger: null, auth: new Set() };
+const siteServer = createServer(async (req, res) => {
+  site.auth.add(req.headers.authorization);
+  const path = req.url.replace("/api/publisher/helper/archive/", "");
+  const reply = (status, body) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(typeof body === "string" ? body : JSON.stringify(body));
+  };
+  if (path === "ledger" && req.method === "PUT") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    site.ledger = body;
+    return reply(200, { ok: true });
+  }
+  if (path === "ledger") return site.ledger ? reply(200, site.ledger) : reply(404, { error: "No ledger yet" });
+  if (path === "projects") return reply(200, { projects: [{ name: "001-film", archivedAt: "2026-02-10T00:00:00.000Z", versions: 1 }] });
+  if (path.startsWith("projects/001-film?"))
+    return reply(200, { files: [{ path: "assets/DJI_20260101120000_0099_D.mp4", size: 17, sha256: "ab" }] });
+  reply(404, { error: "Not found" });
+});
 
 // A flat colour by default (the inversion check needs a flat patch); `busy` is a moving pattern that takes a while to
 // export (20 s, or `seconds`), for stopping one midway.
@@ -89,8 +113,23 @@ beforeAll(async () => {
   for (let b = 0, i = 0; b < 2; b++) for (let g = 0; g < 2; g++) for (let r = 0; r < 2; r++) cube.set([1 - r, 1 - g, 1 - b], i++ * 3);
   writeFileSync(join(data, "luts/dlog2-to-rec709-aces2.cube"), writeCube(2, cube, "invert"));
   writeFileSync(join(data, "luts/agx/dlog2-punchy.cube"), writeCube(2, cube, "agx stand-in"));
+  await new Promise((resolve) => siteServer.listen(0, "127.0.0.1", resolve));
+  mkdirSync(publisher);
+  writeFileSync(join(publisher, "config.json"), JSON.stringify({ origin: `http://127.0.0.1:${siteServer.address().port}`, token }));
+  const uploads = { [withStill.replace(".MP4", ".mp4")]: [{ video: "vid1", size: 123, uploadedAt: "2026-02-06T10:00:00Z" }] };
+  writeFileSync(join(publisher, "footage.json"), JSON.stringify({ clips: uploads, days: {} }));
   server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
-    env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: join(root, "cache"), GRADE_CAMERA: camera, GRADE_PORT: String(port), GRADE_TRASH: trash },
+    env: {
+      ...process.env,
+      GRADE_ROOT: movies,
+      GRADE_DATA: data,
+      GRADE_CACHE: join(root, "cache"),
+      GRADE_CAMERA: camera,
+      GRADE_PORT: String(port),
+      GRADE_TRASH: trash,
+      GRADE_PUBLISHER: publisher,
+      GRADE_LEDGER_EVERY: "300",
+    },
     stdio: ["ignore", "pipe", "inherit"],
   });
   await new Promise((resolve) => server.stdout.on("data", (c) => String(c).includes("grade:") && resolve()));
@@ -98,6 +137,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   server?.kill();
+  siteServer.close();
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -186,6 +226,47 @@ test.if(usable)("counts an export put in Movies/Exported by hand as graded", asy
   expect(s.clips[1].exported).toMatchObject({ key: null });
   expect((await json("/api/library")).camera.days[0].graded).toBe(2);
 });
+
+test.if(usable)("keeps a ledger of every clip and where its copies are, sent whole to the site's archive", async () => {
+  const graded = (clip) => clip?.graded;
+  const { ledger, cloud, error } = await until(async () => {
+    const body = await json("/api/ledger");
+    const clips = body.ledger?.clips ?? {};
+    return graded(clips.DJI_20260203101500_0007_D)?.mac && graded(clips.DJI_20260205090100_0002_D)?.mac && body;
+  });
+  expect({ cloud, error }).toEqual({ cloud: true, error: null });
+  expect(ledger.camera).toMatchObject({ name: "Pocket 4P", mounted: true });
+  expect(ledger.clips.DJI_20260203101500_0007_D).toMatchObject({
+    name,
+    recorded: "2026-02-03T10:15:00",
+    profile: "dlog2",
+    size: statSync(join(original, name)).size,
+    original: { camera: false, mac: true, cloudflare: false },
+    graded: { look: "ACES 2.0", mac: true, cloudflare: false, youtube: null },
+    gradePending: false,
+  });
+  // Graded off the card, and on YouTube by the footage archive's record (an earlier grade: its size isn't this one's).
+  expect(ledger.clips.DJI_20260205090000_0001_D).toMatchObject({
+    profile: "rec709",
+    original: { camera: true, mac: false },
+    graded: { mac: true, youtube: { video: "vid1", current: false } },
+  });
+  // Only a film in the archive still holds this one.
+  expect(ledger.clips.DJI_20260101120000_0099_D).toMatchObject({
+    recorded: "2026-01-01T12:00:00",
+    original: { camera: false, mac: false, cloudflare: false },
+    graded: { size: 17, mac: false, cloudflare: "current" },
+  });
+  // Not graded yet.
+  expect(ledger.clips.DJI_20260207100000_0001_D).toMatchObject({ graded: null, gradePending: false });
+  const sent = await until(() => {
+    const body = site.ledger && JSON.parse(site.ledger);
+    return body?.clips.DJI_20260205090100_0002_D?.graded?.mac && body;
+  });
+  expect(Object.keys(sent.clips).sort()).toEqual(Object.keys(ledger.clips).sort());
+  expect([...site.auth]).toEqual([`Bearer ${token}`]);
+  expect(Object.keys(JSON.parse(readFileSync(join(data, "ledger.json"), "utf8")).clips)).toContain("DJI_20260101120000_0099_D");
+}, 60_000);
 
 test.if(usable)("stops exporting: drops the queue, and the clip in progress leaves nothing behind", async () => {
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: slow, names: slowClips }) })).status).toBe(200);

@@ -226,6 +226,41 @@ kbd {
 .keys dt { color: var(--ink-3); }
 .keys dd { margin: 0; color: var(--ink-3); display: flex; gap: 3px; align-items: center; justify-content: flex-end; }
 .keys { border-bottom: 0; }
+.kept { margin: 2px 0 0; font-size: 11.5px; color: var(--ink-3); }
+
+/* ---- ledger: every clip seen, and where its original and graded copies are --------------------------------------- */
+/* It covers the work area, the header staying. */
+.work, .ledger { grid-row: 2; grid-column: 1; }
+.ledger { z-index: 5; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: var(--surface); }
+.ledger-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.ledger-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.ledger-sync { margin: 2px 0 0; color: var(--ink-3); font-size: 12px; }
+.ledger-head .seg { margin-left: auto; }
+.ledger-head .seg button { font-variant-numeric: tabular-nums; }
+.ledger-scroll { overflow: auto; min-height: 0; }
+.ledger-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.ledger-table th, .ledger-table td { padding: 6px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.ledger-table thead { position: sticky; top: 0; z-index: 1; }
+.ledger-table thead th { background: var(--surface); color: var(--ink-3); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.ledger-table thead th.span { text-align: center; border-bottom-color: var(--line-2); }
+.ledger-table .mark { width: 92px; text-align: center; }
+.ledger-table .first { border-left: 1px solid var(--line); }
+.ledger-table tr.day th { padding-top: 16px; background: var(--surface); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.ledger-table tbody tr:not(.day):hover td { background: var(--raised); }
+/* A clip with no copy off this Mac and the card is marked at its edge; one with no copy left anywhere, more so. */
+.ledger-table tr[data-risk] td:first-child { box-shadow: inset 2px 0 0 var(--warn); }
+.ledger-table tr[data-risk="lost"] td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
+.ledger-table .dim { color: var(--ink-3); }
+.ledger-table .clip-cell b { font-family: var(--mono); font-weight: 600; }
+.ledger-table .clip-cell small { margin-left: 8px; color: var(--ink-3); font-size: 11.5px; }
+.ledger-table .note { margin-left: 8px; color: var(--bad); font-size: 11.5px; }
+.ledger-table td.mark span { color: var(--ink); }
+.ledger-table td.mark span.no { color: var(--ink-4); }
+.ledger-table td.mark span.old, .ledger-table td.mark a.old { color: var(--warn); font-size: 11.5px; }
+.ledger-table td.mark span.asof { color: var(--ink-3); }
+.ledger-table td.mark a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--ink-4); }
+.ledger-table td.mark a:hover { text-decoration-color: currentColor; }
+.empty-note { margin: 24px 20px; color: var(--ink-3); }
 
 @media (max-width: 1100px) {
   body { overflow: auto; }
