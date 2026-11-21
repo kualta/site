@@ -191,6 +191,8 @@ export function mergeLedger(previous, seen) {
   }
   if (seen.archive)
     for (const file of seen.archive) {
+      // A day's offloaded originals (`_originals-<day>`) aren't a film.
+      if (file.project.startsWith("_")) continue;
       film(file.project).archived = true;
       holds(file.project, file.name);
     }

@@ -133,6 +133,15 @@ test("a clip is followed off the card, through grading, onto YouTube and into th
   expect(kept.archiveAt).toBe("2026-11-19T11:00:00Z");
 });
 
+test("an offloaded original counts as the original in Cloudflare, and its day isn't a film", () => {
+  const card = { name: "Pocket 4P", mounted: true, clips: [{ name: `${A}.MP4`, size: 1000 }] };
+  const archive = [{ name: `${A}.MP4`, size: 1000, sha256: "ab", project: "_originals-2026-11-11" }];
+  const ledger = mergeLedger(null, seen("2026-11-21T10:00:00Z", { camera: card, archive }));
+  expect(ledger.clips[A].original).toEqual({ camera: true, mac: false, cloudflare: true });
+  expect(ledger.clips[A].graded).toBeNull();
+  expect(ledger.projects).toEqual({});
+});
+
 test("a film's clips come from its project on this Mac and from the archive, kept between askings", () => {
   const card = {
     name: "Pocket 4P",

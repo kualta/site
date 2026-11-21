@@ -98,6 +98,25 @@ until it's allowed, the tab says so. Only the composer may frame the app (`frame
 site run locally on port 4321). In the frame the app says it's there, opens the clips the Footage tab's **Grade**
 asks for (`#clip=<file>` in its address, or a message; `/api/find` says which day holds it), and takes the
 composer's light or dark.
+
+## Offload: originals to Cloudflare, then the card cleared
+
+**Offload** (top bar) sends originals to the site's archive so the camera's card, or this Mac, can be cleared of them
+and nothing is lost: **Offload the camera** sends the card's clips, **Offload this Mac's originals** the ones in
+`Original/`, each only once (a clip already sent, by name and size, is skipped). Each is hashed (SHA-256), sent unless
+the archive already holds those bytes (whole up to 64 MiB, else in parts, through `helper/archive` on the helper's
+pairing), and filed in its shoot day's manifest in the archive, `_originals-<day>` (as `assets/<file>`), saved again
+after every clip so each is safe the moment it's in. `offloaded.json` (beside `grades.json`) records each one's hash,
+size and day. You start it, and the status line shows it going: the clip, how many of how many, size, speed and time
+left; **Stop offloading** stops between parts and keeps what's in. Log clips without a grade get the default look as
+settings (`GRADE_DEFAULT_LOOK`, OpenDRT Colorful), to change before any export.
+
+**Clear the camera** and **Clear this Mac's originals** (asking with a second click) delete the clips there whose
+originals are in the archive: offloaded by name and size, and the archive still holding their hash, checked right
+before. The camera's `.LRF` beside each goes too; a clip being exported stays. The ledger then counts them as in
+Cloudflare (an archived file the original's size); `_originals-*` aren't films. To bring a day back:
+`bun run publisher restore _originals-<day> <folder>`.
+
 ## Grading
 
 - **Look**: the base look for the clip's camera profile, read from its own metadata tag. D-Log2, D-Log and HLG get
