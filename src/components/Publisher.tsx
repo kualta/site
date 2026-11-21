@@ -1187,7 +1187,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           {/* Once opened, the grade app stays loaded while other tabs are shown, so coming back doesn't load it again. */}
           {gradeOpened && (
             <div className="publisher-grade-tab" hidden={tab !== "grade"}>
-              <PublisherGrade open={gradeClip} />
+              <PublisherGrade open={gradeClip} active={tab === "grade"} />
             </div>
           )}
           {tab === "accounts" && (

@@ -11,6 +11,8 @@ const PATIENCE = 8000;
 interface Props {
   /** A clip to open, from the Footage tab; `n` tells the same clip asked for twice apart. */
   open: { clip: string; n: number } | null;
+  /** The tab is the one shown: the app stays loaded behind the others. */
+  active: boolean;
 }
 
 const theme = () => (document.documentElement.classList.contains("dark") ? "dark" : "light");
@@ -19,7 +21,7 @@ const theme = () => (document.documentElement.classList.contains("dark") ? "dark
  * The composer's Grade tab: the grade app on the Mac, in a frame. Chrome asks once to let post.kualta.dev reach this
  * device (the frame is allowed local network access). Away from the Mac, or until that's allowed, it says so.
  */
-export default function PublisherGrade({ open }: Props) {
+export default function PublisherGrade({ open, active }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const box = useRef<HTMLElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "away">("loading");
@@ -59,16 +61,19 @@ export default function PublisherGrade({ open }: Props) {
     if (state === "ready" && open) post({ type: "open", clip: open.clip });
   }, [open, state]);
 
-  // The frame fills the window below the tabs.
+  // While the tab is shown, the app fills the window below the tabs, edge to edge, and the page doesn't scroll
+  // (publisher.css): back at the top, it starts where the tabs end.
   useEffect(() => {
+    if (!active) return;
+    window.scrollTo(0, 0);
     const fit = () => {
-      const top = box.current?.getBoundingClientRect().top ?? 0;
-      box.current?.style.setProperty("--grade-height", `${Math.max(480, window.innerHeight - top - 24)}px`);
+      const tabs = document.querySelector(".publisher-tabs")?.getBoundingClientRect();
+      if (tabs) box.current?.style.setProperty("--grade-top", `${Math.round(tabs.bottom)}px`);
     };
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, []);
+  }, [active]);
 
   return (
     <section ref={box} className="publisher-grade" aria-label="Grade">
