@@ -602,54 +602,83 @@ Browser metrics rely on provider response shapes and still need real-account acc
 
 ## Post records
 
-Every post that is up somewhere has one public record in the owner's own AT Protocol repository
-(`did:plc:jhvnnnd3adml7t6anu3ay7ip`), of type `dev.kualta.post`
+Every post with a public copy up somewhere has one public record in the owner's own AT Protocol
+repository (`did:plc:jhvnnnd3adml7t6anu3ay7ip`), of type `dev.kualta.post`
 (`scripts/lexicons/dev.kualta.post.json`). The repository is the original record of what was
 posted; each platform's copy is a syndication link on it.
 
 | Field | Holds |
 | --- | --- |
 | `kind` | `text`, `photo`, `video` or `mixed` |
-| `title` | the post's title, when it has one |
-| `text` | the caption |
-| `tags` | the post's tags, without `#` |
+| `title` | the title, when a copy that is up shows one |
+| `text` | the text as the fullest copy that is up shows it |
+| `tags` | the tags the copies that are up carry, without `#` |
 | `createdAt` | when the first copy went up |
 | `thumbnail` | the post's stored thumbnail (JPEG, PNG or WebP, at most 200 KB) |
-| `syndication` | one `{ platform, url, uri?, publishedAt? }` for each copy that is up now |
+| `syndication` | one `{ platform, url, uri?, publishedAt? }` for each public copy that is up now |
 
-`uri` is the copy's own record, for Bluesky and Grain. `publishedAt` is left out for a copy
-published elsewhere and linked from History, whose publish time isn't known. `platform` uses the
-publisher's own names (`twitter` for X).
+`uri` is the copy's own record, for Bluesky and Grain. `platform` uses the publisher's own names
+(`twitter` for X). `publishedAt` is left out for a copy linked from History or marked as published
+by hand: the time kept for those is when that was done, and it doesn't count toward `createdAt`
+either.
 
-The record holds only what a platform already shows. It never holds capture dates, the tagged
-place, alt text, the uploads or their ids, the short and Chinese versions, the schedule, metrics,
-failed or unconfirmed destinations, or anything about the helper and its connections. The site
-enforces this first: `GET helper/post-records` hands the helper only the title, caption, tags,
-confirmed links and the thumbnail's type, size and hash, and the helper builds the record from
-those by name (`buildPostRecord` in `scripts/publisher/post-record.mjs`).
+The record never shows what no copy that is up shows. The site decides this
+(`src/lib/publisher/post-records.ts`), so nothing else reaches the laptop's record builder
+(`buildPostRecord` in `scripts/publisher/post-record.mjs`), which takes each field by name:
+
+- A YouTube copy is listed only when the post's YouTube visibility is Public. A private or
+  unlisted video, sent or linked by hand, never appears, and a post whose only copy it is has no
+  record at all.
+- The words are the version a destination was sent (`variants`), not what the composer holds now.
+  The fullest copy that is up speaks: Grain, Lens, YouTube, Instagram, TikTok, then Bluesky,
+  Farcaster and X, which may have the short version, then Xiaohongshu's Chinese version when
+  nothing else is up. Instagram, TikTok and YouTube show the tags at the end of the text, so they
+  are in `text` there too. A post edited after a copy went out keeps that copy's words.
+- `title` is there only when Grain, YouTube or Xiaohongshu is up: nothing else shows one.
+- `tags` are the ones those versions carry: written in the text, or kept beside it on Bluesky and
+  Lens, or Xiaohongshu's topics.
+- A copy linked from History was written elsewhere, so it adds a link and no words. A post with
+  only linked copies up has an empty `text` and no thumbnail.
+- The thumbnail is left out when the only copies up carry another video (Xiaohongshu's Chinese
+  one). The helper refuses to upload one that holds EXIF or XMP metadata.
+- A link pasted by hand is reduced to the post's own address, without share parameters such as
+  `?igsh=`, `?si=` or `xsec_token`.
+
+It never holds capture dates, the tagged place, alt text, the uploads or their ids, the schedule,
+metrics, failed, unconfirmed or deleted destinations, or anything about the helper and its
+connections. A post with no public copy up reaches the helper as its id alone.
 
 The record's key is a TID derived from the post's id (`recordKey("publisher:post:<id>")`, the
 derivation articles use), so a post has exactly one record however often it is written. The helper
 reconciles a post's record after a destination succeeds and after a deletion completes: it
 creates the record with the first copy, updates it as copies come and go, and deletes it when no
-copy is left. A record that can't be written never changes a destination's result, since the post
-is already up; the helper log says the record was not written and how to repair it.
+public copy is left. A record that can't be written, or a repository that doesn't answer within
+a minute, never changes a destination's result or holds the queue, since the post is already up;
+the helper log says the record was not written and how to repair it.
 
 `bun run publisher post-records [--job <post id>]` compares every post, or one, with the
-repository and prints what it would create, update or delete. It reads public data only and
-writes nothing. Add `--write` to do it. Each write is conditional on the version it read, the
-thumbnail is uploaded only when the record doesn't already hold it, and a second run changes
-nothing, so the same command is the backfill for posts from before records existed and the
-repair after a failed write. It also picks up what the helper isn't told about: a post marked
-as published by hand, a link added or removed in History, and edited words. Records in the
-collection that match no post are listed and left alone.
+repository and prints what it would create, update or delete. It reads the post list from the
+site with the helper's pairing key and the records from the repository's public API, and writes
+nothing. Add `--write` to do it. Each write is conditional on the version it read, the thumbnail
+is uploaded only when the record doesn't already hold it, and a second run changes nothing, so
+the same command is the backfill for posts from before records existed and the repair after a
+failed write. It also picks up what the helper isn't told about: a post marked as published by
+hand, a link added or removed in History, and edited words. Records in the collection that match
+no post are listed and left alone.
 
 `--write` uses the laptop's Bluesky sign-in, which only one process may hold: stop the helper
 first (`bun run publisher uninstall`), run it, then `bun run publisher install`.
 
 The sign-in must grant `repo:dev.kualta.post` and the thumbnail's blob types
 (`src/lib/publisher/oauth-client.json`). A sign-in made before this was added doesn't, and the
-helper and the command both say so once instead of writing: after the site with the new client
-metadata is deployed, disconnect Grain / Bluesky in the composer's Accounts tab, connect it
-again, then run `bun run publisher post-records` and, if the plan looks right,
-`bun run publisher post-records --write`.
+helper and the command both say so once instead of writing. To turn records on, in this order:
+
+1. Deploy the site, which publishes the new client metadata.
+2. On the laptop, `git pull`, then `bun run publisher install` to restart the helper. It reads
+   the scope it asks for when it starts, so an old helper would sign in without the new one.
+3. Wait a few minutes: bsky.social caches a client's metadata, and a sign-in asking for a scope
+   it hasn't seen yet is refused.
+4. In the composer's Accounts tab, disconnect Grain / Bluesky and connect it again.
+5. `bun run publisher post-records`, and read the plan.
+6. `bun run publisher uninstall`, `bun run publisher post-records --write`, then
+   `bun run publisher install`.

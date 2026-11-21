@@ -36,22 +36,19 @@ function recordUri(platform, url) {
 }
 
 /**
- * The record a post should have, or null when none of its copies is up. Each field is taken by name: a post also
- * holds capture dates, a place, alt text, upload ids, a schedule and a Chinese draft, and none of that is public.
+ * The record a post should have, or null when none of its copies is up. Each field is taken by name, from what the
+ * site says the copies that are up show (`src/lib/publisher/post-records.ts`); nothing else a post holds is public.
  */
 export function buildPostRecord({ post, targets, thumbnail, created_at }) {
   const live = targets.filter((target) => !target.deleted);
   if (!live.length) return null;
-  // Deleted copies count, so taking the first one down doesn't move the post's date. A linked copy's time is when it
-  // was linked, not when it went up.
-  const published = targets
-    .filter((target) => !target.linked && target.finished_at)
-    .map((target) => target.finished_at);
+  // Deleted copies count, so taking the first one down doesn't move the post's date.
+  const published = targets.filter((target) => target.published_at).map((target) => target.published_at);
   return {
     $type: collection,
     kind: post.kind,
     ...(post.title ? { title: post.title } : {}),
-    text: post.caption,
+    text: post.text,
     ...(post.tags?.length ? { tags: post.tags } : {}),
     createdAt: new Date(published.length ? Math.min(...published) : created_at).toISOString(),
     ...(thumbnail
@@ -70,7 +67,7 @@ export function buildPostRecord({ post, targets, thumbnail, created_at }) {
         platform: target.platform,
         url: target.url,
         ...(uri ? { uri } : {}),
-        ...(!target.linked && target.finished_at ? { publishedAt: new Date(target.finished_at).toISOString() } : {}),
+        ...(target.published_at ? { publishedAt: new Date(target.published_at).toISOString() } : {}),
       };
     }),
   };
@@ -120,6 +117,41 @@ export function scopeDenied(error) {
     /ScopeMissing|insufficient_scope|InsufficientScope/i.test(text) ||
     ([401, 403].includes(error?.status) && /scope/i.test(text))
   );
+}
+
+const ascii = (bytes, at, length) => String.fromCharCode(...bytes.subarray(at, at + length));
+/**
+ * Whether an image carries EXIF or XMP, where a camera puts the place and time. The composer's thumbnails are drawn
+ * afresh and have none, but the site stores whatever it is sent, and a blob in the repository is public for good.
+ */
+export function carriesMetadata(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    // Segments up to the image data: APP1 holds both.
+    for (let at = 2; at + 4 <= bytes.length && bytes[at] === 0xff && bytes[at + 1] !== 0xda; ) {
+      if (bytes[at + 1] === 0xe1 && /^(Exif|http:\/\/ns\.adobe\.com\/)/.test(ascii(bytes, at + 4, 28))) return true;
+      at += 2 + view.getUint16(at + 2);
+    }
+    return false;
+  }
+  if (ascii(bytes, 1, 3) === "PNG") {
+    for (let at = 8; at + 8 <= bytes.length; at += 12 + view.getUint32(at)) {
+      const type = ascii(bytes, at + 4, 4);
+      if (type === "eXIf") return true;
+      if (/^(iTXt|tEXt|zTXt)$/.test(type) && /^(XML:com\.adobe\.xmp|Raw profile type)/.test(ascii(bytes, at + 8, 17)))
+        return true;
+    }
+    return false;
+  }
+  if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP") {
+    for (let at = 12; at + 8 <= bytes.length; ) {
+      if (["EXIF", "XMP "].includes(ascii(bytes, at, 4))) return true;
+      const size = view.getUint32(at + 4, true);
+      at += 8 + size + (size % 2);
+    }
+    return false;
+  }
+  throw new Error("The post's thumbnail is not a JPEG, PNG or WebP image");
 }
 
 const xrpc = (pds, method, query) => new URL(`/xrpc/com.atproto.repo.${method}?${new URLSearchParams(query)}`, pds);
@@ -177,6 +209,7 @@ export async function applyPostRecord(plan, source, { authorization, api }) {
       const bytes = new Uint8Array(await (await api(`post-records/${plan.job}/thumbnail`)).arrayBuffer());
       if (createHash("sha256").update(bytes).digest("hex") !== source.thumbnail.sha256)
         throw new Error("The post's thumbnail changed meanwhile");
+      if (carriesMetadata(bytes)) throw new Error("The post's thumbnail carries EXIF or XMP metadata");
       const { data } = await agent.uploadBlob(bytes, { encoding: source.thumbnail.type });
       record = { ...record, thumbnail: data.blob };
     }
@@ -188,7 +221,7 @@ export async function applyPostRecord(plan, source, { authorization, api }) {
   }
 }
 
-const label = (source) => JSON.stringify((source.post.title || source.post.caption).slice(0, 50));
+const label = (source) => JSON.stringify((source.post.title || source.post.text).slice(0, 50));
 const where = (source) =>
   source.targets
     .filter((target) => !target.deleted)
@@ -226,7 +259,9 @@ export async function reconcilePostRecords({ api, job, authorization, fetcher = 
       counts.none++;
       continue;
     }
-    const line = `${plan.action} ${plan.rkey} ${source.id} ${label(source)}${plan.record ? ` → ${where(source)}` : ""}`;
+    const line = plan.record
+      ? `${plan.action} ${plan.rkey} ${source.id} ${label(source)} → ${where(source)}`
+      : `${plan.action} ${plan.rkey} ${source.id}`;
     if (!authorization) {
       counts[plan.action]++;
       log(`would ${line}`);
@@ -254,10 +289,18 @@ export async function reconcilePostRecords({ api, job, authorization, fetcher = 
 let relinkShown = false;
 /**
  * Reconciles one post's record after a copy of it went up or came down. It never throws and never reports the
- * platform's own result differently: the copy is already up, or gone, whatever happens to the record.
+ * platform's own result differently: the copy is already up, or gone, whatever happens to the record. The queue waits
+ * on it, so a repository that doesn't answer is given up on.
  */
-export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = console.error }) {
-  try {
+export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = console.error, deadline = 60_000 }) {
+  let timer;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`no answer within ${deadline / 1000} s, though the write may still land`)),
+      deadline,
+    );
+  });
+  const work = (async () => {
     const { job: source } = await (await api(`post-records/${job}`)).json();
     if (!source) return "none";
     const authorization = await oauth.agent();
@@ -265,6 +308,11 @@ export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = c
     await applyPostRecord(plan, source, { authorization, api });
     if (plan.action !== "none") log(`Post record ${plan.rkey}: ${plan.action}`);
     return plan.action;
+  })();
+  // Given up on, it may still fail later with nobody waiting.
+  work.catch(() => {});
+  try {
+    return await Promise.race([work, late]);
   } catch (error) {
     if (!(error instanceof ScopeError))
       log(
@@ -275,5 +323,7 @@ export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = c
       log(`Post records are NOT being written. ${RELINK}`);
     }
     return "failed";
+  } finally {
+    clearTimeout(timer);
   }
 }

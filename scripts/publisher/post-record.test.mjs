@@ -8,6 +8,7 @@ import {
   applyPostRecord,
   blobCid,
   buildPostRecord,
+  carriesMetadata,
   collection,
   planPostRecord,
   postRecordKey,
@@ -18,26 +19,24 @@ import {
 
 const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
 const job = "11111111-2222-3333-4444-555555555555";
-const picture = new Uint8Array([1, 2, 3, 4]);
+const picture = new Uint8Array([0xff, 0xd8, 0xff, 0xda, 0, 2, 0xff, 0xd9]);
 const sha256 = createHash("sha256").update(picture).digest("hex");
 const bluesky = {
   platform: "bluesky",
   url: `https://bsky.app/profile/${owner}/post/3kabcdefghijk`,
-  finished_at: Date.UTC(2026, 10, 2),
-  linked: false,
+  published_at: Date.UTC(2026, 10, 2),
   deleted: false,
 };
 const instagram = {
   platform: "instagram",
   url: "https://www.instagram.com/p/Cabc123/",
-  finished_at: Date.UTC(2026, 10, 1),
-  linked: false,
+  published_at: Date.UTC(2026, 10, 1),
   deleted: false,
 };
 const source = (changes = {}) => ({
   id: job,
   created_at: Date.UTC(2026, 9, 30),
-  post: { kind: "photo", title: "Bogotá", caption: "Morning light", tags: ["travel"] },
+  post: { kind: "photo", title: "Bogotá", text: "Morning light", tags: ["travel"] },
   targets: [bluesky, instagram],
   thumbnail: { type: "image/jpeg", size: picture.length, sha256 },
   ...changes,
@@ -66,7 +65,7 @@ test("the record lists each copy that is up and is valid under its lexicon", () 
     text: "Morning light",
     tags: ["travel"],
     createdAt: "2026-11-01T00:00:00.000Z",
-    thumbnail: { $type: "blob", ref: { $link: blobCid(sha256) }, mimeType: "image/jpeg", size: 4 },
+    thumbnail: { $type: "blob", ref: { $link: blobCid(sha256) }, mimeType: "image/jpeg", size: 8 },
     syndication: [
       {
         platform: "bluesky",
@@ -81,7 +80,7 @@ test("the record lists each copy that is up and is valid under its lexicon", () 
   lexicons.assertValidRecord(collection, jsonToLex(record));
   lexicons.assertValidRecord(
     collection,
-    jsonToLex(buildPostRecord(source({ post: { kind: "text", title: "", caption: "Hi" }, thumbnail: null }))),
+    jsonToLex(buildPostRecord(source({ post: { kind: "text", title: "", text: "Hi", tags: [] }, thumbnail: null }))),
   );
 });
 
@@ -92,8 +91,9 @@ test("nothing private in a post reaches its record", () => {
       post: {
         kind: "photo",
         title: "Bogotá",
-        caption: "Morning light",
+        text: "Morning light",
         tags: ["travel"],
+        caption: secret,
         alt: secret,
         alts: [secret],
         media: [secret],
@@ -107,7 +107,7 @@ test("nothing private in a post reaches its record", () => {
         zh: { title: secret, text: secret, topics: [secret], video: secret, location: secret },
         variants: { xiaohongshu: { title: secret, text: secret, tags: [secret] } },
       },
-      targets: [{ ...bluesky, message: secret, claim: secret, metrics: secret }],
+      targets: [{ ...bluesky, message: secret, claim: secret, metrics: secret, linked: secret }],
       helper: secret,
     }),
   );
@@ -118,7 +118,7 @@ test("nothing private in a post reaches its record", () => {
   expect(Object.keys(record.syndication[0]).sort()).toEqual(["platform", "publishedAt", "uri", "url"]);
 });
 
-test("a deleted copy leaves the list but keeps the post's date; a linked copy has no publish time", () => {
+test("a deleted copy leaves the list but keeps the post's date; a copy without a known time has none", () => {
   const record = buildPostRecord(
     source({
       targets: [
@@ -127,8 +127,7 @@ test("a deleted copy leaves the list but keeps the post's date; a linked copy ha
         {
           platform: "bluesky",
           url: "https://bsky.app/profile/kualta.dev/post/3kzzzzzzzzzzz",
-          finished_at: 5,
-          linked: true,
+          published_at: null,
           deleted: false,
         },
       ],
@@ -141,7 +140,9 @@ test("a deleted copy leaves the list but keeps the post's date; a linked copy ha
     url: "https://bsky.app/profile/kualta.dev/post/3kzzzzzzzzzzz",
   });
   expect(buildPostRecord(source({ targets: [{ ...instagram, deleted: true }] }))).toBeNull();
-  expect(buildPostRecord(source({ targets: [] }))).toBeNull();
+  expect(buildPostRecord({ id: job, targets: [] })).toBeNull();
+  const linkedOnly = buildPostRecord(source({ targets: [{ ...instagram, published_at: null }] }));
+  expect(linkedOnly.createdAt).toBe("2026-10-30T00:00:00.000Z");
 });
 
 test("the plan creates, leaves alone, updates and deletes", () => {
@@ -152,13 +153,23 @@ test("the plan creates, leaves alone, updates and deletes", () => {
   const held = stored({ ...Object.fromEntries(Object.entries(record).reverse()) });
   held.value.thumbnail.mimeType = "image/jpg";
   expect(planPostRecord(source(), held).action).toBe("none");
-  const edited = planPostRecord(source({ post: { ...source().post, caption: "Evening light" } }), held);
+  const edited = planPostRecord(source({ post: { ...source().post, text: "Evening light" } }), held);
   expect(edited).toMatchObject({ action: "update", cid: "bafyrecord", upload: false });
   expect(edited.record.thumbnail).toEqual(held.value.thumbnail);
   const repainted = source({ thumbnail: { type: "image/png", size: 9, sha256: "00".repeat(32) } });
   expect(planPostRecord(repainted, held)).toMatchObject({ action: "update", upload: true });
   expect(planPostRecord(source({ targets: [instagram] }), held).record.syndication).toHaveLength(1);
   expect(planPostRecord(source({ targets: [{ ...bluesky, deleted: true }] }), held)).toMatchObject({
+    action: "delete",
+    cid: "bafyrecord",
+  });
+});
+
+test("a post the site holds back, such as one only on YouTube as a private or unlisted video, has no record", () => {
+  const held = { id: job, targets: [] };
+  expect(buildPostRecord(held)).toBeNull();
+  expect(planPostRecord(held, null).action).toBe("none");
+  expect(planPostRecord(held, stored(buildPostRecord(source())))).toMatchObject({
     action: "delete",
     cid: "bafyrecord",
   });
@@ -205,12 +216,12 @@ test("writes are conditional: a create under the fixed key, a swap for an update
   });
   expect(calls[1][1]).not.toHaveProperty("swapRecord");
   calls.length = 0;
-  const edit = source({ post: { ...source().post, caption: "Evening light" } });
+  const edit = source({ post: { ...source().post, text: "Evening light" } });
   await applyPostRecord(planPostRecord(edit, stored(record)), edit, { authorization, api: thumbnailApi });
   expect(calls).toHaveLength(1);
   expect(calls[0]).toMatchObject(["putRecord", { swapRecord: "bafyrecord", record: { text: "Evening light" } }]);
   calls.length = 0;
-  const gone = source({ targets: [] });
+  const gone = { id: job, targets: [] };
   await applyPostRecord(planPostRecord(gone, stored(record)), gone, { authorization, api: thumbnailApi });
   expect(calls).toEqual([
     ["deleteRecord", { repo: owner, collection, rkey: postRecordKey(job), swapRecord: "bafyrecord" }],
@@ -228,6 +239,55 @@ test("a thumbnail that changed since the plan is not uploaded", async () => {
       api: async () => new Response(new Uint8Array([9])),
     }),
   ).rejects.toThrow("thumbnail changed");
+  expect(calls).toEqual([]);
+});
+
+const jpeg = (...segments) => new Uint8Array([0xff, 0xd8, ...segments.flat(), 0xff, 0xda, 0, 2, 0xff, 0xd9]);
+const segment = (marker, text) => [0xff, marker, 0, text.length + 2, ...Buffer.from(text, "latin1")];
+const png = (...chunks) =>
+  new Uint8Array([
+    0x89,
+    ...Buffer.from("PNG\r\n\x1a\n", "latin1"),
+    ...chunks.flatMap(([type, text]) => [0, 0, 0, text.length, ...Buffer.from(type + text, "latin1"), 0, 0, 0, 0]),
+  ]);
+const webp = (...chunks) =>
+  new Uint8Array([
+    ...Buffer.from("RIFF\0\0\0\0WEBP", "latin1"),
+    ...chunks.flatMap(([type, text]) => [
+      ...Buffer.from(type, "latin1"),
+      text.length,
+      0,
+      0,
+      0,
+      ...Buffer.from(text.padEnd(text.length + (text.length % 2), "\0"), "latin1"),
+    ]),
+  ]);
+
+test("a thumbnail carrying EXIF or XMP is recognised in each format", () => {
+  expect(carriesMetadata(jpeg(segment(0xe0, "JFIF\0"), segment(0xdb, "Exif\0\0 in a table")))).toBe(false);
+  expect(carriesMetadata(jpeg(segment(0xe0, "JFIF\0"), segment(0xe1, "Exif\0\0GPS")))).toBe(true);
+  expect(carriesMetadata(jpeg(segment(0xe1, "http://ns.adobe.com/xap/1.0/\0<x/>")))).toBe(true);
+  expect(carriesMetadata(png(["IHDR", "eXIf in the pixels"], ["IDAT", "x"]))).toBe(false);
+  expect(carriesMetadata(png(["IHDR", "x"], ["eXIf", "GPS"]))).toBe(true);
+  expect(carriesMetadata(png(["iTXt", "XML:com.adobe.xmp\0<x/>"]))).toBe(true);
+  expect(carriesMetadata(webp(["VP8 ", "EXIF"], ["ALPH", "abc"]))).toBe(false);
+  expect(carriesMetadata(webp(["VP8 ", "abc"], ["EXIF", "GPS"]))).toBe(true);
+  expect(carriesMetadata(webp(["XMP ", "<x/>"]))).toBe(true);
+  expect(() => carriesMetadata(new Uint8Array([1, 2, 3, 4]))).toThrow("not a JPEG, PNG or WebP");
+});
+
+test("a thumbnail carrying metadata is never uploaded", async () => {
+  const calls = [];
+  const bytes = jpeg(segment(0xe1, "Exif\0\0GPS"));
+  const tagged = source({
+    thumbnail: { type: "image/jpeg", size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") },
+  });
+  await expect(
+    applyPostRecord(planPostRecord(tagged, null), tagged, {
+      authorization: { agent: repo(calls), scope },
+      api: async () => new Response(bytes),
+    }),
+  ).rejects.toThrow("carries EXIF or XMP metadata");
   expect(calls).toEqual([]);
 });
 
@@ -258,7 +318,7 @@ test("the PDS turning a write down for scope reads as the same instruction", asy
   expect(scopeDenied({ status: 400, error: "InvalidSwap", message: "Record was at bafy" })).toBe(false);
   expect(scopeDenied({ status: 403, error: "Forbidden", message: "Account is suspended" })).toBe(false);
   const denied = Object.assign(new Error("Missing required scope"), { status: 403, error: "ScopeMissingError" });
-  const gone = source({ targets: [] });
+  const gone = { id: job, targets: [] };
   await expect(
     applyPostRecord(planPostRecord(gone, stored({})), gone, {
       authorization: { agent: repo([], denied) },
@@ -300,7 +360,7 @@ const other = "99999999-2222-3333-4444-555555555555";
 test("a dry run plans every post across pages and writes nothing", async () => {
   const lines = [];
   const counts = await reconcilePostRecords({
-    api: site([source(), source({ id: other, targets: [{ ...instagram, deleted: true }] })]),
+    api: site([source(), { id: other, targets: [] }]),
     fetcher: pds({
       [postRecordKey(other)]: stored(buildPostRecord(source())),
       strayrecordkey: stored({ text: "?" }),
@@ -310,7 +370,7 @@ test("a dry run plans every post across pages and writes nothing", async () => {
   expect(counts).toEqual({ create: 1, update: 0, delete: 1, none: 0, failed: 0, orphans: 1 });
   expect(lines).toEqual([
     `would create ${postRecordKey(job)} ${job} "Bogotá" → bluesky, instagram`,
-    `would delete ${postRecordKey(other)} ${other} "Bogotá"`,
+    `would delete ${postRecordKey(other)} ${other}`,
     "no post for record strayrecordkey; left alone",
   ]);
 });
@@ -370,4 +430,17 @@ test("a record that can't be written after publishing is reported, never thrown 
   for (let i = 0; i < 3; i++)
     expect(await syncPostRecord(job, { ...options, oauth: oauth(repo([]), "atproto") })).toBe("failed");
   expect(lines).toEqual([`Post records are NOT being written. ${RELINK}`]);
+});
+
+test("a repository that never answers holds the queue only until the deadline", async () => {
+  const lines = [];
+  const stalled = { agent: () => new Promise(() => {}) };
+  const started = Date.now();
+  expect(
+    await syncPostRecord(job, { api: site([source()]), oauth: stalled, deadline: 30, log: (line) => lines.push(line) }),
+  ).toBe("failed");
+  expect(Date.now() - started).toBeLessThan(2000);
+  expect(lines).toEqual([
+    `Post record for ${job} was NOT written: no answer within 0.03 s, though the write may still land. Repair it with: bun run publisher post-records --write`,
+  ]);
 });
