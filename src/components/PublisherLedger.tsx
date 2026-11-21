@@ -1,45 +1,26 @@
 import { useEffect, useState } from "react";
+import type { Content } from "@/lib/publisher/content";
+import {
+  atRisk,
+  type FootageLink,
+  filmsByClip,
+  type Ledger,
+  type LedgerClip,
+  lost,
+  needsGrade,
+} from "@/lib/publisher/ledger";
 
-/** A clip's record in the footage ledger, which the grade app keeps (scripts/grade/ledger.mjs). */
-export interface LedgerClip {
-  name: string;
-  recorded: string | null;
-  profile: string | null;
-  duration: number | null;
-  size: number | null;
-  original: { camera: boolean; mac: boolean; cloudflare: boolean };
-  graded: null | {
-    look: string | null;
-    at: string | null;
-    size: number | null;
-    mac: boolean;
-    cloudflare: "current" | "earlier" | false;
-    youtube: null | { video: string; at: string; current: boolean };
-  };
-  gradePending: boolean;
-  /** Its small picture is in the archive. */
-  thumb?: boolean;
-}
-export interface Ledger {
-  updatedAt: string;
-  camera: { name: string; mounted: boolean; seenAt: string | null };
-  archiveAt: string | null;
-  clips: Record<string, LedgerClip>;
-}
 interface Props {
   request: (path: string) => Promise<any>;
   /** The clip going up to YouTube now, by its graded file's name, and how far it is. */
   uploading: { name: string; share: number } | null;
   /** Opens the clip in the Grade tab. */
   onGrade: (clip: string) => void;
+  /** Where a post's numbers are. */
+  statsHref: (job: string) => string;
 }
 
 const PROFILES: Record<string, string> = { dlog2: "D-Log2", dlog: "D-Log", hlg: "HLG", rec709: "Rec.709" };
-/** A copy off the Mac and the card: in the Cloudflare archive, or on YouTube (re-encoded, but a copy). */
-const keptAway = (c: LedgerClip) =>
-  c.original.cloudflare || Boolean(c.graded?.cloudflare) || Boolean(c.graded?.youtube);
-const atRisk = (c: LedgerClip) => !keptAway(c);
-const lost = (c: LedgerClip) => !c.original.camera && !c.original.mac && !c.graded?.mac && !keptAway(c);
 /** How a row is marked at its edge: no copy left anywhere, or none off the Mac and the card. */
 function riskOf(c: LedgerClip) {
   if (lost(c)) return "lost";
@@ -49,7 +30,7 @@ function riskOf(c: LedgerClip) {
 const FILTERS = {
   all: { name: "All", shows: () => true },
   risk: { name: "At risk", shows: atRisk },
-  ungraded: { name: "Not graded", shows: (c: LedgerClip) => c.profile !== "rec709" && !c.graded },
+  ungraded: { name: "Not graded", shows: needsGrade },
   youtube: { name: "Not on YouTube", shows: (c: LedgerClip) => Boolean(c.graded) && !c.graded?.youtube },
   cloudflare: { name: "Not in Cloudflare", shows: (c: LedgerClip) => !c.original.cloudflare && !c.graded?.cloudflare },
 } as const;
@@ -151,13 +132,60 @@ function Thumb({ clip, record }: { clip: string; record: LedgerClip }) {
   );
 }
 
+/** The films a clip is in, each linking to its post's numbers once a Pipeline piece made from it is posted. */
+function Films({
+  names,
+  posted,
+  statsHref,
+}: { names: string[]; posted: Map<string, string>; statsHref: Props["statsHref"] }) {
+  if (!names.length) return null;
+  return (
+    <span className="films">
+      {names.map((name, i) => {
+        const job = posted.get(name);
+        return (
+          <span key={name}>
+            {i ? ", " : " · in "}
+            {job ? (
+              <a href={statsHref(job)} title="Its post's numbers">
+                {name}
+              </a>
+            ) : (
+              name
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 /**
- * The footage ledger: every clip the grade app has seen, newest day first, with its grade and where its original and
- * graded copies are. Read from the archive as the grade app last sent it, and again every 30 seconds.
+ * The footage ledger: every clip the grade app has seen, newest day first, with its grade, where its original and
+ * graded copies are, and the films it's in. Read from the archive as the grade app last sent it, and again every 30
+ * seconds.
  */
-export default function PublisherLedger({ request, uploading, onGrade }: Props) {
+export default function PublisherLedger({ request, uploading, onGrade, statsHref }: Props) {
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Each film's post, from the Pipeline pieces that name it: read once, as nothing here changes them.
+  const [posted, setPosted] = useState(new Map<string, string>());
+  useEffect(() => {
+    let active = true;
+    Promise.all([request("footage/links"), request("content")])
+      .then(([{ links }, { items }]: [{ links: Record<string, FootageLink> }, { items: Content[] }]) => {
+        const films = new Map<string, string>();
+        for (const piece of items) {
+          const film = links[piece.id]?.project;
+          if (film && piece.stage === "posted" && piece.job_id) films.set(film, piece.job_id);
+        }
+        if (active) setPosted(films);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [request]);
   const [filter, setFilter] = useState<Filter>(() => {
     try {
       const saved = localStorage.getItem(FILTER_KEY);
@@ -224,6 +252,7 @@ export default function PublisherLedger({ request, uploading, onGrade }: Props) 
       ? `As of ${when(camera.seenAt)}, when the ${camera.name} was last plugged in`
       : undefined;
   const live = uploading?.name.replace(/\.[^.]+$/, "").toLowerCase();
+  const films = filmsByClip(ledger);
 
   return (
     <section className="publisher-ledger" aria-label="Footage ledger">
@@ -294,6 +323,7 @@ export default function PublisherLedger({ request, uploading, onGrade }: Props) 
                       <Thumb clip={key} record={c} />
                       <b>{/^DJI_\d{14}_(\d+)/.exec(c.name)?.[1] ?? c.name.replace(/\.[^.]+$/, "")}</b>
                       {bytes ? <small>{fileSize(bytes)}</small> : null}
+                      <Films names={films.get(key) ?? []} posted={posted} statsHref={statsHref} />
                       {lost(c) ? <span className="note">No copy left</span> : null}
                     </td>
                     <td className="dim">{(c.profile && PROFILES[c.profile]) ?? "—"}</td>

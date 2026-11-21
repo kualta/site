@@ -108,6 +108,12 @@ const patch = (f) =>
 beforeAll(async () => {
   if (!usable) return;
   mkdirSync(original, { recursive: true });
+  // A film being made on this Mac, using a clip from Movies/Original (its graded copy, under the same name).
+  const film = join(movies, "OpenFilm/Projects/014-walk");
+  mkdirSync(join(film, "assets"), { recursive: true });
+  writeFileSync(join(film, "film.html"), "<!doctype html>");
+  writeFileSync(join(film, "assets/DJI_20260203101500_0007_D.mp4"), "graded copy");
+  writeFileSync(join(film, "assets/song.mp3"), "not footage");
   mkdirSync(join(data, "luts/agx"), { recursive: true });
   mkdirSync(join(camera, "DJI_001"), { recursive: true });
   clip(join(original, name), "D-Log2");
@@ -282,6 +288,12 @@ test.if(usable)("keeps a ledger of every clip and where its copies are, sent who
   const jpeg = site.thumbs.get("DJI_20260203101500_0007_D");
   expect(jpeg.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
   expect(marked.clips.DJI_20260101120000_0099_D.thumb).toBeUndefined();
+
+  // The films: one on this Mac, one only the archive holds.
+  expect(marked.projects).toEqual({
+    "001-film": { clips: ["DJI_20260101120000_0099_D"], local: false, archived: true },
+    "014-walk": { clips: ["DJI_20260203101500_0007_D"], local: true, archived: false },
+  });
 }, 60_000);
 
 test.if(usable)("finds a clip's day by its name, and lets only the composer frame the app", async () => {

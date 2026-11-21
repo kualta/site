@@ -316,6 +316,8 @@
 .publisher-ledger-table .dim, .publisher-ledger-table .no, .publisher-ledger-table small { color:var(--publisher-muted); }
 .publisher-ledger-table .clip b { font-weight:400; font-variant-numeric:tabular-nums; }
 .publisher-ledger-table .clip small { margin-left:8px; font-size:12px; }
+.publisher-ledger-table .films { color:var(--publisher-muted); font-size:12px; }
+.publisher .publisher-ledger-table .films a { text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--publisher-edge); }
 .publisher-ledger-table .note { margin-left:8px; color:var(--publisher-danger); font-size:12px; }
 .publisher-ledger-table .old { color:var(--publisher-warning); font-size:12px; }
 .publisher-ledger-table .busy { color:var(--publisher-ink); }
@@ -571,6 +573,7 @@
 .publisher-pipeline-info { display:grid; gap:2px; }
 .publisher-pipeline-info strong { display:-webkit-box; font-weight:400; font-size:15px; line-height:1.3; overflow:hidden; overflow-wrap:anywhere; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
 .publisher-pipeline-info small { color:var(--publisher-muted); font-size:12px; }
+.publisher-pipeline-info .publisher-pipeline-footage { overflow-wrap:anywhere; }
 .publisher-pipeline-notes { display:-webkit-box; overflow:hidden; color:var(--publisher-muted); font-size:13px; line-height:1.45; white-space:pre-line; overflow-wrap:anywhere; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
 /* With a picture, the picture is the card and what it is sits over its top. Videos are vertical; photos 4:5. */
 .publisher .publisher-pipeline-card[data-picture] .publisher-pipeline-open { padding:0; border:0; background:#000; }

@@ -133,6 +133,28 @@ test("a clip is followed off the card, through grading, onto YouTube and into th
   expect(kept.archiveAt).toBe("2026-11-19T11:00:00Z");
 });
 
+test("a film's clips come from its project on this Mac and from the archive, kept between askings", () => {
+  const card = {
+    name: "Pocket 4P",
+    mounted: true,
+    clips: [
+      { name: `${A}.MP4`, size: 1000 },
+      { name: `${B}.MP4`, size: 900 },
+    ],
+  };
+  // A clip the ledger doesn't know (a phone recording dropped in) isn't one of the film's.
+  const projects = [{ name: "014-walk", files: [`${A}.mp4`, "IMG_9999.MOV"] }];
+  const archive = [{ name: `${B}.mp4`, size: 50, sha256: "cd", project: "013-maybe-later" }];
+  let ledger = mergeLedger(null, seen("2026-11-20T10:00:00Z", { camera: card, projects, archive }));
+  expect(ledger.projects).toEqual({
+    "013-maybe-later": { clips: [B], local: false, archived: true },
+    "014-walk": { clips: [A], local: true, archived: false },
+  });
+  // The archive not asked this time, and the walk film gone from the Mac without being archived.
+  ledger = mergeLedger(ledger, seen("2026-11-20T10:00:30Z", { camera: card, projects: [] }));
+  expect(ledger.projects).toEqual({ "013-maybe-later": { clips: [B], local: false, archived: true } });
+});
+
 test("clips only the archive or YouTube still has get records, and an archived original counts as the original", () => {
   const mac = [{ name: "IMG_4857.MOV", size: 2780, mtime: new Date(2026, 9, 30, 20, 15, 4).getTime() }];
   const archive = [

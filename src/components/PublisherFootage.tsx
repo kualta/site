@@ -40,6 +40,8 @@ interface Props {
   onAccounts: () => void;
   /** Opens a clip in the Grade tab. */
   onGrade: (clip: string) => void;
+  /** Where a post's numbers are. */
+  statsHref: (job: string) => string;
 }
 
 /** The laptop reports every 5 seconds during an upload and every 10 otherwise; older than this, it hasn't started. */
@@ -100,7 +102,7 @@ function noticeFor(
  * footage going up to the footage archive's YouTube channel. The laptop uploads only while this tab is open, so it
  * says so on opening and every 30 seconds, and says it closed on leaving.
  */
-export default function PublisherFootage({ request, online, connected, onAccounts, onGrade }: Props) {
+export default function PublisherFootage({ request, online, connected, onAccounts, onGrade, statsHref }: Props) {
   const [reply, setReply] = useState<Reply | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -244,7 +246,12 @@ export default function PublisherFootage({ request, online, connected, onAccount
           {!fresh && <p className="publisher-note">As of {when(status.at)}</p>}
         </>
       )}
-      <PublisherLedger request={request} uploading={current ? { name: current.name, share } : null} onGrade={onGrade} />
+      <PublisherLedger
+        request={request}
+        uploading={current ? { name: current.name, share } : null}
+        onGrade={onGrade}
+        statsHref={statsHref}
+      />
     </section>
   );
 }

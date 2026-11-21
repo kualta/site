@@ -495,6 +495,15 @@ first, each linked to the post there, with a total and a link to Analytics. Belo
 notes (script, shots, links) and stage, plus **Delete**, and **Compose** at Edit ready. Changing
 the stage there works on a phone, where cards don't drag.
 
+**Footage** names what the piece is made from: a film (an OpenFilm project the footage ledger knows,
+on the Mac or archived) or, before there's a film, a shoot day. Until it's posted, its card then
+says how that footage stands from the ledger: `014-walk · 24 clips · 18 graded · 3 at risk` (log
+clips count toward graded; at risk is no copy off the Mac and the card). A film not in the ledger yet
+says so. The links are one small document in the archive (`pipeline/footage-links.json`, read with
+`GET footage/links` and set a piece at a time with `PUT footage/links/<piece>`), so pieces gained
+them without a D1 column. The Footage tab names each clip's films, and links a film to its post's
+numbers once a piece naming it is posted.
+
 **Compose** opens the composer linked to that piece (`?content=<id>`), saving any edits first. The
 composer's **Pipeline** field shows the link, and it can link any piece that isn't posted yet,
 including from a draft. A draft saved from the composer keeps its link.

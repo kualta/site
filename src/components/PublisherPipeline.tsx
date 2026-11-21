@@ -9,6 +9,7 @@ import {
   type PiecePost,
   type Stage,
 } from "@/lib/publisher/content";
+import { dayOf, type FootageLink, footageLine, type Ledger, linkedClips } from "@/lib/publisher/ledger";
 import { combined, metricValue, type Metric } from "@/lib/publisher/metrics";
 import { platformNames } from "@/lib/publisher/presets";
 import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
@@ -49,18 +50,42 @@ const statColumns: [Metric, string][] = [
 ];
 const YOUTUBE_STILL = "https://i.ytimg.com/";
 
+/** A piece's footage, as its card and editor say it: the film's or the day's clips, how many graded and at risk. */
+function footageText(link: FootageLink | undefined, ledger: Ledger | null) {
+  if (!link) return null;
+  const clips = linkedClips(link, ledger);
+  if (clips === null) return link.project ? `${link.project} · not seen yet` : null;
+  return `${link.project ?? dayName(link.day ?? "")} · ${footageLine(clips)}`;
+}
+const dayName = (day: string) =>
+  new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+/** The value of the editor's Footage choice for a link, and back. */
+const choiceOf = (link: FootageLink | undefined) => {
+  if (link?.project) return `project:${link.project}`;
+  if (link?.day) return `day:${link.day}`;
+  return "";
+};
+function linkOf(choice: string): FootageLink {
+  if (choice.startsWith("project:")) return { project: choice.slice("project:".length) };
+  if (choice.startsWith("day:")) return { day: choice.slice("day:".length) };
+  return {};
+}
+
 /**
  * A piece on the board. Once posted it's its post's picture (kept thumbnail, cover, YouTube still or first upload,
  * whichever loads) with what it is over the top; until then, or without a picture, its title and notes.
  */
 function Card({
   piece,
+  footage,
   carried,
   onOpen,
   onDragStart,
   onDragEnd,
 }: {
   piece: Content;
+  /** Its footage in a line, until it's posted. */
+  footage: string | null;
   carried: boolean;
   onOpen: () => void;
   onDragStart: () => void;
@@ -123,6 +148,7 @@ function Card({
             <time dateTime={new Date(piece.stage_at).toISOString()}>{since(piece.stage_at)}</time>
             {views !== null && ` · ${compact.format(views)} views`}
           </small>
+          {footage && !post && <small className="publisher-pipeline-footage">{footage}</small>}
         </span>
         {!picture && piece.notes && <span className="publisher-pipeline-notes">{piece.notes}</span>}
       </button>
@@ -209,11 +235,18 @@ function PieceEditor({
   onDeleted,
   onCompose,
   statsHref,
+  ledger,
+  link,
+  onLinked,
 }: Pick<Props, "request" | "onError" | "statsHref" | "onCompose"> & {
   piece: Content;
   onClose: () => void;
   onSaved: (piece: Content) => void;
   onDeleted: (id: string) => void;
+  /** The footage ledger, for the films and shoot days a piece can name; null until read. */
+  ledger: Ledger | null;
+  link: FootageLink | undefined;
+  onLinked: (links: Record<string, FootageLink>) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -222,14 +255,29 @@ function PieceEditor({
   const [title, setTitle] = useState(piece.title);
   const [notes, setNotes] = useState(piece.notes);
   const [stage, setStage] = useState<Stage>(piece.stage);
+  const [footage, setFootage] = useState(choiceOf(link));
   const [busy, setBusy] = useState(false);
-  const changed = title.trim() !== piece.title || notes !== piece.notes || stage !== piece.stage;
+  const edited = title.trim() !== piece.title || notes !== piece.notes || stage !== piece.stage;
+  const relinked = footage !== choiceOf(link);
+  const changed = edited || relinked;
+  // Films newest first (their names start with a number), the one named kept even before the ledger has it; then
+  // the days clips were shot on, newest first.
+  const films = [...new Set([...Object.keys(ledger?.projects ?? {}), ...(link?.project ? [link.project] : [])])].sort(
+    (a, b) => b.localeCompare(a),
+  );
+  const days = new Map<string, number>();
+  for (const clip of Object.values(ledger?.clips ?? {})) {
+    const day = dayOf(clip);
+    if (day) days.set(day, (days.get(day) ?? 0) + 1);
+  }
+  if (link?.day && !days.has(link.day)) days.set(link.day, 0);
   /** Saves what changed; false when it couldn't. */
   async function save() {
     setBusy(true);
     onError("");
     try {
-      if (changed) onSaved(await request(`content/${piece.id}`, { title, notes, stage }, "PATCH"));
+      if (edited) onSaved(await request(`content/${piece.id}`, { title, notes, stage }, "PATCH"));
+      if (relinked) onLinked((await request(`footage/links/${piece.id}`, linkOf(footage), "PUT")).links);
       return true;
     } catch (error) {
       onError((error as Error).message);
@@ -307,6 +355,33 @@ function PieceEditor({
             <small className="publisher-note">Moving it lets go of the post it went out as, and its stats.</small>
           )}
         </label>
+        <label>
+          Footage
+          <select value={footage} disabled={busy} onChange={(event) => setFootage(event.target.value)}>
+            <option value="">None</option>
+            {films.length > 0 && (
+              <optgroup label="Films">
+                {films.map((film) => (
+                  <option key={film} value={`project:${film}`}>
+                    {film}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {days.size > 0 && (
+              <optgroup label="Shoot days">
+                {[...days]
+                  .sort(([a], [b]) => b.localeCompare(a))
+                  .map(([day, clips]) => (
+                    <option key={day} value={`day:${day}`}>
+                      {dayName(day)} · {clips} {clips === 1 ? "clip" : "clips"}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+          {footage && <small className="publisher-note">{footageText(linkOf(footage), ledger)}</small>}
+        </label>
         <div className="publisher-pipeline-editor-foot">
           <button type="button" disabled={busy} onClick={() => void remove()}>
             <TrashIcon size={16} />
@@ -380,6 +455,27 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
       document.removeEventListener("visibilitychange", shown);
     };
   }, [request, onError, postsVersion]);
+  // Each piece's footage (a film or a shoot day) and the ledger saying how it stands; the board works without them.
+  const [ledger, setLedger] = useState<Ledger | null>(null);
+  const [links, setLinks] = useState<Record<string, FootageLink>>({});
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      if (document.hidden) return;
+      request("footage/ledger")
+        .then((next: Ledger) => active && setLedger(next))
+        .catch(() => {});
+      request("footage/links")
+        .then((next: { links: Record<string, FootageLink> }) => active && setLinks(next.links))
+        .catch(() => {});
+    };
+    load();
+    document.addEventListener("visibilitychange", load);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", load);
+    };
+  }, [request]);
   const put = (piece: Content) => setItems((list) => newestFirst([piece, ...list.filter((p) => p.id !== piece.id)]));
   async function add() {
     if (!idea.trim()) return;
@@ -478,6 +574,7 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
                       <Card
                         key={`${piece.id}:${piece.job_id}`}
                         piece={piece}
+                        footage={footageText(links[piece.id], ledger)}
                         carried={drag?.id === piece.id}
                         onOpen={() => setEditing(piece)}
                         // After the browser has its picture of the card, so the picture isn't the faded original.
@@ -505,6 +602,9 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
           onClose={() => setEditing(null)}
           onSaved={put}
           onDeleted={(id) => setItems((list) => list.filter((piece) => piece.id !== id))}
+          ledger={ledger}
+          link={links[editing.id]}
+          onLinked={setLinks}
         />
       )}
     </section>

@@ -79,7 +79,10 @@ unplugged (the Footage tab says as of when), and the archive between askings (ev
   what the footage archive put up;
 - Cloudflare: the archive's film projects, each manifest read once per archiving. A file of a clip's that's the
   original's size is the original; any other is a graded copy, the current one when it's the export's size (the same
-  goes for YouTube).
+  goes for YouTube);
+- films: the OpenFilm projects in `~/Movies/OpenFilm/Projects` (`GRADE_PROJECTS`) and in the archive, each with the
+  ledger's clips in its `assets/` and `zh/assets/` (`projects` in the ledger, with whether it's on this Mac and
+  archived). The composer's Pipeline pieces name a film or a shoot day and say how its clips stand.
 
 `ledger.json` is the ledger as last merged. Whenever anything in it changes it's sent whole to the site's archive
 (`ledger/footage.json`, through `helper/archive/ledger` on the helper's pairing), but only once the archive's copy has

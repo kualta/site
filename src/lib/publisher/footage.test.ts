@@ -91,3 +91,28 @@ test("the Footage tab reads the ledger and its pictures from the archive, as the
   // Without the archive bound there's nothing to read.
   expect((await footageResponse("footage/ledger", call("footage/ledger"), { media }))?.status).toBe(404);
 });
+
+test("a Pipeline piece names its film, or a shoot day before there's one, and can let go of it", async () => {
+  const { bucket: media } = memoryMedia();
+  const { bucket: archive } = memoryArchive();
+  const send = async (path: string, method = "GET", body?: unknown) => {
+    const response = await footageResponse(path, call(path, method, body), { media, archive });
+    return { status: response?.status, data: (await response?.json()) as any };
+  };
+  const piece = "00000000-0000-4000-8000-000000000001";
+  const other = "00000000-0000-4000-8000-000000000002";
+  expect((await send("footage/links")).data).toEqual({ links: {} });
+  await send(`footage/links/${piece}`, "PUT", { project: "013-maybe-later" });
+  await send(`footage/links/${other}`, "PUT", { day: "2026-11-15" });
+  expect((await send("footage/links")).data.links).toEqual({
+    [piece]: { project: "013-maybe-later" },
+    [other]: { day: "2026-11-15" },
+  });
+  // A film made since takes the shoot day's place; naming nothing lets go.
+  await send(`footage/links/${other}`, "PUT", { project: "014-walk" });
+  await send(`footage/links/${piece}`, "PUT", {});
+  expect((await send("footage/links")).data.links).toEqual({ [other]: { project: "014-walk" } });
+  for (const body of [{ project: "../x" }, { day: "15 Nov" }, { project: "a", day: "2026-11-15" }])
+    expect((await send(`footage/links/${piece}`, "PUT", body)).status).toBe(400);
+  expect((await send("footage/links/not-a-piece", "PUT", { day: "2026-11-15" })).status).toBe(400);
+});
