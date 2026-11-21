@@ -121,14 +121,15 @@ export function scopeDenied(error) {
 
 const ascii = (bytes, at, length) => String.fromCharCode(...bytes.subarray(at, at + length));
 /**
- * Whether an image carries EXIF or XMP, where a camera puts the place and time. The composer's thumbnails are drawn
+ * Whether an image carries EXIF, XMP, IPTC or a comment, where a camera or an editor puts the place, time and author. The composer's thumbnails are drawn
  * afresh and have none, but the site stores whatever it is sent, and a blob in the repository is public for good.
  */
 export function carriesMetadata(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-    // Segments up to the image data: APP1 holds both.
+    // Segments up to the image data: APP1 holds both; APP13 holds IPTC and COM a free comment, refused whatever they say.
     for (let at = 2; at + 4 <= bytes.length && bytes[at] === 0xff && bytes[at + 1] !== 0xda; ) {
+      if (bytes[at + 1] === 0xed || bytes[at + 1] === 0xfe) return true;
       if (bytes[at + 1] === 0xe1 && /^(Exif|http:\/\/ns\.adobe\.com\/)/.test(ascii(bytes, at + 4, 28))) return true;
       at += 2 + view.getUint16(at + 2);
     }
@@ -209,7 +210,7 @@ export async function applyPostRecord(plan, source, { authorization, api }) {
       const bytes = new Uint8Array(await (await api(`post-records/${plan.job}/thumbnail`)).arrayBuffer());
       if (createHash("sha256").update(bytes).digest("hex") !== source.thumbnail.sha256)
         throw new Error("The post's thumbnail changed meanwhile");
-      if (carriesMetadata(bytes)) throw new Error("The post's thumbnail carries EXIF or XMP metadata");
+      if (carriesMetadata(bytes)) throw new Error("The post's thumbnail carries EXIF, XMP, IPTC or comment metadata");
       const { data } = await agent.uploadBlob(bytes, { encoding: source.thumbnail.type });
       record = { ...record, thumbnail: data.blob };
     }

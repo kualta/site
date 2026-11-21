@@ -229,6 +229,56 @@ test("the thumbnail goes only with a copy that carries the post's own media", as
   expect((await postRecordSource(db, own))?.thumbnail).toMatchObject({ type: "image/png", size: 1 });
 });
 
+test("a cover's thumbnail goes only when a copy that is up shows the cover", async () => {
+  const { sql, db, job, target, remove } = fixture();
+  const zh = { title: "标题", text: "正文", topics: [] };
+  const covered = (payload: Record<string, unknown> = {}) => {
+    const id = job(1, { kind: "video", cover: "cover", ...payload });
+    sql.query("INSERT INTO publisher_thumbnails VALUES (?,?,?,?)").run(id, "image/png", new Uint8Array([1]), 1);
+    return id;
+  };
+  const thumbnail = async (id: string) => (await postRecordSource(db, id))?.thumbnail;
+
+  // Private on YouTube, the one place its cover shows; Bluesky picks its own frame.
+  const hidden = covered({ visibility: "PRIVATE" });
+  target(hidden, "youtube", "https://youtu.be/abcdefghijk");
+  target(hidden, "bluesky", bsky);
+  expect(await thumbnail(hidden)).toBeNull();
+
+  const shown = covered();
+  target(shown, "bluesky", bsky);
+  const instagram = target(shown, "instagram", "https://www.instagram.com/reel/abcde/");
+  expect(await thumbnail(shown)).toMatchObject({ size: 1 });
+  remove(instagram);
+  expect(await thumbnail(shown)).toBeNull();
+
+  const linked = covered();
+  target(linked, "bluesky", bsky);
+  target(linked, "instagram", "https://www.instagram.com/reel/abcdf/", "linked");
+  expect(await thumbnail(linked)).toBeNull();
+
+  // Xiaohongshu was given the Chinese video's cover, not the post's.
+  const translated = covered({ variants: { xiaohongshu: { ...zh, tags: [], cover: "zh-cover" } } });
+  target(translated, "bluesky", bsky);
+  target(translated, "xiaohongshu", "https://www.xiaohongshu.com/explore/0123456789abcdef01234567");
+  expect(await thumbnail(translated)).toBeNull();
+
+  const uncovered = job(2, { kind: "video" });
+  sql.query("INSERT INTO publisher_thumbnails VALUES (?,?,?,?)").run(uncovered, "image/png", new Uint8Array([1]), 1);
+  target(uncovered, "bluesky", bsky);
+  expect(await thumbnail(uncovered)).toMatchObject({ size: 1 });
+});
+
+test("YouTube's title counts only on a video", async () => {
+  const { db, job, target } = fixture();
+  const photo = job(1, { kind: "photo" });
+  target(photo, "youtube", "https://www.youtube.com/post/abcdefg");
+  const video = job(2, { kind: "video" });
+  target(video, "youtube", "https://youtu.be/abcdefghijk");
+  expect((await postRecordSource(db, photo))?.post?.title).toBe("");
+  expect((await postRecordSource(db, video))?.post?.title).toBe("Title");
+});
+
 test("a link pasted by hand loses its share tracking, and its time is not a publish time", async () => {
   const { db, job, target } = fixture();
   const id = job(1);

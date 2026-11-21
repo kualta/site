@@ -263,10 +263,13 @@ const webp = (...chunks) =>
     ]),
   ]);
 
-test("a thumbnail carrying EXIF or XMP is recognised in each format", () => {
+test("a thumbnail carrying EXIF, XMP, IPTC or a comment is recognised in each format", () => {
   expect(carriesMetadata(jpeg(segment(0xe0, "JFIF\0"), segment(0xdb, "Exif\0\0 in a table")))).toBe(false);
   expect(carriesMetadata(jpeg(segment(0xe0, "JFIF\0"), segment(0xe1, "Exif\0\0GPS")))).toBe(true);
   expect(carriesMetadata(jpeg(segment(0xe1, "http://ns.adobe.com/xap/1.0/\0<x/>")))).toBe(true);
+  expect(carriesMetadata(jpeg(segment(0xe0, "JFIF\0"), segment(0xed, "Photoshop 3.0\x008BIM")))).toBe(true);
+  expect(carriesMetadata(jpeg(segment(0xe0, "JFIF\0"), segment(0xfe, "shot at home")))).toBe(true);
+  expect(carriesMetadata(jpeg(segment(0xe0, "JFIF\0"), segment(0xe2, "ICC_PROFILE\0")))).toBe(false);
   expect(carriesMetadata(png(["IHDR", "eXIf in the pixels"], ["IDAT", "x"]))).toBe(false);
   expect(carriesMetadata(png(["IHDR", "x"], ["eXIf", "GPS"]))).toBe(true);
   expect(carriesMetadata(png(["iTXt", "XML:com.adobe.xmp\0<x/>"]))).toBe(true);
@@ -287,7 +290,7 @@ test("a thumbnail carrying metadata is never uploaded", async () => {
       authorization: { agent: repo(calls), scope },
       api: async () => new Response(bytes),
     }),
-  ).rejects.toThrow("carries EXIF or XMP metadata");
+  ).rejects.toThrow("carries EXIF, XMP, IPTC or comment metadata");
   expect(calls).toEqual([]);
 });
 

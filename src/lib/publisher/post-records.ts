@@ -1,7 +1,7 @@
 import type { NewsletterDB } from "../newsletter/types";
 import { publicationLink } from "./links";
 import type { Platform, PostKind } from "./presets";
-import { PostError, validId, type Post } from "./server";
+import { PostError, coverPlatforms, validId, type Post } from "./server";
 import { isTag, renderVariant } from "./variants";
 
 /**
@@ -53,12 +53,14 @@ const fullest: Platform[] = [
  * out, its short version and its Chinese version all differ from what the composer holds.
  */
 function shown(post: Post, platforms: Platform[]) {
-  let versions = fullest
+  const sent = fullest
     .filter((platform) => platforms.includes(platform))
     .map((platform) => ({ platform, ...(post.variants?.[platform] ?? renderVariant(platform, post)) }));
   // Xiaohongshu's version is a translation, so it speaks for the post only when nothing else is up.
-  if (versions.some((version) => version.platform !== "xiaohongshu"))
-    versions = versions.filter((version) => version.platform !== "xiaohongshu");
+  const others = sent.filter((version) => version.platform !== "xiaohongshu");
+  const versions = others.length ? others : sent;
+  // The thumbnail may be of the post's cover, which only some destinations show, and not one given its own.
+  const coverShown = sent.some((version) => coverPlatforms.includes(version.platform) && !version.cover);
   const tags = new Map<string, string>();
   for (const version of versions) {
     const written = (version.text.match(/#[\p{L}\p{N}_]+/gu) ?? []).map((tag) => tag.slice(1));
@@ -66,11 +68,14 @@ function shown(post: Post, platforms: Platform[]) {
       if (isTag(tag) && !tags.has(tag.toLowerCase())) tags.set(tag.toLowerCase(), tag);
   }
   return {
-    title: versions.find((version) => version.title)?.title ?? "",
+    // YouTube shows a title on a video only; its photo posts have none.
+    title:
+      versions.find((version) => version.title && (version.platform !== "youtube" || post.kind === "video"))?.title ??
+      "",
     text: versions[0]?.text ?? "",
     tags: [...tags.values()].slice(0, MAX_TAGS),
     // The thumbnail is of the post's own media, which a copy carrying another video doesn't show.
-    ownMedia: versions.some((version) => !version.video),
+    ownMedia: versions.some((version) => !version.video) && (!post.cover || coverShown),
   };
 }
 

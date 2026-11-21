@@ -634,13 +634,17 @@ The record never shows what no copy that is up shows. The site decides this
   Farcaster and X, which may have the short version, then Xiaohongshu's Chinese version when
   nothing else is up. Instagram, TikTok and YouTube show the tags at the end of the text, so they
   are in `text` there too. A post edited after a copy went out keeps that copy's words.
-- `title` is there only when Grain, YouTube or Xiaohongshu is up: nothing else shows one.
+- `title` is there only when Grain, a YouTube video or Xiaohongshu is up: nothing else shows one,
+  and a YouTube photo post has none.
 - `tags` are the ones those versions carry: written in the text, or kept beside it on Bluesky and
   Lens, or Xiaohongshu's topics.
 - A copy linked from History was written elsewhere, so it adds a link and no words. A post with
   only linked copies up has an empty `text` and no thumbnail.
 - The thumbnail is left out when the only copies up carry another video (Xiaohongshu's Chinese
-  one). The helper refuses to upload one that holds EXIF or XMP metadata.
+  one). For a post with a cover it may be the cover, so it goes only while a copy sent from here
+  is up on a destination that shows the post's cover (YouTube, TikTok, Instagram, Xiaohongshu,
+  Lens): a cover shown only on a private YouTube video stays out. The helper refuses to upload
+  one that holds EXIF, XMP, IPTC or a comment.
 - A link pasted by hand is reduced to the post's own address, without share parameters such as
   `?igsh=`, `?si=` or `xsec_token`.
 
