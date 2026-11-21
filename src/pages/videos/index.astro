@@ -1,10 +1,8 @@
 ---
 import { env, waitUntil } from "cloudflare:workers";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import StoriesTray from "@/components/StoriesTray.astro";
-import StoryViewer from "@/components/StoryViewer.astro";
 import VideoCard from "@/components/VideoCard.astro";
-import { getVideoLibrary, isShort, liveStories, type VideoLibrary } from "@/lib/videos";
+import { getVideoLibrary, isShort, type VideoLibrary } from "@/lib/videos";
 import "@/styles/videos.css";
 export const prerender = false;
 
@@ -17,8 +15,6 @@ try {
 const now = Date.now();
 const long = library?.videos.filter((video) => !isShort(video)) ?? [];
 const shorts = library?.videos.filter(isShort) ?? [];
-// Everyone sees the stories still up; signed in as the owner, the row goes on into every past day.
-const live = liveStories(library?.stories ?? [], now);
 Astro.response.headers.set("cache-control", library ? "public, max-age=60" : "no-store");
 ---
 <BaseLayout title="videos" description="Videos by kualta, published on Bluesky.">
@@ -30,7 +26,6 @@ Astro.response.headers.set("cache-control", library ? "public, max-age=60" : "no
         <a href="/videos">Try again</a>
       </div>
     )}
-    {library && <StoriesTray live={live} channel={library.channel} />}
     {library && !library.videos.length && <p class="videos-status">No videos yet.</p>}
     {long.length > 0 && (
       <section class="videos-section" aria-label="Long form">
@@ -47,5 +42,4 @@ Astro.response.headers.set("cache-control", library ? "public, max-age=60" : "no
       </section>
     )}
   </section>
-  <StoryViewer />
 </BaseLayout>

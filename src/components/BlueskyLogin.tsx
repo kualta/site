@@ -1,4 +1,4 @@
-import { CloseIcon } from "@/components/icons";
+import { CloseIcon, UserIcon } from "@/components/icons";
 import { type RefObject, useId, useRef, useState, useSyncExternalStore } from "react";
 import {
   getBlueskyAuthSnapshot,
@@ -11,10 +11,36 @@ import {
 export default function BlueskyLogin({
   compact = false,
   fullWidth = false,
+  icon = false,
   label,
-}: { compact?: boolean; fullWidth?: boolean; label?: string }) {
+}: {
+  compact?: boolean;
+  fullWidth?: boolean;
+  /** a round button showing the signed-in account's picture, or a person before signing in */
+  icon?: boolean;
+  label?: string;
+}) {
   const auth = useSyncExternalStore(subscribeBlueskyAuth, getBlueskyAuthSnapshot, getBlueskyAuthServerSnapshot);
   const dialog = useRef<HTMLDialogElement>(null);
+  if (icon)
+    return (
+      <div className="bluesky-login text-sm tracking-normal">
+        <button
+          type="button"
+          className="grid size-11 place-items-center overflow-hidden rounded-full hover:opacity-80 disabled:opacity-50"
+          aria-label={auth.profile ? `Bluesky account @${auth.profile.handle}` : "Log in with Bluesky"}
+          onClick={() => dialog.current?.showModal()}
+          disabled={auth.loading}
+        >
+          {auth.profile?.avatar ? (
+            <img src={auth.profile.avatar} alt="" className="size-full object-cover" />
+          ) : (
+            <UserIcon size={22} aria-hidden="true" />
+          )}
+        </button>
+        <BlueskyLoginDialog ref={dialog} />
+      </div>
+    );
   return (
     <div className={`bluesky-login text-sm tracking-normal ${fullWidth ? "w-full" : ""}`}>
       <button

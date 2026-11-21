@@ -396,15 +396,14 @@ up to twelve older ones, oldest first, so a backlog goes over a few hours withou
 only so many videos a day; reaching that ends the run and the next one carries on. Its record key comes from the
 story's id, so a run stopped after posting finds the post instead of posting it twice; `index.json` notes each post.
 
-**On the site.** kualta.dev/videos reads the account's media posts and keeps those tagged as stories (`pinkleapStory`
-or Pinksky's `pinkskyStory`) out of the videos; the activity feed leaves them out too. Everyone sees the stories still
-up (under a day old) as one ring with the account's picture, above the videos. **Log in with Bluesky** sits beside it,
-using the site's Bluesky sign-in; signed in as kualta, the row shows every day of past stories, read page by page from
-Bluesky in the owner's browser: the earliest day on the left and the stories still up at the right end, where the row
-opens, so going right is always going later. **Calendar** beside it lays the same days out by month, as Instagram's
-archive does: a grid per month from the first day with stories to the last, each such day showing its picture and
-opening its stories. The browser remembers whether the calendar was left open. Signing out takes all of it away again.
-The data is public on Bluesky anyway; this only decides what the page shows. On /feed the same picture sits left of the
+**On the site.** kualta.dev reads the account's media posts and keeps those tagged as stories (`pinkleapStory` or
+Pinksky's `pinkskyStory`) out of /videos and the activity feed. They have their own page, kualta.dev/stories. Everyone
+sees the stories still up (under a day old) there, as one ring with the account's picture. The Bluesky account sits in
+the top-right corner as a round button, inside that corner's bracket and at the bell's inset: a person before signing
+in, the account's picture after, opening the site's Bluesky sign-in. Signed in as kualta, a calendar of every day with
+stories follows, read page by page from Bluesky in the owner's browser and laid out by month as Instagram's archive
+does: the newest month first, a grid per month from the first day with stories to the last, each such day a tall cell
+showing its picture and opening its stories. Signing out takes the calendar away again. The data is public on Bluesky anyway; this only decides what the page shows. On /feed the same picture sits left of the
 header. Its ring is colored while a story still up hasn't been watched in that browser, grey once all have, and gone
 without one: Instagram's style in the brand's pink (`--primary`) and deeper pinks of its hue, the one place the site uses
 color as decoration. That pink is a tint near white, so on the light page the ring ends on a deeper shade of it instead.
