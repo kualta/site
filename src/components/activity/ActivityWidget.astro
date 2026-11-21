@@ -23,7 +23,7 @@ const lastSeenText = feed?.lastSeenAt ? formatLastSeenTime(feed.lastSeenAt) : nu
 // The tier comes from lastSeenAt, not feed.presence, so a head stored under older tier names still renders.
 const presenceChance = feed && feed.presence !== "unknown" ? getPresenceChance(feed.lastSeenAt) : null;
 const presence = PRESENCE_PARTS[presenceChance === null ? "unknown" : getPresenceTier(presenceChance)];
-const presenceDetail = presenceChance === null ? "not checked for a day" : formatPresenceChance(presenceChance);
+const presenceDetail = presenceChance === null ? "?" : formatPresenceChance(presenceChance);
 // The picture from one of kualta's own posts in the feed; without one, the story ring's script reads it from Bluesky.
 const ownPost = feed?.events.find(
   (event): event is BlueskyActivity => event.source === "bluesky" && event.post.author.did === identity.did,
@@ -70,11 +70,8 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
               class="presence-tooltip rounded-xl bg-secondary p-3 text-xs font-normal
                      text-secondary-text drop-shadow-sm dark:bg-dark-secondary"
             >
-              Chance kualta is around
-              <span class="mt-1 block tabular-nums text-text dark:text-dark-text" data-presence-detail>
-                {presenceDetail}
-              </span>
-              <span class="mt-1 block">falls the longer kualta is quiet on GitHub and Bluesky</span>
+              Chance kualta is alive{" "}
+              <span class="tabular-nums text-text dark:text-dark-text" data-presence-detail>{presenceDetail}</span>
             </span>
           </span>
         </h2>
@@ -144,7 +141,7 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
     inset-block-start: calc(100% + 0.5rem);
     inset-inline-start: 0;
     z-index: 20;
-    width: 16rem;
+    width: max-content;
     max-width: min(90vw, 16rem);
     visibility: hidden;
     opacity: 0;
@@ -361,7 +358,7 @@ const author = { name: "kualta", avatar: ownPost?.post.author.avatar };
   /** the tooltip gives the chance itself, which keeps falling while the words hold still */
   function describePresence(widget: HTMLElement, chance: number | null): void {
     const detail = widget.querySelector<HTMLElement>("[data-presence-detail]");
-    if (detail) detail.textContent = chance === null ? "not checked for a day" : formatPresenceChance(chance);
+    if (detail) detail.textContent = chance === null ? "?" : formatPresenceChance(chance);
   }
 
   /** only the status half carries the sweep, so the two halves are set apart */
