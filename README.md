@@ -32,7 +32,8 @@ its token is between two seconds and an hour old. The form waits out the rest of
 two seconds itself. A signup is also dropped when it has no `Origin` header, when
 the hidden `website` honeypot field is filled in, or when the browser reports
 `navigator.webdriver`. Dropped signups get the same **You’re subscribed.** answer
-but are never stored or announced on Discord; the Worker logs
+but are never stored. Discord gets **Newsletter signup dropped: address (reason)**,
+at most 20 an hour so a flood can't bury the channel, and the Worker logs
 `newsletter_signup_blocked` with the reason (`no_origin`, `honeypot`, `automated`,
 `token_missing`, `token_invalid`, `token_early`, `token_expired`, `token_reused`).
 
