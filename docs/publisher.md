@@ -344,8 +344,8 @@ footage archive** in the composer's Accounts. It signs in with a Chrome profile 
 own account) before Finish. The helper keeps the channel the window is on, with the page id that
 picks it among a Google account's channels, and refuses the channel the YouTube destination posts to.
 
-The helper uploads only while the composer's **Archive** tab (post.kualta.dev/archive) is open, so
-the uploads never take the network unseen. The tab says it's open when it opens and every 30
+The helper uploads only while the composer's **Footage** tab (post.kualta.dev/footage; its old
+address, /archive, still opens it) is open, so the uploads never take the network unseen. The tab says it's open when it opens and every 30
 seconds after, and says it closed when it's left (another tab, a reload, the window closed); a tab
 that goes quiet without saying so counts as closed after 150 seconds. The helper asks every 10
 seconds and, while the tab is open, sends it what's up every 5 seconds during an upload: the clip
@@ -376,10 +376,21 @@ phone number at youtube.com/verify, or longer clips fail to process.
 **The footage ledger.** The grade app (`scripts/grade`) keeps a record of every clip: when it was
 recorded, its profile, its grade, and where its original (camera, Mac, Cloudflare) and graded copy
 (Mac, Cloudflare, YouTube) are, read from the card, `~/Movies`, `.publisher/footage.json` and the
-archive's projects. It sends the ledger whole to `ledger/footage.json` in the archive
-(`GET`/`PUT helper/archive/ledger`, on the pairing token, streamed like the archive's files and
-stored on the Standard class since it's rewritten as it changes) and shows it under **Ledger**.
-See `scripts/grade/README.md`.
+archive's projects. It sends the ledger whole to `ledger/footage.json` in the archive, and each
+clip's thumbnail once to `ledger/thumbs/<clip>.jpg` (`PUT helper/archive/ledger` and
+`ledger/thumbs/<clip>`, on the pairing token, streamed like the archive's files and stored on the
+Standard class since they're rewritten). The Footage tab shows it under the uploads, read through
+`GET footage/ledger` and `footage/thumbs/<clip>.jpg` (both streamed from the archive, pictures cached a
+day): every clip by day, newest first, with its grade, ✓ or – for each copy, the clip going up to
+YouTube with its share, and filters for clips at risk (no copy off the Mac and the card), not
+graded, not on YouTube and not in Cloudflare. A clip's **Grade** opens it in the Grade tab.
+
+**Grade tab.** post.kualta.dev/grade frames the grade app on the Mac (http://127.0.0.1:4777), so
+grading stays local: it reads the card and `~/Movies`, previews on the browser's GPU and exports with
+ffmpeg. The frame is allowed local network access (Chrome asks once to let post.kualta.dev reach
+this device); away from the Mac, or until that's allowed, the tab says so. Once opened it stays
+loaded while other tabs are shown, takes the composer's light or dark, and opens the clips Grade
+asks for. See `scripts/grade/README.md`.
 
 ## Instagram stories
 

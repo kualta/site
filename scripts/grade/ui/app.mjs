@@ -103,9 +103,6 @@ const state = {
   ledger: null,
   /** The ledger's clips by name without extension, any case. */
   ledgerByClip: new Map(),
-  /** The clips with a small picture at /media/ledger/<clip>.jpg, lowercase. */
-  ledgerThumbs: new Set(),
-  ledgerFilter: store.get("grade.ledgerFilter") ?? "all",
 };
 
 const viewer = new Viewer($("canvas"));
@@ -1132,45 +1129,25 @@ function renderStatus() {
   $("status").title = $("status").textContent;
 }
 
-// ---- ledger -------------------------------------------------------------------------------------------------------
+// ---- ledger and the composer ------------------------------------------------------------------------------------------
+// The ledger (every clip, its grade, where its copies are) is shown in the composer's Footage tab, post.kualta.dev/footage;
+// here it's the line under the selected clip saying where its copies are. The composer's Grade tab shows this app in a
+// frame: it asks for a clip to open, and says whether it's light or dark.
 
-/** A copy off this Mac and the card: in the Cloudflare archive, or on YouTube (re-encoded, but a copy). */
-const keptAway = (c) => c.original.cloudflare || Boolean(c.graded?.cloudflare) || Boolean(c.graded?.youtube);
-/** Losing this Mac or the card would lose it. */
-const atRisk = (c) => !keptAway(c);
-/** No copy of it left anywhere. */
-const lost = (c) => !c.original.camera && !c.original.mac && !c.graded?.mac && !keptAway(c);
-const LEDGER_FILTERS = {
-  all: () => true,
-  risk: atRisk,
-  ungraded: (c) => c.profile !== "rec709" && !c.graded,
-  youtube: (c) => Boolean(c.graded) && !c.graded.youtube,
-  cloudflare: (c) => !c.original.cloudflare && !c.graded?.cloudflare,
-};
-if (!LEDGER_FILTERS[state.ledgerFilter]) state.ledgerFilter = "all";
-const FILTER_NAMES = { all: "All", risk: "At risk", ungraded: "Not graded", youtube: "Not on YouTube", cloudflare: "Not in Cloudflare" };
-const ledgerOpen = () => !$("ledger").hidden;
-const when = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+/** The pages that may frame the app and talk to it; the server's frame-ancestors names the same. */
+const COMPOSERS = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
+const framed = window.parent !== window;
 
 let ledgerAt = 0;
-/** What the table's rows show, so they're built again only when it changes and their pictures don't flicker. */
-function rowsShow() {
-  const ledger = state.ledger?.ledger;
-  const camera = ledger?.camera;
-  return JSON.stringify([ledger?.clips ?? null, [...state.ledgerThumbs].sort(), camera?.mounted ? null : camera?.seenAt]);
-}
-let rowsShown = "";
 async function loadLedger() {
   ledgerAt = Date.now();
   try {
     state.ledger = await (await api("/api/ledger")).json();
-  } catch (e) {
-    state.ledger = { ledger: state.ledger?.ledger ?? null, cloud: false, error: String(e.message || e), thumbs: [...state.ledgerThumbs] };
+  } catch {
+    return;
   }
   state.ledgerByClip = new Map(Object.entries(state.ledger.ledger?.clips ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
-  state.ledgerThumbs = new Set(state.ledger.thumbs ?? []);
   renderKept();
-  if (ledgerOpen()) renderLedger({ rows: rowsShow() !== rowsShown });
 }
 
 /** Where the selected clip's copies are, in a line under its details. */
@@ -1192,179 +1169,45 @@ function renderKept() {
   $("clip-kept").textContent = text;
 }
 
-/** A yes or no in a location column: an earlier grade, and the card's clips while it's unplugged, say so. */
-function markCell(value, { first = false, asOf = null, href = null } = {}) {
-  const td = document.createElement("td");
-  td.className = first ? "mark first" : "mark";
-  const el = document.createElement(href && value ? "a" : "span");
-  if (href && value) Object.assign(el, { href, target: "_blank", rel: "noreferrer" });
-  if (value === "earlier") {
-    el.className = "old";
-    el.textContent = "Earlier";
-    el.title = "An earlier grade";
-  } else if (value) {
-    el.textContent = "✓";
-    el.setAttribute("aria-label", "Yes");
-    if (asOf) {
-      el.className = "asof";
-      el.title = asOf;
-    }
-  } else {
-    el.className = "no";
-    el.textContent = "–";
-    el.setAttribute("aria-label", "No");
+/** Opens a clip by its name, in the card's day holding it or else Movies/Original's, and selects it. */
+async function openClip(clip) {
+  try {
+    const { source, name } = await (await api(`/api/find?clip=${encodeURIComponent(clip)}`)).json();
+    if (state.source !== source) await openSource(source);
+    state.selected = new Set([name]);
+    setPrimary(name);
+    document.querySelector(`.clip[data-name="${CSS.escape(name)}"]`)?.scrollIntoView({ block: "nearest" });
+  } catch (e) {
+    showError(e);
   }
-  td.append(el);
-  return td;
 }
+/** A clip the address asks for: #clip=DJI_….MP4. */
+function openFromAddress() {
+  const clip = new URLSearchParams(location.hash.slice(1)).get("clip");
+  if (clip) openClip(clip);
+}
+window.addEventListener("hashchange", openFromAddress);
 
-function gradeText(c) {
-  if (c.graded) return c.graded.look ?? "Graded";
-  if (c.gradePending) return "Not exported";
-  if (c.profile === "rec709") return "Not log";
-  return c.profile ? "Not graded" : "—";
+/** The composer framing the app, when it's one the app talks to. Chrome and Safari say which page that is. */
+function composer() {
+  const origin = location.ancestorOrigins?.[0];
+  return origin && COMPOSERS.includes(origin) ? origin : null;
 }
-
-/** A clip's small picture: this Mac's, else its YouTube video's, else an empty frame the same size. */
-function ledgerThumb(key, c) {
-  const blank = () => Object.assign(document.createElement("span"), { className: "ledger-thumb" });
-  const video = c.graded?.youtube?.video;
-  let src = null;
-  if (state.ledgerThumbs.has(key.toLowerCase())) src = `/media/ledger/${encodeURIComponent(key)}.jpg`;
-  else if (video) src = `https://i.ytimg.com/vi/${encodeURIComponent(video)}/default.jpg`;
-  if (!src) return blank();
-  const img = Object.assign(new Image(), { className: "ledger-thumb", alt: "", loading: "lazy", decoding: "async", src });
-  img.addEventListener("error", () => img.replaceWith(blank()), { once: true });
-  return img;
+if (framed) {
+  document.documentElement.classList.add("framed");
+  window.addEventListener("message", (event) => {
+    if (!COMPOSERS.includes(event.origin) || event.source !== window.parent) return;
+    const { type, clip, theme } = event.data ?? {};
+    if (type === "open" && typeof clip === "string") openClip(clip);
+    // Light or dark as the composer is, rather than as the Mac is set.
+    if (type === "theme" && (theme === "light" || theme === "dark")) document.documentElement.dataset.theme = theme;
+  });
 }
-
-function ledgerRow(key, c, camera) {
-  const tr = document.createElement("tr");
-  if (lost(c)) tr.dataset.risk = "lost";
-  else if (atRisk(c)) tr.dataset.risk = "risk";
-  const td = (text, className = "") => {
-    const cell = document.createElement("td");
-    cell.className = className;
-    cell.textContent = text;
-    return cell;
-  };
-  const clipCell = document.createElement("td");
-  clipCell.className = "clip-cell";
-  clipCell.title = c.name;
-  const number = document.createElement("b");
-  number.textContent = /^DJI_\d{14}_(\d+)/.exec(c.name)?.[1] ?? c.name.replace(/\.[^.]+$/, "");
-  clipCell.append(ledgerThumb(key, c), number);
-  // The original's size, or the graded copy's for a clip whose original was never seen here.
-  const bytes = c.size ?? c.graded?.size;
-  if (bytes) {
-    const small = document.createElement("small");
-    small.textContent = fileSize(bytes);
-    clipCell.append(small);
-  }
-  if (lost(c)) {
-    const note = document.createElement("span");
-    note.className = "note";
-    note.textContent = "No copy left";
-    clipCell.append(note);
-  }
-  const youtube = c.graded?.youtube;
-  // The card's clips are as of when it was last plugged in.
-  const asOf = !camera.mounted && camera.seenAt ? `As of ${when(camera.seenAt)}, when the ${camera.name} was last plugged in` : null;
-  tr.append(
-    td(c.recorded?.slice(11, 16) ?? "", "dim"),
-    clipCell,
-    td(PROFILE_NAMES[c.profile] ?? "—", "dim"),
-    td(gradeText(c), c.graded ? "" : "dim"),
-    markCell(c.original.camera, { first: true, asOf }),
-    markCell(c.original.mac),
-    markCell(c.original.cloudflare),
-    markCell(c.graded?.mac, { first: true }),
-    markCell(c.graded?.cloudflare),
-    markCell(youtube && (youtube.current ? true : "earlier"), { href: youtube && `https://youtu.be/${youtube.video}` }),
-  );
-  return tr;
+/** Tells the framing composer the app is there, so it shows it. */
+function sayReady() {
+  const origin = framed && composer();
+  if (origin) window.parent.postMessage({ type: "grade-ready" }, origin);
 }
-
-/** The ledger's header, and its rows unless `rows` is false (nothing they show changed). */
-function renderLedger({ rows: rebuild = true } = {}) {
-  const info = state.ledger;
-  const ledger = info?.ledger;
-  const entries = Object.entries(ledger?.clips ?? {});
-  const clips = entries.map(([, c]) => c);
-  const keys = new Map(entries.map(([key, c]) => [c, key]));
-  const parts = [];
-  if (!ledger) parts.push(info?.error ?? "Reading…");
-  else {
-    parts.push(`${clips.length} clip${clips.length === 1 ? "" : "s"}`);
-    if (info.error) parts.push(info.error);
-    else if (!info.cloud) parts.push("On this Mac only: pair the crossposter helper to save it to Cloudflare");
-    else if (info.savedAt) parts.push(`Saved to Cloudflare ${when(info.savedAt)}`);
-    else parts.push("Saving to Cloudflare…");
-  }
-  $("ledger-sync").textContent = parts.join(" · ");
-  for (const b of $("ledger-filter").querySelectorAll("button")) {
-    const key = b.dataset.filter;
-    b.textContent = `${FILTER_NAMES[key]} ${clips.filter(LEDGER_FILTERS[key]).length}`;
-    b.setAttribute("aria-pressed", String(key === state.ledgerFilter));
-  }
-  if (!rebuild) return;
-  rowsShown = rowsShow();
-  // Newest day first; within a day, in the order they were shot.
-  const shown = clips
-    .filter(LEDGER_FILTERS[state.ledgerFilter])
-    .sort((a, b) => {
-      const [da, db] = [a.recorded?.slice(0, 10) ?? "", b.recorded?.slice(0, 10) ?? ""];
-      return da === db ? (a.recorded ?? "").localeCompare(b.recorded ?? "") : db.localeCompare(da);
-    });
-  const perDay = new Map();
-  for (const c of shown) {
-    const day = c.recorded?.slice(0, 10) ?? "";
-    perDay.set(day, (perDay.get(day) ?? 0) + 1);
-  }
-  const rows = [];
-  let day = null;
-  for (const c of shown) {
-    const d = c.recorded?.slice(0, 10) ?? "";
-    if (d !== day) {
-      day = d;
-      const tr = document.createElement("tr");
-      tr.className = "day";
-      const th = document.createElement("th");
-      th.colSpan = 10;
-      th.scope = "colgroup";
-      const date = d
-        ? new Date(`${d}T12:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" })
-        : "Date unknown";
-      const n = perDay.get(d);
-      th.textContent = `${date} · ${n} clip${n === 1 ? "" : "s"}`;
-      tr.append(th);
-      rows.push(tr);
-    }
-    rows.push(ledgerRow(keys.get(c), c, ledger.camera));
-  }
-  $("ledger-rows").replaceChildren(...rows);
-  $("ledger-empty").hidden = !ledger || shown.length > 0;
-}
-
-function setLedger(open) {
-  $("ledger").hidden = !open;
-  $("ledger-open").setAttribute("aria-expanded", String(open));
-  $("ledger-open").setAttribute("aria-pressed", String(open));
-  if (open) {
-    renderLedger();
-    loadLedger();
-    $("ledger-close").focus();
-  } else $("ledger-open").focus();
-}
-$("ledger-open").addEventListener("click", () => setLedger(!ledgerOpen()));
-$("ledger-close").addEventListener("click", () => setLedger(false));
-$("ledger-filter").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-filter]");
-  if (!b) return;
-  state.ledgerFilter = b.dataset.filter;
-  store.set("grade.ledgerFilter", state.ledgerFilter);
-  renderLedger();
-});
 
 let pollTimer = null;
 let lastDone = 0;
@@ -1385,8 +1228,8 @@ async function poll() {
       if (!state.source && allSources().length) await openSource(defaultSource());
       else if (state.source?.startsWith("camera:") && state.library.camera.mounted && !wasMounted && sourceInfo(state.source)) await openSource(state.source);
     }
-    // The ledger changes when the server looks again (every 30 seconds, and after exports): read often while it's open.
-    if (Date.now() - ledgerAt > (ledgerOpen() ? 5000 : 20000)) await loadLedger();
+    // The ledger changes when the server looks again: every 30 seconds, and after exports.
+    if (Date.now() - ledgerAt > 20000) await loadLedger();
     const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted;
     if (reachable && (done !== lastDone || waiting)) await refreshSource();
     lastDone = done;
@@ -1411,11 +1254,6 @@ function defaultSource() {
 let heldMode = null;
 document.addEventListener("keydown", (e) => {
   const t = e.target;
-  // The ledger covers the clips: their shortcuts wait until it's closed.
-  if (ledgerOpen()) {
-    if (e.key === "Escape") setLedger(false);
-    return;
-  }
   if (t.matches?.("select, textarea, input:not([type=range]):not([type=checkbox])")) return;
   if (e.key === "Escape" && !exportMenu.hidden) {
     setExportMenu(false);
@@ -1459,6 +1297,7 @@ $("shoot").addEventListener("change", (e) => openSource(e.target.value));
 // ---- start --------------------------------------------------------------------------------------------------------
 
 buildControls();
+sayReady();
 loadLedger();
 try {
   await calibrate();
@@ -1470,6 +1309,7 @@ try {
     $("empty").textContent = `Plug in the ${state.library.camera.name}, or put clips in ${state.library.original}.`;
     updatePanel();
   }
+  openFromAddress();
 } catch (e) {
   showError(e);
 }

@@ -455,6 +455,57 @@ function footage() {
     },
   };
 }
+// The footage ledger as the grade app sends it: the clip going up, one whose YouTube video is an earlier grade, one
+// safe in Cloudflare and on YouTube, one only the archive holds, one with no copy left, and a phone clip on the Mac.
+const original = (camera: boolean, mac: boolean, cloudflare = false) => ({ camera, mac, cloudflare });
+const graded = (extra: Record<string, unknown>) => ({
+  look: "Umbra",
+  at: "2026-11-21T09:00:00Z",
+  size: 1_000_000_000,
+  mac: true,
+  cloudflare: false,
+  youtube: null,
+  ...extra,
+});
+const ledgerClip = (name: string, recorded: string, extra: Record<string, unknown>) => ({
+  name,
+  recorded,
+  profile: "dlog2",
+  duration: 30,
+  size: 3_000_000_000,
+  original: original(false, false),
+  graded: null,
+  gradePending: false,
+  ...extra,
+});
+const ledger = {
+  version: 1,
+  updatedAt: new Date(Date.now() - 60_000).toISOString(),
+  camera: { name: "Pocket 4P", mounted: false, seenAt: new Date(Date.now() - 86_400_000).toISOString() },
+  archiveAt: new Date().toISOString(),
+  clips: {
+    DJI_20261121101500_0402_D: ledgerClip("DJI_20261121101500_0402_D.MP4", "2026-11-21T10:15:00", {
+      original: original(true, false),
+      graded: graded({ size: 1_840_000_000 }),
+      thumb: true,
+    }),
+    DJI_20261120183012_0399_D: ledgerClip("DJI_20261120183012_0399_D.MP4", "2026-11-20T18:30:12", {
+      original: original(false, true),
+      graded: graded({ youtube: { video: "earlier1234", at: "2026-11-20T20:00:00Z", current: false } }),
+    }),
+    DJI_20261111161230_0258_D: ledgerClip("DJI_20261111161230_0258_D.MP4", "2026-11-11T16:12:30", {
+      original: original(true, false),
+      graded: graded({ cloudflare: "current", youtube: { video: "abcDEF12345", at: "2026-11-17T10:00:00Z", current: true } }),
+      thumb: true,
+    }),
+    DJI_20261108122204_0086_D: ledgerClip("DJI_20261108122204_0086_D.mp4", "2026-11-08T12:22:04", {
+      size: null,
+      graded: graded({ mac: false, cloudflare: "current" }),
+    }),
+    DJI_20261101090000_0001_D: ledgerClip("DJI_20261101090000_0001_D.MP4", "2026-11-01T09:00:00", {}),
+    IMG_4857: ledgerClip("IMG_4857.MOV", "2026-10-30T20:15:04", { profile: "rec709", original: original(false, true) }),
+  },
+};
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const url = new URL(String(input), location.href);
@@ -505,6 +556,7 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
         : [],
     });
   if (path === "footage/watch") return json({ watching: method !== "DELETE" });
+  if (path === "footage/ledger") return json(ledger);
   if (path === "footage") return json(footage());
   if (path === "history") return json(history);
   if (path === "drafts") return json({ drafts });

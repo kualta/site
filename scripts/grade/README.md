@@ -2,7 +2,8 @@
 
 A local app for grading camera footage in bulk before it goes into OpenFilm: pick a look, set exposure, white
 balance, tint, contrast and saturation across many clips at once, watch it live, and export graded copies when it
-looks right. It's dark or light as the Mac's appearance is set; full screen stays dark.
+looks right. It's dark or light as the Mac's appearance is set (or, in the composer's Grade tab, as the composer is);
+full screen stays dark.
 
 On the owner's laptop it is always running: launchd starts it at login and restarts it if it exits
 (`dev.kualta.grade`, `~/Library/LaunchAgents/dev.kualta.grade.plist`, log `~/Library/Logs/Grade/server.log`), from
@@ -59,23 +60,17 @@ Each day shows how many of its clips have an export, and the clip list can show 
 Clips are known by file name, so a clip graded off the card and the same clip copied into `Original/` share one grade
 and one export. An export put in `Exported/` by hand counts as graded too.
 
-## The ledger
+## The ledger, the composer's Footage tab, and its Grade tab
 
-**Ledger** (top bar) lists every clip the app has ever seen, newest day first, with its profile, its grade, and where
-its copies are: the original on the camera, on this Mac (`Original/`) or in the Cloudflare archive, and the graded
-copy on this Mac (`Exported/`), in the Cloudflare archive or on YouTube. The selected clip's panel says the same in a
-line. Filters pick out clips **at risk** (no copy off this Mac and the card: nothing in Cloudflare or on YouTube), not
-graded (log footage without a graded copy), not on YouTube and not in Cloudflare. A clip with no copy left anywhere
-says so. Esc closes it.
-
-Each row has a small picture, no taller than its text: the clip-list thumbnail from the cache, made for the ledger a
-dozen per look (from the original's still or a frame, or from the graded copy once the original is gone; none while
-an export reads the card). A clip with none on this Mac shows its YouTube video's still, if it has one, else an empty
-frame. They're served at `/media/ledger/<clip>.jpg`, and `/api/ledger` lists which clips have one.
+The app keeps the footage ledger: a record of every clip it has ever seen, with its profile, its grade, and where its
+copies are (the original on the camera, on this Mac in `Original/` or in the Cloudflare archive; the graded copy on
+this Mac in `Exported/`, in the Cloudflare archive or on YouTube). It's shown in the composer's **Footage** tab
+(post.kualta.dev/footage, **Footage** in the top bar), from phone or laptop; here, the selected clip's panel says where
+its copies are in a line.
 
 The server looks every 30 seconds (and after an export or ⌘⌫) and merges what it sees into what it knew, so a clip
 off the card or the Mac keeps its record. What it can't look at keeps its last answer: the card's clips while it's
-unplugged (the table says as of when), and the archive between askings (every 10 minutes). The sources:
+unplugged (the Footage tab says as of when), and the archive between askings (every 10 minutes). The sources:
 
 - the card and `Original/`, and each clip's profile from its metadata (clips not yet probed are probed a few at a
   time, none while an export reads the card);
@@ -88,9 +83,18 @@ unplugged (the table says as of when), and the archive between askings (every 10
 
 `ledger.json` is the ledger as last merged. Whenever anything in it changes it's sent whole to the site's archive
 (`ledger/footage.json`, through `helper/archive/ledger` on the helper's pairing), but only once the archive's copy has
-been read back and merged in, so a fresh `ledger.json` on a new Mac can't drop clips only the archive knows. Without a
-paired helper the ledger stays on this Mac, and the table says so.
+been read back and merged in, so a fresh `ledger.json` on a new Mac can't drop clips only the archive knows. Each
+clip's thumbnail (made in the cache a dozen per look, from the original's still or a frame, or from the graded copy
+once the original is gone) goes to `ledger/thumbs/<clip>.jpg` once, and the clip's record says `thumb`. Without a
+paired helper the ledger stays on this Mac.
 
+**Grade tab.** post.kualta.dev/grade shows this app in a frame, loaded from http://127.0.0.1:4777: it still reads
+the card and `~/Movies` itself, previews on the browser's GPU and exports with ffmpeg here. The frame is allowed local
+network access, and Chrome asks once whether post.kualta.dev may reach this device: allow it. Away from the Mac, or
+until it's allowed, the tab says so. Only the composer may frame the app (`frame-ancestors`: post.kualta.dev, and the
+site run locally on port 4321). In the frame the app says it's there, opens the clips the Footage tab's **Grade**
+asks for (`#clip=<file>` in its address, or a message; `/api/find` says which day holds it), and takes the
+composer's light or dark.
 ## Grading
 
 - **Look**: the base look for the clip's camera profile, read from its own metadata tag. D-Log2, D-Log and HLG get

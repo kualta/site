@@ -1,5 +1,6 @@
 import PublisherAnalytics from "./PublisherAnalytics";
-import PublisherArchive from "./PublisherArchive";
+import PublisherFootage from "./PublisherFootage";
+import PublisherGrade from "./PublisherGrade";
 import PublisherCalendar from "./PublisherCalendar";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
@@ -177,6 +178,17 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     tabSearch.current[tab] = location.search;
     navigate(tabPath(base, next), tabSearch.current[next] ?? "");
   }
+  // The Footage tab's old address shows its new one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate reads the address itself
+  useEffect(() => {
+    if (/\/archive\/?$/.test(location.pathname)) navigate(tabPath(base, "footage"), location.search, true);
+  }, []);
+  // The clip the Footage tab last asked the Grade tab to open, and whether the grade app has been opened at all.
+  const [gradeClip, setGradeClip] = useState<{ clip: string; n: number } | null>(null);
+  const [gradeOpened, setGradeOpened] = useState(tab === "grade");
+  useEffect(() => {
+    if (tab === "grade") setGradeOpened(true);
+  }, [tab]);
   const [access, setAccess] = useState<Access>(initialAccess);
   // On a narrow phone the tabs scroll sideways; the open one is kept in view.
   const tabsBar = useRef<HTMLElement>(null);
@@ -1110,8 +1122,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
             <button aria-pressed={tab === "analytics"} onClick={() => openTab("analytics")}>
               Analytics
             </button>
-            <button type="button" aria-pressed={tab === "archive"} onClick={() => openTab("archive")}>
-              Archive
+            <button type="button" aria-pressed={tab === "footage"} onClick={() => openTab("footage")}>
+              Footage
+            </button>
+            <button type="button" aria-pressed={tab === "grade"} onClick={() => openTab("grade")}>
+              Grade
             </button>
             <button aria-pressed={tab === "accounts"} onClick={() => openTab("accounts")}>
               Accounts
@@ -1156,13 +1171,23 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               postsVersion={postsVersion}
             />
           )}
-          {tab === "archive" && (
-            <PublisherArchive
+          {tab === "footage" && (
+            <PublisherFootage
               request={api}
               online={helperOnline}
               connected={connectedPlatforms.includes("youtube-footage")}
               onAccounts={() => openTab("accounts")}
+              onGrade={(clip) => {
+                setGradeClip({ clip, n: Date.now() });
+                openTab("grade");
+              }}
             />
+          )}
+          {/* Once opened, the grade app stays loaded while other tabs are shown, so coming back doesn't load it again. */}
+          {gradeOpened && (
+            <div className="publisher-grade-tab" hidden={tab !== "grade"}>
+              <PublisherGrade open={gradeClip} />
+            </div>
           )}
           {tab === "accounts" && (
             <>

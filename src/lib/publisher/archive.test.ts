@@ -240,4 +240,13 @@ describe("the laptop's archive requests", () => {
     // Like the archive's files, it says its length.
     expect((await body("ledger", { method: "PUT", body: second })).status).toBe(400);
   });
+
+  test("a ledger clip's picture is kept by the clip's name, and only a clip's name is taken", async () => {
+    const { body, archive } = setup();
+    expect((await body("ledger/thumbs/DJI_20261111161230_0258_D", { method: "PUT", bytes: "jpeg" })).data).toEqual({
+      ok: true,
+    });
+    expect(await text(await archive.bucket.get("ledger/thumbs/DJI_20261111161230_0258_D.jpg"))).toBe("jpeg");
+    expect((await body("ledger/thumbs/.hidden", { method: "PUT", bytes: "x" })).status).toBe(400);
+  });
 });

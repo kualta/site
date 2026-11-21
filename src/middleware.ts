@@ -1,5 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 import { canonicalRedirect, permanentRedirect } from "@/lib/canonical-host";
+import { TAB_PATHS } from "@/lib/publisher/route";
 import { forbiddenFormOrigin } from "@/lib/request-origin";
 
 export const onRequest = defineMiddleware((ctx, next) => {
@@ -13,16 +14,13 @@ export const onRequest = defineMiddleware((ctx, next) => {
   if (canonical) return permanentRedirect(canonical);
 
   const hostname = (ctx.request.headers.get("host") ?? "").toLowerCase();
-  const publisherTab = ctx.url.pathname.match(
-    /^\/publish(\/(?:pipeline|history|calendar|analytics|archive|accounts))?$/,
-  );
+  // /publish and its tabs' paths, such as /publish/history, belong on post.kualta.dev.
+  const publish = ctx.url.pathname.match(/^\/publish(\/[a-z]+)?$/);
+  const publisherTab = publish && (!publish[1] || TAB_PATHS.includes(publish[1].slice(1)));
   if (!import.meta.env.DEV && hostname === "kualta.dev" && publisherTab)
-    return Response.redirect(`https://post.kualta.dev${publisherTab[1] ?? "/"}${ctx.url.search}`, 302);
+    return Response.redirect(`https://post.kualta.dev${publish[1] ?? "/"}${ctx.url.search}`, 302);
   // src/pages/history.astro and the other tabs' pages give those paths a route here; on other hosts they're a 404.
-  if (
-    hostname === "post.kualta.dev" &&
-    ["/", "/pipeline", "/history", "/calendar", "/analytics", "/archive", "/accounts"].includes(ctx.url.pathname)
-  )
+  if (hostname === "post.kualta.dev" && (ctx.url.pathname === "/" || TAB_PATHS.includes(ctx.url.pathname.slice(1))))
     return ctx.rewrite(ctx.url.pathname === "/" ? "/publish" : `/publish${ctx.url.pathname}`);
 
   return next();

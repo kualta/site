@@ -65,7 +65,11 @@ export function sized(body: ReadableStream | null, length: number): ReadableStre
   return readable;
 }
 
-const LEDGER = "ledger/footage.json";
+export const LEDGER = "ledger/footage.json";
+/** A ledger clip's small picture, by its name without extension (DJI_20261111161230_0258_D, IMG_4857). */
+export const ledgerThumbKey = (clip: string) => `ledger/thumbs/${clip}.jpg`;
+export const isClipName = (value: unknown): value is string =>
+  typeof value === "string" && /^[\w-][\w.-]{0,119}$/.test(value);
 const mediaKey = (id: string) => `media/${id}`;
 const blobKey = (hash: string) => `blobs/${hash}`;
 export const isHash = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
@@ -425,6 +429,7 @@ export async function readManifest(archive: ArchiveBucket, name: string, at?: st
  *                                      published or scheduled, whose videos are those files
  *   GET    ledger                     the footage ledger, as the grade app last sent it (404 before the first)
  *   PUT    ledger                     the footage ledger, whole: the grade app is its only writer
+ *   PUT    ledger/thumbs/<clip>       a clip's small picture (JPEG), for the composer's Footage tab
  */
 export async function archiveResponse(
   rest: string,
@@ -492,6 +497,14 @@ export async function archiveResponse(
     if (rest === "ledger" && method === "PUT") {
       await archive.put(LEDGER, body(), {
         httpMetadata: { contentType: "application/json" },
+        storageClass: "Standard",
+      });
+      return json({ ok: true });
+    }
+    if (kind === "ledger" && key === "thumbs" && part !== undefined && method === "PUT") {
+      if (!isClipName(part)) throw new ArchiveError("Invalid clip");
+      await archive.put(ledgerThumbKey(part), body(), {
+        httpMetadata: { contentType: "image/jpeg" },
         storageClass: "Standard",
       });
       return json({ ok: true });
