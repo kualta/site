@@ -55,7 +55,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config dist/server/wrangler.json
 
-      - name: Publish and verify Standard.site articles
+      - name: Publish and verify articles, projects and links on ATProto
         run: bun run atproto:publish
         env:
           ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}

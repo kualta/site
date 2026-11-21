@@ -1,0 +1,80 @@
+{
+  "lexicon": 1,
+  "id": "dev.kualta.project",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A portfolio project: something the account owner built or worked on.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["name", "description", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 640,
+            "maxGraphemes": 64,
+            "description": "Short name of the project."
+          },
+          "fullName": {
+            "type": "string",
+            "maxLength": 1280,
+            "maxGraphemes": 128,
+            "description": "Longer display name, when it differs from the short name."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 3000,
+            "maxGraphemes": 300,
+            "description": "One-line summary of the project."
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 64,
+            "knownValues": ["ongoing", "complete", "archived"],
+            "description": "Where the project stands."
+          },
+          "date": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the project started. Midnight UTC when only the day is known."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048,
+            "description": "Where the project can be used or read about."
+          },
+          "gitUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048,
+            "description": "Source code location on a git host."
+          },
+          "repo": {
+            "type": "string",
+            "format": "at-uri",
+            "description": "The sh.tangled.repo record of the same source code, when there is one."
+          },
+          "language": {
+            "type": "string",
+            "maxLength": 640,
+            "maxGraphemes": 64,
+            "description": "Main programming language."
+          },
+          "techStack": {
+            "type": "array",
+            "maxLength": 32,
+            "items": { "type": "string", "maxLength": 640, "maxGraphemes": 64 },
+            "description": "Notable frameworks, engines and platforms."
+          },
+          "relevance": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The owner's ordering weight: a higher value is listed first."
+          }
+        }
+      }
+    }
+  }
+}

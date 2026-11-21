@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { validateRecord } from "./lib/atproto-validation.mjs";
+import { profileRecords } from "./lib/atproto-profile.mjs";
 import { articleRecord, publicationUri } from "./lib/atproto-content.mjs";
 
 export async function prepare(root = process.cwd()) {
@@ -48,6 +49,7 @@ export async function prepare(root = process.cwd()) {
       },
     },
     documents,
+    ...(await profileRecords(config, root)),
   };
   validateRecord(manifest.publication.record);
   for (const document of documents) validateRecord(document.record);
@@ -55,7 +57,9 @@ export async function prepare(root = process.cwd()) {
   await mkdir(output, { recursive: true });
   await writeFile(path.join(output, "site.standard.publication"), `${manifest.publication.uri}\n`);
   await writeFile(path.join(output, "site.standard.manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log(`Prepared ${documents.length} Standard.site articles`);
+  console.log(
+    `Prepared ${documents.length} Standard.site articles, ${manifest.projects.length} projects, the links record and ${manifest.schemas.length} lexicon schemas`,
+  );
   return manifest;
 }
 

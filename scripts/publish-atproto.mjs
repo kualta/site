@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { AtpAgent } from "@atproto/api";
+import { syncProfile } from "./lib/atproto-profile.mjs";
 import { syncRecords, verifyWebsite, waitForWebsite } from "./lib/atproto-publish.mjs";
 
 const args = process.argv.slice(2);
@@ -9,6 +10,9 @@ if (args.includes("--dry-run")) {
   console.log(`Publication: ${manifest.publication.uri}`);
   for (const doc of manifest.documents)
     console.log(`${doc.record.title}: ${doc.uri} (${Buffer.byteLength(doc.record.textContent)} text bytes)`);
+  for (const schema of manifest.schemas) console.log(`Lexicon schema: ${schema.uri}`);
+  for (const project of manifest.projects) console.log(`Project ${project.record.name}: ${project.uri}`);
+  console.log(`Links: ${manifest.links.uri} (${manifest.links.record.links.length} links)`);
 } else {
   const verifyOnly = args.includes("--verify");
   if (verifyOnly) await verifyWebsite(manifest);
@@ -23,4 +27,5 @@ if (args.includes("--dry-run")) {
   const agent = new AtpAgent({ service: pds });
   if (!verifyOnly) await agent.login({ identifier: manifest.did, password });
   await syncRecords(manifest, agent, { verifyOnly });
+  await syncProfile(manifest, agent, { verifyOnly });
 }

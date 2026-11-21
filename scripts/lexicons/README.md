@@ -10,3 +10,8 @@ Retrieved from Standard.site's public AT Protocol repository on 2026-09-13:
 The repository wrapper `$type` was removed; the lexicon schemas are otherwise unchanged.
 Sources: https://standard.site/docs/lexicons/document and https://standard.site/docs/lexicons/publication.
 Portable Markdown follows https://markpub.at/ (`at.markpub.markdown` containing `at.markpub.text`).
+
+## dev.kualta schemas
+
+`dev.kualta.*.json` are this site's own lexicons, authored here. Each is published to the
+owner's repository as a `com.atproto.lexicon.schema` record on deploy; see `docs/atproto.md`.
