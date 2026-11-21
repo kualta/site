@@ -181,6 +181,13 @@ test("clips only the archive or YouTube still has get records, and an archived o
   });
 });
 
+test("a graded copy exported and cleaned off the Mac before the ledger saw it weighs what the archive's copy does", () => {
+  const record = { profile: "dlog2", base: { name: "Umbra" }, exportedAt: "2026-11-12T17:03:56.093Z" };
+  const archive = [{ name: `${A}.mp4`, size: 300, sha256: "ab", project: "013-maybe-later" }];
+  const ledger = mergeLedger(null, seen("2026-11-21T10:00:00Z", { exports: { [`${A}.MP4`]: record }, archive }));
+  expect(ledger.clips[A].graded).toMatchObject({ look: "Umbra", size: 300, mac: false, cloudflare: "current" });
+});
+
 test("only a change in what the ledger says is a change, and the archive's copy fills in clips this Mac lost", () => {
   const card = { name: "Pocket 4P", mounted: true, clips: [{ name: `${A}.MP4`, size: 1000 }] };
   const first = mergeLedger(null, seen("2026-11-20T10:00:00Z", { camera: card }));

@@ -160,7 +160,12 @@ export function mergeLedger(previous, seen) {
       const files = archived.get(key.toLowerCase()) ?? [];
       entry.original.cloudflare = entry.size !== null && files.some((file) => file.size === entry.size);
       const copies = files.filter((file) => file.size !== entry.size);
-      if (copies.length) entry.graded ??= { ...blankGraded(), size: copies.at(-1).size };
+      // A graded copy only the archive holds, or whose export left the Mac before its size was seen, weighs what the
+      // archive's copy does.
+      if (copies.length) {
+        entry.graded ??= blankGraded();
+        entry.graded.size ??= copies.at(-1).size;
+      }
       if (!entry.graded) continue;
       if (!copies.length) entry.graded.cloudflare = false;
       else if (entry.graded.size === null || copies.some((file) => file.size === entry.graded.size))
