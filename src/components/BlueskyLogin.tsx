@@ -27,13 +27,14 @@ export default function BlueskyLogin({
       <div className="bluesky-login text-sm tracking-normal">
         <button
           type="button"
-          className="grid size-11 place-items-center overflow-hidden rounded-full hover:opacity-80 disabled:opacity-50"
+          className="grid size-11 place-items-center rounded-full hover:opacity-80 disabled:opacity-50"
           aria-label={auth.profile ? `Bluesky account @${auth.profile.handle}` : "Log in with Bluesky"}
           onClick={() => dialog.current?.showModal()}
           disabled={auth.loading}
         >
           {auth.profile?.avatar ? (
-            <img src={auth.profile.avatar} alt="" className="size-full object-cover" />
+            // smaller than the button, which keeps its size to stay easy to press and in line with the bell
+            <img src={auth.profile.avatar} alt="" className="size-[30px] rounded-full object-cover" />
           ) : (
             <LoginIcon size={22} aria-hidden="true" />
           )}
