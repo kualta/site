@@ -1,5 +1,5 @@
 import { calendarMonths, type StoryDay } from "@/lib/videos";
-import { warmWhenNear } from "./stories-viewer";
+import { firstToShow, warmWhenNear } from "./stories-viewer";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
@@ -58,7 +58,7 @@ export function renderCalendar(
         }
         button.append(cell("", number));
         button.addEventListener("click", () => open(position, button));
-        warmWhenNear(button);
+        warmWhenNear(button, undefined, () => firstToShow(day.stories));
         grid.append(button);
       }
       section.append(title, grid);

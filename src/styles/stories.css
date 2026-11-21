@@ -94,6 +94,11 @@ html[data-story-open] { overflow: hidden; }
 .story-media img, .story-media video { object-fit: contain; pointer-events: none; }
 .story-media[data-fit="cover"] img, .story-media[data-fit="cover"] video { object-fit: cover; }
 .story-top { position: absolute; inset: 0 0 auto; padding: 10px 10px 28px; background: linear-gradient(rgb(0 0 0 / 45%), transparent); }
+/* a line running along the bottom while the story is still coming; it waits a moment, so a quick load never shows it */
+.story-loader { position: absolute; inset: auto 0 0; z-index: 1; height: 2px; overflow: hidden; opacity: 0; transition: opacity 150ms; pointer-events: none; }
+.story-frame[data-loading="true"] .story-loader { opacity: 1; transition-delay: 150ms; }
+.story-loader::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 80%), transparent); animation: story-loading 1.1s var(--ease-in-out, ease-in-out) infinite; }
+@keyframes story-loading { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .story-bars { display: flex; gap: 4px; }
 .story-bar { position: relative; flex: 1; height: 2px; overflow: hidden; border-radius: 1px; background: rgb(255 255 255 / 35%); }
 .story-bar::after { content: ""; position: absolute; inset: 0; background: #fff; transform: scaleX(var(--progress, 0)); transform-origin: left; }
@@ -123,4 +128,7 @@ html[data-story-open] { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .story-step, .story-date-has img, .story-peek img { transition: none; }
   .story-viewer, .story-frame { animation: none; }
+  /* still, the line just shows: a dim bar the full width */
+  .story-loader { transition: none; }
+  .story-loader::after { width: 100%; animation: none; background: rgb(255 255 255 / 45%); }
 }

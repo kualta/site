@@ -417,9 +417,17 @@ new source keeps showing the old picture until the new one loads; the pictures t
 one still loading stays hidden until it can fade in. The previous and next arrows keep to the edges of the screen.
 Reduced motion turns all of this off. Inside it: a bar per story, photos for five seconds and videos for their length, tap
 the right side for the next and the left third for the previous one, hold to pause, swipe down or Esc to close, and on
-into the next, later day. Its header says how long ago each story went up, as Instagram does (now, 12m, 5h, 3d, 2w,
-1y), with the exact time, on the clock it was posted with, on hover. Each browser remembers which stories it has seen.
-Stories are grouped by the date written in the post, so a story posted at 23:30 in Bogotá stays on that day.
+into the next, later day. Its header says when each story went up, as Instagram does: now, 12m or 5h within a day,
+then its date (Jul 14, with the year when it isn't this one), and the exact time, on the clock it was posted with, on
+hover. Each browser remembers which stories it has seen. Stories are grouped by the date written in the post, so a story
+posted at 23:30 in Bogotá stays on that day.
+
+**Loading.** The stories either side of the one up are loaded while it plays, a video's stream included (silent, a few
+seconds ahead, not held to the size of a player it isn't in yet), and the one just left stays loaded, so a step either
+way starts at once; anything further is let go. Pointing at, focusing or touching a ring or calendar day starts loading
+the story it opens on. While the story up is still coming (a photo not loaded, a video without enough buffered to play
+on) a thin line runs along its bottom; it waits 150 ms, so a quick load never shows it, and holds still with reduced
+motion.
 
 TikTok stories can't be sent: TikTok's posting API has none, and its web uploader isn't known to offer them.
 

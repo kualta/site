@@ -1,6 +1,6 @@
 import identity from "../../atproto.config.json";
 import { liveStories, normalizeStoryPost, type Story } from "@/lib/videos";
-import { openStories, ringState, type StoryAuthor, warmWhenNear } from "./stories-viewer";
+import { firstToShow, openStories, ringState, type StoryAuthor, warmWhenNear } from "./stories-viewer";
 
 /** The account's stories still up, and its picture, from its latest media posts on Bluesky. */
 async function readLive(signal: AbortSignal): Promise<{ stories: Story[]; avatar?: string }> {
@@ -64,7 +64,7 @@ export function mountStoryAvatar(root: HTMLElement): () => void {
       })
       .catch(() => {});
   button.addEventListener("click", () => openStories([stories], 0, button, author), options);
-  warmWhenNear(button, listeners.signal);
+  warmWhenNear(button, listeners.signal, () => firstToShow(stories));
   document.addEventListener("stories:seen", paint, options);
   return () => listeners.abort();
 }
