@@ -4,7 +4,7 @@ export type WaitUntil = (work: Promise<unknown>) => void;
 
 export async function notifyNewsletter(
   env: NewsletterEnv,
-  event: "subscribed" | "unsubscribed" | "open detected",
+  event: "subscribed" | "unsubscribed" | "signup dropped" | "open detected",
   detail: string,
   waitUntil?: WaitUntil,
 ): Promise<void> {

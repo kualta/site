@@ -148,9 +148,10 @@ describe("newsletter subscriptions", () => {
     expect(await readFormToken("x".repeat(64), token, issuedAt + 5000)).toBe("token_invalid");
     expect((await issueFormToken({})).status).toBe(503);
   });
-  const bots: [string, () => Promise<Request>][] = [
+  const bots: [string, string, () => Promise<Request>][] = [
     [
       "no_origin",
+      "no Origin header",
       async () => {
         const request = await signup();
         const headers = new Headers(request.headers);
@@ -158,28 +159,51 @@ describe("newsletter subscriptions", () => {
         return new Request(request, { headers });
       },
     ],
-    ["honeypot", () => signup({ email: "reader@example.com", website: "https://spam.example" })],
-    ["automated", () => signup({ email: "reader@example.com", automated: true })],
-    ["token_missing", () => signup({ email: "reader@example.com", token: undefined })],
+    ["honeypot", "honeypot filled in", () => signup({ email: "reader@example.com", website: "https://spam.example" })],
+    ["automated", "automated browser", () => signup({ email: "reader@example.com", automated: true })],
+    ["token_missing", "no form token", () => signup({ email: "reader@example.com", token: undefined })],
     [
       "token_invalid",
+      "forged form token",
       () => signup({ email: "reader@example.com", token: `${Date.now() - 5000}.${"0".repeat(36)}.${"0".repeat(64)}` }),
     ],
-    ["token_early", () => signup(undefined, undefined, 500)],
-    ["token_expired", () => signup(undefined, undefined, 3600_001)],
+    ["token_early", "sent too fast", () => signup(undefined, undefined, 500)],
+    ["token_expired", "expired form token", () => signup(undefined, undefined, 3600_001)],
   ];
-  test.each(bots)("answers bots (%s) like people but stores and announces nothing", async (reason, request) => {
-    const { env, sqlite } = setup();
+  test.each(bots)(
+    "answers bots (%s) like people, stores nothing and tells Discord why",
+    async (reason, why, request) => {
+      const { env, sqlite } = setup();
+      const notify = mockFetch(async () => Response.json({ id: "message" }));
+      const log = spyOn(console, "info").mockImplementation(() => {});
+      try {
+        const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
+        const response = await subscribe(await request(), configured);
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ message: "You’re subscribed." });
+        expect(sqlite.query("SELECT COUNT(*) n FROM newsletter_subscribers").get()).toEqual({ n: 0 });
+        expect(notify).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(String(notify.mock.calls[0][1]?.body)).content).toBe(
+          `Newsletter signup dropped: reader@example.com (${why})`,
+        );
+        expect(log).toHaveBeenCalledWith("newsletter_signup_blocked", { reason });
+      } finally {
+        notify.mockRestore();
+        log.mockRestore();
+      }
+    },
+  );
+  test("tells Discord about at most 20 dropped signups an hour", async () => {
+    const { env } = setup();
     const notify = mockFetch(async () => Response.json({ id: "message" }));
     const log = spyOn(console, "info").mockImplementation(() => {});
     try {
       const configured = { ...env, NEWSLETTER_DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/test/token" };
-      const response = await subscribe(await request(), configured);
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({ message: "You’re subscribed." });
-      expect(sqlite.query("SELECT COUNT(*) n FROM newsletter_subscribers").get()).toEqual({ n: 0 });
-      expect(notify).not.toHaveBeenCalled();
-      expect(log).toHaveBeenCalledWith("newsletter_signup_blocked", { reason });
+      for (let i = 0; i < 25; i++) {
+        const response = await subscribe(await signup({ email: `bot${i}@example.com`, website: "x" }), configured);
+        expect(response.status).toBe(200);
+      }
+      expect(notify).toHaveBeenCalledTimes(20);
     } finally {
       notify.mockRestore();
       log.mockRestore();
