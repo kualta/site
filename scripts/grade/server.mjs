@@ -617,6 +617,8 @@ async function ledgerLook() {
       const remote = await cloud.read();
       ledger.current = unionLedgers(ledger.current, remote);
       ledger.sent = comparable(remote);
+      // When the archive's copy was made: unchanged since, there's nothing to send, and it's still the time it was saved.
+      ledger.savedAt = remote?.updatedAt ?? null;
       ledger.restored = true;
     } catch (e) {
       ledger.error = `Couldn't read the ledger in Cloudflare: ${e.message}`;
