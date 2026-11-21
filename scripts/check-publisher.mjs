@@ -1718,6 +1718,19 @@ try {
     await row("IMG_4857").getByText("Not log").waitFor();
     // Each clip names the films it's in; a film whose piece is posted links to the post's numbers.
     await row("0402").getByText("· in 014-walk").waitFor();
+    // How much footage is where: the card's originals; the Mac's and the archive's originals and graded copies.
+    assert.deepEqual(
+      await page.locator(".publisher-ledger-storage > div").evaluateAll((cells) =>
+        cells.map((cell) => [cell.querySelector("dt").textContent, cell.querySelector("dd").firstChild.textContent]),
+      ),
+      [
+        ["Camera", "6.0 GB"],
+        ["Mac", "9.8 GB"],
+        ["Cloudflare", "2.0 GB"],
+        ["YouTube", "2 videos"],
+      ],
+    );
+    await page.locator(".publisher-ledger-storage").getByText("2 originals · 3 graded").waitFor();
     assert.match(
       await row("0258").getByRole("link", { name: "013-maybe-later" }).getAttribute("href"),
       /\/analytics\?post=00000000-0000-4000-8000-000000000008$/,
@@ -1743,6 +1756,19 @@ try {
     assert.equal(await frame.getAttribute("allow"), "local-network-access; fullscreen");
     assert.equal(await frame.getAttribute("src"), "http://127.0.0.1:4777/#clip=DJI_20261121101500_0402_D.MP4");
     // This browser isn't the Mac's: the grade app never says it's there.
+    // The Grade tab fills the window below the tabs, edge to edge, and the page doesn't scroll.
+    const filled = await page.evaluate(() => {
+      const box = document.querySelector(".publisher-grade").getBoundingClientRect();
+      const tabs = document.querySelector(".publisher-tabs").getBoundingClientRect();
+      return {
+        left: box.left,
+        right: Math.round(box.right),
+        bottom: Math.round(box.bottom),
+        underTabs: Math.round(box.top) === Math.round(tabs.bottom),
+        scrolls: document.documentElement.scrollHeight > innerHeight || getComputedStyle(document.documentElement).overflow !== "hidden",
+      };
+    });
+    assert.deepEqual(filled, { left: 0, right: width, bottom: 900, underTabs: true, scrolls: false });
     await page.getByRole("status").filter({ hasText: "The grade app runs on the Mac" }).waitFor({ timeout: 15_000 });
     if (shots) await page.screenshot({ path: path.join(shots, `grade-away-${name}.png`) });
 

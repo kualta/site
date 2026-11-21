@@ -381,16 +381,20 @@ clip's thumbnail once to `ledger/thumbs/<clip>.jpg` (`PUT helper/archive/ledger`
 `ledger/thumbs/<clip>`, on the pairing token, streamed like the archive's files and stored on the
 Standard class since they're rewritten). The Footage tab shows it under the uploads, read through
 `GET footage/ledger` and `footage/thumbs/<clip>.jpg` (both streamed from the archive, pictures cached a
-day): every clip by day, newest first, with its grade, ✓ or – for each copy, the clip going up to
-YouTube with its share, and filters for clips at risk (no copy off the Mac and the card), not
-graded, not on YouTube and not in Cloudflare. A clip's **Grade** opens it in the Grade tab.
+day): how much footage is where (the card's originals, as of when it was last plugged in; the
+Mac's and the archive's originals and graded copies; YouTube's videos, counted since they're
+re-encoded), then every clip by day, newest first, with its grade, ✓ or – for each copy, the clip
+going up to YouTube with its share, and filters for clips at risk (no copy off the Mac and the
+card), not graded, not on YouTube and not in Cloudflare. A clip's **Grade** opens it in the Grade
+tab.
 
 **Grade tab.** post.kualta.dev/grade frames the grade app on the Mac (http://127.0.0.1:4777), so
 grading stays local: it reads the card and `~/Movies`, previews on the browser's GPU and exports with
 ffmpeg. The frame is allowed local network access (Chrome asks once to let post.kualta.dev reach
-this device); away from the Mac, or until that's allowed, the tab says so. Once opened it stays
-loaded while other tabs are shown, takes the composer's light or dark, and opens the clips Grade
-asks for. See `scripts/grade/README.md`.
+this device); away from the Mac, or until that's allowed, the tab says so. The app fills the window
+below the tabs, edge to edge, and the page doesn't scroll. Once opened it stays loaded while other
+tabs are shown, takes the composer's light or dark, and opens the clips Grade asks for. See
+`scripts/grade/README.md`.
 
 ## Instagram stories
 

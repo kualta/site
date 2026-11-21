@@ -8,6 +8,7 @@ import {
   type LedgerClip,
   lost,
   needsGrade,
+  storage,
 } from "@/lib/publisher/ledger";
 
 interface Props {
@@ -254,8 +255,50 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
   const live = uploading?.name.replace(/\.[^.]+$/, "").toLowerCase();
   const films = filmsByClip(ledger);
 
+  const kept = storage(Object.values(ledger.clips));
+  const weight = (bytes: number) => (bytes ? fileSize(bytes) : "0 GB");
+  function copies({ originals, graded }: { originals: number; graded: number }) {
+    const parts: string[] = [];
+    if (originals) parts.push(`${originals} ${originals === 1 ? "original" : "originals"}`);
+    if (graded) parts.push(`${graded} graded`);
+    return parts.join(" · ") || "Nothing";
+  }
+
   return (
     <section className="publisher-ledger" aria-label="Footage ledger">
+      <dl className="publisher-ledger-storage" aria-label="Where the footage is">
+        <div>
+          <dt>Camera</dt>
+          <dd>
+            {weight(kept.camera.bytes)}
+            <small>
+              {kept.camera.clips} {kept.camera.clips === 1 ? "clip" : "clips"}
+              {asOf && camera.seenAt ? ` · as of ${when(camera.seenAt)}` : ""}
+            </small>
+          </dd>
+        </div>
+        <div>
+          <dt>Mac</dt>
+          <dd>
+            {weight(kept.mac.bytes)}
+            <small>{copies(kept.mac)}</small>
+          </dd>
+        </div>
+        <div>
+          <dt>Cloudflare</dt>
+          <dd>
+            {weight(kept.cloudflare.bytes)}
+            <small>{copies(kept.cloudflare)}</small>
+          </dd>
+        </div>
+        <div>
+          <dt>YouTube</dt>
+          <dd>
+            {`${kept.youtube.videos} ${kept.youtube.videos === 1 ? "video" : "videos"}`}
+            <small>Re-encoded copies</small>
+          </dd>
+        </div>
+      </dl>
       <div className="publisher-ledger-head">
         <p className="publisher-note">
           {entries.length} clips · updated {when(ledger.updatedAt)}

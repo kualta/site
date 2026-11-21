@@ -74,6 +74,33 @@ export function footageLine(clips: LedgerClip[]) {
   return parts.join(" · ");
 }
 
+/**
+ * How much footage is where: originals on the card, originals and graded copies on the Mac and in the archive, and
+ * videos on YouTube (re-encoded, so counted, not weighed). An archived graded copy of an earlier grade counts at the
+ * current grade's size.
+ */
+export function storage(clips: LedgerClip[]) {
+  const sum = (list: LedgerClip[], size: (c: LedgerClip) => number | null | undefined) =>
+    list.reduce((total, c) => total + (size(c) ?? 0), 0);
+  const originals = (where: keyof LedgerClip["original"]) => clips.filter((c) => c.original[where]);
+  const camera = originals("camera");
+  const place = (where: "mac" | "cloudflare") => {
+    const kept = originals(where);
+    const graded = clips.filter((c) => Boolean(c.graded?.[where]));
+    return {
+      originals: kept.length,
+      graded: graded.length,
+      bytes: sum(kept, (c) => c.size) + sum(graded, (c) => c.graded?.size),
+    };
+  };
+  return {
+    camera: { clips: camera.length, bytes: sum(camera, (c) => c.size) },
+    mac: place("mac"),
+    cloudflare: place("cloudflare"),
+    youtube: { videos: clips.filter((c) => c.graded?.youtube).length },
+  };
+}
+
 /** The films each clip is in, by its key. */
 export function filmsByClip(ledger: Ledger | null) {
   const films = new Map<string, string[]>();
