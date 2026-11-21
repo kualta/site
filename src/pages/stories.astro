@@ -3,6 +3,7 @@ import { env, waitUntil } from "cloudflare:workers";
 import BlueskyLogin from "@/components/BlueskyLogin";
 import StoryAvatar from "@/components/StoryAvatar.astro";
 import StoryViewer from "@/components/StoryViewer.astro";
+import { MinusIcon, PlusIcon } from "@/components/icons";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { getVideoLibrary, liveStories, type VideoLibrary } from "@/lib/videos";
 import identity from "../../atproto.config.json";
@@ -41,7 +42,20 @@ Astro.response.headers.set("cache-control", "public, max-age=60");
     <p class="stories-page-status" data-stories-status role="status" hidden={live.length > 0}>
       {live.length ? "" : "No stories right now."}
     </p>
-    <div class="stories-calendar" data-stories-calendar role="region" aria-label="Stories by day" hidden></div>
+    <div class="stories-calendar" data-stories-calendar role="region" aria-label="Stories by day" hidden>
+      <div class="stories-calendar-bar" data-calendar-bar>
+        <p class="stories-calendar-month" data-calendar-month aria-hidden="true"></p>
+        <div class="stories-calendar-zoom">
+          <button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out (-)">
+            <MinusIcon size={18} aria-hidden="true" />
+          </button>
+          <button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in (+)">
+            <PlusIcon size={18} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <div class="stories-calendar-grid" data-calendar-grid></div>
+    </div>
   </section>
   <StoryViewer />
 </BaseLayout>

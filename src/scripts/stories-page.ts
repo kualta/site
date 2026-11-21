@@ -1,6 +1,6 @@
 import { getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import { readStories, storyDays, type StoryDay } from "@/lib/videos";
-import { renderCalendar } from "./stories-calendar";
+import { mountCalendar } from "./stories-calendar";
 import { openStories, type StoryAuthor } from "./stories-viewer";
 
 /** History is read a hundred media posts a page; this many reach back years. */
@@ -22,7 +22,7 @@ export function mountStoriesPage(root: HTMLElement): () => void {
   };
   let days: StoryDay[] = [];
   let loading: AbortController | undefined;
-  let shown = false;
+  let unmountCalendar: (() => void) | undefined;
   /** what the page says before the calendar, such as that no story is up */
   const resting = status?.textContent?.trim() ?? "";
 
@@ -45,9 +45,9 @@ export function mountStoriesPage(root: HTMLElement): () => void {
   function clear(): void {
     loading?.abort();
     loading = undefined;
-    shown = false;
     days = [];
-    calendar.replaceChildren();
+    unmountCalendar?.();
+    unmountCalendar = undefined;
     calendar.hidden = true;
     say(resting);
   }
@@ -67,9 +67,9 @@ export function mountStoriesPage(root: HTMLElement): () => void {
       );
       if (controller.signal.aborted) return;
       days = storyDays(stories);
-      renderCalendar(calendar, days, openDay);
+      // shown first, so the calendar can measure how many squares fit a row
       calendar.hidden = false;
-      shown = true;
+      unmountCalendar = mountCalendar(calendar, days, openDay);
       say(days.length ? "" : "No stories yet.");
     } catch {
       if (!controller.signal.aborted) say("Bluesky couldn't be read. Reload to try again.");
@@ -80,8 +80,8 @@ export function mountStoriesPage(root: HTMLElement): () => void {
 
   function follow(): void {
     const isOwner = getBlueskyAuthSnapshot().profile?.did === owner;
-    if (isOwner && !loading && !shown) void load();
-    else if (!isOwner && (loading || shown)) clear();
+    if (isOwner && !loading && !unmountCalendar) void load();
+    else if (!isOwner && (loading || unmountCalendar)) clear();
   }
 
   const unsubscribe = subscribeBlueskyAuth(follow);

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ActivityFetch } from "./activity/types";
 import {
-  calendarMonths,
+  calendarDays,
   formatDuration,
   getVideoLibrary,
   getWatchVideo,
@@ -256,33 +256,22 @@ test("stories group by the day they were posted, on the clock they were posted w
   ]);
 });
 
-test("the calendar has every month from the first day with stories to the last, weeks starting on Monday", () => {
-  const months = calendarMonths(["2026-11-16", "2025-12-31", "2026-02-03"]);
-  expect(months.map((month) => month.month)).toEqual([
-    "2025-12",
-    "2026-01",
-    "2026-02",
-    "2026-03",
-    "2026-04",
-    "2026-05",
-    "2026-06",
-    "2026-07",
-    "2026-08",
-    "2026-09",
-    "2026-10",
-    "2026-11",
+test("the calendar has every day from the first with stories to the last, naming the month where one starts", () => {
+  const days = calendarDays(["2026-01-02", "2025-12-30", "2025-12-31"]);
+  expect(days).toEqual([
+    { day: "2025-12-30", month: "December 2025", label: "Dec 30" },
+    { day: "2025-12-31", month: "December 2025", label: "31" },
+    { day: "2026-01-01", month: "January 2026", label: "Jan 1" },
+    { day: "2026-01-02", month: "January 2026", label: "2" },
   ]);
-  const [december] = months;
-  // 1 December 2025 was a Monday; 1 November 2026 is a Sunday
-  expect([december.label, december.lead, december.days.length, december.days.at(-1)]).toEqual([
-    "December 2025",
-    0,
-    31,
-    "2025-12-31",
+  // a leap year's February and a whole year of days, with none skipped or doubled
+  const year = calendarDays(["2024-01-01", "2024-12-31"]);
+  expect([year.length, year.find((day) => day.day === "2024-02-29")?.label, year.at(-1)?.day]).toEqual([
+    366,
+    "29",
+    "2024-12-31",
   ]);
-  expect([months.at(-1)!.label, months.at(-1)!.lead, months.at(-1)!.days.length]).toEqual(["November 2026", 6, 30]);
-  expect(months.find((month) => month.month === "2026-02")!.days.length).toBe(28);
-  expect(calendarMonths([])).toEqual([]);
+  expect(calendarDays([])).toEqual([]);
 });
 
 test("the library carries stories from the media feed, and keeps the last ones when that read fails", async () => {

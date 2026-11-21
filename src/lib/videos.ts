@@ -310,40 +310,36 @@ export function storyDays(stories: Story[], now = Date.now()): StoryDay[] {
     });
 }
 
-/** A month of the stories calendar: its name, the empty cells before its first day, and each of its days. */
-export interface CalendarMonth {
-  /** YYYY-MM */
+/** A day of the stories calendar, which shows each as a square. */
+export interface CalendarDay {
+  /** YYYY-MM-DD */
+  day: string;
+  /** the month it falls in, "November 2026", for the bar that names the month in view */
   month: string;
+  /** what its square says: the day of the month, with the month's name on the 1st and on the calendar's first day */
   label: string;
-  /** cells before the 1st, in a week that starts on Monday */
-  lead: number;
-  /** YYYY-MM-DD for each day of the month */
-  days: string[];
 }
 
-const monthLabel = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" });
+const monthName = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" });
+const monthShort = new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" });
+const DAY_MS = 86_400_000;
 
-/** Every month from the first day with stories to the last, in order, laid out the way a calendar is. */
-export function calendarMonths(days: string[]): CalendarMonth[] {
+/** Every day from the first with stories to the last, in order, gaps included, so rows of them read as time passing. */
+export function calendarDays(days: string[]): CalendarDay[] {
   const sorted = [...days].sort();
   if (!sorted.length) return [];
-  // months counted from year 0, so stepping one on crosses a year as it should
-  const monthIndex = (day: string): number => Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1;
-  const months: CalendarMonth[] = [];
-  for (let index = monthIndex(sorted[0]); index <= monthIndex(sorted.at(-1)!); index++) {
-    const year = Math.floor(index / 12);
-    const month = (index % 12) + 1;
-    const start = new Date(Date.UTC(year, month - 1, 1));
-    const length = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    const key = `${year}-${String(month).padStart(2, "0")}`;
-    months.push({
-      month: key,
-      label: monthLabel.format(start),
-      lead: (start.getUTCDay() + 6) % 7,
-      days: Array.from({ length }, (_, index) => `${key}-${String(index + 1).padStart(2, "0")}`),
+  const last = Date.parse(`${sorted.at(-1)}T00:00:00Z`);
+  const calendar: CalendarDay[] = [];
+  for (let time = Date.parse(`${sorted[0]}T00:00:00Z`); time <= last; time += DAY_MS) {
+    const date = new Date(time);
+    const number = date.getUTCDate();
+    calendar.push({
+      day: date.toISOString().slice(0, 10),
+      month: monthName.format(date),
+      label: number === 1 || !calendar.length ? `${monthShort.format(date)} ${number}` : String(number),
     });
   }
-  return months;
+  return calendar;
 }
 
 function normalizeChannel(value: unknown): VideoChannel | undefined {
