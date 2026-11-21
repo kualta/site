@@ -1,4 +1,5 @@
 import PublisherAnalytics from "./PublisherAnalytics";
+import PublisherArchive from "./PublisherArchive";
 import PublisherCalendar from "./PublisherCalendar";
 import { exifDateTime } from "@/lib/publisher/photo-date";
 import PublisherHistory from "./PublisherHistory";
@@ -1109,6 +1110,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
             <button aria-pressed={tab === "analytics"} onClick={() => openTab("analytics")}>
               Analytics
             </button>
+            <button type="button" aria-pressed={tab === "archive"} onClick={() => openTab("archive")}>
+              Archive
+            </button>
             <button aria-pressed={tab === "accounts"} onClick={() => openTab("accounts")}>
               Accounts
             </button>
@@ -1150,6 +1154,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               search={address.search}
               onNavigate={(search, replace) => navigate(tabPath(base, "calendar"), search, replace)}
               postsVersion={postsVersion}
+            />
+          )}
+          {tab === "archive" && (
+            <PublisherArchive
+              request={api}
+              online={helperOnline}
+              connected={connectedPlatforms.includes("youtube-footage")}
+              onAccounts={() => openTab("accounts")}
             />
           )}
           {tab === "accounts" && (

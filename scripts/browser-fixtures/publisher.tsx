@@ -415,6 +415,46 @@ let pieces: Piece[] = [
     },
   },
 ];
+// The Archive tab: the laptop is putting a clip up at 20 Mbit/s, two wait (one off the laptop) and one is up;
+// ?archive=paused, limit, done or stale shows the uploads held up instead.
+const archiveState = new URLSearchParams(location.search).get("archive");
+function footage() {
+  const clips = [
+    ["DJI_20261121101500_0402_D.mp4", "2026-11-21 10:15:00 · clip 0402", 1_840_000_000, "exported", "uploading", null],
+    ["DJI_20261120183012_0399_D.mp4", "2026-11-20 18:30:12 · clip 0399", 912_000_000, "exported", "due", "earlier1234"],
+    ["DJI_20261111161230_0258_D.mp4", "2026-11-11 16:12:30 · clip 0258", 420_000_000, "exported", "up", "abcDEF12345"],
+    ["DJI_20261108122204_0086_D.mp4", "2026-11-08 12:22:04 · clip 0086", 2_780_000_000, "archive", "due", null],
+  ].map(([name, title, size, from, state, video]) => ({ name, title, size, from, state, video, uploadedAt: null }));
+  const uploading = !archiveState || archiveState === "stale";
+  const sent = uploading ? 736_000_000 : 0;
+  return {
+    watching: true,
+    age: archiveState === "stale" ? 3_600_000 : 2_000,
+    status: {
+      at: Date.now() - (archiveState === "stale" ? 3_600_000 : 2_000),
+      channel: "@kualta-footage",
+      daily: 10,
+      today: archiveState === "limit" ? 10 : 3,
+      state: uploading ? "uploading" : archiveState,
+      pausedUntil: archiveState === "paused" ? Date.now() + 30 * 60_000 : null,
+      lastError:
+        archiveState === "paused"
+          ? { clip: clips[0].name, message: "YouTube refused part of the upload (503)", at: new Date().toISOString() }
+          : null,
+      current: uploading ? { name: clips[0].name, title: clips[0].title, size: clips[0].size, sent, from: "exported" } : null,
+      speed: 2_500_000,
+      totals: {
+        up: 1,
+        upBytes: 420_000_000,
+        due: 3,
+        dueBytes: 1_840_000_000 + 912_000_000 + 2_780_000_000 - sent,
+        today: archiveState === "limit" ? 0 : 3,
+        todayBytes: archiveState === "limit" ? 0 : 1_840_000_000 + 912_000_000 + 2_780_000_000 - sent,
+      },
+      clips: archiveState === "done" ? clips.map((clip) => ({ ...clip, state: "up", video: "doneDEF1234" })) : clips,
+    },
+  };
+}
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const url = new URL(String(input), location.href);
@@ -444,7 +484,10 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "session") return json({ allowed: true, signedIn: true });
   if (path === "status")
     return json({
-      helper: { last_seen: Date.now(), platforms: JSON.stringify(["bluesky", "twitter", "grain", "instagram"]) },
+      helper: {
+        last_seen: Date.now(),
+        platforms: JSON.stringify(["bluesky", "twitter", "grain", "instagram", "youtube-footage"]),
+      },
       connections: connecting
         ? [
             {
@@ -461,6 +504,8 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
           ]
         : [],
     });
+  if (path === "footage/watch") return json({ watching: method !== "DELETE" });
+  if (path === "footage") return json(footage());
   if (path === "history") return json(history);
   if (path === "drafts") return json({ drafts });
   // Bluesky posted an hour ago, so its next free slot keeps its gap from that.

@@ -67,6 +67,7 @@ import {
   releaseJob,
   updateContent,
 } from "@/lib/publisher/content";
+import { footageResponse } from "@/lib/publisher/footage";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
 import { isTag } from "@/lib/publisher/variants";
 export const prerender = false;
@@ -99,6 +100,11 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (path.startsWith("helper/archive/")) {
       if (!archive) return json({ error: "The archive bucket isn't configured" }, 503);
       return await archiveResponse(path.slice("helper/archive/".length), request, { db, media, archive });
+    }
+    // The Archive tab: the footage archive's uploads run only while it's open.
+    if (path === "footage" || path === "footage/watch" || path === "helper/footage") {
+      const response = await footageResponse(path, request, media);
+      if (response) return response;
     }
     if (path === "pair" && request.method === "POST") {
       const token = [...crypto.getRandomValues(new Uint8Array(32))]

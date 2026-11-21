@@ -23,7 +23,7 @@ const server = await createServer({
       name: "publisher-tabs",
       configureServer(vite) {
         vite.middlewares.use((request, _response, next) => {
-          request.url = request.url?.replace(/^\/publisher\.html\/(pipeline|history|calendar|analytics|accounts)(?=\?|$)/, "/publisher.html");
+          request.url = request.url?.replace(/^\/publisher\.html\/(pipeline|history|calendar|analytics|archive|accounts)(?=\?|$)/, "/publisher.html");
           next();
         });
       },
@@ -1639,6 +1639,52 @@ try {
         path: path.join(shots, `analytics-${mobile ? "mobile" : "desktop"}.png`),
         fullPage: true,
       });
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+  // The Archive tab: graded footage goes up only while it's open, so it says so on opening and again on leaving. It
+  // shows the clip going up with its progress, speed and time left, and why uploads wait when they do.
+  for (const [width, name] of [
+    [1280, "desktop"],
+    [390, "mobile"],
+  ]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const sent = (method) =>
+      page.waitForFunction((m) => window.publisherRequests.some((r) => r.path === "footage/watch" && r.method === m), method);
+    await page.goto(`http://127.0.0.1:8797/publisher.html/archive?theme=${width > 700 ? "dark" : "light"}`);
+    const archive = page.getByRole("region", { name: "Footage archive" });
+    const bar = archive.getByRole("progressbar", { name: "Uploading 2026-11-21 10:15:00 · clip 0402" });
+    await bar.waitFor();
+    await sent("POST");
+    assert.equal(await bar.getAttribute("aria-valuenow"), "40");
+    for (const text of ["736 MB of 1.84 GB", "20 Mbit/s", "7 min", "32 min"])
+      await archive.getByText(text, { exact: true }).waitFor();
+    await archive.getByText("Today's 3 clips").waitFor();
+    await archive.getByRole("link", { name: "On YouTube" }).waitFor();
+    await archive.getByRole("link", { name: "earlier grade" }).waitFor();
+    await archive.getByText("Uploading 40%").waitFor();
+    await archive.getByText("2.78 GB · Cloudflare archive").waitFor();
+    await archive.getByRole("link", { name: "Channel" }).waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    if (shots) await page.screenshot({ path: path.join(shots, `archive-${name}.png`), fullPage: true });
+    // Leaving the tab tells the laptop to stop.
+    await page.getByRole("button", { name: "History", exact: true }).click();
+    await sent("DELETE");
+    for (const [state, line] of [
+      ["paused", /^Paused until .+: YouTube refused part of the upload \(503\)$/],
+      ["limit", "Daily limit reached. More tomorrow."],
+      ["done", "All clips are up."],
+      ["stale", "Waiting for the laptop…"],
+    ]) {
+      await page.goto(`http://127.0.0.1:8797/publisher.html/archive?archive=${state}&theme=${width > 700 ? "dark" : "light"}`);
+      await archive.getByRole("status").filter({ hasText: line }).waitFor();
+      assert.equal(await archive.getByRole("progressbar").count(), 0);
+      if (state === "stale") await archive.getByText(/^As of /).waitFor();
+      if (shots && state === "paused") await page.screenshot({ path: path.join(shots, `archive-paused-${name}.png`), fullPage: true });
+    }
     assert.deepEqual(errors, []);
     await context.close();
   }

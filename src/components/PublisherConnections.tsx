@@ -141,13 +141,6 @@ export default function PublisherConnections({ online, connected, connections, r
                 {latest.message}
               </p>
             )}
-            {isArchive(platform) && !current && (
-              <p className="publisher-note">
-                {ready && latest?.state === "succeeded" && latest.message
-                  ? latest.message
-                  : "Every graded clip goes up unlisted to a channel of its own, a few a day."}
-              </p>
-            )}
           </div>
         );
       })}

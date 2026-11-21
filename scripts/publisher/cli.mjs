@@ -22,7 +22,7 @@ import {
 } from "./archive.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
-import { DAILY, FOOTAGE, dueClips, readState, uploadFootage } from "./footage.mjs";
+import { DAILY, FOOTAGE, dueClips, readState, uploadFootage, watchFootage } from "./footage.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
@@ -126,23 +126,16 @@ if (command === "connect") {
       .catch((error) => console.error(`Chrome copy cleanup failed: ${error.message}`));
   void sweep();
   setInterval(sweep, 10 * 60_000).unref();
-  // Graded clips go up to the footage archive's channel beside the publishing, every half hour while it's connected: a
-  // multi-gigabyte clip takes a while, and posts don't wait for it.
-  void (async () => {
-    while (true) {
-      try {
-        const current = JSON.parse(await readFile(configFile, "utf8"));
-        if (current.platforms?.includes(FOOTAGE)) {
-          const request = archiveClient({ origin: current.origin, token: current.token });
-          const done = await uploadFootage({ stateDir, config: current, request, log: (line) => console.log(line) });
-          if (done.uploaded) console.log(`Footage archive: ${done.uploaded} clips up, ${done.left} to go`);
-        }
-      } catch (error) {
-        console.error(`Footage archive: ${error.message}`);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 30 * 60_000));
-    }
-  })();
+  // Graded clips go up to the footage archive's channel beside the publishing, and only while the composer's Archive
+  // tab is open, so they never take the network unseen. The helper asks every 10 seconds; closing the tab stops the
+  // upload mid-part, to resume there the next time it opens.
+  void watchFootage({
+    stateDir,
+    loadConfig: async () => JSON.parse(await readFile(configFile, "utf8")),
+    ask: async (status) => (await api("footage", status ?? undefined)).json(),
+    client: (current) => archiveClient({ origin: current.origin, token: current.token }),
+    log: (line) => console.log(line),
+  });
   // Instagram's story archive is copied to disk on start, then hourly when nothing else is waiting, so new stories
   // reach Pinkleap while they're still up. The folder goes to the Cloudflare archive on start and after any change.
   let storiesDue = 0;

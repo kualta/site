@@ -86,20 +86,22 @@ function contentType(method, body) {
  * here can be Cloudflare refusing the Worker for using too much CPU, which the helper's requests then meet too.
  */
 export function archiveClient({ origin, token, fetcher = fetch, log = () => {} }) {
-  return async function request(path, { method = "GET", json, body, raw = false } = {}) {
+  // `signal` stops a request for good, with no retry: the footage archive's uploads stopping when its tab closes.
+  return async function request(path, { method = "GET", json, body, raw = false, signal = null } = {}) {
     const type = contentType(method, body);
     const route = path.split("?")[0];
     for (let attempt = 1; ; attempt++) {
       let response;
+      const timeout = AbortSignal.timeout(10 * 60_000);
       try {
         response = await fetcher(`${origin}/api/publisher/helper/archive/${path}`, {
           method,
           headers: { Authorization: `Bearer ${token}`, ...(type ? { "Content-Type": type } : {}) },
           body: json !== undefined ? JSON.stringify(json) : body,
-          signal: AbortSignal.timeout(10 * 60_000),
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         });
       } catch (error) {
-        if (attempt < 3) {
+        if (attempt < 3 && !signal?.aborted) {
           log(`${method} ${route} failed (${error.message}); trying again`);
           continue;
         }
