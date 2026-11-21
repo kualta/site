@@ -14,12 +14,14 @@ function levelLabel(level: Level): string {
 
 /**
  * A feed preview is muted, small and may never be watched, so it takes the
- * rendition that fits the card and buffers only a few seconds ahead.
+ * rendition that fits the card and buffers only a few seconds ahead. One loaded
+ * before it's on screen, as the stories either side of the one up are, isn't
+ * held to its size (`capToPlayer: false`), which would be none yet.
  */
-export function createPreviewStream(HlsPlayer: typeof Hls): Hls {
+export function createPreviewStream(HlsPlayer: typeof Hls, { capToPlayer = true, buffer = 10 } = {}): Hls {
   const hls = new HlsPlayer({
-    capLevelToPlayerSize: true,
-    maxBufferLength: 10,
+    capLevelToPlayerSize: capToPlayer,
+    maxBufferLength: buffer,
     startLevel: bandwidthEstimate === undefined ? -1 : HlsPlayer.DefaultConfig.startLevel,
   });
   if (bandwidthEstimate !== undefined) hls.bandwidthEstimate = bandwidthEstimate;

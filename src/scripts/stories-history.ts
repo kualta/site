@@ -1,7 +1,7 @@
 import { getBlueskyAuthSnapshot, subscribeBlueskyAuth } from "@/lib/bluesky/auth";
 import { readStories, storyDays, type StoryDay } from "@/lib/videos";
 import { dayName, renderCalendar } from "./stories-calendar";
-import { openStories, ringState, type StoryAuthor, warmWhenNear } from "./stories-viewer";
+import { firstToShow, openStories, ringState, type StoryAuthor, warmWhenNear } from "./stories-viewer";
 
 /** History is read a hundred media posts a page; this many reach back years. */
 const HISTORY_PAGES = 50;
@@ -78,7 +78,7 @@ export function mountStoryHistory(root: HTMLElement): () => void {
     label.textContent = day.label;
     button.append(ring, label);
     button.addEventListener("click", () => openDay(position, button));
-    warmWhenNear(button);
+    warmWhenNear(button, undefined, () => firstToShow(day.stories));
     item.append(button);
     return item;
   }

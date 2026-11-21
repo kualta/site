@@ -18,12 +18,15 @@ export interface StoryAuthor {
   name: string;
   avatar?: string;
 }
-interface Showing {
+/** A story's photo or video, loaded to be shown now or next. */
+interface Loaded {
   story: ViewerStory;
   element: HTMLImageElement | HTMLVideoElement;
   hls?: Hls;
   /** a photo counts down only once it has loaded */
   ready: boolean;
+  /** let go of; a stream still being set up for it stops there */
+  dropped: boolean;
 }
 
 /** How long a photo stays up, as on Instagram. */
@@ -73,13 +76,30 @@ export function ringState(stories: { rkey: string }[]): "none" | "seen" | "unsee
   return allSeen(stories) ? "seen" : "unseen";
 }
 
-/** Fetches the video player as a pointer or focus reaches a ring, so a story can play the moment it opens. */
-export function warmWhenNear(ring: HTMLElement, signal?: AbortSignal): void {
+/** The story a group opens on: its first not watched yet, or its first once all have been. */
+export function firstToShow<T extends { rkey: string }>(stories: T[]): T | undefined {
+  return stories.find((story) => !seen().has(story.rkey)) ?? stories[0];
+}
+
+/**
+ * As a pointer, focus or touch reaches a ring, fetches the video player and starts loading the story it opens on
+ * (`pick`), so it can play the moment the viewer opens.
+ */
+export function warmWhenNear(ring: HTMLElement, signal?: AbortSignal, pick?: () => ViewerStory | undefined): void {
   for (const event of ["pointerenter", "focus", "touchstart"])
-    ring.addEventListener(event, () => void import("hls.js"), { once: true, passive: true, signal });
+    ring.addEventListener(
+      event,
+      () => {
+        void import("hls.js");
+        const story = pick?.();
+        if (story) preloading?.(story);
+      },
+      { once: true, passive: true, signal },
+    );
 }
 
 const dayLabel = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", timeZone: "UTC" });
+const yearLabel = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 /** "Nov 16, 13:40": the date and time written in the story, on the clock it was posted with. */
 export function storyTime(date: string): string {
@@ -87,22 +107,24 @@ export function storyTime(date: string): string {
   return Number.isNaN(day.getTime()) ? "" : `${dayLabel.format(day)}, ${date.slice(11, 16)}`;
 }
 
-/** How long ago a story went up, the way Instagram writes it: now, 12m, 5h, 3d, 2w, 1y. */
-export function storyAge(date: string, now = Date.now()): string {
+/**
+ * When a story went up, as Instagram writes it: now, 12m or 5h within a day, and after that its date on the clock it
+ * was posted with, Jul 14, with the year when it isn't this one.
+ */
+export function storyWhen(date: string, now = Date.now()): string {
   const minutes = Math.floor(Math.max(0, now - Date.parse(date)) / 60_000);
   if (!Number.isFinite(minutes)) return "";
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d`;
-  if (days < 365) return `${Math.floor(days / 7)}w`;
-  return `${Math.floor(days / 365)}y`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`;
+  const day = new Date(`${date.slice(0, 10)}T00:00:00Z`);
+  return (day.getUTCFullYear() === new Date(now).getFullYear() ? dayLabel : yearLabel).format(day);
 }
 
 type Open = (groups: ViewerStory[][], group: number, opener: HTMLElement | null, author: StoryAuthor) => void;
 let mounted: Open | undefined;
+/** Starts loading a story a ring was pointed at, while the viewer is closed. */
+let preloading: ((story: ViewerStory) => void) | undefined;
 
 /** Opens the page's story viewer on a group of stories; the groups after it follow on. */
 export function openStories(...args: Parameters<Open>): void {
@@ -148,8 +170,9 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   let elapsed = 0;
   let last = 0;
   let frameRequest = 0;
-  let generation = 0;
-  let showing: Showing | undefined;
+  let showing: Loaded | undefined;
+  /** the story up and the ones either side, loaded so a step plays at once; or, closed, one a ring was pointed at */
+  const loaded = new Map<string, Loaded>();
   let opener: HTMLElement | null = null;
   /** the animations of a close under way */
   let closing: Animation[] = [];
@@ -267,17 +290,90 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
       );
   }
 
-  function release(): void {
-    generation++;
-    if (!showing) return;
-    showing.hls?.destroy();
-    if (showing.element instanceof HTMLVideoElement) {
-      showing.element.pause();
-      showing.element.removeAttribute("src");
-      showing.element.load();
+  /** Stops a loaded story and lets go of its stream. */
+  function drop(entry: Loaded): void {
+    entry.dropped = true;
+    entry.hls?.destroy();
+    if (entry.element instanceof HTMLVideoElement) {
+      entry.element.pause();
+      entry.element.removeAttribute("src");
+      entry.element.load();
     }
+  }
+
+  /** Lets go of every story loaded, the one up among them. */
+  function release(): void {
+    for (const entry of loaded.values()) drop(entry);
+    loaded.clear();
     showing = undefined;
     media!.replaceChildren();
+  }
+
+  /**
+   * A story's photo or video, from what's loaded or loaded now. A video's stream starts filling at once, silent, so it
+   * plays without a wait when it comes up.
+   */
+  function load(story: ViewerStory): Loaded {
+    const known = loaded.get(story.rkey);
+    if (known) return known;
+    let entry: Loaded;
+    if (story.kind === "photo") {
+      const image = new Image();
+      image.alt = story.alt;
+      image.decoding = "async";
+      const photo: Loaded = { story, element: image, ready: false, dropped: false };
+      image.addEventListener("load", () => (photo.ready = true), { once: true });
+      // a photo that won't load moves on after its time, like one that did
+      image.addEventListener("error", () => (photo.ready = true), { once: true });
+      image.src = story.src;
+      if (image.complete) photo.ready = true;
+      entry = photo;
+    } else {
+      const video = document.createElement("video");
+      video.playsInline = true;
+      video.preload = "auto";
+      video.muted = true;
+      if (story.thumbnail) video.poster = story.thumbnail;
+      video.setAttribute("aria-label", story.alt || "Story video");
+      const clip: Loaded = { story, element: video, ready: true, dropped: false };
+      video.addEventListener("ended", () => clip === showing && next(), options);
+      void stream(video, clip);
+      entry = clip;
+    }
+    loaded.set(story.rkey, entry);
+    return entry;
+  }
+
+  /** Attaches a video's stream; one that's up by the time it's ready starts playing. */
+  async function stream(video: HTMLVideoElement, entry: Loaded): Promise<void> {
+    const { default: HlsPlayer } = await import("hls.js");
+    if (entry.dropped) return;
+    if (HlsPlayer.isSupported()) {
+      const hls = createPreviewStream(HlsPlayer, { capToPlayer: false, buffer: 8 });
+      hls.on(HlsPlayer.Events.ERROR, (_event, data) => {
+        if (data.fatal && entry === showing) next();
+      });
+      hls.loadSource(entry.story.src);
+      hls.attachMedia(video);
+      entry.hls = hls;
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = entry.story.src;
+    if (entry === showing && !paused) playVideo(video);
+  }
+
+  /** Lets go of every loaded story but these. */
+  function keepOnly(rkeys: Set<string>): void {
+    for (const [rkey, entry] of loaded)
+      if (!rkeys.has(rkey)) {
+        drop(entry);
+        loaded.delete(rkey);
+      }
+  }
+
+  /** While the viewer is closed, loads the story a ring was pointed at, and only that one. */
+  function preload(story: ViewerStory): void {
+    if (group >= 0) return;
+    keepOnly(new Set([story.rkey]));
+    load(story);
   }
 
   function playVideo(video: HTMLVideoElement): void {
@@ -293,22 +389,6 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     });
   }
 
-  async function attach(video: HTMLVideoElement, entry: Showing, src: string): Promise<void> {
-    const mine = generation;
-    const { default: HlsPlayer } = await import("hls.js");
-    if (mine !== generation) return;
-    if (HlsPlayer.isSupported()) {
-      const hls = createPreviewStream(HlsPlayer);
-      hls.on(HlsPlayer.Events.ERROR, (_event, data) => {
-        if (data.fatal && mine === generation) next();
-      });
-      hls.loadSource(src);
-      hls.attachMedia(video);
-      entry.hls = hls;
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) video.src = src;
-    if (!paused) playVideo(video);
-  }
-
   /** Puts up one story; `direction` says whether it was reached going later (1) or earlier (-1), for the slide. */
   function show(groupIndex: number, storyIndex: number, direction: 0 | 1 | -1 = 0): void {
     // where the frame and the neighbour it now shows stood, for the slide to start from
@@ -319,7 +399,6 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
             from: (direction > 0 ? nextPeek : previousPeek)?.getBoundingClientRect(),
           }
         : undefined;
-    release();
     const list = groups[groupIndex];
     if (groupIndex !== group || bars!.children.length !== list.length)
       bars!.replaceChildren(
@@ -336,41 +415,30 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     markSeen(story.rkey);
     // how long ago, as Instagram shows it; the exact time, on the clock it was posted with, on hover
     time!.dateTime = story.date;
-    time!.textContent = storyAge(story.date);
+    time!.textContent = storyWhen(story.date);
     time!.title = storyTime(story.date);
     link!.href = story.url;
     // A story shaped like the frame fills it, cropping its sides as Instagram does: a 9:16 story is about 22% wider than
     // a 19.5:9 phone screen. Any other shape, a square or 4:5 photo, shows whole.
     const frameRatio = frame!.clientWidth / frame!.clientHeight || 9 / 16;
     media!.dataset.fit = Math.abs(story.width / story.height - frameRatio) / frameRatio < 0.3 ? "cover" : "contain";
-    if (story.kind === "photo") {
-      const image = new Image();
-      image.alt = story.alt;
-      image.decoding = "async";
-      const entry: Showing = { story, element: image, ready: false };
-      image.addEventListener("load", () => (entry.ready = true), { once: true });
-      // a photo that won't load moves on after its time, like one that did
-      image.addEventListener("error", () => (entry.ready = true), { once: true });
-      image.src = story.src;
-      if (image.complete) entry.ready = true;
-      media!.append(image);
-      showing = entry;
-    } else {
-      const video = document.createElement("video");
-      video.playsInline = true;
-      video.preload = "auto";
-      if (story.thumbnail) video.poster = story.thumbnail;
-      video.setAttribute("aria-label", story.alt || "Story video");
-      const entry: Showing = { story, element: video, ready: true };
-      video.addEventListener("ended", () => entry === showing && next(), options);
-      media!.append(video);
-      showing = entry;
-      void attach(video, entry, story.src);
+    const entry = load(story);
+    // the story left behind stops and goes back to its start, in case it's shown again; shown again now, it starts over
+    const left = showing;
+    if (left?.element instanceof HTMLVideoElement) {
+      if (left !== entry) left.element.pause();
+      left.element.currentTime = 0;
     }
-    // the next photo is fetched while this one is up, so it shows at once
+    showing = entry;
+    media!.replaceChildren(entry.element);
+    if (entry.element instanceof HTMLVideoElement && !paused && (entry.hls || entry.element.src))
+      playVideo(entry.element);
+    // the stories either side load now, so a step either way plays at once; anything further is let go
+    const preceding = nearby(-1);
     const following = nearby(1);
-    if (following?.kind === "photo") new Image().src = following.src;
-    showPeek(previousPeek, nearby(-1));
+    for (const each of [following, preceding]) if (each) load(each);
+    keepOnly(new Set([story, preceding, following].flatMap((each) => (each ? [each.rkey] : []))));
+    showPeek(previousPeek, preceding);
     showPeek(nextPeek, following);
     // so are the pictures two away, which the neighbours show after the next step
     for (const offset of [-2, 2]) {
@@ -415,6 +483,10 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
       share = Number.isFinite(duration) && duration > 0 ? currentTime / duration : 0;
     }
     progress(share);
+    // the line along the bottom runs while the story up is still coming: a photo not loaded, a video without enough
+    // buffered to play on
+    const loading = showing?.element instanceof HTMLVideoElement ? showing.element.readyState < 3 : !showing?.ready;
+    if (frame!.dataset.loading !== String(loading)) frame!.dataset.loading = String(loading);
     if (showing?.story.kind === "photo" && elapsed >= PHOTO_MS) next();
     if (group >= 0) frameRequest = requestAnimationFrame(tick);
   }
@@ -422,7 +494,9 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   function open(list: ViewerStory[][], groupIndex: number, from: HTMLElement | null, author: StoryAuthor): void {
     if (!list[groupIndex]?.length) return;
     if (closing.length) finishClose();
-    release();
+    // what a ring loaded while pointed at stays loaded, for this open to take
+    showing = undefined;
+    media!.replaceChildren();
     groups = list;
     group = -1;
     opener = from;
@@ -445,9 +519,8 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     showPaused();
     showSound();
     last = 0;
-    // a group starts at its first story not seen yet, or from the beginning once all have been
-    const unseen = groups[groupIndex].findIndex((story) => !seen().has(story.rkey));
-    show(groupIndex, unseen < 0 ? 0 : unseen);
+    const first = firstToShow(groups[groupIndex]);
+    show(groupIndex, first ? groups[groupIndex].indexOf(first) : 0);
     cancelAnimationFrame(frameRequest);
     frameRequest = requestAnimationFrame(tick);
     viewer.focus();
@@ -582,10 +655,14 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   );
   document.addEventListener("visibilitychange", () => document.hidden && group >= 0 && setPaused(true), options);
   mounted = open;
+  preloading = preload;
 
   return () => {
     finishClose();
+    // a story a ring loaded with the viewer closed goes too
+    release();
     listeners.abort();
     if (mounted === open) mounted = undefined;
+    if (preloading === preload) preloading = undefined;
   };
 }
