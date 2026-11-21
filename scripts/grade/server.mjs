@@ -12,7 +12,8 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { composeLut, gradeKey, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
+import { composeLut, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
+import { offload } from "./offload.mjs";
 import {
   archivedFootage,
   comparable,
@@ -48,6 +49,10 @@ const LEDGER_EVERY = Number(process.env.GRADE_LEDGER_EVERY || 30_000);
 const ARCHIVE_EVERY = 10 * 60_000;
 /** The pages that may frame the app: the composer's Grade tab, and the site run locally. Kept in step with app.mjs. */
 const FRAMED_BY = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
+/** What each clip offloaded to the archive was, by file name: its SHA-256, size and shoot day. */
+const OFFLOADED = join(DATA, "offloaded.json");
+/** The look an offloaded log clip without a grade gets, as settings, until it's graded by hand. */
+const DEFAULT_LOOK = process.env.GRADE_DEFAULT_LOOK || "opendrt-colorful";
 
 // ---- base looks: a .cube per profile that takes that profile's code values ------------------------------------
 
@@ -712,6 +717,169 @@ function scheduleLedger(ms = LEDGER_EVERY) {
   }, ms);
 }
 
+// ---- offloading originals to the archive (offload.mjs), and clearing the card or the Mac of them ----------------------
+
+const offloading = {
+  running: false,
+  /** "camera" or "mac". */
+  scope: null,
+  stop: null,
+  total: 0,
+  totalBytes: 0,
+  done: 0,
+  /** Bytes of the clips done this run. */
+  doneBytes: 0,
+  /** The clip going in: { name, sent, size, hashing }. */
+  current: null,
+  /** [time, bytes] over the last minute, for the speed. */
+  samples: [],
+  error: null,
+  /** How the last run ended: "done" or "stopped". */
+  finished: null,
+};
+const sizeOfAll = (clips) => clips.reduce((sum, clip) => sum + clip.size, 0);
+
+/** The clips in a place, the card ("camera") or Movies/Original ("mac"), each with its size, time and shoot day. */
+async function placeClips(scope) {
+  const days = scope === "camera" ? ((await card()) ?? new Map()) : await originalDays();
+  const clips = [];
+  for (const [day, list] of days)
+    for (const clip of list) {
+      const s = await stat(clip.path).catch(() => null);
+      if (s) clips.push({ name: clip.name, path: clip.path, size: s.size, mtime: Math.round(s.mtimeMs), day });
+    }
+  return clips.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A clip whose original went to the archive, by name and size. */
+const offloadedFrom = (record) => (clip) => record[clip.name]?.size === clip.size;
+
+function offloadState() {
+  const sent = offloading.doneBytes + (offloading.current?.sent ?? 0);
+  const [first, last] = [offloading.samples[0], offloading.samples.at(-1)];
+  const speed = first && last && last[0] > first[0] ? ((last[1] - first[1]) / (last[0] - first[0])) * 1000 : null;
+  const { stop, samples, doneBytes, ...state } = offloading;
+  return { ...state, bytes: sent, speed };
+}
+
+/** For each place: its clips, those still only there (pending), and those safe in the archive. */
+async function offloadSummary() {
+  const sent = offloadedFrom(await readClips(OFFLOADED));
+  const place = async (scope) => {
+    const clips = await placeClips(scope);
+    const safe = clips.filter(sent);
+    const pending = clips.filter((clip) => !sent(clip));
+    return {
+      clips: clips.length,
+      pending: pending.length,
+      pendingBytes: sizeOfAll(pending),
+      safe: safe.length,
+      safeBytes: sizeOfAll(safe),
+    };
+  };
+  const mounted = Boolean(await card());
+  return { camera: { mounted, ...(await place("camera")) }, mac: await place("mac"), run: offloadState() };
+}
+
+/** Gives the place's ungraded log clips the default look, as settings: they can be changed before any export. */
+async function applyDefaultLook(clips) {
+  const [grades, known, looks] = await Promise.all([readClips(GRADES), readClips(join(CACHE, "meta.json")), bases()]);
+  const added = {};
+  for (const clip of clips) {
+    const profile = known[clip.path]?.meta?.profile;
+    if (grades[clip.name] || !looks[profile]?.some((look) => look.id === DEFAULT_LOOK)) continue;
+    added[clip.name] = normalizeGrade({ base: DEFAULT_LOOK });
+  }
+  if (Object.keys(added).length) await updateClips(GRADES, (all) => Object.assign(all, added));
+  return Object.keys(added).length;
+}
+
+/** Starts sending a place's clips not in the archive yet; it goes on in the background until done or stopped. */
+async function startOffload(scope) {
+  if (offloading.running) throw httpError(409, "Already offloading");
+  const cloud = await ledgerCloud(PUBLISHER);
+  if (!cloud) throw httpError(409, "Pair the crossposter helper first: the offload goes through it");
+  const sent = offloadedFrom(await readClips(OFFLOADED));
+  const clips = (await placeClips(scope)).filter((clip) => !sent(clip));
+  await applyDefaultLook(clips);
+  Object.assign(offloading, {
+    running: true,
+    scope,
+    stop: new AbortController(),
+    total: clips.length,
+    totalBytes: sizeOfAll(clips),
+    done: 0,
+    doneBytes: 0,
+    current: null,
+    samples: [],
+    error: null,
+    finished: null,
+  });
+  const sample = () => {
+    const now = Date.now();
+    offloading.samples.push([now, offloading.doneBytes + (offloading.current?.sent ?? 0)]);
+    while (offloading.samples.length > 2 && now - offloading.samples[0][0] > 60_000) offloading.samples.shift();
+  };
+  void (async () => {
+    try {
+      const run = await offload(clips, {
+        request: cloud.request,
+        signal: offloading.stop.signal,
+        progress: (current) => {
+          offloading.current = current;
+          sample();
+        },
+        landed: (clip, sha256) => {
+          offloading.done++;
+          offloading.doneBytes += clip.size;
+          offloading.current = null;
+          sample();
+          void updateClips(OFFLOADED, (all) => {
+            all[clip.name] = { sha256, size: clip.size, day: clip.day, at: new Date().toISOString() };
+          });
+          // The ledger reads the archive again, so the clip shows as in Cloudflare.
+          ledger.archiveAt = 0;
+          scheduleLedger(2000);
+        },
+      });
+      offloading.finished = run.stopped ? "stopped" : "done";
+    } catch (e) {
+      offloading.error = String(e.message || e);
+    } finally {
+      offloading.running = false;
+      offloading.current = null;
+    }
+  })();
+}
+
+/**
+ * Deletes from a place the clips whose originals are in the archive: offloaded by name and size, and the archive
+ * still holding their bytes. The camera's low-res .LRF beside each goes too. Not while one is exporting.
+ */
+async function clearPlace(scope) {
+  if (offloading.running && offloading.scope === scope) throw httpError(409, "Stop or finish offloading first");
+  const cloud = await ledgerCloud(PUBLISHER);
+  if (!cloud) throw httpError(409, "Pair the crossposter helper first: clearing checks the archive through it");
+  const record = await readClips(OFFLOADED);
+  const offloaded = (await placeClips(scope)).filter(offloadedFrom(record));
+  const busy = (clip) =>
+    jobs.export.current?.name === clip.name || jobs.export.queue.some((job) => job.name === clip.name);
+  const hashes = offloaded.map((clip) => record[clip.name].sha256);
+  const missing = new Set();
+  for (let i = 0; i < hashes.length; i += 1000)
+    for (const hash of (await cloud.request("missing", { method: "POST", json: { blobs: hashes.slice(i, i + 1000) } }))
+      .missing)
+      missing.add(hash);
+  const sure = offloaded.filter((clip) => !missing.has(record[clip.name].sha256) && !busy(clip));
+  for (const clip of sure) {
+    await rm(clip.path);
+    await rm(clip.path.replace(/\.mp4$/i, ".LRF"), { force: true });
+  }
+  cardCache = null;
+  scheduleLedger(2000);
+  return { cleared: sure.length, bytes: sizeOfAll(sure), kept: offloaded.length - sure.length };
+}
+
 // ---- HTTP -----------------------------------------------------------------------------------------------------------
 
 function send(res, status, body, type = "application/json") {
@@ -921,7 +1089,25 @@ async function route(req, res) {
       thumbs: jobs.thumb.queue.length + jobs.thumb.busy,
       proxy: { queued: jobs.proxy.queue.length, current: jobs.proxy.current && { id: jobs.proxy.current.id, name: jobs.proxy.current.name } },
       export: jobs.export,
+      offload: offloadState(),
     });
+
+  // Offloading originals to the archive, and clearing the card or the Mac of those that are there.
+  const scopeOf = async () => {
+    const { scope } = await body(req);
+    if (scope !== "camera" && scope !== "mac") throw httpError(400, "Say camera or mac");
+    return scope;
+  };
+  if (p === "/api/offload" && req.method === "GET") return send(res, 200, await offloadSummary());
+  if (p === "/api/offload" && req.method === "POST") {
+    await startOffload(await scopeOf());
+    return send(res, 200, await offloadSummary());
+  }
+  if (p === "/api/offload/stop" && req.method === "POST") {
+    offloading.stop?.abort();
+    return send(res, 200, { stopping: offloading.running });
+  }
+  if (p === "/api/clear" && req.method === "POST") return send(res, 200, await clearPlace(await scopeOf()));
 
   throw httpError(404, "not found");
 }

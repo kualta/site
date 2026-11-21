@@ -1111,6 +1111,9 @@ function renderStatus() {
   const j = state.jobs;
   const parts = [];
   $("stop-export").hidden = !(j?.export.current || j?.export.queue.length);
+  $("stop-offload").hidden = !j?.offload?.running;
+  const offloadLine = offloadText(j?.offload);
+  if (offloadLine) parts.push(offloadLine);
   if (state.source?.startsWith("camera:") && state.library && !state.library.camera.mounted)
     parts.push(`${state.library.camera.name} disconnected: plug it in to preview and export; graded copies stay on the Mac`);
   if (j?.export.current) {
@@ -1128,6 +1131,118 @@ function renderStatus() {
   $("status").textContent = parts.join(" · ");
   $("status").title = $("status").textContent;
 }
+
+// ---- offload: originals to Cloudflare, then the card or the Mac cleared of them ----------------------------------------
+
+const offloadMenu = $("offload-menu");
+/** The server's /api/offload answer: each place's clips, those not in Cloudflare yet, and those safe there. */
+let offloadInfo = null;
+/** A Clear waiting for its confirming second click: { button, timer }. */
+let clearArmed = null;
+const weight = (bytes) => (bytes ? fileSize(bytes) : "0 GB");
+const clipsAndSize = (count, bytes) => `${count} clip${count === 1 ? "" : "s"} · ${weight(bytes)}`;
+
+/** The status line while originals go to Cloudflare, or after a run that went wrong. */
+function offloadText(o) {
+  if (!o) return "";
+  if (o.error && !o.running) return `Offload stopped: ${o.error}`;
+  if (!o.running) return "";
+  const parts = [`Offloading ${o.done} of ${o.total} · ${weight(o.bytes)} of ${weight(o.totalBytes)}`];
+  if (o.current) parts.push(`${o.current.hashing ? "checking" : "sending"} ${o.current.name.replace(/\.[^.]+$/, "")}`);
+  if (o.speed) {
+    const mbit = (o.speed * 8) / 1e6;
+    parts.push(`${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`);
+    const left = (o.totalBytes - o.bytes) / o.speed;
+    parts.push(left < 3600 ? `${Math.max(1, Math.round(left / 60))} min left` : `${(left / 3600).toFixed(1)} h left`);
+  }
+  return parts.join(" · ");
+}
+
+function renderOffloadMenu() {
+  const info = offloadInfo;
+  if (!info) return;
+  const running = state.jobs?.offload?.running ?? info.run.running;
+  const set = (id, disabled, note) => {
+    const button = $(id);
+    button.disabled = disabled;
+    button.querySelector(".menu-note").textContent = note;
+  };
+  const { camera, mac } = info;
+  set(
+    "offload-camera",
+    running || !camera.mounted || !camera.pending,
+    !camera.mounted ? "Camera not plugged in" : camera.pending ? `${clipsAndSize(camera.pending, camera.pendingBytes)} to send` : "All in Cloudflare",
+  );
+  set("offload-mac", running || !mac.pending, mac.pending ? `${clipsAndSize(mac.pending, mac.pendingBytes)} to send` : "All in Cloudflare");
+  for (const [id, place, where] of [
+    ["clear-camera", camera, "the card"],
+    ["clear-mac", mac, "this Mac"],
+  ])
+    if (clearArmed?.button !== $(id))
+      set(id, running || !place.safe, place.safe ? `Deletes ${clipsAndSize(place.safe, place.safeBytes)} from ${where}` : "Nothing in Cloudflare yet");
+}
+
+async function loadOffload() {
+  try {
+    offloadInfo = await (await api("/api/offload")).json();
+    renderOffloadMenu();
+  } catch (e) {
+    showError(e);
+  }
+}
+function setOffloadMenu(open) {
+  offloadMenu.hidden = !open;
+  $("offload-open").setAttribute("aria-expanded", String(open));
+  if (open) loadOffload();
+}
+$("offload-open").addEventListener("click", () => setOffloadMenu(offloadMenu.hidden));
+document.addEventListener("pointerdown", (e) => {
+  if (!offloadMenu.hidden && !e.target.closest("#offload-group")) setOffloadMenu(false);
+});
+offloadMenu.addEventListener("click", async (e) => {
+  const button = e.target.closest("button[data-action]");
+  if (!button || button.disabled) return;
+  const { scope, action } = button.dataset;
+  try {
+    if (action === "offload") {
+      await api("/api/offload", { method: "POST", json: { scope } });
+      setOffloadMenu(false);
+      return poll();
+    }
+    // Deleting is for good: the first click asks, the second within four seconds deletes.
+    if (clearArmed?.button !== button) {
+      clearTimeout(clearArmed?.timer);
+      button.querySelector(".menu-note").textContent = "Click again to delete them";
+      clearArmed = {
+        button,
+        timer: setTimeout(() => {
+          clearArmed = null;
+          renderOffloadMenu();
+        }, 4000),
+      };
+      return;
+    }
+    clearTimeout(clearArmed.timer);
+    clearArmed = null;
+    const { cleared, bytes, kept } = await (await api("/api/clear", { method: "POST", json: { scope } })).json();
+    setStatus(`Cleared ${clipsAndSize(cleared, bytes)}${kept ? `; kept ${kept} Cloudflare didn't confirm` : ""}`, { first: true });
+    await loadOffload();
+    // The clips gone from the card or the Mac leave their day; open what's still there.
+    await loadLibrary();
+    const id = sourceInfo(state.source) ? state.source : defaultSource();
+    if (id) await openSource(id);
+  } catch (err) {
+    showError(err);
+  }
+});
+$("stop-offload").addEventListener("click", async () => {
+  try {
+    await api("/api/offload/stop", { method: "POST" });
+    poll();
+  } catch (e) {
+    showError(e);
+  }
+});
 
 // ---- ledger and the composer ------------------------------------------------------------------------------------------
 // The ledger (every clip, its grade, where its copies are) is shown in the composer's Footage tab, post.kualta.dev/footage;
@@ -1235,7 +1350,8 @@ async function poll() {
     lastDone = done;
     renderStatus();
     updateRows();
-    const active = jobs.export.current || jobs.export.queue.length || waiting;
+    const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || waiting;
+    if (!offloadMenu.hidden) renderOffloadMenu();
     pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {
     showError(e);
