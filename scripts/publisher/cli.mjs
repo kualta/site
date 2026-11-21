@@ -24,6 +24,7 @@ import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { DAILY, FOOTAGE, dueClips, readState, uploadFootage, watchFootage } from "./footage.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
+import { reconcilePostRecords, syncPostRecord } from "./post-record.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
 import { archiveStories, crosspostStories, storiesRoot } from "./stories.mjs";
@@ -157,6 +158,7 @@ if (command === "connect") {
         for (let attempt = 0; attempt < 5; attempt++) {
           try {
             await api("deletion-result", { target_id: deletion.target_id, claim: deletion.claim, ...result });
+            if (result.state === "deleted") await syncPostRecord(deletion.post.id, { api, oauth });
             break;
           } catch {
             if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -216,6 +218,7 @@ if (command === "connect") {
         console.log(
           `${target.platform}: ${result.state}${delivered ? "" : " (receipt not saved; check the platform)"}`,
         );
+        if (delivered && result.state === "succeeded") await syncPostRecord(post.id, { api, oauth });
       } else if (config.platforms.includes("instagram") && Date.now() >= storiesDue) {
         storiesDue = Date.now() + 60 * 60_000;
         const { saved, removed, total } = await archiveStories({ stateDir });
@@ -379,6 +382,41 @@ if (command === "connect") {
     console.error(error.message);
     process.exitCode = 1;
   }
+} else if (command === "post-records") {
+  let oauth;
+  try {
+    if (!config.token) throw new Error("Connect the helper first");
+    const args = process.argv.slice(3);
+    const write = args.includes("--write");
+    const job = args.includes("--job") ? args[args.indexOf("--job") + 1] : undefined;
+    if (args.includes("--job") && !/^[a-f0-9-]{36}$/.test(job ?? ""))
+      throw new Error("Usage: bun run publisher post-records [--write] [--job <post id>]");
+    if (write)
+      oauth = await createOAuth(stateDir).catch((error) => {
+        // The running helper holds the sign-in; two processes refreshing it would end it.
+        if (error.code === "EADDRINUSE")
+          throw new Error(
+            "The helper is running and holds the Bluesky sign-in. Stop it (bun run publisher uninstall, or Ctrl+C " +
+              "where it runs), run this again, then start it (bun run publisher install).",
+          );
+        throw error;
+      });
+    const done = await reconcilePostRecords({ api, job, authorization: await oauth?.agent() });
+    const would = write ? "" : "would be ";
+    console.log(
+      `${done.create} ${would}created, ${done.update} ${would}updated, ${done.delete} ${would}deleted, ` +
+        `${done.none} already right` +
+        (done.failed ? `, ${done.failed} FAILED` : "") +
+        (done.orphans ? `, ${done.orphans} records without a post` : "") +
+        (write ? "" : ". Nothing was written; add --write to do it."),
+    );
+    if (done.failed) process.exitCode = 1;
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  } finally {
+    await oauth?.close();
+  }
 } else if (command === "oauth-key") {
   const file = join(stateDir, "oauth/client-key.json");
   const { created, jwk } = await ensureClientKey(file, `publisher-${new Date().toISOString().slice(0, 10)}`);
@@ -392,5 +430,6 @@ if (command === "connect") {
   console.log(
     "Usage: bun run publisher connect | start | install | uninstall | draft <post.json> | oauth-key |\n" +
       "  archive <project folder>… [--keep-cache] | restore <project> [folder] [--at <time>] | archives | archive-media |\n" +
-      "  cleanup <project folder>… | --all [--posted] [--dry-run] | footage [--now] [--daily <clips>]",
+      "  cleanup <project folder>… | --all [--posted] [--dry-run] | footage [--now] [--daily <clips>] |\n" +
+      "  post-records [--write] [--job <post id>]",
   );

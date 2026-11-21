@@ -58,6 +58,7 @@ import { EXPIRY_MARGIN, UPLOAD_LIFETIME, WEEK } from "@/lib/publisher/schedule";
 import { type Account, accounts, platforms } from "@/lib/publisher/presets";
 import { historyPage, queueDeletion, claimDeletion } from "@/lib/publisher/history";
 import { calendarPosts } from "@/lib/publisher/calendar";
+import { postRecordPage, postRecordSource } from "@/lib/publisher/post-records";
 import {
   createContent,
   deleteContent,
@@ -224,6 +225,19 @@ export const ALL: APIRoute = async ({ request, params }) => {
         .bind(data.state, String(data.message || "").slice(0, 500), Date.now(), data.target_id, data.claim)
         .run();
       return json({ ok: result.meta.changes > 0 });
+    }
+    // What the helper keeps each post's public record in the owner's AT Protocol repository in step with.
+    if (path === "helper/post-records" && request.method === "GET")
+      return json(await postRecordPage(db, new URL(request.url).searchParams.get("before")));
+    const recordOf = path.match(/^helper\/post-records\/([^/]+)(\/thumbnail)?$/);
+    if (recordOf && request.method === "GET") {
+      const [, id, picture] = recordOf;
+      if (!validId(id)) return json({ error: "Invalid post" }, 400);
+      if (!picture) return json({ job: await postRecordSource(db, id) });
+      const thumbnail = await readThumbnail(db, id);
+      if (!thumbnail) return json({ error: "No thumbnail" }, 404);
+      headers.set("Content-Type", thumbnail.type);
+      return new Response(thumbnail.data, { headers });
     }
     if (path === "status" && request.method === "GET") {
       const helper = await db.prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1").first();

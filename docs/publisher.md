@@ -599,3 +599,57 @@ Collector coverage:
 - Xiaohongshu: views and engagement from the creator center's note list. For a video note with views, the note manager also asks the data center for its average watch time (`/api/galaxy/creator/datacenter/note/base`), signed by the page's own signer since no RedNote page asks for it. It answers -1 until the account has data access, and the note then has no watch time; when it fills, it covers up to the day before.
 
 Browser metrics rely on provider response shapes and still need real-account acceptance testing. Hidden counts, expired sessions, changed response formats, and platform challenges yield unavailable/error states, not invented numbers. Unique reach is never inferred from views. No credentials or response bodies are persisted in analytics; only numeric counts, average watch times and video lengths in milliseconds, target IDs, timestamps, and generic error messages are stored. Apply `0006_publisher_analytics.sql` before deploying.
+
+## Post records
+
+Every post that is up somewhere has one public record in the owner's own AT Protocol repository
+(`did:plc:jhvnnnd3adml7t6anu3ay7ip`), of type `dev.kualta.post`
+(`scripts/lexicons/dev.kualta.post.json`). The repository is the original record of what was
+posted; each platform's copy is a syndication link on it.
+
+| Field | Holds |
+| --- | --- |
+| `kind` | `text`, `photo`, `video` or `mixed` |
+| `title` | the post's title, when it has one |
+| `text` | the caption |
+| `tags` | the post's tags, without `#` |
+| `createdAt` | when the first copy went up |
+| `thumbnail` | the post's stored thumbnail (JPEG, PNG or WebP, at most 200 KB) |
+| `syndication` | one `{ platform, url, uri?, publishedAt? }` for each copy that is up now |
+
+`uri` is the copy's own record, for Bluesky and Grain. `publishedAt` is left out for a copy
+published elsewhere and linked from History, whose publish time isn't known. `platform` uses the
+publisher's own names (`twitter` for X).
+
+The record holds only what a platform already shows. It never holds capture dates, the tagged
+place, alt text, the uploads or their ids, the short and Chinese versions, the schedule, metrics,
+failed or unconfirmed destinations, or anything about the helper and its connections. The site
+enforces this first: `GET helper/post-records` hands the helper only the title, caption, tags,
+confirmed links and the thumbnail's type, size and hash, and the helper builds the record from
+those by name (`buildPostRecord` in `scripts/publisher/post-record.mjs`).
+
+The record's key is a TID derived from the post's id (`recordKey("publisher:post:<id>")`, the
+derivation articles use), so a post has exactly one record however often it is written. The helper
+reconciles a post's record after a destination succeeds and after a deletion completes: it
+creates the record with the first copy, updates it as copies come and go, and deletes it when no
+copy is left. A record that can't be written never changes a destination's result, since the post
+is already up; the helper log says the record was not written and how to repair it.
+
+`bun run publisher post-records [--job <post id>]` compares every post, or one, with the
+repository and prints what it would create, update or delete. It reads public data only and
+writes nothing. Add `--write` to do it. Each write is conditional on the version it read, the
+thumbnail is uploaded only when the record doesn't already hold it, and a second run changes
+nothing, so the same command is the backfill for posts from before records existed and the
+repair after a failed write. It also picks up what the helper isn't told about: a post marked
+as published by hand, a link added or removed in History, and edited words. Records in the
+collection that match no post are listed and left alone.
+
+`--write` uses the laptop's Bluesky sign-in, which only one process may hold: stop the helper
+first (`bun run publisher uninstall`), run it, then `bun run publisher install`.
+
+The sign-in must grant `repo:dev.kualta.post` and the thumbnail's blob types
+(`src/lib/publisher/oauth-client.json`). A sign-in made before this was added doesn't, and the
+helper and the command both say so once instead of writing: after the site with the new client
+metadata is deployed, disconnect Grain / Bluesky in the composer's Accounts tab, connect it
+again, then run `bun run publisher post-records` and, if the plan looks right,
+`bun run publisher post-records --write`.
