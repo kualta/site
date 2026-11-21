@@ -25,13 +25,13 @@ const PRESENCE_SHAPE = 1.5;
 
 /** split so the half that actually changes can be styled on its own */
 export const PRESENCE_PARTS: Record<PresenceState, { lead: string; status: string }> = {
-  "almost-certain": { lead: "kualta is", status: "almost certainly around" },
-  "very-likely": { lead: "kualta is", status: "very likely around" },
-  likely: { lead: "kualta is", status: "likely around" },
-  "even-odds": { lead: "kualta is", status: "as likely around as not" },
-  unlikely: { lead: "kualta is", status: "unlikely to be around" },
-  "very-unlikely": { lead: "kualta is", status: "very unlikely to be around" },
-  "almost-no-chance": { lead: "kualta is", status: "almost certainly not around" },
+  "almost-certain": { lead: "kualta is", status: "almost certainly alive" },
+  "very-likely": { lead: "kualta is", status: "very likely alive" },
+  likely: { lead: "kualta is", status: "likely alive" },
+  "even-odds": { lead: "kualta is", status: "as likely alive as not" },
+  unlikely: { lead: "kualta is", status: "unlikely to be alive" },
+  "very-unlikely": { lead: "kualta is", status: "very unlikely to be alive" },
+  "almost-no-chance": { lead: "kualta is", status: "almost certainly dead" },
   unknown: { lead: "kualta's whereabouts are", status: "unknown" },
 };
 
@@ -52,7 +52,7 @@ const PRESENCE_TIERS: ReadonlyArray<{
   { minimumPercent: 0, state: "almost-no-chance" },
 ];
 
-/** the chance, from 0 to 1, that kualta is around after this long without a public sign */
+/** the chance, from 0 to 1, that kualta is alive after this long without a public sign */
 export function getPresenceChance(lastSeenAt: string | null, now: Date | number = Date.now()): number {
   if (!lastSeenAt) return 0;
 
