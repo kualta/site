@@ -10,12 +10,18 @@ import { UPLOAD_LIFETIME } from "./schedule";
  *                            still there to retry or crosspost once the media bucket has expired it
  *   blobs/<sha256>           the files of finished projects, each stored once however many projects hold it
  *   projects/<name>/<at>.json  a project's files as archived at that time: path, sha256, size and modified time each
+ *   ledger/footage.json      the footage ledger: every clip the grade app has seen, whether it's graded, and where its
+ *                            original and graded copies are. Rewritten as it changes, so it's on the Standard class.
  */
 export interface ArchiveBucket {
   put(
     key: string,
     body: ReadableStream | ArrayBuffer | string,
-    options?: { httpMetadata?: { contentType?: string }; sha256?: string },
+    options?: {
+      httpMetadata?: { contentType?: string };
+      sha256?: string;
+      storageClass?: "Standard" | "InfrequentAccess";
+    },
   ): Promise<unknown>;
   get(key: string): Promise<{
     body: ReadableStream;
@@ -59,6 +65,7 @@ export function sized(body: ReadableStream | null, length: number): ReadableStre
   return readable;
 }
 
+const LEDGER = "ledger/footage.json";
 const mediaKey = (id: string) => `media/${id}`;
 const blobKey = (hash: string) => `blobs/${hash}`;
 export const isHash = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
@@ -416,6 +423,8 @@ export async function readManifest(archive: ArchiveBucket, name: string, at?: st
  *   POST   media                      archives the uploads of every post queued in the last 31 days
  *   POST   posted                     { md5s: [md5] } → { posted: [{ md5, job, queuedAt, platforms }] }: the posts,
  *                                      published or scheduled, whose videos are those files
+ *   GET    ledger                     the footage ledger, as the grade app last sent it (404 before the first)
+ *   PUT    ledger                     the footage ledger, whole: the grade app is its only writer
  */
 export async function archiveResponse(
   rest: string,
@@ -473,6 +482,19 @@ export async function archiveResponse(
         const manifest = await readManifest(archive, key, params.get("at"));
         return manifest ? json(manifest) : json({ error: "No such archived project" }, 404);
       }
+    }
+    if (rest === "ledger" && method === "GET") {
+      const object = await archive.get(LEDGER);
+      if (!object) return json({ error: "No ledger yet" }, 404);
+      return new Response(object.body, { headers: { ...headers, "Content-Type": "application/json" } });
+    }
+    // Streamed on like the archive's files, so a ledger of thousands of clips costs the Worker no CPU to read.
+    if (rest === "ledger" && method === "PUT") {
+      await archive.put(LEDGER, body(), {
+        httpMetadata: { contentType: "application/json" },
+        storageClass: "Standard",
+      });
+      return json({ ok: true });
     }
     if (rest === "media" && method === "POST") return json(await archiveRecentPosts(db, media, archive));
     if (rest === "posted" && method === "POST") {

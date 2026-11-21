@@ -373,6 +373,14 @@ not.
 YouTube takes videos over 15 minutes only from a verified channel: verify the archive channel's
 phone number at youtube.com/verify, or longer clips fail to process.
 
+**The footage ledger.** The grade app (`scripts/grade`) keeps a record of every clip: when it was
+recorded, its profile, its grade, and where its original (camera, Mac, Cloudflare) and graded copy
+(Mac, Cloudflare, YouTube) are, read from the card, `~/Movies`, `.publisher/footage.json` and the
+archive's projects. It sends the ledger whole to `ledger/footage.json` in the archive
+(`GET`/`PUT helper/archive/ledger`, on the pairing token, streamed like the archive's files and
+stored on the Standard class since it's rewritten as it changes) and shows it under **Ledger**.
+See `scripts/grade/README.md`.
+
 ## Instagram stories
 
 The helper keeps the stories posted on Instagram (`scripts/publisher/stories.mjs`), on start and then hourly when

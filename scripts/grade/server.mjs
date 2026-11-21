@@ -13,6 +13,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { composeLut, gradeKey, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
+import { archivedFootage, comparable, ledgerCloud, mergeLedger, unionLedgers, youtubeUploads } from "./ledger.mjs";
 import { cameraDays, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +29,13 @@ const CAMERA = process.env.GRADE_CAMERA || "/Volumes/Pocket4P/DCIM";
 const CAMERA_NAME = process.env.GRADE_CAMERA_NAME || "Pocket 4P";
 const PORT = Number(process.env.GRADE_PORT || 4777);
 const EXPORT_LUT_SIZE = 65;
+// The crossposter helper's folder in this checkout: its pairing reaches the site's archive, and its footage.json says
+// what went up to YouTube.
+const PUBLISHER = process.env.GRADE_PUBLISHER || join(here, "../../.publisher");
+const LEDGER = join(DATA, "ledger.json");
+/** How often the ledger looks again; the archive's projects are asked every 10 minutes of that. */
+const LEDGER_EVERY = Number(process.env.GRADE_LEDGER_EVERY || 30_000);
+const ARCHIVE_EVERY = 10 * 60_000;
 
 // ---- base looks: a .cube per profile that takes that profile's code values ------------------------------------
 
@@ -309,6 +317,7 @@ async function pumpExports() {
     jobs.export.current = null;
   }
   exportBusy = false;
+  scheduleLedger(2000);
 }
 
 /** Stop exporting: drop the queue and stop the clip in progress (its half-written file is removed). */
@@ -379,6 +388,7 @@ async function trashNow(src, names) {
     await rm(thumbFile(name), { force: true });
   }
   cardCache = null;
+  scheduleLedger(2000);
   return trashed;
 }
 
@@ -483,6 +493,147 @@ function calibrationData() {
   return calibration;
 }
 
+// ---- the footage ledger (ledger.mjs) ----------------------------------------------------------------------------------
+
+const ledger = {
+  /** The ledger as last merged; null until the first look. */
+  current: null,
+  /** Whether the archive's copy has been read back, so sending this Mac's can't drop clips only it knows. */
+  restored: false,
+  /** What the archive holds, as comparable(): the ledger is sent when it differs. */
+  sent: null,
+  savedAt: null,
+  error: null,
+  archiveError: null,
+  cloud: false,
+  archiveAt: 0,
+  manifests: new Map(),
+  /** Clips whose metadata couldn't be read: not tried again every look. */
+  unreadable: new Set(),
+  running: false,
+  timer: null,
+};
+
+/** A file's size and modification time, or null once it's gone. */
+const sizeOf = async (path) => {
+  const s = await stat(path).catch(() => null);
+  return s ? { size: s.size, mtime: s.mtimeMs } : null;
+};
+
+/**
+ * What the ledger is made from, as mergeLedger takes it. Clips whose profile isn't known yet are probed a few at a time
+ * (none while an export reads the card); `more` says some are left.
+ */
+async function observe(cloud) {
+  const at = new Date().toISOString();
+  const days = await card();
+  const listed = async (list) =>
+    (await Promise.all(list.map(async (c) => ({ name: c.name, path: c.path, ...(await sizeOf(c.path)) })))).filter((c) => c.size !== undefined);
+  const cameraClips = await listed([...(days?.values() ?? [])].flat());
+  const macClips = await listed([...(await originalDays()).values()].flat());
+
+  const known = await readClips(join(CACHE, "meta.json"));
+  const metasByClip = new Map();
+  const unknown = [];
+  for (const c of [...cameraClips, ...macClips]) {
+    const meta = known[c.path]?.meta;
+    if (meta) metasByClip.set(stemOf(c.name).toLowerCase(), { profile: meta.profile, duration: meta.duration });
+    else if (!ledger.unreadable.has(c.path)) unknown.push(c);
+  }
+  const batch = jobs.export.current ? [] : unknown.slice(0, 8);
+  for (const c of batch) {
+    try {
+      const meta = (await metas({ id: "ledger", paths: new Map([[c.name, c.path]]) }, [c.name]))[c.name];
+      metasByClip.set(stemOf(c.name).toLowerCase(), { profile: meta.profile, duration: meta.duration });
+    } catch {
+      ledger.unreadable.add(c.path);
+    }
+  }
+
+  const exportedFiles = (await readdir(EXPORTED).catch(() => [])).filter((f) => f.endsWith(".mp4") && !f.startsWith("."));
+  const exported = await listed(exportedFiles.map((name) => ({ name, path: join(EXPORTED, name) })));
+
+  let archive = null;
+  if (cloud && Date.now() - ledger.archiveAt > ARCHIVE_EVERY) {
+    try {
+      archive = await archivedFootage(cloud.request, ledger.manifests);
+      ledger.archiveAt = Date.now();
+      ledger.archiveError = null;
+    } catch (e) {
+      // Asked again in two minutes rather than ten.
+      ledger.archiveAt = Date.now() - ARCHIVE_EVERY + 2 * 60_000;
+      ledger.archiveError = `Couldn't read the Cloudflare archive: ${e.message}`;
+    }
+  }
+  const seen = {
+    at,
+    camera: { name: CAMERA_NAME, mounted: Boolean(days), clips: cameraClips },
+    mac: macClips,
+    metas: metasByClip,
+    exports: await readClips(EXPORTS),
+    exported,
+    grades: Object.keys(await readClips(GRADES)),
+    youtube: await youtubeUploads(PUBLISHER),
+    archive,
+  };
+  return { seen, more: unknown.length > batch.length && batch.length > 0 };
+}
+
+/**
+ * One look: read back the ledger kept here, and the archive's copy once it can be reached, then merge in what's seen
+ * now, keep it here and send it to the archive if anything in it changed.
+ */
+async function ledgerLook() {
+  const cloud = await ledgerCloud(PUBLISHER);
+  ledger.cloud = Boolean(cloud);
+  ledger.error = null;
+  if (!ledger.current) ledger.current = await readJson(LEDGER, null);
+  if (cloud && !ledger.restored) {
+    try {
+      const remote = await cloud.read();
+      ledger.current = unionLedgers(ledger.current, remote);
+      ledger.sent = comparable(remote);
+      ledger.restored = true;
+    } catch (e) {
+      ledger.error = `Couldn't read the ledger in Cloudflare: ${e.message}`;
+    }
+  }
+  const { seen, more } = await observe(cloud);
+  const before = comparable(ledger.current);
+  ledger.current = mergeLedger(ledger.current, seen);
+  const now = comparable(ledger.current);
+  if (now !== before || !(await exists(LEDGER))) await writeJson(LEDGER, ledger.current);
+  if (cloud && ledger.restored && now !== ledger.sent) {
+    try {
+      await cloud.write(ledger.current);
+      ledger.sent = now;
+      ledger.savedAt = ledger.current.updatedAt;
+    } catch (e) {
+      ledger.error = `Couldn't save the ledger to Cloudflare: ${e.message}`;
+    }
+  }
+  return more;
+}
+
+/** Looks again in `ms`; sooner after an export or a trash, and every few seconds while clips wait to be probed. */
+function scheduleLedger(ms = LEDGER_EVERY) {
+  clearTimeout(ledger.timer);
+  ledger.timer = setTimeout(async () => {
+    if (ledger.running) return scheduleLedger(1000);
+    ledger.running = true;
+    let more = false;
+    try {
+      more = await ledgerLook();
+    } catch (e) {
+      ledger.error = String(e.message || e);
+      console.error(e);
+    } finally {
+      ledger.running = false;
+    }
+    scheduleLedger(more ? Math.min(5000, LEDGER_EVERY) : LEDGER_EVERY);
+  }, ms);
+}
+
 // ---- HTTP -----------------------------------------------------------------------------------------------------------
 
 function send(res, status, body, type = "application/json") {
@@ -578,6 +729,13 @@ async function route(req, res) {
   if (/^\/ui\/\w[\w.-]*$/.test(p)) return serveFile(req, res, join(here, p));
 
   if (p === "/api/library" && req.method === "GET") return send(res, 200, await library());
+  if (p === "/api/ledger" && req.method === "GET")
+    return send(res, 200, {
+      ledger: ledger.current,
+      cloud: ledger.cloud,
+      savedAt: ledger.savedAt,
+      error: ledger.error ?? ledger.archiveError,
+    });
   if (p === "/api/bases" && req.method === "GET") return send(res, 200, await bases());
   if (p === "/api/calibration" && req.method === "GET") {
     const { expected } = await calibrationData();
@@ -689,4 +847,5 @@ server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;
   console.log(`grade: ${address}  (movies ${MOVIES}, camera ${CAMERA}, data ${DATA}, LUTs ${LUTS})`);
   if (process.argv.includes("--open")) execFile("open", [address], () => {});
+  scheduleLedger(Math.min(2000, LEDGER_EVERY));
 });

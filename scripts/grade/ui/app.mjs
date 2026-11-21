@@ -99,6 +99,11 @@ const state = {
   filter: ["all", "graded", "ungraded"].includes(store.get("grade.filter")) ? store.get("grade.filter") : "all",
   // Export quality in percent, 100 (near lossless) each time the app opens.
   quality: 100,
+  /** The server's /api/ledger answer: the ledger and whether it's saved to Cloudflare. */
+  ledger: null,
+  /** The ledger's clips by name without extension, any case. */
+  ledgerByClip: new Map(),
+  ledgerFilter: store.get("grade.ledgerFilter") ?? "all",
 };
 
 const viewer = new Viewer($("canvas"));
@@ -790,6 +795,7 @@ function updatePanel() {
   const disabled = !clip;
   for (const el of document.querySelectorAll(".panel input, .panel select, .look-step, #copy, #reset, [data-reset-group]")) el.disabled = disabled;
   $("paste").disabled = disabled || !state.clipboard;
+  renderKept();
   if (!clip) {
     $("editing").textContent = "Nothing selected";
     $("clip-title").textContent = "—";
@@ -1124,6 +1130,214 @@ function renderStatus() {
   $("status").title = $("status").textContent;
 }
 
+// ---- ledger -------------------------------------------------------------------------------------------------------
+
+/** A copy off this Mac and the card: in the Cloudflare archive, or on YouTube (re-encoded, but a copy). */
+const keptAway = (c) => c.original.cloudflare || Boolean(c.graded?.cloudflare) || Boolean(c.graded?.youtube);
+/** Losing this Mac or the card would lose it. */
+const atRisk = (c) => !keptAway(c);
+/** No copy of it left anywhere. */
+const lost = (c) => !c.original.camera && !c.original.mac && !c.graded?.mac && !keptAway(c);
+const LEDGER_FILTERS = {
+  all: () => true,
+  risk: atRisk,
+  ungraded: (c) => c.profile !== "rec709" && !c.graded,
+  youtube: (c) => Boolean(c.graded) && !c.graded.youtube,
+  cloudflare: (c) => !c.original.cloudflare && !c.graded?.cloudflare,
+};
+if (!LEDGER_FILTERS[state.ledgerFilter]) state.ledgerFilter = "all";
+const FILTER_NAMES = { all: "All", risk: "At risk", ungraded: "Not graded", youtube: "Not on YouTube", cloudflare: "Not in Cloudflare" };
+const ledgerOpen = () => !$("ledger").hidden;
+const when = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+let ledgerAt = 0;
+async function loadLedger() {
+  ledgerAt = Date.now();
+  try {
+    state.ledger = await (await api("/api/ledger")).json();
+  } catch (e) {
+    state.ledger = { ledger: state.ledger?.ledger ?? null, cloud: false, error: String(e.message || e) };
+  }
+  state.ledgerByClip = new Map(Object.entries(state.ledger.ledger?.clips ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+  renderKept();
+  if (ledgerOpen()) renderLedger();
+}
+
+/** Where the selected clip's copies are, in a line under its details. */
+function renderKept() {
+  const clip = primaryClip();
+  const record = clip && state.ledgerByClip.get(clip.stem.toLowerCase());
+  if (!record) {
+    $("clip-kept").textContent = "";
+    return;
+  }
+  const places = (pairs) => pairs.filter(([, v]) => v).map(([name, v]) => (v === "earlier" ? `${name} (earlier grade)` : name));
+  const original = places([["camera", record.original.camera], ["Mac", record.original.mac], ["Cloudflare", record.original.cloudflare]]);
+  let text = `Original: ${original.join(", ") || "nowhere"}`;
+  if (record.graded) {
+    const youtube = record.graded.youtube && (record.graded.youtube.current ? true : "earlier");
+    const graded = places([["Mac", record.graded.mac], ["Cloudflare", record.graded.cloudflare], ["YouTube", youtube]]);
+    text += ` · Graded: ${graded.join(", ") || "nowhere"}`;
+  }
+  $("clip-kept").textContent = text;
+}
+
+/** A yes or no in a location column: an earlier grade, and the card's clips while it's unplugged, say so. */
+function markCell(value, { first = false, asOf = null, href = null } = {}) {
+  const td = document.createElement("td");
+  td.className = first ? "mark first" : "mark";
+  const el = document.createElement(href && value ? "a" : "span");
+  if (href && value) Object.assign(el, { href, target: "_blank", rel: "noreferrer" });
+  if (value === "earlier") {
+    el.className = "old";
+    el.textContent = "Earlier";
+    el.title = "An earlier grade";
+  } else if (value) {
+    el.textContent = "✓";
+    el.setAttribute("aria-label", "Yes");
+    if (asOf) {
+      el.className = "asof";
+      el.title = asOf;
+    }
+  } else {
+    el.className = "no";
+    el.textContent = "–";
+    el.setAttribute("aria-label", "No");
+  }
+  td.append(el);
+  return td;
+}
+
+function gradeText(c) {
+  if (c.graded) return c.graded.look ?? "Graded";
+  if (c.gradePending) return "Not exported";
+  if (c.profile === "rec709") return "Not log";
+  return c.profile ? "Not graded" : "—";
+}
+
+function ledgerRow(c, camera) {
+  const tr = document.createElement("tr");
+  if (lost(c)) tr.dataset.risk = "lost";
+  else if (atRisk(c)) tr.dataset.risk = "risk";
+  const td = (text, className = "") => {
+    const cell = document.createElement("td");
+    cell.className = className;
+    cell.textContent = text;
+    return cell;
+  };
+  const clipCell = document.createElement("td");
+  clipCell.className = "clip-cell";
+  clipCell.title = c.name;
+  const number = document.createElement("b");
+  number.textContent = /^DJI_\d{14}_(\d+)/.exec(c.name)?.[1] ?? c.name.replace(/\.[^.]+$/, "");
+  clipCell.append(number);
+  // The original's size, or the graded copy's for a clip whose original was never seen here.
+  const bytes = c.size ?? c.graded?.size;
+  if (bytes) {
+    const small = document.createElement("small");
+    small.textContent = fileSize(bytes);
+    clipCell.append(small);
+  }
+  if (lost(c)) {
+    const note = document.createElement("span");
+    note.className = "note";
+    note.textContent = "No copy left";
+    clipCell.append(note);
+  }
+  const youtube = c.graded?.youtube;
+  // The card's clips are as of when it was last plugged in.
+  const asOf = !camera.mounted && camera.seenAt ? `As of ${when(camera.seenAt)}, when the ${camera.name} was last plugged in` : null;
+  tr.append(
+    td(c.recorded?.slice(11, 16) ?? "", "dim"),
+    clipCell,
+    td(PROFILE_NAMES[c.profile] ?? "—", "dim"),
+    td(gradeText(c), c.graded ? "" : "dim"),
+    markCell(c.original.camera, { first: true, asOf }),
+    markCell(c.original.mac),
+    markCell(c.original.cloudflare),
+    markCell(c.graded?.mac, { first: true }),
+    markCell(c.graded?.cloudflare),
+    markCell(youtube && (youtube.current ? true : "earlier"), { href: youtube && `https://youtu.be/${youtube.video}` }),
+  );
+  return tr;
+}
+
+function renderLedger() {
+  const info = state.ledger;
+  const ledger = info?.ledger;
+  const clips = Object.values(ledger?.clips ?? {});
+  const parts = [];
+  if (!ledger) parts.push(info?.error ?? "Reading…");
+  else {
+    parts.push(`${clips.length} clip${clips.length === 1 ? "" : "s"}`);
+    if (info.error) parts.push(info.error);
+    else if (!info.cloud) parts.push("On this Mac only: pair the crossposter helper to save it to Cloudflare");
+    else if (info.savedAt) parts.push(`Saved to Cloudflare ${when(info.savedAt)}`);
+    else parts.push("Saving to Cloudflare…");
+  }
+  $("ledger-sync").textContent = parts.join(" · ");
+  for (const b of $("ledger-filter").querySelectorAll("button")) {
+    const key = b.dataset.filter;
+    b.textContent = `${FILTER_NAMES[key]} ${clips.filter(LEDGER_FILTERS[key]).length}`;
+    b.setAttribute("aria-pressed", String(key === state.ledgerFilter));
+  }
+  // Newest day first; within a day, in the order they were shot.
+  const shown = clips
+    .filter(LEDGER_FILTERS[state.ledgerFilter])
+    .sort((a, b) => {
+      const [da, db] = [a.recorded?.slice(0, 10) ?? "", b.recorded?.slice(0, 10) ?? ""];
+      return da === db ? (a.recorded ?? "").localeCompare(b.recorded ?? "") : db.localeCompare(da);
+    });
+  const perDay = new Map();
+  for (const c of shown) {
+    const day = c.recorded?.slice(0, 10) ?? "";
+    perDay.set(day, (perDay.get(day) ?? 0) + 1);
+  }
+  const rows = [];
+  let day = null;
+  for (const c of shown) {
+    const d = c.recorded?.slice(0, 10) ?? "";
+    if (d !== day) {
+      day = d;
+      const tr = document.createElement("tr");
+      tr.className = "day";
+      const th = document.createElement("th");
+      th.colSpan = 10;
+      th.scope = "colgroup";
+      const date = d
+        ? new Date(`${d}T12:00:00`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" })
+        : "Date unknown";
+      const n = perDay.get(d);
+      th.textContent = `${date} · ${n} clip${n === 1 ? "" : "s"}`;
+      tr.append(th);
+      rows.push(tr);
+    }
+    rows.push(ledgerRow(c, ledger.camera));
+  }
+  $("ledger-rows").replaceChildren(...rows);
+  $("ledger-empty").hidden = !ledger || shown.length > 0;
+}
+
+function setLedger(open) {
+  $("ledger").hidden = !open;
+  $("ledger-open").setAttribute("aria-expanded", String(open));
+  $("ledger-open").setAttribute("aria-pressed", String(open));
+  if (open) {
+    renderLedger();
+    loadLedger();
+    $("ledger-close").focus();
+  } else $("ledger-open").focus();
+}
+$("ledger-open").addEventListener("click", () => setLedger(!ledgerOpen()));
+$("ledger-close").addEventListener("click", () => setLedger(false));
+$("ledger-filter").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-filter]");
+  if (!b) return;
+  state.ledgerFilter = b.dataset.filter;
+  store.set("grade.ledgerFilter", state.ledgerFilter);
+  renderLedger();
+});
+
 let pollTimer = null;
 let lastDone = 0;
 let libraryAt = 0;
@@ -1143,6 +1357,8 @@ async function poll() {
       if (!state.source && allSources().length) await openSource(defaultSource());
       else if (state.source?.startsWith("camera:") && state.library.camera.mounted && !wasMounted && sourceInfo(state.source)) await openSource(state.source);
     }
+    // The ledger changes when the server looks again (every 30 seconds, and after exports): read often while it's open.
+    if (Date.now() - ledgerAt > (ledgerOpen() ? 5000 : 20000)) await loadLedger();
     const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted;
     if (reachable && (done !== lastDone || waiting)) await refreshSource();
     lastDone = done;
@@ -1167,6 +1383,11 @@ function defaultSource() {
 let heldMode = null;
 document.addEventListener("keydown", (e) => {
   const t = e.target;
+  // The ledger covers the clips: their shortcuts wait until it's closed.
+  if (ledgerOpen()) {
+    if (e.key === "Escape") setLedger(false);
+    return;
+  }
   if (t.matches?.("select, textarea, input:not([type=range]):not([type=checkbox])")) return;
   if (e.key === "Escape" && !exportMenu.hidden) {
     setExportMenu(false);
@@ -1210,6 +1431,7 @@ $("shoot").addEventListener("change", (e) => openSource(e.target.value));
 // ---- start --------------------------------------------------------------------------------------------------------
 
 buildControls();
+loadLedger();
 try {
   await calibrate();
   await loadLibrary();

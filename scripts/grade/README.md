@@ -51,12 +51,40 @@ Each day shows how many of its clips have an export, and the clip list can show 
 ~/Library/Application Support/Grade/      GRADE_DATA
   grades.json                             every clip's grade, by file name, saved as you work
   exports.json                            what each export was made with: source, base look, grade, key, quality
+  ledger.json                             the footage ledger (below), also kept in the site's archive
   luts/                                   GRADE_LUTS: base looks (below)
 ~/Library/Caches/Grade/                   GRADE_CACHE: metadata, thumbnails, previews; safe to delete
 ```
 
 Clips are known by file name, so a clip graded off the card and the same clip copied into `Original/` share one grade
 and one export. An export put in `Exported/` by hand counts as graded too.
+
+## The ledger
+
+**Ledger** (top bar) lists every clip the app has ever seen, newest day first, with its profile, its grade, and where
+its copies are: the original on the camera, on this Mac (`Original/`) or in the Cloudflare archive, and the graded
+copy on this Mac (`Exported/`), in the Cloudflare archive or on YouTube. The selected clip's panel says the same in a
+line. Filters pick out clips **at risk** (no copy off this Mac and the card: nothing in Cloudflare or on YouTube), not
+graded (log footage without a graded copy), not on YouTube and not in Cloudflare. A clip with no copy left anywhere
+says so. Esc closes it.
+
+The server looks every 30 seconds (and after an export or ⌘⌫) and merges what it sees into what it knew, so a clip
+off the card or the Mac keeps its record. What it can't look at keeps its last answer: the card's clips while it's
+unplugged (the table says as of when), and the archive between askings (every 10 minutes). The sources:
+
+- the card and `Original/`, and each clip's profile from its metadata (clips not yet probed are probed a few at a
+  time, none while an export reads the card);
+- `grades.json`, `exports.json` and `Exported/`;
+- YouTube: the crossposter helper's `.publisher/footage.json` in this checkout (`GRADE_PUBLISHER` names the folder),
+  what the footage archive put up;
+- Cloudflare: the archive's film projects, each manifest read once per archiving. A file of a clip's that's the
+  original's size is the original; any other is a graded copy, the current one when it's the export's size (the same
+  goes for YouTube).
+
+`ledger.json` is the ledger as last merged. Whenever anything in it changes it's sent whole to the site's archive
+(`ledger/footage.json`, through `helper/archive/ledger` on the helper's pairing), but only once the archive's copy has
+been read back and merged in, so a fresh `ledger.json` on a new Mac can't drop clips only the archive knows. Without a
+paired helper the ledger stays on this Mac, and the table says so.
 
 ## Grading
 

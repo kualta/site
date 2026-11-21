@@ -29,6 +29,7 @@
     <label for="shoot" class="cap">Clips from</label>
     <span class="select"><select id="shoot"></select><svg><use href="#i-chevron"/></svg></span>
   </div>
+  <button id="ledger-open" class="btn" type="button" aria-expanded="false" aria-controls="ledger">Ledger</button>
   <p class="status" id="status" role="status"></p>
   <button id="stop-export" class="btn" type="button" hidden>Stop exporting</button>
   <div class="split" id="export-group">
@@ -89,6 +90,7 @@
       <p class="cap" id="editing">Nothing selected</p>
       <h2 id="clip-title">—</h2>
       <div class="meta" id="clip-meta"></div>
+      <p class="kept" id="clip-kept"></p>
     </header>
 
     <section class="group">
@@ -133,6 +135,29 @@
     </section>
   </aside>
 </main>
+
+<section class="ledger" id="ledger" aria-labelledby="ledger-title" hidden>
+  <header class="ledger-head">
+    <div>
+      <h2 id="ledger-title">Ledger</h2>
+      <p class="ledger-sync" id="ledger-sync"></p>
+    </div>
+    <div class="seg" role="group" aria-label="Show" id="ledger-filter">
+      <button type="button" data-filter="all" aria-pressed="true">All</button><button type="button" data-filter="risk" aria-pressed="false">At risk</button><button type="button" data-filter="ungraded" aria-pressed="false">Not graded</button><button type="button" data-filter="youtube" aria-pressed="false">Not on YouTube</button><button type="button" data-filter="cloudflare" aria-pressed="false">Not in Cloudflare</button>
+    </div>
+    <button id="ledger-close" class="btn" type="button">Close</button>
+  </header>
+  <div class="ledger-scroll">
+    <table class="ledger-table">
+      <thead>
+        <tr><th rowspan="2">Recorded</th><th rowspan="2">Clip</th><th rowspan="2">Profile</th><th rowspan="2">Grade</th><th colspan="3" scope="colgroup" class="span first">Original</th><th colspan="3" scope="colgroup" class="span first">Graded copy</th></tr>
+        <tr><th class="mark first">Camera</th><th class="mark">Mac</th><th class="mark">Cloudflare</th><th class="mark first">Mac</th><th class="mark">Cloudflare</th><th class="mark">YouTube</th></tr>
+      </thead>
+      <tbody id="ledger-rows"></tbody>
+    </table>
+    <p class="empty-note" id="ledger-empty" hidden>Nothing here.</p>
+  </div>
+</section>
 <script type="module" src="/ui/app.mjs"></script>
 </body>
 </html>
