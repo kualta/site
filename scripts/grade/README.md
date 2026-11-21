@@ -2,7 +2,7 @@
 
 A local app for grading camera footage in bulk before it goes into OpenFilm: pick a look, set exposure, white
 balance, tint, contrast and saturation across many clips at once, watch it live, and export graded copies when it
-looks right.
+looks right. It's dark or light as the Mac's appearance is set; full screen stays dark.
 
 On the owner's laptop it is always running: launchd starts it at login and restarts it if it exits
 (`dev.kualta.grade`, `~/Library/LaunchAgents/dev.kualta.grade.plist`, log `~/Library/Logs/Grade/server.log`), from
@@ -67,6 +67,11 @@ copy on this Mac (`Exported/`), in the Cloudflare archive or on YouTube. The sel
 line. Filters pick out clips **at risk** (no copy off this Mac and the card: nothing in Cloudflare or on YouTube), not
 graded (log footage without a graded copy), not on YouTube and not in Cloudflare. A clip with no copy left anywhere
 says so. Esc closes it.
+
+Each row has a small picture, no taller than its text: the clip-list thumbnail from the cache, made for the ledger a
+dozen per look (from the original's still or a frame, or from the graded copy once the original is gone; none while
+an export reads the card). A clip with none on this Mac shows its YouTube video's still, if it has one, else an empty
+frame. They're served at `/media/ledger/<clip>.jpg`, and `/api/ledger` lists which clips have one.
 
 The server looks every 30 seconds (and after an export or ⌘⌫) and merges what it sees into what it knew, so a clip
 off the card or the Mac keeps its record. What it can't look at keeps its last answer: the card's clips while it's

@@ -514,6 +514,12 @@ const ledger = {
   timer: null,
 };
 
+/** The clips with a thumbnail in the cache, by name without extension, lowercase. */
+async function thumbStems() {
+  const files = await readdir(join(CACHE, "thumbs")).catch(() => []);
+  return new Set(files.filter((f) => f.endsWith(".jpg")).map((f) => stemOf(f).toLowerCase()));
+}
+
 /** A file's size and modification time, or null once it's gone. */
 const sizeOf = async (path) => {
   const s = await stat(path).catch(() => null);
@@ -553,6 +559,22 @@ async function observe(cloud) {
   const exportedFiles = (await readdir(EXPORTED).catch(() => [])).filter((f) => f.endsWith(".mp4") && !f.startsWith("."));
   const exported = await listed(exportedFiles.map((name) => ({ name, path: join(EXPORTED, name) })));
 
+  // The ledger's small pictures, made like the clip list's: from the original (its still, or a frame), or from the
+  // graded copy once the original is gone. A dozen each look, none while an export reads the card.
+  const pictured = await thumbStems();
+  const unpictured = [];
+  for (const c of [...cameraClips, ...macClips, ...exported]) {
+    const lower = stemOf(c.name).toLowerCase();
+    if (pictured.has(lower)) continue;
+    const meta = known[c.path]?.meta ?? (c.path.startsWith(EXPORTED) ? { still: null, duration: 1 } : null);
+    if (!meta) continue;
+    // One picture a clip: from the first copy that can make it.
+    pictured.add(lower);
+    unpictured.push({ ...c, meta });
+  }
+  const pictures = jobs.export.current ? [] : unpictured.slice(0, 12);
+  for (const c of pictures) queueThumb({ id: "ledger", paths: new Map([[c.name, c.path]]) }, c.name, c.meta);
+
   let archive = null;
   if (cloud && Date.now() - ledger.archiveAt > ARCHIVE_EVERY) {
     try {
@@ -576,7 +598,9 @@ async function observe(cloud) {
     youtube: await youtubeUploads(PUBLISHER),
     archive,
   };
-  return { seen, more: unknown.length > batch.length && batch.length > 0 };
+  const moreToProbe = unknown.length > batch.length && batch.length > 0;
+  const moreToPicture = unpictured.length > pictures.length && pictures.length > 0;
+  return { seen, more: moreToProbe || moreToPicture };
 }
 
 /**
@@ -735,7 +759,11 @@ async function route(req, res) {
       cloud: ledger.cloud,
       savedAt: ledger.savedAt,
       error: ledger.error ?? ledger.archiveError,
+      // Which clips have a small picture at /media/ledger/<clip>.jpg: this Mac's cache, not the ledger's.
+      thumbs: [...(await thumbStems())],
     });
+  const thumb = /^\/media\/ledger\/([\w.-]+)\.jpg$/.exec(p);
+  if (thumb && req.method === "GET") return serveFile(req, res, join(CACHE, "thumbs", `${thumb[1]}.jpg`));
   if (p === "/api/bases" && req.method === "GET") return send(res, 200, await bases());
   if (p === "/api/calibration" && req.method === "GET") {
     const { expected } = await calibrationData();

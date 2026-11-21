@@ -266,6 +266,17 @@ test.if(usable)("keeps a ledger of every clip and where its copies are, sent who
   expect(Object.keys(sent.clips).sort()).toEqual(Object.keys(ledger.clips).sort());
   expect([...site.auth]).toEqual([`Bearer ${token}`]);
   expect(Object.keys(JSON.parse(readFileSync(join(data, "ledger.json"), "utf8")).clips)).toContain("DJI_20260101120000_0099_D");
+
+  // Small pictures: clips on this Mac or the card have one; the one only the archive holds doesn't.
+  const { thumbs } = await until(async () => {
+    const body = await json("/api/ledger");
+    return body.thumbs.includes("dji_20260203101500_0007_d") && body;
+  });
+  expect(thumbs).not.toContain("dji_20260101120000_0099_d");
+  const picture = await fetch(url("/media/ledger/DJI_20260203101500_0007_D.jpg"));
+  expect(picture.status).toBe(200);
+  expect(picture.headers.get("content-type")).toBe("image/jpeg");
+  expect((await fetch(url("/media/ledger/..%2Fmeta.jpg"))).status).toBe(404);
 }, 60_000);
 
 test.if(usable)("stops exporting: drops the queue, and the clip in progress leaves nothing behind", async () => {

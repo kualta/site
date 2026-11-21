@@ -103,6 +103,8 @@ const state = {
   ledger: null,
   /** The ledger's clips by name without extension, any case. */
   ledgerByClip: new Map(),
+  /** The clips with a small picture at /media/ledger/<clip>.jpg, lowercase. */
+  ledgerThumbs: new Set(),
   ledgerFilter: store.get("grade.ledgerFilter") ?? "all",
 };
 
@@ -1151,16 +1153,24 @@ const ledgerOpen = () => !$("ledger").hidden;
 const when = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 let ledgerAt = 0;
+/** What the table's rows show, so they're built again only when it changes and their pictures don't flicker. */
+function rowsShow() {
+  const ledger = state.ledger?.ledger;
+  const camera = ledger?.camera;
+  return JSON.stringify([ledger?.clips ?? null, [...state.ledgerThumbs].sort(), camera?.mounted ? null : camera?.seenAt]);
+}
+let rowsShown = "";
 async function loadLedger() {
   ledgerAt = Date.now();
   try {
     state.ledger = await (await api("/api/ledger")).json();
   } catch (e) {
-    state.ledger = { ledger: state.ledger?.ledger ?? null, cloud: false, error: String(e.message || e) };
+    state.ledger = { ledger: state.ledger?.ledger ?? null, cloud: false, error: String(e.message || e), thumbs: [...state.ledgerThumbs] };
   }
   state.ledgerByClip = new Map(Object.entries(state.ledger.ledger?.clips ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+  state.ledgerThumbs = new Set(state.ledger.thumbs ?? []);
   renderKept();
-  if (ledgerOpen()) renderLedger();
+  if (ledgerOpen()) renderLedger({ rows: rowsShow() !== rowsShown });
 }
 
 /** Where the selected clip's copies are, in a line under its details. */
@@ -1215,7 +1225,20 @@ function gradeText(c) {
   return c.profile ? "Not graded" : "—";
 }
 
-function ledgerRow(c, camera) {
+/** A clip's small picture: this Mac's, else its YouTube video's, else an empty frame the same size. */
+function ledgerThumb(key, c) {
+  const blank = () => Object.assign(document.createElement("span"), { className: "ledger-thumb" });
+  const video = c.graded?.youtube?.video;
+  let src = null;
+  if (state.ledgerThumbs.has(key.toLowerCase())) src = `/media/ledger/${encodeURIComponent(key)}.jpg`;
+  else if (video) src = `https://i.ytimg.com/vi/${encodeURIComponent(video)}/default.jpg`;
+  if (!src) return blank();
+  const img = Object.assign(new Image(), { className: "ledger-thumb", alt: "", loading: "lazy", decoding: "async", src });
+  img.addEventListener("error", () => img.replaceWith(blank()), { once: true });
+  return img;
+}
+
+function ledgerRow(key, c, camera) {
   const tr = document.createElement("tr");
   if (lost(c)) tr.dataset.risk = "lost";
   else if (atRisk(c)) tr.dataset.risk = "risk";
@@ -1230,7 +1253,7 @@ function ledgerRow(c, camera) {
   clipCell.title = c.name;
   const number = document.createElement("b");
   number.textContent = /^DJI_\d{14}_(\d+)/.exec(c.name)?.[1] ?? c.name.replace(/\.[^.]+$/, "");
-  clipCell.append(number);
+  clipCell.append(ledgerThumb(key, c), number);
   // The original's size, or the graded copy's for a clip whose original was never seen here.
   const bytes = c.size ?? c.graded?.size;
   if (bytes) {
@@ -1262,10 +1285,13 @@ function ledgerRow(c, camera) {
   return tr;
 }
 
-function renderLedger() {
+/** The ledger's header, and its rows unless `rows` is false (nothing they show changed). */
+function renderLedger({ rows: rebuild = true } = {}) {
   const info = state.ledger;
   const ledger = info?.ledger;
-  const clips = Object.values(ledger?.clips ?? {});
+  const entries = Object.entries(ledger?.clips ?? {});
+  const clips = entries.map(([, c]) => c);
+  const keys = new Map(entries.map(([key, c]) => [c, key]));
   const parts = [];
   if (!ledger) parts.push(info?.error ?? "Reading…");
   else {
@@ -1281,6 +1307,8 @@ function renderLedger() {
     b.textContent = `${FILTER_NAMES[key]} ${clips.filter(LEDGER_FILTERS[key]).length}`;
     b.setAttribute("aria-pressed", String(key === state.ledgerFilter));
   }
+  if (!rebuild) return;
+  rowsShown = rowsShow();
   // Newest day first; within a day, in the order they were shot.
   const shown = clips
     .filter(LEDGER_FILTERS[state.ledgerFilter])
@@ -1312,7 +1340,7 @@ function renderLedger() {
       tr.append(th);
       rows.push(tr);
     }
-    rows.push(ledgerRow(c, ledger.camera));
+    rows.push(ledgerRow(keys.get(c), c, ledger.camera));
   }
   $("ledger-rows").replaceChildren(...rows);
   $("ledger-empty").hidden = !ledger || shown.length > 0;
