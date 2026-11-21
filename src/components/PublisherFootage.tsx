@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import PublisherLedger from "./PublisherLedger";
 
 /** A graded clip as the laptop reports it: up on the footage channel, waiting, or going up now. */
 export interface FootageClip {
@@ -37,6 +38,8 @@ interface Props {
   /** Whether the YouTube footage archive is connected in Accounts. */
   connected: boolean;
   onAccounts: () => void;
+  /** Opens a clip in the Grade tab. */
+  onGrade: (clip: string) => void;
 }
 
 /** The laptop reports every 5 seconds during an upload and every 10 otherwise; older than this, it hasn't started. */
@@ -92,49 +95,12 @@ function noticeFor(
   }
 }
 
-/** `live`: the status is the laptop's latest, so a clip it says is going up still is. */
-function ClipState({ clip, status, live }: { clip: FootageClip; status: FootageStatus; live: boolean }) {
-  if (clip.state === "up" && clip.video)
-    return (
-      <a
-        className="publisher-archive-state"
-        data-state="up"
-        href={`https://youtu.be/${clip.video}`}
-        target="_blank"
-        rel="noreferrer"
-      >
-        On YouTube
-      </a>
-    );
-  if (clip.state === "uploading" && live && status.current) {
-    const share = status.current.size ? Math.floor((status.current.sent / status.current.size) * 100) : 0;
-    return (
-      <span className="publisher-archive-state" data-state="uploading">
-        Uploading {share}%
-      </span>
-    );
-  }
-  return (
-    <span className="publisher-archive-state" data-state="due">
-      {clip.video ? (
-        <>
-          Waiting ·{" "}
-          <a href={`https://youtu.be/${clip.video}`} target="_blank" rel="noreferrer">
-            earlier grade
-          </a>
-        </>
-      ) : (
-        "Waiting"
-      )}
-    </span>
-  );
-}
-
 /**
- * The composer's Archive tab: graded footage going up to the footage archive's channel. The laptop uploads only while
- * this tab is open, so it says so on opening and every 30 seconds, and says it closed on leaving.
+ * The composer's Footage tab: the footage ledger (every clip, its grade, where its copies are) under the graded
+ * footage going up to the footage archive's YouTube channel. The laptop uploads only while this tab is open, so it
+ * says so on opening and every 30 seconds, and says it closed on leaving.
  */
-export default function PublisherArchive({ request, online, connected, onAccounts }: Props) {
+export default function PublisherFootage({ request, online, connected, onAccounts, onGrade }: Props) {
   const [reply, setReply] = useState<Reply | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -187,13 +153,11 @@ export default function PublisherArchive({ request, online, connected, onAccount
   const share = current?.size ? Math.min(100, Math.floor((current.sent / current.size) * 100)) : 0;
   const clipLeft = current && speed ? (current.size - current.sent) / speed : null;
   const todayLeft = current && speed && status && status.totals.today > 1 ? status.totals.todayBytes / speed : null;
-  const listed = status ? status.clips.length : 0;
-  const counted = status ? status.totals.up + status.totals.due : 0;
 
   return (
-    <section className="publisher-archive" aria-label="Footage archive">
+    <section className="publisher-archive" aria-label="Footage">
       <div className="publisher-heading">
-        <h1>Footage archive</h1>
+        <h1>Footage</h1>
         {status?.channel && (
           <a
             className="publisher-archive-channel"
@@ -278,31 +242,9 @@ export default function PublisherArchive({ request, online, connected, onAccount
             </div>
           </dl>
           {!fresh && <p className="publisher-note">As of {when(status.at)}</p>}
-          {status.clips.length ? (
-            <ul className="publisher-archive-clips" aria-label="Graded clips">
-              {status.clips.map((clip) => (
-                <li key={clip.name}>
-                  <div>
-                    <span>{clip.title}</span>
-                    <small>
-                      {size(clip.size)}
-                      {clip.from === "archive" ? " · Cloudflare archive" : ""}
-                    </small>
-                  </div>
-                  <ClipState clip={clip} status={status} live={Boolean(current)} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="publisher-note">No graded clips yet.</p>
-          )}
-          {listed < counted && (
-            <p className="publisher-note">
-              Newest {listed} of {counted}
-            </p>
-          )}
         </>
       )}
+      <PublisherLedger request={request} uploading={current ? { name: current.name, share } : null} onGrade={onGrade} />
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { footageResponse, isWatched, MAX_STATUS, WATCH_TTL } from "./footage";
-import { memoryMedia } from "./memory-archive";
+import { memoryArchive, memoryMedia } from "./memory-archive";
 import type { MediaBucket } from "./server";
 
 const url = "https://post.kualta.dev/api/publisher/";
@@ -12,7 +12,7 @@ const call = (path: string, method = "GET", body?: unknown) =>
   });
 /** A route's answer, which these paths always have. */
 async function answer(bucket: MediaBucket, path: string, method = "GET", body?: unknown, now = Date.now()) {
-  const response = await footageResponse(path, call(path, method, body), bucket, now);
+  const response = await footageResponse(path, call(path, method, body), { media: bucket }, now);
   if (!response) throw new Error(`${method} ${path} wasn't answered`);
   return response;
 }
@@ -65,7 +65,29 @@ test("a status that isn't an object, or is too big, is refused and the last one 
 
 test("other paths and methods are left to the rest of the API", async () => {
   const { bucket } = memoryMedia();
-  expect(await footageResponse("footage", call("footage", "POST", {}), bucket)).toBeNull();
-  expect(await footageResponse("footage/watch", call("footage/watch"), bucket)).toBeNull();
-  expect(await footageResponse("helper/footage", call("helper/footage", "DELETE"), bucket)).toBeNull();
+  expect(await footageResponse("footage", call("footage", "POST", {}), { media: bucket })).toBeNull();
+  expect(await footageResponse("footage/watch", call("footage/watch"), { media: bucket })).toBeNull();
+  expect(await footageResponse("helper/footage", call("helper/footage", "DELETE"), { media: bucket })).toBeNull();
+});
+
+test("the Footage tab reads the ledger and its pictures from the archive, as they're stored", async () => {
+  const { bucket: media } = memoryMedia();
+  const { bucket: archive } = memoryArchive();
+  const read = (path: string) => footageResponse(path, call(path), { media, archive });
+  expect((await read("footage/ledger"))?.status).toBe(404);
+  const ledger = JSON.stringify({ version: 1, clips: { DJI_20261111161230_0258_D: { thumb: true } } });
+  await archive.put("ledger/footage.json", ledger);
+  const sent = await read("footage/ledger");
+  expect(sent?.headers.get("Content-Type")).toBe("application/json");
+  expect(await sent?.text()).toBe(ledger);
+
+  await archive.put("ledger/thumbs/DJI_20261111161230_0258_D.jpg", "jpeg bytes");
+  const picture = await read("footage/thumbs/DJI_20261111161230_0258_D.jpg");
+  expect(picture?.headers.get("Content-Type")).toBe("image/jpeg");
+  expect(picture?.headers.get("Cache-Control")).toBe("private, max-age=86400");
+  expect(await picture?.text()).toBe("jpeg bytes");
+  expect((await read("footage/thumbs/IMG_4857.jpg"))?.status).toBe(404);
+  expect((await read("footage/thumbs/..%2Fledger.jpg"))?.status).toBe(404);
+  // Without the archive bound there's nothing to read.
+  expect((await footageResponse("footage/ledger", call("footage/ledger"), { media }))?.status).toBe(404);
 });

@@ -101,10 +101,14 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (!archive) return json({ error: "The archive bucket isn't configured" }, 503);
       return await archiveResponse(path.slice("helper/archive/".length), request, { db, media, archive });
     }
-    // The Archive tab: the footage archive's uploads run only while it's open.
-    if (path === "footage" || path === "footage/watch" || path === "helper/footage") {
-      const response = await footageResponse(path, request, media);
-      if (response) return response;
+    // The Footage tab: the ledger, and the footage archive's uploads, which run only while it's open.
+    if (path === "footage" || path.startsWith("footage/") || path === "helper/footage") {
+      const response = await footageResponse(path, request, { media, archive });
+      if (response) {
+        // A session refreshed on the way in has to reach the browser, or its rotated sign-in is lost.
+        for (const cookie of headers.getSetCookie()) response.headers.append("Set-Cookie", cookie);
+        return response;
+      }
     }
     if (path === "pair" && request.method === "POST") {
       const token = [...crypto.getRandomValues(new Uint8Array(32))]

@@ -1,7 +1,11 @@
+import { type ArchiveBucket, isClipName, LEDGER, ledgerThumbKey } from "./archive";
 import type { MediaBucket } from "./server";
 
 /*
- * The footage archive's uploads run only while the composer's Archive tab is open. The tab says it's open by keeping a
+ * The Footage tab shows the footage ledger the grade app keeps in the archive (every clip, whether it's graded and
+ * where its copies are), with each clip's small picture.
+ *
+ * The footage archive's uploads run only while the composer's Footage tab is open. The tab says it's open by keeping a
  * marker fresh; the laptop asks for it every few seconds and, while it's there, sends back what's up and how the upload
  * in flight is going. Both live in the media bucket (R2 Standard, which has a free allowance, unlike the archive's
  * Infrequent Access), not D1, whose daily read cap the helper's polling has nearly reached before. Its expiry rule
@@ -32,18 +36,33 @@ async function readStatus(media: MediaBucket, now: number) {
 }
 
 /**
- * The Archive tab's routes, with the caller already checked: `footage` (what's up, for the tab), `footage/watch`
- * (POST keeps the tab counted as open, DELETE says it closed), and `helper/footage` (the laptop asks whether the tab is
- * open, and with a POST sends its status). Anything else is null.
+ * The Footage tab's routes, with the caller already checked: `footage` (what's up with the uploads), `footage/watch`
+ * (POST keeps the tab counted as open, DELETE says it closed), `footage/ledger` and `footage/thumbs/<clip>.jpg` (the
+ * ledger and its pictures, from the archive), and `helper/footage` (the laptop asks whether the tab is open, and with
+ * a POST sends its status). Anything else is null.
  */
 export async function footageResponse(
   path: string,
   request: Request,
-  media: MediaBucket,
+  { media, archive = null }: { media: MediaBucket; archive?: Pick<ArchiveBucket, "get"> | null },
   now = Date.now(),
 ): Promise<Response | null> {
   const headers = { "Cache-Control": "no-store" };
   const json = (data: unknown, status = 200) => Response.json(data, { status, headers });
+  // Both streamed as they're stored: the ledger runs to hundreds of kilobytes, and the Worker has 10 ms to spend.
+  if (path === "footage/ledger" && request.method === "GET") {
+    const object = archive ? await archive.get(LEDGER) : null;
+    if (!object) return json({ error: "No ledger yet" }, 404);
+    return new Response(object.body, { headers: { ...headers, "Content-Type": "application/json" } });
+  }
+  const thumb = path.match(/^footage\/thumbs\/(.+)\.jpg$/)?.[1];
+  if (thumb !== undefined && request.method === "GET") {
+    const object = archive && isClipName(thumb) ? await archive.get(ledgerThumbKey(thumb)) : null;
+    if (!object) return json({ error: "No picture" }, 404);
+    return new Response(object.body, {
+      headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400" },
+    });
+  }
   if (path === "footage" && request.method === "GET") {
     const [watching, { text, age }] = await Promise.all([isWatched(media, now), readStatus(media, now)]);
     // The status went in checked, so it goes out as it is, without parsing it again.

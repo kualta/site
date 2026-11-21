@@ -13,7 +13,15 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { composeLut, gradeKey, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
-import { archivedFootage, comparable, ledgerCloud, mergeLedger, unionLedgers, youtubeUploads } from "./ledger.mjs";
+import {
+  archivedFootage,
+  comparable,
+  ledgerCloud,
+  mergeLedger,
+  pictureName,
+  unionLedgers,
+  youtubeUploads,
+} from "./ledger.mjs";
 import { cameraDays, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -36,6 +44,8 @@ const LEDGER = join(DATA, "ledger.json");
 /** How often the ledger looks again; the archive's projects are asked every 10 minutes of that. */
 const LEDGER_EVERY = Number(process.env.GRADE_LEDGER_EVERY || 30_000);
 const ARCHIVE_EVERY = 10 * 60_000;
+/** The pages that may frame the app: the composer's Grade tab, and the site run locally. Kept in step with app.mjs. */
+const FRAMED_BY = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
 
 // ---- base looks: a .cube per profile that takes that profile's code values ------------------------------------
 
@@ -516,8 +526,33 @@ const ledger = {
 
 /** The clips with a thumbnail in the cache, by name without extension, lowercase. */
 async function thumbStems() {
+  return new Set((await thumbFiles()).keys());
+}
+/** The cache's thumbnails: clip, lowercase, → file name. */
+async function thumbFiles() {
   const files = await readdir(join(CACHE, "thumbs")).catch(() => []);
-  return new Set(files.filter((f) => f.endsWith(".jpg")).map((f) => stemOf(f).toLowerCase()));
+  return new Map(files.filter((f) => f.endsWith(".jpg")).map((f) => [stemOf(f).toLowerCase(), f]));
+}
+
+/**
+ * Sends the archive a few clips' pictures it hasn't got (for the composer's Footage tab), marking each clip's record
+ * `thumb` once it's there; says whether more are waiting.
+ */
+async function sendThumbs(cloud, at = 24) {
+  const files = await thumbFiles();
+  const waiting = Object.entries(ledger.current.clips).filter(
+    ([key, clip]) => !clip.thumb && pictureName(key) && files.has(key.toLowerCase()),
+  );
+  for (const [key, clip] of waiting.slice(0, at)) {
+    try {
+      await cloud.putThumb(key, await readFile(join(CACHE, "thumbs", files.get(key.toLowerCase()))));
+      clip.thumb = true;
+    } catch (e) {
+      ledger.error = `Couldn't send a picture to Cloudflare: ${e.message}`;
+      return false;
+    }
+  }
+  return waiting.length > at;
 }
 
 /** A file's size and modification time, or null once it's gone. */
@@ -627,6 +662,7 @@ async function ledgerLook() {
   const { seen, more } = await observe(cloud);
   const before = comparable(ledger.current);
   ledger.current = mergeLedger(ledger.current, seen);
+  const morePictures = cloud && ledger.restored ? await sendThumbs(cloud) : false;
   const now = comparable(ledger.current);
   if (now !== before || !(await exists(LEDGER))) await writeJson(LEDGER, ledger.current);
   if (cloud && ledger.restored && now !== ledger.sent) {
@@ -638,7 +674,7 @@ async function ledgerLook() {
       ledger.error = `Couldn't save the ledger to Cloudflare: ${e.message}`;
     }
   }
-  return more;
+  return more || morePictures;
 }
 
 /** Looks again in `ms`; sooner after an export or a trash, and every few seconds while clips wait to be probed. */
@@ -750,7 +786,11 @@ async function route(req, res) {
   // A page on another origin cannot send this header without a preflight this server never grants.
   if (mutating && req.headers["x-grade"] !== "1") throw httpError(403, "missing X-Grade header");
 
-  if (p === "/" || p === "/index.html") return serveFile(req, res, join(here, "ui/index.html"));
+  if (p === "/" || p === "/index.html") {
+    // Only the composer's Grade tab (post.kualta.dev/grade, or the site run locally) may show the app in a frame.
+    res.setHeader("Content-Security-Policy", `frame-ancestors 'self' ${FRAMED_BY.join(" ")}`);
+    return serveFile(req, res, join(here, "ui/index.html"));
+  }
   if (p === "/color.mjs") return serveFile(req, res, join(here, "color.mjs"));
   if (/^\/ui\/\w[\w.-]*$/.test(p)) return serveFile(req, res, join(here, p));
 
@@ -761,11 +801,21 @@ async function route(req, res) {
       cloud: ledger.cloud,
       savedAt: ledger.savedAt,
       error: ledger.error ?? ledger.archiveError,
-      // Which clips have a small picture at /media/ledger/<clip>.jpg: this Mac's cache, not the ledger's.
-      thumbs: [...(await thumbStems())],
     });
-  const thumb = /^\/media\/ledger\/([\w.-]+)\.jpg$/.exec(p);
-  if (thumb && req.method === "GET") return serveFile(req, res, join(CACHE, "thumbs", `${thumb[1]}.jpg`));
+  // Where a clip is, by its name, for the Footage tab's Grade: the card's day holding it, else Movies/Original's.
+  if (p === "/api/find" && req.method === "GET") {
+    const wanted = stemOf(url.searchParams.get("clip") ?? "").toLowerCase();
+    const places = [
+      ["camera", (await card()) ?? new Map()],
+      ["mac", await originalDays()],
+    ];
+    for (const [kind, days] of places)
+      for (const [day, list] of days) {
+        const hit = list.find((c) => stemOf(c.name).toLowerCase() === wanted);
+        if (hit) return send(res, 200, { source: `${kind}:${day}`, name: hit.name });
+      }
+    throw httpError(404, "That clip isn't on the camera or this Mac");
+  }
   if (p === "/api/bases" && req.method === "GET") return send(res, 200, await bases());
   if (p === "/api/calibration" && req.method === "GET") {
     const { expected } = await calibrationData();

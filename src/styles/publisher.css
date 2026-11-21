@@ -11,8 +11,9 @@
 /* --- page --- */
 .publisher { width:100%; padding:40px 48px 120px; font-size:16px; line-height:1.5; }
 /* Everything keeps to one centred column whichever tab is open, so switching tabs never moves the header or the
-   tabs. Only the calendar's month and the pipeline's board leave it, to take the whole width of the window. */
-:where(.publisher > :not(.publisher-calendar, .publisher-pipeline, .publisher-toasts), .publisher-calendar > :not(.publisher-calendar-grid), .publisher-pipeline > :not(.publisher-pipeline-board)) { max-width:1104px; margin-inline:auto; }
+   tabs. Only the calendar's month, the pipeline's board and the grade app leave it, to take the whole width of the
+   window. */
+:where(.publisher > :not(.publisher-calendar, .publisher-pipeline, .publisher-grade-tab, .publisher-toasts),.publisher-calendar > :not(.publisher-calendar-grid), .publisher-pipeline > :not(.publisher-pipeline-board)) { max-width:1104px; margin-inline:auto; }
 .publisher,.publisher * { box-sizing:border-box; }
 .publisher a { color:inherit; text-decoration:none; }
 .publisher-note, .publisher small, .publisher time, .publisher-for { color:var(--publisher-muted); }
@@ -291,18 +292,44 @@
 .publisher-archive-totals { margin:0 0 24px; }
 .publisher-archive-figures dt, .publisher-archive-totals dt { font-size:13px; color:var(--publisher-muted); }
 .publisher-archive-figures dd, .publisher-archive-totals dd { margin:2px 0 0; font-size:15px; font-variant-numeric:tabular-nums; }
-.publisher-archive-clips { list-style:none; margin:0; padding:0; }
-/* A state too long to sit beside the clip's name on a phone goes under it rather than squeezing it. */
-.publisher-archive-clips > li { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 16px; padding:12px 0; border-top:1px solid var(--publisher-line); }
-.publisher-archive-clips > li > div { display:flex; flex:1 1 220px; flex-direction:column; min-width:0; }
-.publisher-archive-clips > li > div > span { font-size:15px; overflow-wrap:anywhere; }
-.publisher-archive-clips small { font-size:13px; }
-.publisher-archive-state { display:inline-flex; flex:none; align-items:center; gap:6px; font-size:13px; color:var(--publisher-muted); white-space:nowrap; }
-.publisher-archive-state::before { content:""; flex:none; width:6px; height:6px; border:1px solid currentColor; border-radius:50%; }
-.publisher-archive-state[data-state="up"]::before { border-color:var(--publisher-success); background:var(--publisher-success); }
-.publisher-archive-state[data-state="uploading"] { color:var(--publisher-ink); }
-.publisher-archive-state[data-state="uploading"]::before { background:currentColor; }
-.publisher a.publisher-archive-state, .publisher .publisher-archive-state a { text-decoration:underline; text-underline-offset:3px; }
+
+/* --- footage ledger: every clip, its grade, and where its original and graded copies are --- */
+.publisher-ledger { margin-top:32px; }
+.publisher-ledger-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; margin-bottom:12px; }
+.publisher .publisher-ledger-head > .publisher-note { margin:0; }
+.publisher-ledger-filters { display:flex; flex-wrap:wrap; gap:6px; }
+.publisher .publisher-ledger-filters button { padding:5px 12px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; color:var(--publisher-muted); font-size:13px; }
+.publisher .publisher-ledger-filters button span { margin-left:4px; font-variant-numeric:tabular-nums; }
+.publisher .publisher-ledger-filters button[aria-pressed="true"] { border-color:var(--publisher-ink); background:var(--publisher-ink); color:var(--publisher-on-ink); }
+/* Wider than a phone: the table scrolls sideways in its own box, never the page; positioned, so labels for screen
+   readers only (absolutely placed) stay in it too. */
+.publisher-ledger-scroll { position:relative; overflow-x:auto; }
+.publisher-ledger-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
+.publisher-ledger-table th, .publisher-ledger-table td { padding:6px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--publisher-line); }
+.publisher-ledger-table thead th { color:var(--publisher-muted); font-size:11px; font-weight:400; letter-spacing:.04em; text-transform:uppercase; }
+.publisher-ledger-table thead th.span { text-align:center; }
+.publisher-ledger-table .mark { width:76px; text-align:center; }
+.publisher-ledger-table .first { border-left:1px solid var(--publisher-line); }
+.publisher-ledger-table tr.day th { padding-top:18px; color:var(--publisher-ink); font-size:13px; font-weight:400; }
+.publisher-ledger-table tr[data-risk] td:first-child { box-shadow:inset 2px 0 0 var(--publisher-warning); }
+.publisher-ledger-table tr[data-risk="lost"] td:first-child { box-shadow:inset 2px 0 0 var(--publisher-danger); }
+.publisher-ledger-table .dim, .publisher-ledger-table .no, .publisher-ledger-table small { color:var(--publisher-muted); }
+.publisher-ledger-table .clip b { font-weight:400; font-variant-numeric:tabular-nums; }
+.publisher-ledger-table .clip small { margin-left:8px; font-size:12px; }
+.publisher-ledger-table .note { margin-left:8px; color:var(--publisher-danger); font-size:12px; }
+.publisher-ledger-table .old { color:var(--publisher-warning); font-size:12px; }
+.publisher-ledger-table .busy { color:var(--publisher-ink); }
+.publisher .publisher-ledger-table td.mark a { text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--publisher-edge); }
+/* As tall as its line of text, its margins pulled in, so a picture never makes a row taller. */
+.publisher-ledger-thumb { display:inline-block; width:32px; height:18px; margin:-2px 10px -2px 0; vertical-align:middle; border-radius:3px; object-fit:cover; background:var(--publisher-surface); }
+.publisher .publisher-ledger-table td.open button { padding:2px 10px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; font-size:12px; }
+.publisher .publisher-ledger-table td.open button:disabled { opacity:.4; }
+
+/* --- grade: the grade app on the Mac, framed, filling the window below the tabs --- */
+.publisher-grade iframe { display:block; width:100%; height:var(--grade-height, 70vh); border:1px solid var(--publisher-line); border-radius:12px; background:var(--publisher-surface); }
+.publisher-grade iframe[hidden] { display:none; }
+.publisher-grade-away { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; max-width:640px; padding:16px; border-radius:12px; background:var(--publisher-wash); }
+.publisher .publisher-grade-away p { margin:0; }
 .publisher-connection p { margin:0 0 12px; font-size:14px; color:var(--publisher-muted); }
 .publisher-connection code { padding:1px 6px; border:1px solid var(--publisher-line); border-radius:6px; background:var(--publisher-surface); color:var(--publisher-ink); font-size:13px; }
 .publisher-connection button { margin:0 8px 8px 0; }

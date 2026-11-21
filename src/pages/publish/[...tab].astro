@@ -6,13 +6,13 @@ import Publisher from "@/components/Publisher";
 import { env } from "cloudflare:workers";
 import { publisherSession } from "@/lib/publisher/auth";
 import { accounts, type Account } from "@/lib/publisher/presets";
+import { readPath, TAB_PATHS } from "@/lib/publisher/route";
 import "@/styles/globals.css";
 export const prerender = false;
 // The composer, or another tab by its path; the tab then keeps its own place in the query.
-const tabs = ["pipeline", "history", "calendar", "analytics", "archive", "accounts"] as const;
 const { tab } = Astro.params;
-const initialTab = tabs.find((name) => name === tab) ?? "compose";
-if (tab && initialTab === "compose") return new Response("Not found", { status: 404 });
+if (tab && !TAB_PATHS.includes(tab)) return new Response("Not found", { status: 404 });
+const initialTab = readPath(`/${tab ?? ""}`).tab;
 Astro.response.headers.set("Cache-Control", "no-store");
 // Check access while rendering, so the page opens straight into the composer or the sign-in prompt.
 let access: "owner" | "signin" | "denied" | undefined;

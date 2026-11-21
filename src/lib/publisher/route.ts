@@ -1,16 +1,19 @@
 import type { Metric } from "./metrics";
 import type { PostKind } from "./presets";
 
-export type Tab = "compose" | "pipeline" | "history" | "calendar" | "analytics" | "archive" | "accounts";
-const TAB = /\/(pipeline|history|calendar|analytics|archive|accounts)\/?$/;
+export type Tab = "compose" | "pipeline" | "history" | "calendar" | "analytics" | "footage" | "grade" | "accounts";
+/** The tabs' paths. `archive` is the Footage tab's old name, still opening it. */
+export const TAB_PATHS = ["pipeline", "history", "calendar", "analytics", "footage", "archive", "grade", "accounts"];
+const TAB = /\/(pipeline|history|calendar|analytics|footage|archive|grade|accounts)\/?$/;
 /**
  * Which tab a path opens, and the composer's own path: `/` or another tab's own, such as `/history`, on
  * post.kualta.dev, `/publish…` locally.
  */
 export function readPath(pathname: string): { base: string; tab: Tab } {
+  const name = pathname.match(TAB)?.[1];
   return {
     base: pathname.replace(TAB, "").replace(/\/+$/, ""),
-    tab: (pathname.match(TAB)?.[1] as Tab | undefined) ?? "compose",
+    tab: name === "archive" ? "footage" : (name as Tab | undefined) ?? "compose",
   };
 }
 export function tabPath(base: string, tab: Tab) {

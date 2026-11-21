@@ -23,7 +23,7 @@ const server = await createServer({
       name: "publisher-tabs",
       configureServer(vite) {
         vite.middlewares.use((request, _response, next) => {
-          request.url = request.url?.replace(/^\/publisher\.html\/(pipeline|history|calendar|analytics|archive|accounts)(?=\?|$)/, "/publisher.html");
+          request.url = request.url?.replace(/^\/publisher\.html\/(pipeline|history|calendar|analytics|footage|archive|grade|accounts)(?=\?|$)/, "/publisher.html");
           next();
         });
       },
@@ -1642,48 +1642,83 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
-  // The Archive tab: graded footage goes up only while it's open, so it says so on opening and again on leaving. It
-  // shows the clip going up with its progress, speed and time left, and why uploads wait when they do.
+  // The Footage tab (its old address, /archive, still opens it): the ledger of every clip, its grade and where its
+  // copies are, under the graded footage going up to YouTube, which runs only while the tab is open, so it says so on
+  // opening and again on leaving. A clip's Grade opens it in the Grade tab: the grade app on the Mac, in a frame allowed
+  // local network access, saying so when it can't be reached.
   for (const [width, name] of [
     [1280, "desktop"],
     [390, "mobile"],
   ]) {
     const context = await browser.newContext({ viewport: { width, height: 900 } });
     const page = await context.newPage();
+    await page.route("**/api/publisher/footage/thumbs/**", (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="36"><rect width="64" height="36" fill="#8a8f99"/></svg>',
+      }),
+    );
+    await page.route("https://i.ytimg.com/**", (route) =>
+      route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="90"/>' }),
+    );
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const sent = (method) =>
       page.waitForFunction((m) => window.publisherRequests.some((r) => r.path === "footage/watch" && r.method === m), method);
-    await page.goto(`http://127.0.0.1:8797/publisher.html/archive?theme=${width > 700 ? "dark" : "light"}`);
-    const archive = page.getByRole("region", { name: "Footage archive" });
-    const bar = archive.getByRole("progressbar", { name: "Uploading 2026-11-21 10:15:00 · clip 0402" });
+    const theme = width > 700 ? "dark" : "light";
+    await page.goto(`http://127.0.0.1:8797/publisher.html/archive?theme=${theme}`);
+    await page.waitForURL(/\/publisher\.html\/footage\?/);
+    const footage = page.getByRole("region", { name: "Footage", exact: true });
+    const bar = footage.getByRole("progressbar", { name: "Uploading 2026-11-21 10:15:00 · clip 0402" });
     await bar.waitFor();
     await sent("POST");
     assert.equal(await bar.getAttribute("aria-valuenow"), "40");
     for (const text of ["736 MB of 1.84 GB", "20 Mbit/s", "7 min", "32 min"])
-      await archive.getByText(text, { exact: true }).waitFor();
-    await archive.getByText("Today's 3 clips").waitFor();
-    await archive.getByRole("link", { name: "On YouTube" }).waitFor();
-    await archive.getByRole("link", { name: "earlier grade" }).waitFor();
-    await archive.getByText("Uploading 40%").waitFor();
-    await archive.getByText("2.78 GB · Cloudflare archive").waitFor();
-    await archive.getByRole("link", { name: "Channel" }).waitFor();
+      await footage.getByText(text, { exact: true }).waitFor();
+    await footage.getByRole("link", { name: "Channel" }).waitFor();
+
+    // The ledger: the clip going up says how far, a video of an earlier grade says so, a clip with nothing left too.
+    const ledger = page.getByRole("region", { name: "Footage ledger" });
+    const row = (clip) => ledger.getByRole("row").filter({ hasText: clip });
+    await row("0402").getByText("↑ 40%").waitFor();
+    await row("0399").getByRole("link", { name: "Earlier" }).waitFor();
+    await row("0258").getByRole("link", { name: "✓" }).waitFor();
+    await row("0001").getByText("No copy left").waitFor();
+    await row("IMG_4857").getByText("Not log").waitFor();
+    assert.equal(await row("0086").getByRole("button", { name: "Grade" }).isDisabled(), true);
+    await ledger.locator("img.publisher-ledger-thumb").first().waitFor();
+    assert.deepEqual(
+      await ledger.getByRole("group", { name: "Show" }).getByRole("button").allTextContents(),
+      ["All 6", "At risk 3", "Not graded 1", "Not on YouTube 2", "Not in Cloudflare 4"],
+    );
+    await ledger.getByRole("button", { name: "At risk 3" }).click();
+    assert.equal(await ledger.locator("tbody tr:not(.day)").count(), 3);
+    await ledger.getByRole("button", { name: "All 6" }).click();
+    // The page never scrolls sideways: on a phone the table scrolls in its own box.
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-    if (shots) await page.screenshot({ path: path.join(shots, `archive-${name}.png`), fullPage: true });
-    // Leaving the tab tells the laptop to stop.
-    await page.getByRole("button", { name: "History", exact: true }).click();
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-${name}.png`), fullPage: true });
+
+    // Grade opens the clip in the Grade tab, and leaving the Footage tab tells the laptop to stop uploading.
+    await row("0402").getByRole("button", { name: "Grade" }).click();
+    await page.waitForURL(/\/publisher\.html\/grade/);
     await sent("DELETE");
+    const frame = page.locator('iframe[title="Grade app"]');
+    assert.equal(await frame.getAttribute("allow"), "local-network-access; fullscreen");
+    assert.equal(await frame.getAttribute("src"), "http://127.0.0.1:4777/#clip=DJI_20261121101500_0402_D.MP4");
+    // This browser isn't the Mac's: the grade app never says it's there.
+    await page.getByRole("status").filter({ hasText: "The grade app runs on the Mac" }).waitFor({ timeout: 15_000 });
+    if (shots) await page.screenshot({ path: path.join(shots, `grade-away-${name}.png`) });
+
     for (const [state, line] of [
       ["paused", /^Paused until .+: YouTube refused part of the upload \(503\)$/],
       ["limit", "Daily limit reached. More tomorrow."],
       ["done", "All clips are up."],
       ["stale", "Waiting for the laptop…"],
     ]) {
-      await page.goto(`http://127.0.0.1:8797/publisher.html/archive?archive=${state}&theme=${width > 700 ? "dark" : "light"}`);
-      await archive.getByRole("status").filter({ hasText: line }).waitFor();
-      assert.equal(await archive.getByRole("progressbar").count(), 0);
-      if (state === "stale") await archive.getByText(/^As of /).waitFor();
-      if (shots && state === "paused") await page.screenshot({ path: path.join(shots, `archive-paused-${name}.png`), fullPage: true });
+      await page.goto(`http://127.0.0.1:8797/publisher.html/footage?archive=${state}&theme=${theme}`);
+      await footage.getByRole("status").filter({ hasText: line }).waitFor();
+      assert.equal(await footage.getByRole("progressbar").count(), 0);
+      if (state === "stale") await footage.getByText(/^As of /).waitFor();
     }
     assert.deepEqual(errors, []);
     await context.close();

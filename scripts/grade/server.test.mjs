@@ -34,7 +34,7 @@ let server;
 // The site's archive as the ledger meets it: a film holding a clip no longer anywhere else, and the ledger it's sent.
 const publisher = join(root, "publisher");
 const token = "a".repeat(64);
-const site = { ledger: null, auth: new Set() };
+const site = { ledger: null, auth: new Set(), thumbs: new Map() };
 const siteServer = createServer(async (req, res) => {
   site.auth.add(req.headers.authorization);
   const path = req.url.replace("/api/publisher/helper/archive/", "");
@@ -46,6 +46,12 @@ const siteServer = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     site.ledger = body;
+    return reply(200, { ok: true });
+  }
+  if (path.startsWith("ledger/thumbs/") && req.method === "PUT") {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    site.thumbs.set(decodeURIComponent(path.slice("ledger/thumbs/".length)), Buffer.concat(chunks));
     return reply(200, { ok: true });
   }
   if (path === "ledger") return site.ledger ? reply(200, site.ledger) : reply(404, { error: "No ledger yet" });
@@ -267,17 +273,29 @@ test.if(usable)("keeps a ledger of every clip and where its copies are, sent who
   expect([...site.auth]).toEqual([`Bearer ${token}`]);
   expect(Object.keys(JSON.parse(readFileSync(join(data, "ledger.json"), "utf8")).clips)).toContain("DJI_20260101120000_0099_D");
 
-  // Small pictures: clips on this Mac or the card have one; the one only the archive holds doesn't.
-  const { thumbs } = await until(async () => {
-    const body = await json("/api/ledger");
-    return body.thumbs.includes("dji_20260203101500_0007_d") && body;
+  // Each clip here gets a small picture, sent to the archive once for the composer's Footage tab, and its record says
+  // so; the one only the archive holds has none.
+  const marked = await until(() => {
+    const body = site.ledger && JSON.parse(site.ledger);
+    return body?.clips.DJI_20260203101500_0007_D?.thumb && body;
   });
-  expect(thumbs).not.toContain("dji_20260101120000_0099_d");
-  const picture = await fetch(url("/media/ledger/DJI_20260203101500_0007_D.jpg"));
-  expect(picture.status).toBe(200);
-  expect(picture.headers.get("content-type")).toBe("image/jpeg");
-  expect((await fetch(url("/media/ledger/..%2Fmeta.jpg"))).status).toBe(404);
+  const jpeg = site.thumbs.get("DJI_20260203101500_0007_D");
+  expect(jpeg.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+  expect(marked.clips.DJI_20260101120000_0099_D.thumb).toBeUndefined();
 }, 60_000);
+
+test.if(usable)("finds a clip's day by its name, and lets only the composer frame the app", async () => {
+  expect(await json(`/api/find?clip=${encodeURIComponent("DJI_20260205090000_0001_D.mp4")}`)).toEqual({
+    source: camId,
+    name: withStill,
+  });
+  expect(await json(`/api/find?clip=${name}`)).toEqual({ source: folder, name });
+  expect((await fetch(url("/api/find?clip=DJI_20200101000000_0001_D.MP4"))).status).toBe(404);
+  const page = await fetch(url("/"));
+  expect(page.headers.get("content-security-policy")).toBe(
+    "frame-ancestors 'self' https://post.kualta.dev http://localhost:4321 http://127.0.0.1:4321",
+  );
+});
 
 test.if(usable)("stops exporting: drops the queue, and the clip in progress leaves nothing behind", async () => {
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: slow, names: slowClips }) })).status).toBe(200);

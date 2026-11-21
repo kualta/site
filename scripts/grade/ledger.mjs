@@ -236,9 +236,12 @@ export async function youtubeUploads(publisherDir) {
   }
 }
 
+/** A clip name the archive keeps a picture under: letters, digits, `_`, `-` and `.`, as camera and phone names are. */
+export const pictureName = (clip) => /^[\w-][\w.-]{0,119}$/.test(clip);
+
 /**
- * The site's archive, reached on the crossposter helper's pairing (its config.json): the archive's own requests, and
- * the ledger read and written whole. Null while the helper isn't paired.
+ * The site's archive, reached on the crossposter helper's pairing (its config.json): the archive's own requests, the
+ * ledger read and written whole, and a clip's small picture sent. Null while the helper isn't paired.
  */
 export async function ledgerCloud(publisherDir, fetcher = fetch) {
   let config;
@@ -270,6 +273,19 @@ export async function ledgerCloud(publisherDir, fetcher = fetch) {
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || `Saving the ledger failed (${response.status})`);
+      }
+    },
+    /** A clip's small picture (JPEG bytes), for the composer's Footage tab. */
+    async putThumb(clip, bytes) {
+      const response = await fetcher(`${url}/thumbs/${encodeURIComponent(clip)}`, {
+        method: "PUT",
+        headers: { ...auth, "Content-Type": "image/jpeg" },
+        body: bytes,
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `Sending a picture failed (${response.status})`);
       }
     },
   };
