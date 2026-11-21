@@ -167,6 +167,8 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
   let group = -1;
   let index = 0;
   let paused = false;
+  /** paused because the page was hidden, so coming back to it plays on */
+  let pausedByLeaving = false;
   let elapsed = 0;
   let last = 0;
   let frameRequest = 0;
@@ -516,6 +518,7 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     }
     document.documentElement.dataset.storyOpen = "";
     paused = false;
+    pausedByLeaving = false;
     showPaused();
     showSound();
     last = 0;
@@ -653,7 +656,22 @@ export function mountStoryViewer(viewer: HTMLElement): () => void {
     },
     options,
   );
-  document.addEventListener("visibilitychange", () => document.hidden && group >= 0 && setPaused(true), options);
+  // Leaving the tab or window pauses the story; coming back plays on, unless it had been paused before leaving.
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (group < 0) return;
+      if (document.hidden) {
+        if (paused) return;
+        pausedByLeaving = true;
+        setPaused(true);
+      } else if (pausedByLeaving) {
+        pausedByLeaving = false;
+        setPaused(false);
+      }
+    },
+    options,
+  );
   mounted = open;
   preloading = preload;
 
