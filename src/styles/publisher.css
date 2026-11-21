@@ -334,8 +334,9 @@
 
 /* --- grade: the grade app on the Mac, framed, filling the window below the tabs edge to edge. The header and tabs
    stay where every tab has them; the page under the app doesn't scroll. --- */
-.publisher-grade { position:fixed; inset:var(--grade-top, 160px) 0 0 0; z-index:2; display:grid; background:var(--publisher-page); }
-.publisher-grade iframe { display:block; width:100%; height:100%; border:0; background:var(--publisher-page); }
+/* Transparent, so the composer's page shows between the grade app's floating cards (its own page is transparent too). */
+.publisher-grade { position:fixed; inset:var(--grade-top, 160px) 0 0 0; z-index:2; display:grid; background:transparent; }
+.publisher-grade iframe { display:block; width:100%; height:100%; border:0; background:transparent; }
 .publisher-grade iframe[hidden] { display:none; }
 html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not([hidden])) body { overflow:hidden; }
 .publisher-grade-away { display:flex; flex-wrap:wrap; align-items:center; align-self:center; justify-self:center; gap:8px 16px; max-width:640px; margin:16px; padding:16px; border-radius:12px; background:var(--publisher-wash); }

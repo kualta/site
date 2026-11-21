@@ -1193,8 +1193,8 @@ function composer() {
   const origin = location.ancestorOrigins?.[0];
   return origin && COMPOSERS.includes(origin) ? origin : null;
 }
+// index.html marks the page framed before it first paints.
 if (framed) {
-  document.documentElement.classList.add("framed");
   window.addEventListener("message", (event) => {
     if (!COMPOSERS.includes(event.origin) || event.source !== window.parent) return;
     const { type, clip, theme } = event.data ?? {};
