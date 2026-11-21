@@ -63,18 +63,27 @@ body:has(.stories-page-account) .live-visitors { right: calc(1.75rem + 2.75rem +
   body:has(.stories-page-account):has(.live-visitors[data-shown]) .site-header { padding-right: 8rem; }
 }
 
-/* the owner's calendar, as Instagram's archive lays stories out: a month to a grid, the newest first */
-.stories-calendar { display: grid; gap: 48px; width: 100%; }
+/*
+ * The owner's calendar, laid out like a Photos library: a square to a day, in order and filling every row, zoomed by
+ * a pinch, Ctrl or ⌘ with the wheel, the buttons, or + and -. The bar above stays in view and names the month.
+ */
+.stories-calendar { width: 100%; touch-action: pan-x pan-y; }
 .stories-calendar[hidden] { display: none; }
-.story-month h2 { margin: 0 0 14px; font-size: 22px; font-weight: 400; }
-.story-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
-.story-weekday { padding-bottom: 4px; font-size: 13px; text-align: center; color: var(--secondary-text); }
-/* a day is a tall cell like a story; its number sits in the corner */
-.story-date { position: relative; display: flex; align-items: flex-start; padding: 8px 10px; aspect-ratio: 3 / 4; border-radius: 12px; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--secondary-text); background: rgb(128 128 128 / 5%); }
-.story-month-grid > .story-date:empty { background: none; }
-.story-date-has { overflow: hidden; border: 0; color: #fff; cursor: pointer; background: rgb(128 128 128 / 12%); }
+.stories-calendar-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(12px); }
+.dark .stories-calendar-bar { background: color-mix(in srgb, var(--bg-dark) 85%, transparent); }
+.stories-calendar-month { margin: 0; font-size: 22px; }
+.stories-calendar-zoom { display: flex; gap: 6px; }
+.stories-calendar-zoom button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: rgb(128 128 128 / 12%); transition: opacity 150ms; }
+.stories-calendar-zoom button:hover:not(:disabled) { opacity: .75; }
+.stories-calendar-zoom button:disabled { opacity: .3; cursor: default; }
+.stories-calendar-grid { position: relative; display: grid; grid-template-columns: repeat(var(--columns, 7), minmax(0, 1fr)); gap: var(--gap, 4px); }
+/* a day is a square at every zoom; its date sits in the corner while there is room for it */
+.story-date { position: relative; display: block; container-type: inline-size; aspect-ratio: 1; overflow: hidden; padding: 0; border-radius: min(8%, 14px); transform-origin: 0 0; scroll-margin-bottom: 96px; font-variant-numeric: tabular-nums; color: var(--secondary-text); background: rgb(128 128 128 / 6%); }
+.story-date-label { position: absolute; top: 0; left: 0; padding: 7cqi 9cqi; font-size: clamp(9px, 12cqi, 18px); line-height: 1; white-space: nowrap; }
+@container (max-width: 44px) { .story-date-label { display: none; } }
+.story-date-has { border: 0; color: #fff; cursor: pointer; background: rgb(128 128 128 / 14%); }
 .story-date-has img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 150ms; }
-.story-date-has span { position: relative; font-weight: 600; text-shadow: 0 1px 3px rgb(0 0 0 / 70%); }
+.story-date-has .story-date-label { font-weight: 600; text-shadow: 0 1px 3px rgb(0 0 0 / 70%); }
 .story-date-has:hover img { opacity: .8; }
 
 /*
@@ -128,11 +137,7 @@ html[data-story-open] { overflow: hidden; }
 .story-step-next { right: 24px; }
 @media (max-width: 760px) {
   .stories-page { padding: 12px 16px 60px; gap: 20px; }
-  .stories-calendar { gap: 36px; }
-  .story-month h2 { font-size: 18px; }
-  .story-month-grid { gap: 4px; }
-  .story-weekday { font-size: 11px; }
-  .story-date { padding: 4px 6px; border-radius: 8px; font-size: 12px; }
+  .stories-calendar-month { font-size: 18px; }
   /* a phone gives the story the whole screen */
   .story-frame { width: 100%; height: 100%; border-radius: 0; aspect-ratio: auto; }
   .story-step { display: none; }
