@@ -4,8 +4,27 @@ A local app for grading camera footage in bulk before it goes into OpenFilm: pic
 balance, tint, contrast and saturation across many clips at once, watch it live, and export graded copies when it
 looks right.
 
+On the owner's laptop it is always running: launchd starts it at login and restarts it if it exits
+(`dev.kualta.grade`, `~/Library/LaunchAgents/dev.kualta.grade.plist`, log `~/Library/Logs/Grade/server.log`), from
+the main checkout. Open http://127.0.0.1:4777 rather than starting it. It loads its code once, so after a
+`scripts/grade` change is merged and master is pulled there, restart it once nothing is exporting:
+
+```sh
+launchctl kickstart -k gui/$(id -u)/dev.kualta.grade
+```
+
+Elsewhere, start it by hand:
+
 ```sh
 bun run grade          # http://127.0.0.1:4777, opens in the browser
+```
+
+With the agent running, port 4777 is taken. To try a branch, start it on another port, and point it at other folders
+too, since a second server reads and writes the same grades and exports (it only reads LUTs, so it can share them):
+
+```sh
+GRADE_PORT=4778 GRADE_ROOT=/tmp/grade/movies GRADE_DATA=/tmp/grade/data GRADE_CACHE=/tmp/grade/cache \
+  GRADE_LUTS="$HOME/Library/Application Support/Grade/luts" bun run grade
 ```
 
 ## Where clips come from
