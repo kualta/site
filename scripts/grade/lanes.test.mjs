@@ -20,6 +20,7 @@ import {
 import { archiveFootage, exportedClips, isUp } from "../publisher/footage.mjs";
 import { archiveDays, bringer, pickClips, withHere } from "./bring.mjs";
 import { keepList } from "./keep.mjs";
+import { archivedFootage } from "./ledger.mjs";
 import { copyClip, dayManifests, gradedName, sendBlob } from "./offload.mjs";
 
 // The offload's switches: each on its own, stopped, waiting out what's in their way, paused, kept out of, and above all
@@ -30,6 +31,8 @@ const name = (n) => `DJI_2026111810000${n}_000${n}_D.MP4`;
 const [one, two, three, four] = [1, 2, 3, 4].map(name);
 const lrf = (clip) => clip.replace(".MP4", ".LRF");
 const onCard = (...clips) => clips.flatMap((clip) => [lrf(clip), clip]).sort();
+/** When the card's files were written (place). */
+const CARD_TIME = Date.parse("2026-11-18T12:00:00Z");
 const LONG = "a clip long enough to go in parts of eight bytes";
 const failing = () => Promise.reject(new TypeError("fetch failed"));
 const uploads = (request) => request.asked.filter((asked) => /^(PUT|POST) (blobs|uploads|projects)/.test(asked));
@@ -82,7 +85,7 @@ test("a record says a hash is the card's own only when it was read off the card"
   const known = records();
   await begin(at, { request: site(), records: known }).done;
   expect(known.clips).toEqual({
-    [one]: { sha256: sha("off the card"), size: 12, day, card: true },
+    [one]: { sha256: sha("off the card"), size: 12, day, card: CARD_TIME },
     [two]: { sha256: sha("on the Mac"), size: 10, day },
   });
 });
@@ -643,7 +646,7 @@ test("what's kept stays even when a record says the archive has it", async () =>
     [two, "on the Mac"],
   ]) {
     const { sha256, size } = await put(request, `assets/${clip}`, body);
-    known[clip] = { sha256, size, card: true };
+    known[clip] = { sha256, size, card: CARD_TIME };
   }
   const run = begin(at, { request, records: records(known), keeping: async () => () => true });
   await run.done;
@@ -742,7 +745,7 @@ test("the sending ending as the card is looked over, its last clip is cleared al
   const run = begin(at, {
     request,
     clearCardAfter: sent,
-    records: records({ [two]: { sha256, size, day, card: true } }),
+    records: records({ [two]: { sha256, size, day, card: CARD_TIME } }),
     removable: async (clip) => {
       if (clip.name !== two) return true;
       // Asked with the first still waiting for the archive, and answered once the sending is over.
@@ -838,7 +841,7 @@ test("a run that ended in between: the next deletes from the card what was check
   // The first is in the archive, filed and recorded, and gone from the Mac; the second is on both.
   const file = await put(request, `assets/${one}`, "checked, then the crash");
   await dayManifests()(request, day, [file]);
-  const known = records({ [one]: { sha256: file.sha256, size: file.size, day, card: true } });
+  const known = records({ [one]: { sha256: file.sha256, size: file.size, day, card: CARD_TIME } });
   await at.put(at.original, [two, "copied, not sent", day]);
   const asked = request.asked.length;
   const run = begin(at, { request, clearCardAfter: sent, records: known });
@@ -895,7 +898,7 @@ test("the camera away as its clips are checked: they're deleted from it once it'
 test("what a record says the archive has, and it hasn't, isn't deleted from the card: it's copied and sent again", async () => {
   const at = await given([[one, "lost up there", day]]);
   const request = site();
-  const known = records({ [one]: { sha256: sha("lost up there"), size: 13, day, card: true } });
+  const known = records({ [one]: { sha256: sha("lost up there"), size: 13, day, card: CARD_TIME } });
   const order = [];
   const run = begin(at, {
     request,
@@ -911,6 +914,32 @@ test("what a record says the archive has, and it hasn't, isn't deleted from the 
   expect(files(at.dcim)).toEqual([]);
 });
 
+test("a card file written to since it was sent, its size the same, is read before it's let go, and stays", async () => {
+  const at = await given([[one, "as it was sent", day]]);
+  const request = site();
+  const known = records();
+  const reading = () => request.asked.filter((what) => what.startsWith("GET blobs")).length;
+  const first = begin(at, {
+    request,
+    records: known,
+    clearCardAfter: sent,
+    removable: (clip) => !clip.path.startsWith(at.dcim),
+  });
+  await first.done;
+  expect(known.clips[one]).toMatchObject({ card: CARD_TIME });
+  expect(files(at.dcim)).toEqual(onCard(one));
+  await writeFile(join(at.dcim, one), "as it's now on");
+  const run = begin(at, { lanes: ["copy"], request, records: known, clearCardAfter: sent });
+  await run.done;
+  expect(files(at.dcim)).toEqual(onCard(one));
+  expect(readFileSync(join(at.dcim, one), "utf8")).toBe("as it's now on");
+  expect(reading()).toBe(0);
+  // As it was when it was sent, it goes without being read again.
+  await at.put(at.dcim, [one, "as it was sent", day], true);
+  await begin(at, { lanes: ["copy"], request, records: known, clearCardAfter: sent }).done;
+  expect(files(at.dcim)).toEqual([]);
+});
+
 test("a hash that doesn't read back as its clip is vouched for by no record from then on", async () => {
   // The same clip under two names: the one recorded on the card, the other sent from the Mac and read back.
   const at = await given([[one, LONG, day]], [[two, LONG, day]]);
@@ -923,7 +952,7 @@ test("a hash that doesn't read back as its clip is vouched for by no record from
     },
   });
   await request.archive.bucket.put(`blobs/${sha(LONG)}`, "something else by now");
-  const known = records({ [one]: { sha256: sha(LONG), size: LONG.length, day, card: true } });
+  const known = records({ [one]: { sha256: sha(LONG), size: LONG.length, day, card: CARD_TIME } });
   const options = { request, part: 8, records: known };
   await begin(at, { ...options, lanes: ["send"] }).done;
   expect(known.clips).toEqual({});
@@ -948,7 +977,7 @@ test("a recorded clip the archive lost, sent again and cut before it's read back
     const request = site({
       hold: (rest, init, pass) => (holding && readsBlob(rest, init) ? reading.hold(init, pass) : null),
     });
-    const known = records({ [one]: { sha256: sha(LONG), size: LONG.length, day, card: true } });
+    const known = records({ [one]: { sha256: sha(LONG), size: LONG.length, day, card: CARD_TIME } });
     const gone = [];
     const options = { request, part: 8, records: known, clearCardAfter: sent, removed: (_, from) => gone.push(from) };
     const run = begin(at, options);
@@ -1002,7 +1031,7 @@ test("with the archive out of reach, what a record says it has stays on the card
   down = false;
   const { sha256, size } = await put(request, `assets/${one}`, "sent before");
   down = true;
-  const run = begin(at, { lanes: ["copy"], request, records: records({ [one]: { sha256, size, card: true } }) });
+  const run = begin(at, { lanes: ["copy"], request, records: records({ [one]: { sha256, size, card: CARD_TIME } }) });
   // The new one is copied all the same.
   await until(() => run.state.copy.done === 1 && run.state.copy.waiting?.for === "network");
   expect(files(at.dcim)).toEqual(onCard(one));
@@ -1020,7 +1049,7 @@ test("a card clip of a recorded one's name and size that isn't it, isn't deleted
   const known = records({ [one]: { sha256: mac.sha256, size: mac.size, day } });
   const run = begin(at, { request, records: known, clearCardAfter: sent });
   await run.done;
-  expect(known.clips[one]).toMatchObject({ sha256: sha("this one's the card's"), card: true });
+  expect(known.clips[one]).toMatchObject({ sha256: sha("this one's the card's"), card: CARD_TIME });
   expect(files(at.dcim)).toEqual([]);
   expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha("this one's the card's") });
 });
@@ -1198,7 +1227,12 @@ test("part of a clip never takes its place in the archive, and the whole takes a
   await begin(part, { lanes: ["send"], request, part: 8 }).done;
   expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha(LONG.slice(0, 20)) });
   await begin(whole, { lanes: ["send"], request, part: 8 }).done;
-  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha(LONG) });
+  const partOf = sha(LONG.slice(0, 20));
+  // The part stays listed, where nothing takes it for the clip.
+  const manifest = { [`assets/${one}`]: sha(LONG), [`replaced/${partOf.slice(0, 12)}/${one}`]: partOf };
+  expect(await listed(request, day)).toEqual(manifest);
+  expect((await archivedFootage(request)).map(({ name: file, sha256 }) => [file, sha256])).toEqual([[one, sha(LONG)]]);
+  expect((await archiveDays().read(request)).clips.map((clip) => clip.sha256)).toEqual([sha(LONG)]);
   expect(files(whole.original)).toEqual([]);
   // From a Mac that knows nothing of it.
   const again = await given([], [[one, LONG.slice(0, 20), day]]);
@@ -1206,7 +1240,7 @@ test("part of a clip never takes its place in the archive, and the whole takes a
   await run.done;
   expect(run.state.send).toMatchObject({ done: 0, skipped: [{ name: one }] });
   expect(files(again.original)).toEqual([one]);
-  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha(LONG) });
+  expect(await listed(request, day)).toEqual(manifest);
 });
 
 test("a recorded clip on the Mac is deleted only if it's what was recorded, and the archive holds it", async () => {

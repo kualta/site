@@ -143,9 +143,9 @@ that doesn't match is sent once more. Parts are put together only if what went u
 a day's manifest, from whichever run, waits for the one before it, starts from what the archive has of the day by then,
 and is read back: a clip's copies go only once its day lists it and the record is on disk. A clip already recorded is
 only deleted, once the archive says it holds its hash and the file is that one (hashed on the Mac; the card's is read
-only if its hash isn't known to be the card's own); one the archive has lost goes again, its record forgotten till it's
-checked. An original listed in the archive gives way only to a larger one of its name, so part of a clip never takes its
-place: another is passed over, and stays. Nothing goes that was written to since it was listed, that's being exported, or
+and hashed too, unless it has the time it had when it was read off the card); one the archive has lost goes again, its record forgotten till it's
+checked. An original listed in the archive gives way only to a larger one of its name, and stays listed itself, in
+`replaced/`, so part of a clip never takes its place: another is passed over, and stays where it is. Nothing goes that was written to since it was listed, that's being exported, or
 that's kept (below).
 
 **Stop** finishes the files in flight (the clip being copied, the two being sent, their manifest saves and deletions)
@@ -167,8 +167,8 @@ extension, so a clip's original and its export are kept alike), stay on the card
 sent or deleted, aren't counted, and get no transcript. A day with some of its clips kept shows a dash, and a click lets
 those go. While `keep.json` can't be read nothing is taken or deleted.
 
-`offloaded.json` (beside `grades.json`) records each clip's hash, size and day, and whether the hash is the card's own;
-`graded.json` the same of exports. Started by hand or by a script:
+`offloaded.json` (beside `grades.json`) records each clip's hash, size and day, and for one read off the card the time
+its file had there (`card`); `graded.json` the same of exports. Started by hand or by a script:
 
 ```sh
 curl -X POST http://127.0.0.1:4777/api/offload -H 'X-Grade: 1' -H 'Content-Type: application/json' -d '{

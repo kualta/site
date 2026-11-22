@@ -193,7 +193,13 @@ async function saveProject(request, project, files, signal) {
     const listed = ({ path, sha256, size }) => held.get(path)?.sha256 === sha256 && held.get(path).size === size;
     if (filing.every(listed)) return filing.map(({ path }) => path);
     if (saves === 3) throw new Error(`${project} doesn't list what was filed in it`);
-    for (const { path, sha256, size, mtime } of filing) held.set(path, { path, sha256, size, mtime });
+    for (const { path, sha256, size, mtime, lasting } of filing) {
+      const was = held.get(path);
+      // What a larger one takes the place of stays listed, out of the way.
+      const aside = was && `replaced/${was.sha256.slice(0, 12)}/${path.split("/").pop()}`;
+      if (lasting && was && was.sha256 !== sha256) held.set(aside, { ...was, path: aside });
+      held.set(path, { path, sha256, size, mtime });
+    }
     await request(`projects/${project}`, { method: "PUT", json: { files: [...held.values()], folders: [] }, signal });
   }
 }
@@ -258,7 +264,7 @@ function inTurn(work) {
  *
  * `records` (`graded` for the exports) keeps what went to the archive: `read()` says name → `{ sha256, size, card }`, and
  * `add(clip, sha256, { card })` is done once it's on disk, as `drop(sha256)` is, which forgets a hash. A clip there that
- * the archive still holds is only deleted. `card` says the hash is the card's own, as it was read off it.
+ * the archive still holds is only deleted. `card` is the time the card's file had when the hash was read off it.
  *
  * Nothing is deleted that's kept or in use: `keeping()` says which clips are kept out of all this (`(clip) => boolean`),
  * asked again at each deletion, and one `removable(clip)` says no to (being exported, say) stays where it is.
@@ -365,22 +371,23 @@ export function startOffload({
 
   /** Whether a clip may go: not one that's kept or in use. */
   const mayGo = async (clip) => !(await keeping())(clip) && (await removable(clip));
-  async function removeFromCard(clip) {
-    if (!(await unchanged(clip))) return false;
-    await rm(clip.path);
-    await rm(lrfOf(clip.path), { force: true });
-    return true;
-  }
-  /** Looked at and deleted in one go, so nothing here can write to it in between. A camera might not answer that soon. */
-  function removeFromMac(clip) {
+  /** Looked at and deleted in one go, so nothing here can write to it in between. */
+  function removeAtOnce(clip) {
     if (!isAsListed(statSync(clip.path, { throwIfNoEntry: false }), clip)) return false;
     unlinkSync(clip.path);
+    return true;
+  }
+  async function removeFromCard(clip) {
+    // Looked at without waiting on it first: a camera that's going might take its time to answer.
+    if (!(await unchanged(clip)) || !removeAtOnce(clip)) return false;
+    await rm(lrfOf(clip.path), { force: true });
     return true;
   }
   /** Deletes a clip, unless it's to stay or was written to since it was listed. */
   async function remove(clip, where) {
     if (!(await mayGo(clip))) return;
-    if (!(where === "camera" ? await removeFromCard(clip) : removeFromMac(clip))) return;
+    const gone = where === "camera" ? await removeFromCard(clip) : removeAtOnce(clip);
+    if (!gone) return;
     state.freed[where] += clip.size;
     removed(clip, where);
     notify();
@@ -393,7 +400,7 @@ export function startOffload({
   const recover = (lane, error) =>
     onTheWay(error) ? lane.recover("network", error, reachSite(lane)) : lane.recover("trouble", error, async () => {});
 
-  /** The clips this run read off the card: name → the file's id there, and its SHA-256. */
+  /** The clips this run read off the card: name → the file's id and time there, and its SHA-256. */
   const offCard = new Map();
   /** The card's files (by id) whose copy on the Mac this run made, or checked against them: the copy, as it was then. */
   const copied = new Map();
@@ -459,14 +466,14 @@ export function startOffload({
   async function isTheSame(clip, known) {
     const mine = readOffCard(clip);
     if (mine) return mine === known.sha256;
-    if (known.card) return true;
+    if (known.card === clip.mtime) return true;
     const going = { name: clip.name, sent: 0, size: clip.size, checking: true };
     copy.state.current = going;
     try {
       const sha256 = await hashFile(clip.path, copy.signal, (n) => {
         going.sent += n;
       });
-      offCard.set(clip.name, { id: idOf(clip), sha256 });
+      offCard.set(clip.name, { id: idOf(clip), mtime: clip.mtime, sha256 });
       return sha256 === known.sha256;
     } finally {
       copy.state.current = null;
@@ -574,7 +581,7 @@ export function startOffload({
         },
       });
       const here = { ...clip, path, mtime: Math.round((await stat(path)).mtimeMs) };
-      offCard.set(clip.name, { id: idOf(clip), sha256 });
+      offCard.set(clip.name, { id: idOf(clip), mtime: clip.mtime, sha256 });
       copied.set(idOf(clip), here);
       copy.state.done++;
       copy.state.doneBytes += clip.size;
@@ -701,8 +708,11 @@ export function startOffload({
     lasting: true,
     before: (clip) => takeSound(clip, send),
     feeding: () => copy.state.on && bringing,
-    // The hash is the card's own, so the card's copy can go on the strength of it.
-    proof: (clip, sha256) => (offCard.get(clip.name)?.sha256 === sha256 ? { card: true } : {}),
+    // The hash is the card's own, of the file it had at that time, so that file can go on the strength of it.
+    proof: (clip, sha256) => {
+      const mine = offCard.get(clip.name);
+      return mine?.sha256 === sha256 ? { card: mine.mtime } : {};
+    },
   });
   const gradedCopies = source(lanes.exports, {
     where: "exports",
