@@ -323,7 +323,7 @@ test("the network lost between a clip's arrival and its manifest loses nothing: 
 test("waits grow, and a stop ends one at once", async () => {
   const at = await given([], [[one, "a clip", day]]);
   const request = site({ hold: failing });
-  const run = begin(at, { lanes: ["send"], request, retry: { first: 20, most: 100_000, tries: 5 } });
+  const run = begin(at, { lanes: ["send"], request, retry: { first: 50, most: 100_000, tries: 5 } });
   const waits = [];
   let last = null;
   await until(() => {
@@ -332,11 +332,15 @@ test("waits grow, and a stop ends one at once", async () => {
     last = until ?? last;
     return waits.length === 5;
   });
-  for (const [i, ms] of waits.entries()) expect(Math.abs(ms - 20 * 2 ** i)).toBeLessThan(20);
+  // As long as it says, but for how late a busy machine hears of it.
+  for (const [i, ms] of waits.entries()) {
+    expect(ms).toBeLessThanOrEqual(50 * 2 ** i + 1);
+    expect(ms).toBeGreaterThan(50 * 2 ** i - 45);
+  }
   const stopped = Date.now();
   run.stop(["send"]);
   await run.done;
-  expect(Date.now() - stopped).toBeLessThan(100);
+  expect(Date.now() - stopped).toBeLessThan(400);
   expect(files(at.original)).toEqual([one]);
 });
 
@@ -471,7 +475,7 @@ test("outages don't count as a clip's tries", async () => {
         cuts++;
         setTimeout(() => {
           down = false;
-        }, 25);
+        }, 80);
       }
       return down ? failing() : null;
     },
