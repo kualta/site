@@ -834,7 +834,12 @@ async function beginOffload() {
       cardCache = null;
     },
   });
-  const watch = () => cloud.watchFootage().catch(() => {});
+  let watchFailed = null;
+  async function watch() {
+    const failed = await cloud.watchFootage().then(() => null, (e) => e.message);
+    if (failed && failed !== watchFailed) console.error("grade: footage uploads:", failed);
+    watchFailed = failed;
+  }
   void watch();
   clearInterval(footageWatch);
   footageWatch = setInterval(watch, 60_000);

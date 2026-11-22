@@ -49,6 +49,8 @@ const siteServer = createServer(async (req, res) => {
   };
   // The offload keeps the composer counted as watching the footage uploads.
   if (req.url === "/api/publisher/helper/footage/watch" && req.method === "POST") {
+    // As Astro does: a POST that says no type is a cross-site form submission.
+    if (!req.headers["content-type"]) return reply(403, { error: "Cross-site POST form submissions are forbidden" });
     site.watched++;
     return reply(200, { watching: true });
   }
@@ -60,6 +62,10 @@ const siteServer = createServer(async (req, res) => {
   if (path.startsWith("blobs/") && req.method === "PUT") {
     site.blobs.set(path.slice("blobs/".length), await bytesOf(req));
     return reply(201, { ok: true });
+  }
+  if (path.startsWith("blobs/") && site.blobs.has(path.slice("blobs/".length))) {
+    res.writeHead(200, { "Content-Type": "application/octet-stream" });
+    return res.end(site.blobs.get(path.slice("blobs/".length)));
   }
   if (path === "uploads" && req.method === "POST") {
     const { blob } = JSON.parse(await bytesOf(req));
@@ -451,7 +457,7 @@ test.if(usable)("exports the frame on screen as a graded PNG beside the exports:
 
 test.if(usable)("exports below full quality at the share of the original's bitrate it promises", async () => {
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: moving, names: [movingClip], quality: 20 }) })).status).toBe(200);
-  // Its own export's record, not `exported`: the frame exported before can already count the clip as exported.
+  // Its own export's record, not `exported`: the file lands before its record is written.
   await until(async () => records()[movingClip]?.quality === 20, 120_000);
   const record = records()[movingClip];
   expect(record.quality).toBe(20);

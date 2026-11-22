@@ -1,6 +1,7 @@
 // Offloading frees the camera's card fast and the Mac after it. Each clip is copied off the card to Movies/Original
 // (hashed as it's read, then read back on the Mac and checked against it) and deleted from the card with its .LRF; then
-// it goes to the site's archive under its SHA-256 and is deleted from the Mac once the archive has it. The two go on
+// it goes to the site's archive under its SHA-256 and is deleted from the Mac once it's checked there (read back, unless
+// R2 checked it whole). The two go on
 // together: the card is read a clip at a time while the Mac has room for the next with `keepFree` to spare, and the clips
 // on the Mac go up `together` at a time, each one gone making room for the next off the card. The camera is needed only
 // until the last clip is on the Mac.
@@ -97,6 +98,19 @@ export async function sendBlob(
     await request(`uploads/${hash}?${query}`, { method: "DELETE" }).catch(() => {});
     throw error;
   }
+}
+
+/**
+ * Whether the archive's file under `hash` reads back as exactly that. R2 checks a file sent whole against its hash, but
+ * not one sent in parts, and the pipeline deletes the last copy on the strength of it.
+ */
+async function readsBack(request, hash, size, signal) {
+  // A few GB on a slow line outlasts a request's usual ten minutes: allow down to 50 KB/s.
+  const timeout = Math.max(10 * 60_000, Math.ceil(size / 50));
+  const response = await request(`blobs/${hash}`, { raw: true, signal, timeout });
+  const read = createHash("sha256");
+  for await (const chunk of response.body) read.update(chunk);
+  return read.digest("hex") === hash;
 }
 
 /** Which of `hashes` the archive holds. */
@@ -263,6 +277,30 @@ export function startOffload({
     }
   }
 
+  /** Puts a clip in the archive and makes sure of it: anything R2 didn't just check whole is read back first. */
+  async function store(clip, sha256, going) {
+    const { missing } = await request("missing", { method: "POST", json: { blobs: [sha256] }, signal });
+    let send = missing.length > 0;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      if (send) {
+        going.sent = 0;
+        await sendBlob(request, { abs: clip.path, size: clip.size }, sha256, {
+          part,
+          signal,
+          onBytes: (n) => {
+            going.sent += n;
+            sentBytes(n);
+          },
+        });
+        if (clip.size <= part) return;
+      }
+      if (await readsBack(request, sha256, clip.size, signal)) return;
+      // What's there under this hash isn't this clip: send it over that, once.
+      send = true;
+    }
+    throw new Error(`${clip.name} doesn't read back from Cloudflare as it was sent: it stays on this Mac`);
+  }
+
   async function sendAll() {
     for (;;) {
       if (signal.aborted) return;
@@ -277,16 +315,7 @@ export function startOffload({
       try {
         const sha256 = clip.sha256 ?? (await hashFile(clip.path, signal));
         going.hashing = false;
-        const { missing } = await request("missing", { method: "POST", json: { blobs: [sha256] }, signal });
-        if (missing.length)
-          await sendBlob(request, { abs: clip.path, size: clip.size }, sha256, {
-            part,
-            signal,
-            onBytes: (n) => {
-              going.sent += n;
-              sentBytes(n);
-            },
-          });
+        await store(clip, sha256, going);
         await fileInDay(clip, sha256);
         state.send.done++;
         state.send.doneBytes += clip.size;

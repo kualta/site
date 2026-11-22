@@ -99,6 +99,8 @@ export async function exportedClips({ exported = EXPORTED, exportsFile = EXPORTS
 export async function archiveFootage(request, records = new Map()) {
   const clips = new Map();
   for (const { name: project } of (await request("projects")).projects) {
+    // A shoot day's offloaded originals (`_originals-<day>`) are ungraded: they never go to YouTube.
+    if (project.startsWith("_")) continue;
     for (const file of (await request(`projects/${project}`)).files) {
       const name = file.path.split("/").pop();
       if (!/^(zh\/)?assets\//.test(file.path) || !CLIP.test(name) || clips.has(name)) continue;

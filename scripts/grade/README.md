@@ -113,7 +113,9 @@ on this Mac; **Offload to Cloudflare** takes it all, and nothing starts until yo
   16 MiB, else 16 MiB a request, so each lands well inside a request's ten minutes on a slow uplink; through
   `helper/archive` on the helper's pairing), filed in its shoot day's manifest in the archive, `_originals-<day>` (as
   `assets/<file>`, the manifest saved again after every clip), then deleted from this Mac. That makes room for the
-  next clip off the card.
+  next clip off the card. R2 checks a file sent whole against its hash but not one sent in parts, so a clip over 16 MiB
+  is read back in full and hashed before its Mac copy goes: each is downloaded once as well as uploaded. One that
+  doesn't match is sent once more, and if it still doesn't the run stops with the clip on this Mac.
 
 `offloaded.json` (beside `grades.json`) records each clip's hash, size and day. A clip already there whose hash the
 archive still holds is only deleted; one the archive has lost goes again. A clip being exported stays put. The status
