@@ -1,4 +1,5 @@
 import { blockMeans, composeLut, gradeKey, inputCurves, resolveGrade, sampleTetra } from "/color.mjs";
+import { bringView, isCloud } from "/ui/bring.mjs";
 import { Viewer } from "/ui/viewer.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -315,6 +316,17 @@ const allSources = () => [...(state.library?.camera.days ?? []), ...(state.libra
 const sourceInfo = (id) => allSources().find((s) => s.id === id);
 const sourceLabel = (s) => `${s.label} · ${s.clips} clip${s.clips === 1 ? "" : "s"}${s.graded ? ` · ${s.graded} graded` : ""}`;
 
+/** The picker's Cloudflare days, and bringing their clips to this Mac. */
+const bring = bringView({
+  api,
+  fileSize,
+  label,
+  openClip,
+  say: (text) => setStatus(text, { first: true }),
+  poll,
+  changed: () => state.library && renderPicker(),
+});
+
 function renderPicker() {
   const { camera, folders } = state.library;
   const sel = $("shoot");
@@ -341,8 +353,9 @@ function renderPicker() {
     groups.push(og);
   }
   if (folders.length) groups.push(group("On this Mac", folders));
-  sel.replaceChildren(...groups);
-  if (state.source) sel.value = state.source;
+  sel.replaceChildren(...groups, ...bring.groups());
+  // With nothing open, nothing looks picked: a day in Cloudflare is only opened by picking it.
+  sel.value = state.source ?? "";
 }
 
 async function loadLibrary() {
@@ -352,10 +365,26 @@ async function loadLibrary() {
   renderPicker();
 }
 
-async function openSource(id) {
+/** Opens a day in Cloudflare: none of its clips are here, so there's nothing to grade, only to bring. */
+async function openCloud(id) {
   await save();
   state.source = id;
   $("shoot").value = id;
+  state.clips = [];
+  state.byName = new Map();
+  state.grades = {};
+  state.selected = new Set();
+  renderList();
+  setPrimary(null);
+  await bring.show(id);
+}
+
+async function openSource(id) {
+  if (isCloud(id)) return openCloud(id);
+  await save();
+  state.source = id;
+  $("shoot").value = id;
+  bring.show(null);
   store.set("grade.source", id);
   const payload = await (await api(`/api/sources/${encodeURIComponent(id)}`)).json();
   state.clips = payload.clips;
@@ -368,10 +397,24 @@ async function openSource(id) {
   setPrimary([...state.selected].pop() ?? null);
 }
 
+/** Clips brought to the open day join its list, leaving the one on screen and what's selected as they are. */
+function addArrived({ clips, grades }) {
+  const arrived = clips.filter((c) => !state.byName.has(c.name));
+  if (!arrived.length) return;
+  for (const clip of arrived) if (grades[clip.name]) state.grades[clip.name] = grades[clip.name];
+  state.clips = [...state.clips, ...arrived].sort((a, b) => (a.name < b.name ? -1 : 1));
+  state.byName = new Map(state.clips.map((c) => [c.name, c]));
+  const list = $("clip-list");
+  for (const [i, clip] of state.clips.entries())
+    if (arrived.includes(clip)) list.insertBefore(clipRow(clip), list.children[i] ?? null);
+  updateRows();
+}
+
 /** Pick up thumbnails and previews that finished and exports that landed, keeping grades edited here. */
 async function refreshSource() {
-  if (!state.source) return;
+  if (!state.source || isCloud(state.source)) return;
   const payload = await (await api(`/api/sources/${encodeURIComponent(state.source)}`)).json();
+  if (payload.id === state.source) addArrived(payload);
   for (const fresh of payload.clips) {
     const clip = state.byName.get(fresh.name);
     if (!clip) continue;
@@ -419,27 +462,28 @@ function renderList() {
   const list = $("clip-list");
   rowObserver.disconnect();
   visibleRows.clear();
-  list.replaceChildren();
-  for (const clip of state.clips) {
-    const li = document.createElement("li");
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "clip";
-    b.dataset.name = clip.name;
-    const { title, time } = label(clip);
-    b.innerHTML =
-      '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span><span class="state"></span></span><span class="sub-row"><span class="profile"></span><span class="size"></span></span></span><span class="progress" hidden><i></i></span>';
-    b.querySelector("b").textContent = title;
-    b.querySelector(".when").textContent = [time, `${clip.duration.toFixed(1)} s`].filter(Boolean).join(" · ");
-    b.querySelector(".size").textContent = clip.bytes ? fileSize(clip.bytes) : "";
-    b.querySelector(".profile").textContent = PROFILE_NAMES[clip.profile];
-    b.title = `${clip.name} · ${clip.width}×${clip.height}`;
-    li.append(b);
-    list.append(li);
-    rowObserver.observe(b);
-    pendingThumbs.add(clip.name);
-  }
+  list.replaceChildren(...state.clips.map(clipRow));
   updateRows();
+}
+
+function clipRow(clip) {
+  const li = document.createElement("li");
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "clip";
+  b.dataset.name = clip.name;
+  const { title, time } = label(clip);
+  b.innerHTML =
+    '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span><span class="state"></span></span><span class="sub-row"><span class="profile"></span><span class="size"></span></span></span><span class="progress" hidden><i></i></span>';
+  b.querySelector("b").textContent = title;
+  b.querySelector(".when").textContent = [time, `${clip.duration.toFixed(1)} s`].filter(Boolean).join(" · ");
+  b.querySelector(".size").textContent = clip.bytes ? fileSize(clip.bytes) : "";
+  b.querySelector(".profile").textContent = PROFILE_NAMES[clip.profile];
+  b.title = `${clip.name} · ${clip.width}×${clip.height}`;
+  li.append(b);
+  rowObserver.observe(b);
+  pendingThumbs.add(clip.name);
+  return li;
 }
 
 function updateRows() {
@@ -1146,6 +1190,8 @@ function renderStatus() {
   $("stop-offload").hidden = !j?.offload?.running;
   const offloadLine = offloadText(j?.offload);
   if (offloadLine) parts.push(offloadLine);
+  const bringLine = bring.text();
+  if (bringLine) parts.push(bringLine);
   if (state.source?.startsWith("camera:") && state.library && !state.library.camera.mounted)
     parts.push(`${state.library.camera.name} disconnected: plug it in to preview and export; graded copies stay on the Mac`);
   if (j?.export.current) {
@@ -1292,11 +1338,12 @@ function renderKept() {
   $("clip-kept").textContent = text;
 }
 
-/** Opens a clip by its name, in the card's day holding it or else Movies/Original's, and selects it. */
+/** Opens a clip by its name, in the card's day holding it, else Movies/Original's, else Cloudflare's, and selects it. */
 async function openClip(clip) {
   try {
     const { source, name } = await (await api(`/api/find?clip=${encodeURIComponent(clip)}`)).json();
     if (state.source !== source) await openSource(source);
+    if (isCloud(source)) return bring.select(name);
     state.selected = new Set([name]);
     setPrimary(name);
     document.querySelector(`.clip[data-name="${CSS.escape(name)}"]`)?.scrollIntoView({ block: "nearest" });
@@ -1354,10 +1401,11 @@ async function poll() {
     state.jobs = jobs;
     sayProgress(jobs);
     const done = jobs.export.done.length;
+    const arrived = bring.update(jobs);
     const waiting = jobs.thumbs > 0 || state.clips.some((c) => c.proxy === "queued" || c.proxy === "working");
     // The library is re-read every few seconds, so the camera appears when it's plugged in and graded counts update.
     const moves = offloadMoves(jobs.offload);
-    if (Date.now() - libraryAt > 4000 || done !== lastDone || moves !== lastMoves) {
+    if (Date.now() - libraryAt > 4000 || done !== lastDone || moves !== lastMoves || arrived) {
       libraryAt = Date.now();
       const wasMounted = state.library?.camera.mounted;
       state.library = await (await api("/api/library")).json();
@@ -1365,7 +1413,7 @@ async function poll() {
       const open = sourceInfo(state.source);
       if (!state.source && allSources().length) await openSource(defaultSource());
       else if (state.source?.startsWith("camera:") && state.library.camera.mounted && !wasMounted && open) await openSource(state.source);
-      else if (moves !== lastMoves && state.source) {
+      else if (moves !== lastMoves && state.source && !isCloud(state.source)) {
         // Clips the offload took off the card or the Mac leave the open day, or empty it.
         if (open && open.clips !== state.clips.length) await openSource(state.source);
         else if (!open && defaultSource()) await openSource(defaultSource());
@@ -1375,11 +1423,11 @@ async function poll() {
     // The ledger changes when the server looks again: every 30 seconds, and after exports.
     if (Date.now() - ledgerAt > 20000) await loadLedger();
     const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted;
-    if (reachable && (done !== lastDone || waiting)) await refreshSource();
+    if (reachable && (done !== lastDone || waiting || arrived)) await refreshSource();
     lastDone = done;
     renderStatus();
     updateRows();
-    const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || waiting;
+    const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || jobs.bring?.running || waiting;
     if (!exportMenu.hidden) renderOffload();
     pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {
@@ -1453,7 +1501,7 @@ try {
   const id = defaultSource();
   if (id) await openSource(id);
   else {
-    $("empty").textContent = `Plug in the ${state.library.camera.name}, or put clips in ${state.library.original}.`;
+    $("empty").textContent = `Plug in the ${state.library.camera.name}, put clips in ${state.library.original}, or pick a day in Cloudflare.`;
     updatePanel();
   }
   openFromAddress();

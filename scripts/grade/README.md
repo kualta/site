@@ -30,7 +30,7 @@ GRADE_PORT=4778 GRADE_ROOT=/tmp/grade/movies GRADE_DATA=/tmp/grade/data GRADE_CA
 
 ## Where clips come from
 
-**Clips from** (top bar) lists shoot days from two places:
+**Clips from** (top bar) lists shoot days from two places, and the days in Cloudflare:
 
 - **Pocket 4P**: the camera's card while it's plugged in (`/Volumes/Pocket4P/DCIM`, `GRADE_CAMERA`), by the date in
   each DJI file name. Clips stay on the card: nothing is copied off it, and nothing is written to it except by ⌘⌫
@@ -38,6 +38,9 @@ GRADE_PORT=4778 GRADE_ROOT=/tmp/grade/movies GRADE_DATA=/tmp/grade/data GRADE_CA
   select it.
 - **On this Mac**: the video in `~/Movies/Original/`, for clips that aren't on the camera, by the date in a DJI name
   or else the file's own date.
+
+**Cloudflare**, the last group, lists the days with clips that were offloaded and aren't on this Mac, to bring back
+(below).
 
 Each day shows how many of its clips have an export, and the clip list can show only graded or ungraded clips.
 
@@ -156,6 +159,32 @@ so the helper puts graded clips up to YouTube meanwhile, as it does while the Fo
 grade get the default look as settings first (`GRADE_DEFAULT_LOOK`, OpenDRT Colorful), to change before any export.
 The ledger counts offloaded clips as in Cloudflare (an archived file the original's size); `_originals-*` aren't
 films. To bring a day back, transcripts and all: `bun run publisher restore _originals-<day> <folder>`.
+
+## Bring to Mac: from Cloudflare back here
+
+Under **Cloudflare**, **Clips from** lists each shoot day with clips the archive has and this Mac doesn't. Picking one
+lists them with their sizes, and **Bring** gets one back: an original into `Original/`, a graded copy into `Exported/`.
+**Bring all** takes every original, or graded copy, of the day that isn't here. A brought original is in its day under
+**On this Mac** again, with the grade it had (its button then says **Grade**, and opens it there). The status line says
+how far it is and **Stop bringing** ends it. A clip asked for by name (`#clip=<file>`, or the composer's message) that's
+neither on the card nor here opens its day in Cloudflare, marked; the Footage tab's **Grade** button is off for those.
+
+Originals are in `_originals-<day>` projects in the archive and graded copies in `_graded-<day>` ones, each clip as
+`assets/<file>`. A day's manifest is read once each time it's archived, and the list of days again when an offload ends,
+after an hour, or on **Refresh**. Nothing is ever written to the archive. What's on this Mac is told by name and size.
+
+Clips come one at a time, each streamed to a hidden `.<file>.bring.part` beside where it goes and hashed as it comes. It
+takes its name only if its size and SHA-256 are what its manifest lists, with the time it had (the footage uploads know a
+clip they've put up by its size and time), and never over a file that has that name by then: the very same file is
+skipped, another is left as it is and the clip stays in Cloudflare, saying so. One that's stopped, fails or comes back
+different leaves nothing here; a clip's own trouble lets the next come, and the archive out of reach ends the run. The
+`.part`s of a server killed meanwhile go when it starts again. A clip of 3.5 GB takes about 15 minutes at 30 Mbit/s.
+
+It starts only if `GRADE_KEEP_FREE` (5 GB) stays free after all that's asked for, and with room for what an export or the
+offload's copy off the card has still to write (an export is counted at its original's size, times its quality). That's
+looked at again before each clip and every few seconds during one: when room runs short the clip gives way, saying why.
+
+Clips brought here are on this Mac like any other: the next offload, finding them in the archive, takes them off again.
 
 ## Grading
 

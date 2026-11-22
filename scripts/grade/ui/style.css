@@ -156,7 +156,7 @@ kbd {
 /* ---- clip bin -------------------------------------------------------------------------------------------- */
 .bin-head { display: grid; gap: 9px; padding: 12px 12px 8px 14px; position: sticky; top: 0; z-index: 2; background: var(--surface); }
 .bin-row { display: flex; align-items: center; gap: 8px; min-height: 20px; }
-.bin-head .count { color: var(--ink-3); font-size: 11.5px; }
+.bin-head .count { color: var(--ink-3); font-size: 11.5px; white-space: nowrap; }
 .bin-head .link { margin-left: auto; }
 .seg.small { display: grid; grid-template-columns: repeat(3, 1fr); }
 .seg.small button { height: 22px; padding: 0 6px; font-size: 11.5px; }
@@ -188,6 +188,22 @@ kbd {
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .progress { position: absolute; left: 8px; right: 8px; bottom: 3px; height: 2px; border-radius: 1px; background: var(--line-2); overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--mark); transition: width .3s; }
+
+/* ---- a Cloudflare day, in the clip list's place (bring.mjs) -------------------------------------------------- */
+.bin.cloud > .bin-head:not(#cloud-head), .bin.cloud > #clip-list, .bin:not(.cloud) > #cloud-head, .bin:not(.cloud) > #cloud-list { display: none; }
+.btn.small { height: 22px; padding: 0 6px; font-size: 11.5px; }
+.cloud-kind { display: grid; grid-template-columns: 64px minmax(0, 1fr) 74px; align-items: center; gap: 8px; min-height: 22px; font-size: 12.5px; }
+.cloud-kind output { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Three lines' room, so what it says moves nothing. */
+.cloud-note { margin: 0; height: 48px; font-size: 11.5px; line-height: 16px; color: var(--ink-3); overflow: hidden; }
+.cloud-clip {
+  position: relative; display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 11px; padding: 7px; border-radius: 8px;
+  border: 1px solid transparent;
+}
+.cloud-clip[aria-current="true"] { background: var(--hover); border-color: var(--line-2); }
+.cloud-clip .thumb { width: 78px; height: 44px; align-self: center; }
+.cloud-file { display: grid; grid-template-columns: 50px minmax(0, 1fr) 58px; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink-2); }
+.cloud-file .btn { font-variant-numeric: tabular-nums; }
 
 /* ---- viewer ---------------------------------------------------------------------------------------------- */
 /* The picture on a neutral card, its transport a card of its own under it. */
@@ -278,5 +294,8 @@ a.btn { color: inherit; text-decoration: none; }
   body { overflow: auto; }
   .work { grid-template-columns: 240px minmax(0, 1fr); }
   .panel { grid-column: 1 / -1; }
+  .cloud-kind { grid-template-columns: 54px minmax(0, 1fr) 58px; gap: 4px; font-size: 11.5px; }
+  .cloud-clip { grid-template-columns: minmax(0, 1fr); }
+  .cloud-clip .thumb { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
