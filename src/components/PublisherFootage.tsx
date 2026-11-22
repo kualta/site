@@ -51,6 +51,7 @@ const FRESH = 30_000;
 
 const size = (bytes: number) =>
   bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${Math.max(0, Math.round(bytes / 1e6))} MB`;
+const clipsOf = (count: number, bytes: number) => `${count} ${count === 1 ? "clip" : "clips"} · ${size(bytes)}`;
 /** Network speed in the unit an internet plan states it in. */
 function rate(bytesPerSecond: number) {
   const mbit = (bytesPerSecond * 8) / 1e6;
@@ -78,7 +79,7 @@ function noticeFor(
 ): { text: string; tone?: "ok" | "bad"; accounts?: boolean } | null {
   if (!connected) return { text: "Not connected.", accounts: true };
   if (!online) return { text: "Laptop offline." };
-  if (!reply) return failed ? { text: "Couldn't load. Retrying…" } : null;
+  if (!reply) return failed ? { text: "Couldn't load. Retrying…" } : { text: "Reading…" };
   const status = reply.status;
   if (!status || !fresh) return { text: "Waiting for the laptop…" };
   switch (status.state) {
@@ -175,6 +176,14 @@ export default function PublisherFootage({
     return () => onProgress(null);
   }, [onProgress, percent]);
 
+  // What each figure says while a clip goes up; otherwise there's nothing to say.
+  let [sent, pace, left] = ["—", "—", "—"];
+  if (current) {
+    sent = `${size(current.sent)} of ${size(current.size)}`;
+    pace = speed ? rate(speed) : "Measuring…";
+    left = clipLeft !== null ? duration(clipLeft) : "Measuring…";
+  }
+
   return (
     <section className="publisher-archive" aria-label="Footage">
       <div className="publisher-heading">
@@ -190,22 +199,23 @@ export default function PublisherFootage({
           </a>
         )}
       </div>
-      {notice && (
-        <p className="publisher-archive-notice" data-tone={notice.tone} role="status">
-          {notice.text}
-          {notice.accounts && (
-            <button type="button" onClick={onAccounts}>
-              Open Accounts
-            </button>
+      {/* One panel whatever the laptop's doing, so a clip starting, stopping or finishing moves nothing under it. */}
+      <div className="publisher-archive-current">
+        <div className="publisher-archive-current-head">
+          {notice && (
+            <p className="publisher-archive-notice" data-tone={notice.tone} role="status">
+              {notice.text}
+              {notice.accounts && (
+                <button type="button" onClick={onAccounts}>
+                  Open Accounts
+                </button>
+              )}
+            </p>
           )}
-        </p>
-      )}
-      {current && status && (
-        <div className="publisher-archive-current">
-          <div className="publisher-archive-current-head">
-            <h2>{current.title}</h2>
-            <span>{share}%</span>
-          </div>
+          {!notice && current && <h2>{current.title}</h2>}
+          <span>{current ? `${share}%` : ""}</span>
+        </div>
+        {current ? (
           <div
             className="publisher-archive-bar"
             role="progressbar"
@@ -216,55 +226,45 @@ export default function PublisherFootage({
           >
             <span style={{ width: `${share}%` }} />
           </div>
-          <dl className="publisher-archive-figures">
-            <div>
-              <dt>Sent</dt>
-              <dd>
-                {size(current.sent)} of {size(current.size)}
-              </dd>
-            </div>
-            <div>
-              <dt>Speed</dt>
-              <dd>{speed ? rate(speed) : "Measuring…"}</dd>
-            </div>
-            <div>
-              <dt>Time left</dt>
-              <dd>{clipLeft !== null ? duration(clipLeft) : "Measuring…"}</dd>
-            </div>
-            {todayLeft !== null && (
-              <div>
-                <dt>Today's {status.totals.today} clips</dt>
-                <dd>{duration(todayLeft)}</dd>
-              </div>
-            )}
-          </dl>
+        ) : (
+          <div className="publisher-archive-bar" />
+        )}
+        <dl className="publisher-archive-figures">
+          <div>
+            <dt>Sent</dt>
+            <dd>{sent}</dd>
+          </div>
+          <div>
+            <dt>Speed</dt>
+            <dd>{pace}</dd>
+          </div>
+          <div>
+            <dt>Time left</dt>
+            <dd>{left}</dd>
+          </div>
+          <div>
+            <dt>{status && todayLeft !== null ? `Today's ${status.totals.today} clips` : "Today's clips"}</dt>
+            <dd>{todayLeft !== null ? duration(todayLeft) : "—"}</dd>
+          </div>
+        </dl>
+      </div>
+      <dl className="publisher-archive-totals">
+        <div>
+          <dt>Up</dt>
+          <dd>{status ? clipsOf(status.totals.up, status.totals.upBytes) : "—"}</dd>
         </div>
-      )}
-      {status && (
-        <>
-          <dl className="publisher-archive-totals">
-            <div>
-              <dt>Up</dt>
-              <dd>
-                {status.totals.up} {status.totals.up === 1 ? "clip" : "clips"} · {size(status.totals.upBytes)}
-              </dd>
-            </div>
-            <div>
-              <dt>Waiting</dt>
-              <dd>
-                {status.totals.due} {status.totals.due === 1 ? "clip" : "clips"} · {size(status.totals.dueBytes)}
-              </dd>
-            </div>
-            <div>
-              <dt>Today</dt>
-              <dd>
-                {status.today} of {status.daily}
-              </dd>
-            </div>
-          </dl>
-          {!fresh && <p className="publisher-note">As of {when(status.at)}</p>}
-        </>
-      )}
+        <div>
+          <dt>Waiting</dt>
+          <dd>{status ? clipsOf(status.totals.due, status.totals.dueBytes) : "—"}</dd>
+        </div>
+        <div>
+          <dt>Today</dt>
+          <dd>{status ? `${status.today} of ${status.daily}` : "—"}</dd>
+        </div>
+      </dl>
+      <p className="publisher-note" data-unsaid={!status || fresh || undefined}>
+        As of {status ? when(status.at) : "now"}
+      </p>
       <PublisherLedger
         request={request}
         uploading={current ? { name: current.name, share } : null}

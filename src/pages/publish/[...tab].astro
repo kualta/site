@@ -1,7 +1,7 @@
 ---
 import CornersScope from "@/components/CornersScope.astro";
+import PublisherFont from "@/components/PublisherFont.astro";
 import ThemeInit from "@/components/ThemeInit.astro";
-import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?url";
 import Publisher from "@/components/Publisher";
 import { env } from "cloudflare:workers";
 import { publisherSession } from "@/lib/publisher/auth";
@@ -48,12 +48,19 @@ Astro.response.headers.set("Referrer-Policy", "same-origin");
     <meta name="robots" content="noindex,nofollow" />
     <title>{tabTitle(initialTab)}</title>
     <link rel="icon" href="/favicon.ico" />
-    <link rel="preload" href={fredoka} as="font" type="font/woff2" crossorigin />
     <ThemeInit />
+    <PublisherFont />
   </head>
   <body class="publisher-page bg-bg dark:bg-dark-bg text-text dark:text-dark-text min-h-screen relative">
     <div class="noise" aria-hidden="true"></div>
-    <Publisher client:load initialAccess={access} initialHelper={helper} initialTab={initialTab} />
-    <div class="pointer-events-none" aria-hidden="true"><CornersScope /></div>
+    <Publisher
+      client:load
+      initialAccess={access}
+      initialHelper={helper}
+      initialTab={initialTab}
+      initialSearch={Astro.url.search}
+    />
+    <div class="pointer-events-none" aria-hidden="true"><CornersScope bottom_left={false} bottom_right={false} /></div>
+    <div class="publisher-corners" aria-hidden="true"><CornersScope top_left={false} top_right={false} /></div>
   </body>
 </html>

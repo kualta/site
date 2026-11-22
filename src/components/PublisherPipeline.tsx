@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUpRightIcon, CloseIcon, PlusIcon, TrashIcon } from "@/components/icons";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUpRightIcon, CloseIcon, ImageIcon, PlusIcon, TrashIcon, VideoIcon } from "@/components/icons";
 import {
   MAX_CONTENT_NOTES,
   MAX_CONTENT_TITLE,
@@ -14,6 +14,7 @@ import { combined, metricValue, type Metric } from "@/lib/publisher/metrics";
 import { platformNames } from "@/lib/publisher/presets";
 import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
 import PlatformIcon from "./PlatformIcon";
+import PublisherSteady from "./PublisherSteady";
 
 type Props = {
   request: (path: string, body?: unknown, method?: string) => Promise<any>;
@@ -50,12 +51,12 @@ const statColumns: [Metric, string][] = [
 ];
 const YOUTUBE_STILL = "https://i.ytimg.com/";
 
-/** A piece's footage, as its card and editor say it: the film's or the day's clips, how many graded and at risk. */
-function footageText(link: FootageLink | undefined, ledger: Ledger | null) {
+/** A piece's footage, as its card and editor say it: its film or day, then its clips, how many graded and at risk. */
+function footageOf(link: FootageLink | undefined, ledger: Ledger | null): [string, string] | null {
   if (!link) return null;
   const clips = linkedClips(link, ledger);
-  if (clips === null) return link.project ? `${link.project} · not seen yet` : null;
-  return `${link.project ?? dayName(link.day ?? "")} · ${footageLine(clips)}`;
+  if (clips === null) return link.project ? [link.project, "not seen yet"] : null;
+  return [link.project ?? dayName(link.day ?? ""), footageLine(clips)];
 }
 const dayName = (day: string) =>
   new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
@@ -84,8 +85,8 @@ function Card({
   onDragEnd,
 }: {
   piece: Content;
-  /** Its footage in a line, until it's posted. */
-  footage: string | null;
+  /** Its footage in two lines, until it's posted. */
+  footage: [string, string] | null;
   carried: boolean;
   onOpen: () => void;
   onDragStart: () => void;
@@ -104,7 +105,13 @@ function Card({
   const source = sources[failed];
   const next = () => setFailed((n) => n + 1);
   const views = post && total(post, "exposure");
-  let picture = null;
+  // A post whose every picture failed keeps its frame, so its column doesn't close up as they do.
+  const Icon = post?.kind === "photo" ? ImageIcon : VideoIcon;
+  let picture = sources.length ? (
+    <span className="publisher-pipeline-blank">
+      <Icon size={28} />
+    </span>
+  ) : null;
   if (source?.video) picture = <video src={source.src} preload="metadata" muted playsInline onError={next} />;
   else if (source)
     picture = (
@@ -148,7 +155,13 @@ function Card({
             <time dateTime={new Date(piece.stage_at).toISOString()}>{since(piece.stage_at)}</time>
             {views !== null && ` · ${compact.format(views)} views`}
           </small>
-          {footage && !post && <small className="publisher-pipeline-footage">{footage}</small>}
+          {footage && !post && (
+            <small className="publisher-pipeline-footage" title={footage.join(" · ")}>
+              <span>{footage[0]}</span>
+              <span className="publisher-hidden"> · </span>
+              <span>{footage[1]}</span>
+            </small>
+          )}
         </span>
         {!picture && piece.notes && <span className="publisher-pipeline-notes">{piece.notes}</span>}
       </button>
@@ -351,8 +364,10 @@ function PieceEditor({
               </option>
             ))}
           </select>
-          {piece.job_id && stage !== "posted" && (
-            <small className="publisher-note">Moving it lets go of the post it went out as, and its stats.</small>
+          {piece.job_id && (
+            <small className="publisher-note" data-unsaid={stage === "posted" || undefined}>
+              Moving it lets go of the post it went out as, and its stats.
+            </small>
           )}
         </label>
         <label>
@@ -380,27 +395,26 @@ function PieceEditor({
               </optgroup>
             )}
           </select>
-          {footage && <small className="publisher-note">{footageText(linkOf(footage), ledger)}</small>}
+          <small className="publisher-note">{footageOf(linkOf(footage), ledger)?.join(" · ") ?? "\u00a0"}</small>
         </label>
         <div className="publisher-pipeline-editor-foot">
           <button type="button" disabled={busy} onClick={() => void remove()}>
             <TrashIcon size={16} />
             Delete
           </button>
-          {/* Edits go with it, saved on the way. */}
-          {stage === "edit" && (
-            <button
-              type="button"
-              disabled={busy || !title.trim()}
-              onClick={async () => {
-                if (await save()) onCompose(piece.id);
-              }}
-            >
-              Compose
-            </button>
-          )}
+          {/* Edits go with it, saved on the way. Only from Edit ready, and out of sight until then. */}
+          <button
+            type="button"
+            data-unsaid={stage !== "edit" || undefined}
+            disabled={busy || !title.trim()}
+            onClick={async () => {
+              if (await save()) onCompose(piece.id);
+            }}
+          >
+            Compose
+          </button>
           <button type="submit" className="publish-button" disabled={busy || !title.trim() || !changed}>
-            {busy ? "Saving…" : "Save"}
+            <PublisherSteady among={["Saving…"]}>{busy ? "Saving…" : "Save"}</PublisherSteady>
           </button>
         </div>
       </form>
@@ -417,19 +431,6 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
   // The piece being dragged, and the column it's over that would take it.
   const [drag, setDrag] = useState<Content | null>(null);
   const [over, setOver] = useState<Stage | null>(null);
-  // The board reaches the bottom of the window, and each column scrolls on its own.
-  const board = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState<number>();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the board appears once loading ends, and is measured then
-  useLayoutEffect(() => {
-    const fit = () => {
-      const top = board.current?.getBoundingClientRect().top;
-      if (top !== undefined) setHeight(Math.max(420, Math.floor(innerHeight - (top + scrollY) - 24)));
-    };
-    fit();
-    addEventListener("resize", fit);
-    return () => removeEventListener("resize", fit);
-  }, [loading]);
   // Only this page changes the pipeline, besides queueing a post; a tab shown again reads it once in case another
   // device did. Nothing polls, since every read counts against D1's daily cap.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new post is the trigger to read it again
@@ -455,21 +456,25 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
       document.removeEventListener("visibilitychange", shown);
     };
   }, [request, onError, postsVersion]);
-  // Each piece's footage (a film or a shoot day) and the ledger saying how it stands; the board works without them.
+  // Each piece's footage (a film or a shoot day) and the ledger saying how it stands; the board works without them, but
+  // waits until they're read or can't be, so its cards are drawn once, as tall as they'll be.
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [links, setLinks] = useState<Record<string, FootageLink>>({});
+  const [footageRead, setFootageRead] = useState(false);
   useEffect(() => {
     let active = true;
-    const load = () => {
+    const load = async () => {
       if (document.hidden) return;
-      request("footage/ledger")
-        .then((next: Ledger) => active && setLedger(next))
-        .catch(() => {});
-      request("footage/links")
-        .then((next: { links: Record<string, FootageLink> }) => active && setLinks(next.links))
-        .catch(() => {});
+      const [nextLedger, nextLinks] = await Promise.allSettled([
+        request("footage/ledger") as Promise<Ledger>,
+        request("footage/links") as Promise<{ links: Record<string, FootageLink> }>,
+      ]);
+      if (!active) return;
+      if (nextLedger.status === "fulfilled") setLedger(nextLedger.value);
+      if (nextLinks.status === "fulfilled") setLinks(nextLinks.value.links);
+      setFootageRead(true);
     };
-    load();
+    void load();
     document.addEventListener("visibilitychange", load);
     return () => {
       active = false;
@@ -490,6 +495,7 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
       setAdding(false);
     }
   }
+  const shown = !loading && footageRead;
   function endDrag() {
     setDrag(null);
     setOver(null);
@@ -534,63 +540,60 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
           Add
         </button>
       </form>
-      {loading ? (
-        <p className="publisher-note">Loading pipeline…</p>
-      ) : (
-        <div ref={board} className="publisher-pipeline-board" style={{ height }}>
-          {stages.map((stage) => {
-            const here = items.filter((piece) => piece.stage === stage);
-            const droppable = drag !== null && drag.stage !== stage;
-            return (
-              <section
-                key={stage}
-                className="publisher-pipeline-stage"
-                aria-label={stageNames[stage]}
-                data-droppable={droppable || undefined}
-                data-drop={(droppable && over === stage) || undefined}
-                onDragOver={(event) => {
-                  if (!droppable) return;
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = "move";
-                  setOver(stage);
-                }}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-                    setOver((current) => (current === stage ? null : current));
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  if (drag && droppable) void move(drag, stage);
-                  endDrag();
-                }}
-              >
-                <h2>
-                  {stageNames[stage]}
-                  <small>{here.length}</small>
-                </h2>
-                {here.length ? (
-                  <ul>
-                    {here.map((piece) => (
-                      <Card
-                        key={`${piece.id}:${piece.job_id}`}
-                        piece={piece}
-                        footage={footageText(links[piece.id], ledger)}
-                        carried={drag?.id === piece.id}
-                        onOpen={() => setEditing(piece)}
-                        // After the browser has its picture of the card, so the picture isn't the faded original.
-                        onDragStart={() => setTimeout(() => setDrag(piece))}
-                        onDragEnd={endDrag}
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="publisher-pipeline-empty">{stage === "idea" ? "Add an idea above" : "Drop here"}</p>
-                )}
-              </section>
-            );
-          })}
-        </div>
-      )}
+      <div className="publisher-pipeline-board" aria-busy={!shown}>
+        {stages.map((stage) => {
+          const here = shown ? items.filter((piece) => piece.stage === stage) : [];
+          const droppable = drag !== null && drag.stage !== stage;
+          return (
+            <section
+              key={stage}
+              className="publisher-pipeline-stage"
+              aria-label={stageNames[stage]}
+              data-droppable={droppable || undefined}
+              data-drop={(droppable && over === stage) || undefined}
+              onDragOver={(event) => {
+                if (!droppable) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setOver(stage);
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                  setOver((current) => (current === stage ? null : current));
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (drag && droppable) void move(drag, stage);
+                endDrag();
+              }}
+            >
+              <h2>
+                {stageNames[stage]}
+                {shown && <small>{here.length}</small>}
+              </h2>
+              {here.length > 0 && (
+                <ul>
+                  {here.map((piece) => (
+                    <Card
+                      key={`${piece.id}:${piece.job_id}`}
+                      piece={piece}
+                      footage={footageOf(links[piece.id], ledger)}
+                      carried={drag?.id === piece.id}
+                      onOpen={() => setEditing(piece)}
+                      // After the browser has its picture of the card, so the picture isn't the faded original.
+                      onDragStart={() => setTimeout(() => setDrag(piece))}
+                      onDragEnd={endDrag}
+                    />
+                  ))}
+                </ul>
+              )}
+              {shown && !here.length && (
+                <p className="publisher-pipeline-empty">{stage === "idea" ? "Add an idea above" : "Drop here"}</p>
+              )}
+            </section>
+          );
+        })}
+      </div>
       {editing && (
         <PieceEditor
           key={editing.id}

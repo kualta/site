@@ -8,10 +8,11 @@ import PublisherPipeline from "./PublisherPipeline";
 import PlatformIcon from "./PlatformIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AlertIcon, CheckIcon, CloseIcon, ImageIcon, VideoIcon } from "@/components/icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import PublisherConnections, { type Connection } from "./PublisherConnections";
 import PublisherChinese from "./PublisherChinese";
 import PublisherCover, { type Cover } from "./PublisherCover";
+import PublisherSteady from "./PublisherSteady";
 import MediaButton from "./MediaButton";
 import {
   defaultPreferences,
@@ -42,7 +43,7 @@ import { describeProgress, readWithProgress } from "@/lib/publisher/download";
 import { frameAt } from "@/lib/publisher/frame";
 import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost, validId } from "@/lib/publisher/server";
 import { stageNames, stages, type Content } from "@/lib/publisher/content";
-import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
+import { parseTags, problem, renderVariant, usage, type Variant } from "@/lib/publisher/variants";
 import { readPath, tabPath, type Tab } from "@/lib/publisher/route";
 import { tabTitle } from "@/lib/publisher/title";
 import {
@@ -96,6 +97,10 @@ const unavailableFor: Record<PostKind, string> = {
   video: "this video",
   mixed: "photos and videos together",
 };
+/** The limit a platform's version is over, or none. */
+function limitPassed(platform: Platform, variant: Variant): number {
+  return usage(platform, variant).find((item) => item.used > item.limit)?.limit ?? Number.POSITIVE_INFINITY;
+}
 /** How long a video's shape is waited for before the composer goes on without it. */
 const SHAPE_WAIT_MS = 10_000;
 /** Resolves undefined when this browser cannot read the file; the laptop checks it again. */
@@ -130,11 +135,12 @@ function videoShape(file: File): Promise<VideoShape | undefined> {
     read();
   });
 }
+type Message = { tone: "error" | "notice"; text: string; onDismiss: () => void };
 /** A message held at the bottom of the window: errors are announced at once, notices when the reader is free. */
-function Toast({ tone, text, onDismiss }: { tone: "error" | "notice"; text: string; onDismiss: () => void }) {
+function Toast({ tone, text, gone, onDismiss }: Message & { gone: boolean }) {
   const Icon = tone === "error" ? AlertIcon : CheckIcon;
   return (
-    <div className="publisher-toast" data-tone={tone}>
+    <div className="publisher-toast" data-tone={tone} data-gone={gone || undefined} aria-hidden={gone || undefined}>
       <Icon size={18} />
       <p role={tone === "error" ? "alert" : "status"}>{text}</p>
       <button type="button" aria-label="Dismiss" onClick={onDismiss}>
@@ -143,22 +149,61 @@ function Toast({ tone, text, onDismiss }: { tone: "error" | "notice"; text: stri
     </div>
   );
 }
+/**
+ * The messages at the bottom of the window, the first to come lowest. One that goes from under another leaves its space
+ * until that one goes too, so a message never moves while it's read.
+ */
+function Toasts({ messages }: { messages: Message[] }) {
+  const stack = useRef<Message[]>([]);
+  const shown = messages.filter(({ text }) => text);
+  const current = (tone: Message["tone"]) => shown.find((message) => message.tone === tone);
+  stack.current = [
+    ...stack.current.map((kept) => current(kept.tone) ?? kept),
+    ...shown.filter(({ tone }) => !stack.current.some((kept) => kept.tone === tone)),
+  ];
+  while (stack.current.length && !current(stack.current[stack.current.length - 1].tone)) stack.current.pop();
+  return (
+    <div className="publisher-toasts">
+      {stack.current.map((message) => (
+        <Toast key={message.tone} {...message} gone={!current(message.tone)} />
+      ))}
+    </div>
+  );
+}
 type Access = "loading" | "owner" | "signin" | "denied";
 /** What the page already knows from rendering on the server; without it the composer asks from the browser. */
 interface Props {
   initialAccess?: Access;
   initialHelper?: { online: boolean; platforms: Account[] };
-  /** The tab the server rendered, from the path; the browser reads the address itself. */
+  /** The tab and query the server rendered, from the address; the browser reads them itself. */
   initialTab?: Tab;
+  initialSearch?: string;
 }
 type Address = { pathname: string; search: string };
+const laptopLabels = ["Laptop connected", "Laptop offline"];
+/** The widest things the counter and the Publish button say. */
+const counts = ["0000 / 2200 · Instagram", "0000 / 1024 · Farcaster", "0000 / 280 · X / Twitter"];
+const publishLabels = [
+  "Publish to 9 places",
+  "Schedule for 9 places",
+  "Retry queue request",
+  "Loading video… 100%",
+  "Queue post",
+];
 const currentAddress = (): Address => ({ pathname: location.pathname, search: location.search });
-export default function Publisher({ initialAccess = "loading", initialHelper, initialTab = "compose" }: Props) {
+export default function Publisher({
+  initialAccess = "loading",
+  initialHelper,
+  initialTab = "compose",
+  initialSearch = "",
+}: Props) {
   // The address says which tab is open and, in Analytics, what it shows; Back and Forward move between them.
   const [address, setAddress] = useState<Address>(() =>
-    typeof window === "undefined" ? { pathname: tabPath("", initialTab), search: "" } : currentAddress(),
+    typeof window === "undefined" ? { pathname: tabPath("", initialTab), search: initialSearch } : currentAddress(),
   );
   const { base, tab } = readPath(address.pathname);
+  // How tall the page has to stay to be scrolled where it was when the open tab was chosen.
+  const [floor, setFloor] = useState(0);
   // Where each tab was left, so switching back returns to it.
   const tabSearch = useRef<Partial<Record<Tab, string>>>({});
   useEffect(() => {
@@ -182,6 +227,10 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   function openTab(next: Tab) {
     if (next === tab) return;
     tabSearch.current[tab] = location.search;
+    // A shorter tab doesn't pull the tabs out from under the pointer. Grade goes back up to the top by itself.
+    const tabsInView = (tabsBar.current?.getBoundingClientRect().bottom ?? 0) > 0;
+    const held = window.scrollY > 0 && tabsInView && next !== "grade";
+    setFloor(held ? window.scrollY + window.innerHeight : 0);
     navigate(tabPath(base, next), tabSearch.current[next] ?? "");
   }
   // The Footage tab's old address shows its new one.
@@ -198,7 +247,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const [access, setAccess] = useState<Access>(initialAccess);
   // On a narrow phone the tabs scroll sideways; the open one is kept in view.
   const tabsBar = useRef<HTMLElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const bar = tabsBar.current;
     const open = bar?.querySelector('[aria-pressed="true"]');
     if (!bar || !open) return;
@@ -246,7 +295,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const [translating, setTranslating] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
+  // A draft in the address is on its way from the start, so its place is there from the first paint.
+  const [openingDraft, setOpeningDraft] = useState(() => Boolean(new URLSearchParams(address.search).get("draft")));
+  // Why it didn't open, kept where its video would have been until that's dismissed.
+  const [draftProblem, setDraftProblem] = useState("");
+  const [busy, setBusy] = useState(openingDraft);
   const [submitted, setSubmitted] = useState(false);
   const [token, setToken] = useState("");
   const [helperOnline, setHelperOnline] = useState(initialHelper?.online ?? false);
@@ -261,7 +314,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     zhCover?: string;
     payload?: unknown;
   } | null>(null);
-  const [openingDraft, setOpeningDraft] = useState(false);
   // How far a draft's videos have come down, so a large one doesn't look like an empty page.
   const [draftLoad, setDraftLoad] = useState<{ video: number; videos: number; loaded: number; total?: number }>();
   // What an opening draft still has coming once its text is in place; it's a video post from the start.
@@ -298,7 +350,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       presets: p.presets.map((item) => (item.id === preset.id ? { ...item, ...patch } : item)),
     }));
   }
-  useEffect(() => {
+  // Before the first paint, so the composer's fields are drawn once, as this browser left them.
+  useLayoutEffect(() => {
     try {
       const p = parsePreferences(localStorage.getItem(STORAGE_KEY));
       setPreferences(p);
@@ -328,6 +381,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
       // The defaults stand in.
     }
     setReady(true);
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: asked once, when the server couldn't say
+  useEffect(() => {
     if (initialAccess !== "loading") return;
     api("session")
       .then((data) => setAccess(data.allowed ? "owner" : data.signedIn ? "denied" : "signin"))
@@ -422,7 +478,8 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     chineseVideo,
     files,
   ]);
-  useEffect(() => {
+  // Before the next paint, so the previews come in with everything else the files bring.
+  useLayoutEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
     setPreviews(urls);
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
@@ -548,6 +605,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     async function openDraft(id: string) {
       setBusy(true);
       setOpeningDraft(true);
+      setDraftProblem("");
       let filled = false;
       try {
         const draft: Draft = await api(`drafts/${id}`);
@@ -603,7 +661,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           setZhPlace("");
           setOpenDraftId(null);
         }
-        setError(e instanceof Error ? e.message : "Could not open this draft");
+        const message = e instanceof Error ? e.message : "Could not open this draft";
+        setError(message);
+        setDraftProblem(message);
       } finally {
         storedText.current = null;
         setPendingDraft(undefined);
@@ -792,6 +852,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     }
     savedDraft.current = "";
     setDraftStatus(undefined);
+    setDraftProblem("");
     setContentId(null);
     clearMedia();
     setPlace("");
@@ -935,11 +996,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   /** Media lists stay index-aligned with each photo's description and date. */
   async function showMedia(next: File[], nextAlts: string[], nextDates: string[]) {
     const first = next.find((file) => file.type.startsWith("video/"));
+    const shape = first && (await videoShape(first));
     // A cover belongs to the video it was taken from.
     if (first !== files.find((file) => file.type.startsWith("video/"))) setCover(undefined);
     // A Chinese version belongs to the video it translates, so it goes when no video is left.
     if (!first) setChineseVideo(undefined);
-    setVideo(first ? await videoShape(first) : undefined);
+    setVideo(shape);
+    setDraftProblem("");
     setShortChoice(undefined);
     setAsCarousel(false);
     setFiles(next);
@@ -978,7 +1041,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   }
   // The attachments decide the kind; the preset's destinations that can't take it are skipped. A draft is a video post
   // while its video is still coming down.
-  const kind: PostKind = !files.length && pendingDraft ? "video" : postKind(files);
+  const kind: PostKind = !files.length && openingDraft ? "video" : postKind(files);
   const reasons = Object.fromEntries(
     platforms.map((p) => [p, unsupported(p, kind, files.length, video?.seconds)]),
   ) as Record<Platform, string | null>;
@@ -1036,13 +1099,15 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     return { platform, variant, issue: problem(platform, variant) };
   });
   const brief: Platform[] = destinations.filter((p) => p === "twitter" || p === "bluesky" || p === "farcaster");
-  const needsShort = brief.some((p) => problem(p, renderVariant(p, { ...text, short: undefined }))) || !!short;
   // The counter follows the destination whose limit the main text is closest to.
   const counted = versions
     .filter(({ platform }) => platform !== "xiaohongshu" && !(text.short && brief.includes(platform)))
     .map(({ platform, variant }) => ({ platform, ...usage(platform, variant).at(-1)! }))
     .sort((a, b) => b.used / b.limit - a.used / a.limit)[0];
-  const issues = versions.filter(({ issue }) => issue);
+  // The tightest limit first, so as the text grows each one it passes comes in after the last.
+  const issues = versions
+    .filter(({ issue }) => issue)
+    .sort((a, b) => limitPassed(a.platform, a.variant) - limitPassed(b.platform, b.variant));
   if (preset.visibility !== "PUBLIC" && destinations.some((p) => publicOnly(p, kind)))
     issues.push({
       platform: "youtube",
@@ -1067,6 +1132,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   const schedule =
     when === "now" ? undefined : Object.fromEntries(plan.flatMap(({ platform, at }) => (at ? [[platform, at]] : [])));
   const linkedPiece = pieces.find((piece) => piece.id === contentId);
+  // What the fields under the post are depends on this browser's presets and, for a draft, on its settings, so they're
+  // shown once those are read.
+  const settled = ready && (!openingDraft || pendingDraft !== undefined);
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
   const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
@@ -1081,13 +1149,16 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
   if (draftStatus === "saved") draftNote = "Draft saved";
   if (typeof draftStatus === "object") draftNote = `Couldn't save the draft: ${draftStatus.failed}`;
   if (newVideo) draftNote = "Save draft to keep the new video";
+  if (!openDraftId || openingDraft) draftNote = "";
+  const waiting = missingPlatforms.length
+    ? `Waiting for ${missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.`
+    : "";
   if (busy && openingDraft) {
-    const which = draftLoad && draftLoad.videos > 1 ? `video ${draftLoad.video} of ${draftLoad.videos}` : "video";
     const percent = draftLoad?.total ? ` ${Math.floor((draftLoad.loaded / draftLoad.total) * 100)}%` : "";
-    publishLabel = `Loading ${which}…${percent}`;
+    publishLabel = `Loading video…${percent}`;
   }
   return (
-    <main className="publisher">
+    <main className="publisher" style={{ minHeight: floor || undefined }}>
       <header className="publisher-header">
         <a href="https://kualta.dev">
           kualta<span> / post</span>
@@ -1096,7 +1167,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           {access === "owner" && (
             <span className="helper-status">
               <i data-online={helperOnline} />
-              {helperOnline ? "Laptop connected" : "Laptop offline"}
+              <PublisherSteady among={laptopLabels}>{laptopLabels[helperOnline ? 0 : 1]}</PublisherSteady>
             </span>
           )}
           <ThemeToggle path="/publish" showOnHome />
@@ -1209,11 +1280,9 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
               />
               <details className="publisher-connection">
                 <summary>Laptop connection</summary>
-                {!helperOnline && (
-                  <p>
-                    Pair with <code>bun run publisher connect</code>
-                  </p>
-                )}
+                <p data-unsaid={helperOnline || undefined}>
+                  Pair with <code>bun run publisher connect</code>
+                </p>
                 <button
                   onClick={async () => {
                     try {
@@ -1249,7 +1318,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
           )}
           <div hidden={tab !== "compose"}>
             <h1 className="publisher-hidden">New post</h1>
-            <div className="publisher-compose">
+            <div className="publisher-compose" data-unsettled={!settled || undefined}>
               {/* Files can also be dropped anywhere on the composer, or pasted anywhere on Compose. */}
               <div
                 className="publisher-composer"
@@ -1301,21 +1370,22 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                     disabled={busy || submitted}
                     onFiles={(next) => void chooseFiles(next)}
                   />
-                  {!!files.length && (
-                    <button type="button" disabled={busy || submitted} onClick={clearMedia}>
+                  {(!!files.length || openingDraft || draftProblem) && (
+                    <button type="button" disabled={busy || submitted || !files.length} onClick={clearMedia}>
                       <CloseIcon size={16} />
                       Remove media
                     </button>
                   )}
-                  {counted && (
-                    <small className="publisher-count" data-over={counted.used > counted.limit}>
-                      {counted.used} / {counted.limit} · {platformNames[counted.platform]}
-                    </small>
-                  )}
+                  <small className="publisher-count" data-over={counted && counted.used > counted.limit}>
+                    <PublisherSteady among={counts}>
+                      {counted ? `${counted.used} / ${counted.limit} · ${platformNames[counted.platform]}` : ""}
+                    </PublisherSteady>
+                  </small>
                 </div>
               </div>
-              {openingDraft && (
-                <div className="publisher-draft-loading" role="status" aria-live="polite">
+              {/* Where the draft's video will be, as big as it will be. */}
+              {openingDraft && !previews.length && (
+                <div className="publisher-stage publisher-draft-loading" role="status" aria-live="polite">
                   <p>
                     Opening draft
                     {draftLoad && draftLoad.videos > 1 && (
@@ -1333,6 +1403,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                   <small>
                     {draftLoad ? describeProgress(draftLoad.loaded, draftLoad.total) : "Reading the draft…"}
                   </small>
+                </div>
+              )}
+              {draftProblem && !openingDraft && !files.length && (
+                <div className="publisher-stage publisher-draft-loading">
+                  <p>{draftProblem}</p>
+                  <button type="button" onClick={() => setDraftProblem("")}>
+                    Dismiss
+                  </button>
                 </div>
               )}
               {!!previews.length && (
@@ -1402,14 +1480,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                   );
                 })}
                 <div className="publisher-send-actions">
-                  {kind === "video" && (
+                  {(kind === "video" || draftProblem) && (
                     <button
                       type="button"
                       className="publisher-save"
                       disabled={busy || submitted || files.length !== 1}
                       onClick={saveToDrafts}
                     >
-                      {saving ? "Saving…" : "Save draft"}
+                      <PublisherSteady among={["Save draft"]}>{saving ? "Saving…" : "Save draft"}</PublisherSteady>
                     </button>
                   )}
                   <button
@@ -1422,33 +1500,36 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                     }
                     onClick={submit}
                   >
-                    {publishLabel}
+                    <PublisherSteady among={publishLabels}>{publishLabel}</PublisherSteady>
                   </button>
                 </div>
               </div>
+              {/* Always as tall, so a note coming or going moves nothing under it; more than fit scroll. */}
               <div className="publisher-send-notes">
-                {openDraftId && !openingDraft && draftNote && (
-                  <p className="publisher-note" role="status">
-                    {draftNote}
-                  </p>
-                )}
-                {!destinations.length && (
-                  <p className="publisher-note">None of the selected destinations take {unavailableFor[kind]}.</p>
-                )}
-                {overLimit.map((p) => (
-                  <p key={p} className="publisher-note">
-                    {platformNames[p]} {reasons[p]}.
-                  </p>
-                ))}
-                {issues.map(({ platform, issue }) => (
-                  <p key={platform} className="publisher-problem">
-                    {platformNames[platform]}: {issue}
-                  </p>
-                ))}
-                {!!missingPlatforms.length && (
-                  <p className="publisher-note">
-                    Waiting for {missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.
-                  </p>
+                {settled && (
+                  <>
+                    <div className="publisher-note publisher-send-status">
+                      {openDraftId && (
+                        <p role="status" title={draftNote}>
+                          <PublisherSteady among={["Saving draft…"]}>{draftNote}</PublisherSteady>
+                        </p>
+                      )}
+                      <p title={waiting}>{waiting}</p>
+                    </div>
+                    {!destinations.length && (
+                      <p className="publisher-note">None of the selected destinations take {unavailableFor[kind]}.</p>
+                    )}
+                    {overLimit.map((p) => (
+                      <p key={p} className="publisher-note">
+                        {platformNames[p]} {reasons[p]}.
+                      </p>
+                    ))}
+                    {issues.map(({ platform, issue }) => (
+                      <p key={platform} className="publisher-problem">
+                        {platformNames[platform]}: {issue}
+                      </p>
+                    ))}
+                  </>
                 )}
               </div>
               {kind === "video" && (
@@ -1492,33 +1573,38 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                   placeholder="#travel #bogota"
                 />
               </label>
-              {!!pieces.length && (
-                <label>
+              <label>
+                <span className="publisher-label">
                   Pipeline
-                  <select
-                    value={linkedPiece?.id ?? ""}
-                    disabled={busy || submitted}
-                    onChange={(e) => setContentId(e.target.value || null)}
-                  >
-                    <option value="">Not in the pipeline</option>
-                    {/* Closest to posting first. */}
-                    {[...stages].reverse().map((stage) => {
-                      const here = pieces.filter((piece) => piece.stage === stage);
-                      if (!here.length) return null;
-                      return (
-                        <optgroup key={stage} label={stageNames[stage]}>
-                          {here.map((piece) => (
-                            <option key={piece.id} value={piece.id}>
-                              {piece.title}
-                            </option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
-                  </select>
-                  {linkedPiece && <small className="publisher-note">Moves to Posted once the post is queued.</small>}
-                </label>
-              )}
+                  {linkedPiece && (
+                    <span className="publisher-for">
+                      {" · "}
+                      <span>Moves to Posted once the post is queued.</span>
+                    </span>
+                  )}
+                </span>
+                <select
+                  value={linkedPiece?.id ?? ""}
+                  disabled={busy || submitted}
+                  onChange={(e) => setContentId(e.target.value || null)}
+                >
+                  <option value="">Not in the pipeline</option>
+                  {/* Closest to posting first. */}
+                  {[...stages].reverse().map((stage) => {
+                    const here = pieces.filter((piece) => piece.stage === stage);
+                    if (!here.length) return null;
+                    return (
+                      <optgroup key={stage} label={stageNames[stage]}>
+                        {here.map((piece) => (
+                          <option key={piece.id} value={piece.id}>
+                            {piece.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+              </label>
               {!!locationTargets.length && (
                 <label>
                   Location<span className="publisher-for"> · {namesOf(locationTargets)}</span>
@@ -1540,13 +1626,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                   </datalist>
                 </label>
               )}
-              {needsShort && (
+              {!!brief.length && (
                 <label>
                   Short version<span className="publisher-for"> · {namesOf(brief)}</span>
                   <textarea
                     value={short}
                     maxLength={1000}
-                    rows={3}
+                    rows={2}
                     disabled={busy || submitted}
                     onChange={(e) => {
                       setShort(e.target.value);
@@ -1594,10 +1680,11 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                   ))}
                 </fieldset>
               )}
-              {kind === "video" && files[0] && !!coverTargets.length && (
+              {kind === "video" && !!coverTargets.length && (
                 <PublisherCover
                   video={files[0]}
                   value={cover}
+                  pending={pendingDraft?.cover ? "Loading the draft's cover…" : ""}
                   onChange={(next) => {
                     setCover(next);
                     submission.current = null;
@@ -1606,14 +1693,6 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                   disabled={busy || submitted}
                   onError={setError}
                 />
-              )}
-              {kind === "video" && !files[0] && pendingDraft?.cover && !!coverTargets.length && (
-                <fieldset className="publisher-cover publisher-group">
-                  <legend>
-                    Cover<span className="publisher-for"> · {namesOf(coverTargets)}</span>
-                  </legend>
-                  <p className="publisher-note">Loading the draft's cover…</p>
-                </fieldset>
               )}
               {rednote && (
                 <PublisherChinese
@@ -1667,7 +1746,7 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                         </div>
                       )}
                       {!chineseVideo && pendingDraft?.zhVideo && (
-                        <p className="publisher-note">Loading the Chinese version…</p>
+                        <p className="publisher-stage publisher-note">Loading the Chinese version…</p>
                       )}
                       {!chineseVideo && !pendingDraft?.zhVideo && (
                         <MediaButton
@@ -1699,33 +1778,36 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                     </button>
                   ))}
                 </nav>
+                {/* Side by side, so the question a horizontal video brings has its place before the video is read. */}
                 {destinations.includes("youtube") && (
-                  <label>
-                    YouTube visibility
-                    <select
-                      value={preset.visibility}
-                      disabled={busy || submitted}
-                      onChange={(e) => updatePreset({ visibility: e.target.value as Preset["visibility"] })}
-                    >
-                      <option value="PRIVATE">Private</option>
-                      <option value="UNLISTED">Unlisted</option>
-                      <option value="PUBLIC">Public</option>
-                    </select>
-                  </label>
-                )}
-                {canReframe && (
-                  <label className="publisher-option">
-                    Post as a Short
-                    <input
-                      type="checkbox"
-                      checked={youtubeShort}
-                      disabled={busy || submitted}
-                      onChange={(e) => {
-                        setShortChoice(e.target.checked);
-                        submission.current = null;
-                      }}
-                    />
-                  </label>
+                  <div className="publisher-youtube">
+                    <label>
+                      YouTube visibility
+                      <select
+                        value={preset.visibility}
+                        disabled={busy || submitted}
+                        onChange={(e) => updatePreset({ visibility: e.target.value as Preset["visibility"] })}
+                      >
+                        <option value="PRIVATE">Private</option>
+                        <option value="UNLISTED">Unlisted</option>
+                        <option value="PUBLIC">Public</option>
+                      </select>
+                    </label>
+                    {canReframe && (
+                      <label className="publisher-option">
+                        Post as a Short
+                        <input
+                          type="checkbox"
+                          checked={youtubeShort}
+                          disabled={busy || submitted}
+                          onChange={(e) => {
+                            setShortChoice(e.target.checked);
+                            submission.current = null;
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 )}
                 <label>
                   When
@@ -1984,10 +2066,12 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
         </>
       )}
       {/* Messages float at the bottom of the window, so they show beside whatever was just pressed. */}
-      <div className="publisher-toasts">
-        {error && <Toast tone="error" text={error} onDismiss={() => setError("")} />}
-        {notice && <Toast tone="notice" text={notice} onDismiss={() => setNotice("")} />}
-      </div>
+      <Toasts
+        messages={[
+          { tone: "error", text: error, onDismiss: () => setError("") },
+          { tone: "notice", text: notice, onDismiss: () => setNotice("") },
+        ]}
+      />
     </main>
   );
 }

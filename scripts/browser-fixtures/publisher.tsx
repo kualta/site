@@ -1,4 +1,4 @@
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import Publisher from "../../src/components/Publisher";
 import "../../src/styles/globals.css";
 
@@ -525,7 +525,7 @@ const links: Record<string, { project?: string; day?: string }> = {
   [pieceId(7)]: { project: "013-maybe-later" },
 };
 const realFetch = window.fetch.bind(window);
-window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const url = new URL(String(input), location.href);
   const path = url.pathname.replace("/api/publisher/", "");
   const method = init.method || "GET";
@@ -675,5 +675,15 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "crosspost") return json({ platforms: JSON.parse(String(init.body)).platforms });
   if (path === "translate") return json({ title: "波哥大短片", text: "周末的波哥大。", topics: ["波哥大", "旅行"] });
   return json({ error: `Unexpected ${method} ${path}` }, 404);
+};
+// A check can answer late, fail or change what comes back (scripts/publisher-shifts.mjs).
+type Answer = (input: RequestInfo | URL, init?: RequestInit, usual?: Answer) => Promise<Response>;
+window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const { publisherAnswer = respond } = window as { publisherAnswer?: Answer };
+  return publisherAnswer(input, init, respond);
 }) as typeof fetch;
-createRoot(document.getElementById("root") as HTMLElement).render(<Publisher />);
+const root = document.getElementById("root") as HTMLElement;
+// Rendered by the server, as the site renders it, the page only takes over; otherwise it renders from nothing.
+const props = document.getElementById("props")?.textContent;
+if (props) hydrateRoot(root, <Publisher {...JSON.parse(props)} />);
+else createRoot(root).render(<Publisher />);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { wholePercent } from "@/lib/publisher/title";
 
 /**
@@ -76,7 +76,7 @@ export default function PublisherGrade({ open, active, onProgress }: Props) {
 
   // While the tab is shown, the app fills the window below the tabs, edge to edge, and the page doesn't scroll
   // (publisher.css): back at the top, it starts where the tabs end.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active) return;
     window.scrollTo(0, 0);
     const fit = () => {

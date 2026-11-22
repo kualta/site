@@ -1,0 +1,10 @@
+---
+// The composer's face, put in from its own bytes before anything is drawn, so no text is drawn in another face first
+// and set again. A face a stylesheet names, even one written into it, comes a frame or more late.
+import fredoka from "@fontsource/fredoka/files/fredoka-latin-400-normal.woff2?inline";
+const font = fredoka.slice(fredoka.indexOf(",") + 1);
+---
+
+<script is:inline define:vars={{ font }}>
+  document.fonts.add(new FontFace("Fredoka Publisher", Uint8Array.from(atob(font), (c) => c.charCodeAt(0))));
+</script>

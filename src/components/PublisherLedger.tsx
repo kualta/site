@@ -77,7 +77,7 @@ function Mark({
   return (
     <td className={className}>
       {value ? (
-        <span aria-label="Yes" title={title}>
+        <span className="tick" aria-label="Yes" title={title}>
           ✓
         </span>
       ) : (
@@ -102,7 +102,7 @@ function YouTubeMark({ record, share }: { record: LedgerClip; share: number | nu
   return (
     <td className="mark">
       <a
-        className={youtube.current ? undefined : "old"}
+        className={youtube.current ? "tick" : "old"}
         href={`https://youtu.be/${youtube.video}`}
         target="_blank"
         rel="noreferrer"
@@ -227,9 +227,11 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
 
   if (!ledger)
     return (
-      <p className="publisher-note">
-        {error === "No ledger yet" ? "No ledger yet: the grade app sends it once it's running." : error ?? "Reading…"}
-      </p>
+      <section className="publisher-ledger" aria-label="Footage ledger">
+        <p className="publisher-note">
+          {error === "No ledger yet" ? "No ledger yet: the grade app sends it once it's running." : error ?? "Reading…"}
+        </p>
+      </section>
     );
   const entries = Object.entries(ledger.clips);
   const shows = FILTERS[filter].shows;
@@ -300,21 +302,39 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
         </div>
       </dl>
       <div className="publisher-ledger-head">
-        <p className="publisher-note">
-          {entries.length} clips · updated {when(ledger.updatedAt)}
-          {asOf ? ` · ${camera.name} as of ${when(camera.seenAt ?? ledger.updatedAt)}` : ""}
-          {error ? ` · ${error}` : ""}
+        <p className="publisher-note" title={error ?? undefined}>
+          {[
+            `${entries.length} clips`,
+            error ?? `updated ${when(ledger.updatedAt)}`,
+            ...(asOf ? [`${camera.name} as of ${when(camera.seenAt ?? ledger.updatedAt)}`] : []),
+          ].join(" · ")}
         </p>
         <div className="publisher-ledger-filters" role="group" aria-label="Show">
           {(Object.keys(FILTERS) as Filter[]).map((key) => (
             <button key={key} type="button" aria-pressed={key === filter} onClick={() => choose(key)}>
-              {FILTERS[key].name} <span>{entries.filter(([, c]) => FILTERS[key].shows(c)).length}</span>
+              {FILTERS[key].name}{" "}
+              <span style={{ minWidth: `${String(entries.length).length}ch` }}>
+                {entries.filter(([, c]) => FILTERS[key].shows(c)).length}
+              </span>
             </button>
           ))}
         </div>
       </div>
       <div className="publisher-ledger-scroll">
         <table className="publisher-ledger-table">
+          <colgroup>
+            <col style={{ width: 76 }} />
+            <col />
+            <col style={{ width: 84 }} />
+            <col style={{ width: 112 }} />
+            <col style={{ width: 76 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 102 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 102 }} />
+            <col style={{ width: 86 }} />
+            <col style={{ width: 78 }} />
+          </colgroup>
           <thead>
             <tr>
               <th rowSpan={2}>Recorded</th>
@@ -362,12 +382,12 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
                 return (
                   <tr key={key} data-risk={riskOf(c)}>
                     <td className="dim">{c.recorded?.slice(11, 16) ?? ""}</td>
-                    <td className="clip" title={c.name}>
+                    <td className="clip" title={[c.name, ...(films.get(key) ?? [])].join(" · ")}>
                       <Thumb clip={key} record={c} />
                       <b>{/^DJI_\d{14}_(\d+)/.exec(c.name)?.[1] ?? c.name.replace(/\.[^.]+$/, "")}</b>
                       {bytes ? <small>{fileSize(bytes)}</small> : null}
-                      <Films names={films.get(key) ?? []} posted={posted} statsHref={statsHref} />
                       {lost(c) ? <span className="note">No copy left</span> : null}
+                      <Films names={films.get(key) ?? []} posted={posted} statsHref={statsHref} />
                     </td>
                     <td className="dim">{(c.profile && PROFILES[c.profile]) ?? "—"}</td>
                     <td className={c.graded ? undefined : "dim"}>{gradeText(c)}</td>
