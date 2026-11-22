@@ -136,6 +136,19 @@ films. To bring a day back: `bun run publisher restore _originals-<day> <folder>
 - **Exposure** in stops, **Temperature** in Kelvin (as if the camera had been set to it; it starts at the camera's
   own), **Tint** (+ magenta, − green), **Contrast** around 18% grey, **Saturation**. All of it happens in scene
   linear light before the look.
+- **Deflicker** (under Light): **Off**, **Light** or **Strong**, for artificial light flickering at a shutter that
+  doesn't match it, and exposure that jumps from frame to frame in timelapse-like shots. ffmpeg's `deflicker` scales
+  each frame's brightness to the mean of it and the frames after it: 6 for Light, 12 for Strong (`mode=am`). Mains
+  light at a mismatched shutter pulses every few frames (50 Hz light every 6 frames at 24 fps, every 3 at 30 or 60,
+  every 12 at 48), and a window of whole pulses cancels them: 6 frames cancels 2-, 3- and 6-frame pulses, 12 also 4-
+  and 12-frame ones. Light (a quarter second at 24 fps, a tenth at 60) suits handheld, where brightness that changes
+  as the camera moves should stay; Strong, twice as long, suits tripod and timelapse shots, where nothing should. The
+  mean, not the median: the window looks ahead, so a real change in light comes in as a ramp over it rather than a
+  jump half a window early. A clip's last few frames, with less after them, are evened out less. It works on the
+  graded picture, after the LUT (it scales brightness: right for Rec.709, where a change in light is close to a scale,
+  wrong for log, where it's an offset), and only in exports. The preview can't show it, as the panel says; **Export
+  frame** reads the frames after the one on screen too, so the still is that frame of the export. Off, a grade has no
+  `deflicker` field at all, so exports made before it stay current.
 - Select several clips (⌘-click, shift-click, Select all or ⌘A) and a change sets that control on all of them. Copy grade /
   Paste copies a whole grade.
 - **Split** and **Original** compare against the flat original; hold **B** to flash it. Space plays, ↑ ↓ change clip.
@@ -190,10 +203,11 @@ P4P Neutral shares the D-Log2 tone curve exactly.
 
 `color.mjs` is shared by the browser and the export: a clip's grade becomes one LUT built by the same function in
 both, sampled live on the GPU over a small proxy of the clip's own code values, and baked by ffmpeg from the
-original. On startup the browser decodes a grey ramp encoded like the proxies and compares it with ffmpeg; a decoder
+original. Deflicker is the one step outside the LUT: it needs the frames around each one, so only the export does
+it. On startup the browser decodes a grey ramp encoded like the proxies and compares it with ffmpeg; a decoder
 that lands more than 1.5 levels off gets corrected. `node scripts/check-grade.mjs` (not in CI; it needs WebGL; pass
 `CHROMIUM_PATH` and optionally `SCREENSHOT_DIR`) grades a synthetic clip, exports it and a frame of it, and checks
-both against the preview: mean 0.6 and 0.5 of 255, 95% within 2.
+both against the preview: mean 0.6 and 0.5 of 255, 95% within 2. It also sets Deflicker through the panel.
 
 ## Into OpenFilm
 

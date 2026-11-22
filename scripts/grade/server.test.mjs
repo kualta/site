@@ -110,13 +110,14 @@ const siteServer = createServer(async (req, res) => {
 });
 
 // A flat colour by default (the inversion check needs a flat patch); `busy` is a moving pattern that takes a while to
-// export (20 s, or `seconds`), for stopping one midway.
-function clip(dst, gamma, { still = false, busy = false, seconds: busySeconds = 20 } = {}) {
+// export (20 s, or `seconds`), for stopping one midway; `flicker` swings the flat colour's brightness every 3 frames.
+function clip(dst, gamma, { still = false, busy = false, flicker = false, seconds: busySeconds = 20 } = {}) {
   const plain = `${dst}.plain.mp4`;
   const seconds = busy ? busySeconds : 1;
+  const swing = flicker ? ",eq=brightness='0.05*sin(2*PI*n/3)':eval=frame" : "";
   execFileSync(ffmpeg, [
     "-hide_banner", "-loglevel", "error", "-y",
-    "-f", "lavfi", "-i", busy ? `testsrc2=s=1280x720:r=24:d=${seconds}` : "color=c=0x507090:s=320x180:r=24:d=1",
+    "-f", "lavfi", "-i", busy ? `testsrc2=s=1280x720:r=24:d=${seconds}` : `color=c=0x507090:s=320x180:r=24:d=1${swing}`,
     "-f", "lavfi", "-i", `sine=d=${seconds}`,
     "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac",
     "-metadata", `com.dji.camera.ColorGammaSxS=${gamma}`, "-metadata", "com.dji.camera.WhiteBalanceKelvin=5180",
@@ -520,4 +521,38 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   expect(ledger.clips.DJI_20260205090000_0001_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(ledger.clips.DJI_20260203101500_0007_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(Object.keys(ledger.projects).some((film) => film.startsWith("_"))).toBe(false);
+}, 120_000);
+
+// After the offload's counts of this Mac's originals: a clip of its own whose light flickers.
+test.if(usable)("exports with deflicker on: its record and key say so, and the export and a frame of it hold steady", async () => {
+  const flickerDay = "mac:2026-02-17";
+  const flickering = "DJI_20260217100000_0001_D.MP4";
+  clip(join(original, flickering), "D-Log2", { flicker: true });
+  const grade = { base: "aces", exposure: 0, kelvin: null, tint: 0, contrast: 1, saturation: 1, deflicker: "light" };
+  expect((await api(`/api/sources/${flickerDay}/grades`, { method: "PUT", body: JSON.stringify({ clips: { [flickering]: grade } }) })).status).toBe(200);
+  expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: flickerDay, names: [flickering] }) })).status).toBe(200);
+  // Its own export's record, written once the file is in place.
+  await until(async () => records()[flickering], 120_000);
+  const record = records()[flickering];
+  expect(record.grade).toEqual(grade);
+  expect(record.key).toBe(gradeKey(grade));
+  expect(record.key).not.toBe(gradeKey({ ...grade, deflicker: undefined }));
+
+  const exportedClip = join(movies, record.file);
+  const lumas = (file) =>
+    [...execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", file, "-vf", "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-", "-f", "null", "-"]).toString().matchAll(/YAVG=([\d.]+)/g)].map((m) => Number(m[1]));
+  const spread = (values) => Math.max(...values) - Math.min(...values);
+  // The last few frames have less after them to be evened out with.
+  const steadyPart = (values) => values.slice(0, -8);
+  expect(spread(steadyPart(lumas(join(original, flickering))))).toBeGreaterThan(10);
+  expect(spread(steadyPart(lumas(exportedClip)))).toBeLessThan(2);
+  expect(frames(exportedClip)).toBe(frames(join(original, flickering)));
+
+  const res = await api("/api/export-frame", { method: "POST", body: JSON.stringify({ source: flickerDay, name: flickering, frame: 4 }) });
+  expect(res.status).toBe(200);
+  const png = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", join(movies, (await res.json()).file), "-vf", "scale=160:90:flags=area,format=rgb24", "-f", "rawvideo", "-"]);
+  // accurate_rnd: swscale's default 8-bit YUV→RGB path reads limited range about 2 levels low.
+  const vf = "select=eq(n\\,4),scale=160:90:flags=area+accurate_rnd+full_chroma_int:in_color_matrix=bt709:in_range=tv,format=rgb24";
+  const exportedFrame = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", exportedClip, "-vf", vf, "-frames:v", "1", "-f", "rawvideo", "-"]);
+  expect(meanDiff(png, exportedFrame)).toBeLessThan(2);
 }, 120_000);

@@ -792,7 +792,7 @@ function updatePanel() {
   const clip = primaryClip();
   const n = state.selected.size;
   const disabled = !clip;
-  for (const el of document.querySelectorAll(".panel input, .panel select, .look-step, #copy, #reset, [data-reset-group]")) el.disabled = disabled;
+  for (const el of document.querySelectorAll(".panel input, .panel select, .look-step, #deflicker button, #copy, #reset, [data-reset-group]")) el.disabled = disabled;
   $("paste").disabled = disabled || !state.clipboard;
   renderKept();
   if (!clip) {
@@ -867,6 +867,13 @@ function updatePanel() {
       tick.title = c.tickTitle ? c.tickTitle(clip) : "";
     }
   }
+
+  const level = deflickerOf(clip);
+  for (const b of document.querySelectorAll("#deflicker button"))
+    b.setAttribute("aria-pressed", String(b.dataset.deflicker === level));
+  const flicker = document.querySelector('.ctl[data-field="deflicker"]');
+  flicker.classList.toggle("changed", level !== "");
+  flicker.querySelector(".mixed").hidden = !others.some((o) => deflickerOf(o) !== level);
 }
 
 $("base").addEventListener("change", (e) => setField("base", e.target.value));
@@ -881,6 +888,28 @@ function stepLook(delta) {
 }
 $("base-prev").addEventListener("click", () => stepLook(-1));
 $("base-next").addEventListener("click", () => stepLook(1));
+
+// Deflicker: Off, Light or Strong, set on every selected clip. Only the export does it, so the preview stays as is.
+// ← → step through the choices as they step a slider, and double-clicking the name (or the group's Reset) turns it off.
+const deflickerOf = (clip) => gradeOf(clip).deflicker ?? "";
+const deflickerLevels = [...document.querySelectorAll("#deflicker button")].map((b) => b.dataset.deflicker);
+// Off is no field at all (undefined isn't saved), so a clip turned back off keys as it did before.
+const setDeflicker = (level) => setField("deflicker", level || undefined);
+$("deflicker").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) setDeflicker(b.dataset.deflicker);
+});
+$("deflicker").addEventListener("keydown", (e) => {
+  const clip = primaryClip();
+  if (!clip || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+  e.preventDefault();
+  const i = deflickerLevels.indexOf(deflickerOf(clip)) + (e.key === "ArrowRight" ? 1 : -1);
+  const level = deflickerLevels[Math.min(deflickerLevels.length - 1, Math.max(0, i))];
+  setDeflicker(level);
+  document.querySelector(`#deflicker button[data-deflicker="${level}"]`).focus();
+});
+$("deflicker-name").addEventListener("dblclick", () => setDeflicker(""));
+document.querySelector('[data-reset-group="light"]').addEventListener("click", () => setDeflicker(""));
 
 const dirty = new Set();
 let saveTimer = null;
