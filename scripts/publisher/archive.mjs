@@ -87,18 +87,22 @@ function contentType(method, body) {
  */
 export function archiveClient({ origin, token, fetcher = fetch, log = () => {} }) {
   // `signal` stops a request for good, with no retry: the footage archive's uploads stopping when its tab closes.
-  return async function request(path, { method = "GET", json, body, raw = false, signal = null } = {}) {
+  // `timeout` is for a body that takes a while to read: it covers the answer's, not just the request.
+  return async function request(
+    path,
+    { method = "GET", json, body, raw = false, signal = null, timeout = 10 * 60_000 } = {},
+  ) {
     const type = contentType(method, body);
     const route = path.split("?")[0];
     for (let attempt = 1; ; attempt++) {
       let response;
-      const timeout = AbortSignal.timeout(10 * 60_000);
+      const expired = AbortSignal.timeout(timeout);
       try {
         response = await fetcher(`${origin}/api/publisher/helper/archive/${path}`, {
           method,
           headers: { Authorization: `Bearer ${token}`, ...(type ? { "Content-Type": type } : {}) },
           body: json !== undefined ? JSON.stringify(json) : body,
-          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+          signal: signal ? AbortSignal.any([signal, expired]) : expired,
         });
       } catch (error) {
         if (attempt < 3 && !signal?.aborted) {

@@ -239,6 +239,59 @@ test("stopping cuts the part in flight, keeps what's in, and keeps the clip on t
   }
 });
 
+test("a clip sent in parts that doesn't read back is sent once more, and stays on the Mac if it still doesn't", async () => {
+  for (const [bad, finished] of [
+    [1, "done"],
+    [2, null],
+  ]) {
+    const at = await place([], [["DJI_20261117100000_0001_D.MP4", "a clip long enough to go in parts", "2026-11-17"]]);
+    try {
+      let reads = 0;
+      let begun = 0;
+      const request = site({
+        hold: (rest, init) => {
+          if (rest === "uploads") begun++;
+          if (!rest.startsWith("blobs/") || (init.method ?? "GET") !== "GET") return null;
+          return ++reads <= bad ? new Response("not the clip") : null;
+        },
+      });
+      const run = startOffload({ camera: [], mac: at.mac, dir: at.original, request, room: plenty, part: 8 });
+      await run.done;
+      expect(begun).toBe(2);
+      expect(run.state.finished).toBe(finished);
+      expect(run.state.send.done).toBe(finished ? 1 : 0);
+      if (finished) expect(files(at.original)).toEqual([]);
+      else {
+        expect(run.state.error).toMatch(/doesn't read back from Cloudflare/);
+        expect(files(at.original)).toEqual(["DJI_20261117100000_0001_D.MP4"]);
+      }
+    } finally {
+      await at.done();
+    }
+  }
+});
+
+test("a file the archive already has, but no record vouches for, is read back before the Mac's copy goes", async () => {
+  const at = await place([], [["DJI_20261117100000_0001_D.MP4", "here already", "2026-11-17"]]);
+  try {
+    let reads = 0;
+    const request = site({
+      hold: (rest, init) => {
+        if (rest.startsWith("blobs/") && (init.method ?? "GET") === "GET") reads++;
+        return null;
+      },
+    });
+    await request(`blobs/${sha("here already")}`, { method: "PUT", body: "here already" });
+    const run = startOffload({ camera: [], mac: at.mac, dir: at.original, request, room: plenty });
+    await run.done;
+    expect(reads).toBe(1);
+    expect(run.state.finished).toBe("done");
+    expect(files(at.original)).toEqual([]);
+  } finally {
+    await at.done();
+  }
+});
+
 test("a request that fails stops it all, saying why, and nothing is deleted that isn't in", async () => {
   const at = await place(
     [["DJI_20261118100000_0001_D.MP4", "off the card", "2026-11-18"]],

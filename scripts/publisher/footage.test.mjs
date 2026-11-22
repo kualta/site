@@ -8,6 +8,7 @@ import { archiveResponse } from "../../src/lib/publisher/archive.ts";
 import { memoryArchive, memoryMedia } from "../../src/lib/publisher/memory-archive.ts";
 import { archiveClient, archiveProject } from "./archive.mjs";
 import {
+  archiveFootage,
   clipDescription,
   clipTitle,
   exportedClips,
@@ -559,4 +560,17 @@ test("a site that's down is logged once, not every time the helper asks", async 
     signal: done.signal,
   });
   expect(logs).toEqual(["Footage archive: fetch failed", "Footage archive: Publisher request failed (503)"]);
+});
+
+test("a shoot day's offloaded originals aren't graded footage, so they never go to YouTube", async () => {
+  const file = (name) => ({ path: `assets/${name}`, sha256: "ab", size: 1 });
+  const projects = {
+    "_originals-2026-11-08": [file("DJI_20261108115341_0022_D.MP4")],
+    "014-walk": [file("DJI_20261115224628_0313_D.mp4")],
+  };
+  const request = async (path) =>
+    path === "projects"
+      ? { projects: Object.keys(projects).map((name) => ({ name })) }
+      : { files: projects[path.slice("projects/".length)] };
+  expect((await archiveFootage(request)).map((clip) => clip.name)).toEqual(["DJI_20261115224628_0313_D.mp4"]);
 });

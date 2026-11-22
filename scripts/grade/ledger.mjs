@@ -319,7 +319,8 @@ export async function ledgerCloud(publisherDir, fetcher = fetch) {
     async watchFootage() {
       const response = await fetcher(`${origin}/api/publisher/helper/footage/watch`, {
         method: "POST",
-        headers: auth,
+        // Without a type Astro refuses it as a cross-site form submission.
+        headers: { ...auth, "Content-Type": "application/json" },
         signal: AbortSignal.timeout(60_000),
       });
       if (!response.ok) throw new Error(`Keeping the footage uploads going failed (${response.status})`);
