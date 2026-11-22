@@ -183,7 +183,18 @@ export const LIMITS = {
   saturation: [0, 2],
 };
 
-/** A grade with every field present and in range; `base` is kept as given. */
+/**
+ * Deflicker levels, each with how many frames ffmpeg's deflicker averages brightness over (its `size`). Off is no
+ * `deflicker` field at all, so a grade without it keys exactly as grades did before the setting existed. It happens
+ * only in the export: the LUT, and so the preview, never sees it.
+ */
+export const DEFLICKER = Object.freeze({ light: 6, strong: 12 });
+
+/** The frames a deflicker level averages over; 0 for off, or for anything that isn't a level. */
+export const deflickerFrames = (level) =>
+  typeof level === "string" && Object.hasOwn(DEFLICKER, level) ? DEFLICKER[level] : 0;
+
+/** A grade with every field present and in range; `base` is kept as given, `deflicker` only when it's on. */
 export function normalizeGrade(g = {}) {
   const out = { base: g.base ?? null };
   for (const [k, def] of Object.entries(NEUTRAL)) {
@@ -191,6 +202,7 @@ export function normalizeGrade(g = {}) {
     if (v !== null && LIMITS[k]) v = Math.min(LIMITS[k][1], Math.max(LIMITS[k][0], Number(v)));
     out[k] = v;
   }
+  if (deflickerFrames(g.deflicker)) out.deflicker = g.deflicker;
   return out;
 }
 

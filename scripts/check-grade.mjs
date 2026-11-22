@@ -171,6 +171,41 @@ try {
   await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
   assert.ok(!existsSync(path.join(exported, "DJI_20260101120500_0002_D.mp4")), "the never-graded clip was left alone");
   assert.equal(record().grade.exposure, 0.5);
+
+  // Deflicker: Off, Light or Strong, saved with the grade and counted in its key; the panel says it's export only.
+  const deflicker = page.getByRole("group", { name: "Deflicker" });
+  const level = (text) => deflicker.getByRole("button", { name: text, exact: true });
+  const pressed = async () => (await deflicker.locator('[aria-pressed="true"]').textContent()).trim();
+  const saved = (n = name) => JSON.parse(readFileSync(path.join(data, "grades.json"), "utf8")).clips[n] ?? {};
+  const savedSoon = (check, what) => page.waitForTimeout(700).then(() => assert.ok(check(), what));
+  assert.equal(await pressed(), "Off");
+  await page.getByText("Applies on export; the preview doesn't show it.").waitFor();
+  await level("Light").click();
+  await row.getByText("Changed since export").waitFor({ timeout: 5_000 });
+  await savedSoon(() => saved().deflicker === "light", "Light is saved with the grade");
+  if (shots) await page.screenshot({ path: path.join(shots, "grade-5-deflicker.png") });
+  // Arrows step through the choices, as on a slider.
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await pressed(), "Strong");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  assert.equal(await pressed(), "Off");
+  await savedSoon(() => !("deflicker" in saved()), "Off leaves no deflicker in the grade");
+  // Back off, the grade is the exported one again.
+  await row.getByText("Graded", { exact: true }).waitFor({ timeout: 5_000 });
+  // Several clips: the panel shows the primary's and says Mixed; a choice sets it on all, the group's Reset clears it.
+  await level("Light").click();
+  await page.getByRole("button", { name: /0002/ }).click({ modifiers: ["Shift"] });
+  const mixed = page.locator('.ctl[data-field="deflicker"] .mixed');
+  await mixed.waitFor({ state: "visible", timeout: 5_000 });
+  assert.equal(await pressed(), "Off", "the panel shows the primary clip's");
+  await level("Strong").click();
+  await mixed.waitFor({ state: "hidden", timeout: 5_000 });
+  await savedSoon(() => saved().deflicker === "strong" && saved(other).deflicker === "strong", "Strong is set on both clips");
+  await page.locator('[data-reset-group="light"]').click();
+  assert.equal(await pressed(), "Off");
+  await savedSoon(() => !("deflicker" in saved()) && !("deflicker" in saved(other)), "the Light group's Reset turns it off");
+
   assert.deepEqual(errors, []);
   console.log("grade check passed");
 } finally {

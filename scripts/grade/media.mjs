@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import ffmpegStatic from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
-import { CALIBRATION, blockMeans, profileOf } from "./color.mjs";
+import { CALIBRATION, blockMeans, deflickerFrames, profileOf } from "./color.mjs";
 
 const exec = promisify(execFile);
 export const FFMPEG = process.env.FFMPEG_PATH || ffmpegStatic;
@@ -150,15 +150,16 @@ export async function makeThumb(src, dst, { still = null, at = 1 } = {}) {
 /**
  * Bake a grade into a graded copy, from the 10-bit original at 16-bit precision: the clip's LUT through ffmpeg's
  * tetrahedral lut3d, out as 8-bit H.264 BT.709 with a key frame every quarter second, sound copied: near lossless at
- * full `quality`, or a known share of the original's `videoBitrate` below it (exportRate).
+ * full `quality`, or a known share of the original's `videoBitrate` below it (exportRate). `deflicker`, the grade's
+ * level, evens out each frame's brightness with the frames after it (exportFilter).
  */
-export async function exportClip({ src, dst, cube, matrix = "bt709", duration, quality = 100, videoBitrate = 0, onProgress, signal }) {
+export async function exportClip({ src, dst, cube, matrix = "bt709", deflicker = null, duration, quality = 100, videoBitrate = 0, onProgress, signal }) {
   await writeAtomically(dst, (tmp) =>
     run(
       [
         "-i", src,
         "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0",
-        "-vf", `${gradeFilter(matrix, cube)},scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv`,
+        "-vf", exportFilter({ matrix, cube, deflicker }),
         "-c:v", "libx264", "-preset", "medium", ...exportRate(quality, videoBitrate), "-force_key_frames", "expr:gte(t,n_forced*0.25)",
         "-c:a", "copy", "-movflags", "+faststart", tmp,
       ],
@@ -171,6 +172,42 @@ export async function exportClip({ src, dst, cube, matrix = "bt709", duration, q
 const gradeFilter = (matrix, cube) => `scale=in_color_matrix=${matrix}:in_range=tv,format=gbrp16le,lut3d=file='${filterPath(cube)}':interp=tetrahedral`;
 
 /**
+ * ffmpeg's deflicker, after the grade: each frame's luma scaled by one factor, so its mean matches the mean over it
+ * and the next `frames - 1` frames. It goes after the LUT, not on the log original, because it scales: a change in
+ * light is an offset in log code values, so scaling them would leave the shadows flickering and overshoot the
+ * highlights, while in the graded Rec.709 picture it's close to a scale, and the brightness evened out is the one
+ * the viewer sees. It runs in full-range YUV at 16 bits (`pixFmt`), so black stays black when it scales and no
+ * levels are lost. The scale after it is told its frames are full range, as it can't tell on its own; `out` adds what
+ * that scale converts them to.
+ */
+const deflickerFilter = (frames, pixFmt, out = "") =>
+  `scale=out_color_matrix=bt709:out_range=pc,format=${pixFmt},deflicker=size=${frames}:mode=am,` +
+  `scale=in_color_matrix=bt709:in_range=pc${out}`;
+
+const exportTail = "format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv";
+
+/** The export's whole filter graph. With `deflicker` off it is the grade alone, as it always was. */
+export function exportFilter({ matrix = "bt709", cube, deflicker = null }) {
+  const frames = deflickerFrames(deflicker);
+  const grade = gradeFilter(matrix, cube);
+  if (!frames) return `${grade},scale=out_color_matrix=bt709:out_range=tv,${exportTail}`;
+  // 4:2:0, as the export ends up: deflicker only touches luma, and it holds that many frames at a time.
+  return `${grade},${deflickerFilter(frames, "yuv420p16le", ":out_color_matrix=bt709:out_range=tv")},${exportTail}`;
+}
+
+/**
+ * A frame export's filter graph. With `deflicker` it reads that frame and the ones after it the export averages it
+ * with, so the still is the export's frame, not the flickering original's.
+ */
+export function frameFilter({ matrix = "bt709", cube, deflicker = null }) {
+  const frames = deflickerFrames(deflicker);
+  const grade = gradeFilter(matrix, cube);
+  if (!frames) return `${grade},format=rgb24`;
+  // 4:4:4 here: a still keeps its full colour resolution.
+  return `${grade},${deflickerFilter(frames, "yuv444p16le")},format=rgb24`;
+}
+
+/**
  * x264's rate for an export. Full quality (100) is near lossless, CRF 12, whatever size that takes; below it the video
  * gets that share of the original's bitrate, so the file's size is known before it's made (50 ≈ half the original).
  */
@@ -180,10 +217,13 @@ export function exportRate(quality, videoBitrate) {
   return ["-b:v", String(rate), "-maxrate", String(Math.round(rate * 1.5)), "-bufsize", String(rate * 2)];
 }
 
-/** One frame of a clip, graded, as a full-size 8-bit PNG: `time` in seconds lands on the frame it's in. */
-export async function exportFrame({ src, dst, cube, matrix = "bt709", time }) {
+/**
+ * One frame of a clip, graded, as a full-size 8-bit PNG: `time` in seconds lands on the frame it's in. With
+ * `deflicker` it's deflickered as that frame of the export is (frameFilter).
+ */
+export async function exportFrame({ src, dst, cube, matrix = "bt709", deflicker = null, time }) {
   await writeAtomically(dst, (tmp) =>
-    run(["-ss", time.toFixed(6), "-i", src, "-map", "0:v:0", "-frames:v", "1", "-vf", `${gradeFilter(matrix, cube)},format=rgb24`, tmp]),
+    run(["-ss", time.toFixed(6), "-i", src, "-map", "0:v:0", "-frames:v", "1", "-vf", frameFilter({ matrix, cube, deflicker }), tmp]),
   );
 }
 

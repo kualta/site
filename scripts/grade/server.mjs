@@ -457,6 +457,7 @@ async function exportOne(id, name, quality, onProgress, signal) {
       dst: exportedFile(name),
       cube: lut,
       matrix: meta.matrix,
+      deflicker: grade.deflicker,
       duration: meta.duration,
       quality,
       videoBitrate: meta.videoBitrate,
@@ -485,10 +486,12 @@ async function exportOne(id, name, quality, onProgress, signal) {
  * counts from 0; the seek lands a quarter frame early so ffmpeg keeps exactly that frame.
  */
 async function frameOne(src, name, frame) {
-  const { meta, cube } = await clipLut(src, name);
+  const { meta, grade, cube } = await clipLut(src, name);
   const dst = join(EXPORTED, `${stemOf(name)}_f${String(frame).padStart(4, "0")}.png`);
   const time = Math.max(0, (frame - 0.25) / (meta.fps || 24));
-  await withLutFile(name, cube, (lut) => exportFrame({ src: src.paths.get(name), dst, cube: lut, matrix: meta.matrix, time }));
+  await withLutFile(name, cube, (lut) =>
+    exportFrame({ src: src.paths.get(name), dst, cube: lut, matrix: meta.matrix, deflicker: grade.deflicker, time }),
+  );
   return relative(MOVIES, dst);
 }
 

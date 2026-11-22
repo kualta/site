@@ -128,6 +128,13 @@
     <section class="group">
       <div class="group-head"><span class="cap">Light</span><button class="link" type="button" data-reset-group="light">Reset</button></div>
       <div class="controls" data-group="light"></div>
+      <div class="ctl choice" data-field="deflicker">
+        <span class="ctl-label" id="deflicker-name" title="Double-click for Off"><span class="name">Deflicker</span><span class="mixed" hidden>Mixed</span></span>
+        <div class="seg" role="group" aria-labelledby="deflicker-name" id="deflicker">
+          <button type="button" data-deflicker="" aria-pressed="true">Off</button><button type="button" data-deflicker="light" aria-pressed="false" title="Evens out fast flicker, and keeps brightness that changes as the camera moves">Light</button><button type="button" data-deflicker="strong" aria-pressed="false" title="Evens out more, for tripod and timelapse shots">Strong</button>
+        </div>
+        <p class="ctl-note">Applies on export; the preview doesn't show it.</p>
+      </div>
     </section>
 
     <section class="group">

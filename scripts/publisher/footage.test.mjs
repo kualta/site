@@ -95,6 +95,10 @@ test("a clip is titled by the camera's clock and described by its grade", () => 
       "Exported 2026-11-16",
   );
   expect(clipDescription("DJI_20261115224628_0313_D.mp4")).toBe("DJI_20261115224628_0313_D, graded footage.");
+  // A grade with the export's deflicker on says so; off, a grade has no deflicker field at all.
+  const deflickered = { ...record, grade: { ...record.grade, deflicker: "light" } };
+  const described = clipDescription("DJI_20261115224628_0313_D.mp4", deflickered);
+  expect(described).toContain("(exposure 0, contrast 1.3, deflicker light)");
 });
 
 test("a file goes up in whole chunks, the last part finishing it, as an unlisted video", async () => {

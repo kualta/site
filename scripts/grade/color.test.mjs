@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test";
 import {
+  DEFLICKER,
   PROFILES,
   adjuster,
   composeLut,
+  deflickerFrames,
   gradeKey,
   normalizeGrade,
   parseCube,
   planckXy,
   profileOf,
+  resolveGrade,
   sampleTetra,
   whiteBalance,
   writeCube,
@@ -83,6 +86,33 @@ test("grades are clamped and keyed stably", () => {
   const g = normalizeGrade({ base: "aces", exposure: 9, tint: -500 });
   expect(g).toEqual({ base: "aces", exposure: 3, kelvin: null, tint: -100, contrast: 1, saturation: 1 });
   expect(gradeKey({ b: 1, a: 2 })).toBe(gradeKey({ a: 2, b: 1 }));
+});
+
+test("deflicker is kept only as a level, and off keys a grade exactly as before it existed", () => {
+  expect(normalizeGrade({ deflicker: "light" }).deflicker).toBe("light");
+  expect(normalizeGrade({ deflicker: "strong" }).deflicker).toBe("strong");
+  for (const off of [undefined, null, "", "max", 6, true, "constructor", "toString"])
+    expect(normalizeGrade({ base: "aces", deflicker: off })).not.toHaveProperty("deflicker");
+  expect(deflickerFrames("light")).toBe(DEFLICKER.light);
+  expect(deflickerFrames("strong")).toBe(DEFLICKER.strong);
+  expect(deflickerFrames("constructor")).toBe(0);
+  expect(deflickerFrames(null)).toBe(0);
+
+  // The key exports.json holds for a grade made before deflicker: off leaves it alone, so no export goes stale.
+  const before = '{"base":"aces","contrast":1,"exposure":0.5,"kelvin":null,"saturation":1,"tint":0}';
+  expect(gradeKey(resolveGrade({ base: "aces", exposure: 0.5 }, ["aces"]))).toBe(before);
+  expect(gradeKey(resolveGrade({ base: "aces", exposure: 0.5, deflicker: null }, ["aces"]))).toBe(before);
+  // On, it's part of the grade: changing it makes the export out of date.
+  const light = gradeKey(resolveGrade({ base: "aces", exposure: 0.5, deflicker: "light" }, ["aces"]));
+  const strong = gradeKey(resolveGrade({ base: "aces", exposure: 0.5, deflicker: "strong" }, ["aces"]));
+  expect(new Set([before, light, strong]).size).toBe(3);
+});
+
+test("deflicker leaves the grade's LUT, and so the preview, as it is", () => {
+  const base = syntheticBase(9);
+  const grade = { exposure: 0.4, contrast: 1.2 };
+  const lut = (g) => composeLut({ profile: "dlog2", grade: g, shotK: 5180, base, size: 9 });
+  expect(lut({ ...grade, deflicker: "strong" })).toEqual(lut(grade));
 });
 
 // A smooth, non-linear stand-in for a base look.
