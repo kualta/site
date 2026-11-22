@@ -1134,6 +1134,86 @@ test("a copy written to before the card's clip could go isn't taken for it any m
   expect(readFileSync(join(at.original, one), "utf8")).toBe("someone's edits!");
 });
 
+test("a copy written to at the last moment isn't what the card's clip goes on the strength of", async () => {
+  for (const look of ["at once", "later"]) {
+    const at = await given([[one, "the card's bytes", day]]);
+    let asked = 0;
+    const run = begin(at, {
+      lanes: ["copy"],
+      request: site(),
+      // Asked just before it's deleted: right after it's copied, or (being exported then) on a later look.
+      removable: async (clip) => {
+        if (++asked === 1 && look === "later") return false;
+        writeFileSync(join(at.original, clip.name), "someone's edits!");
+        return true;
+      },
+    });
+    await run.done;
+    expect(files(at.dcim)).toEqual(onCard(one));
+    expect(readFileSync(join(at.dcim, one), "utf8")).toBe("the card's bytes");
+  }
+});
+
+test("the card told to keep its clips till they're sent, as one is about to go, keeps it", async () => {
+  const at = await given([[one, "a clip", day]]);
+  let after = "copied";
+  const run = begin(at, {
+    lanes: ["copy"],
+    request: site(),
+    clearCardAfter: () => after,
+    removable: async () => {
+      after = "sent";
+      return true;
+    },
+  });
+  await run.done;
+  expect(run.state.copy).toMatchObject({ done: 1, onCamera: 1 });
+  expect(files(at.dcim)).toEqual(onCard(one));
+});
+
+test("a clip the archive turns out not to have, as its sound is waited for, isn't deleted from the Mac", async () => {
+  // Two names for one clip: the first is in, its sound being taken, as the second finds what's there isn't it.
+  const at = await given(
+    [],
+    [
+      [one, LONG, day],
+      [three, "keeps the other upload busy", day],
+    ],
+  );
+  let take;
+  const taking = new Promise((resolve) => {
+    take = resolve;
+  });
+  const busy = stall();
+  let spoiling = false;
+  const request = site({
+    hold: (rest, init, pass) => {
+      if (rest === `uploads/${sha("keeps the other upload busy")}/1`) return busy.hold(init, pass);
+      if (spoiling && readsBlob(rest, init)) return Promise.resolve(new Response("not it"));
+      return pass();
+    },
+  });
+  const run = begin(at, {
+    lanes: ["send"],
+    request,
+    part: 8,
+    transcripts: {
+      take: (clip) => (clip.name === one ? taking : Promise.resolve()),
+      ready: async () => [],
+      sent: async () => {},
+    },
+  });
+  await until(() => run.state.send.done === 1);
+  spoiling = true;
+  await at.put(at.original, [two, LONG, day]);
+  busy.go();
+  await until(() => run.state.send.skipped.some((clip) => clip.name === two));
+  take();
+  await run.done;
+  expect(files(at.original)).toContain(one);
+  expect(files(at.original)).toContain(two);
+});
+
 test("a file of a card clip's name and size on the Mac isn't taken for its copy, whatever a record made of either", async () => {
   // Recorded as what the Mac has; the card's own, hashed to see whether it's that, isn't, and others are copied first.
   const [mine, theirs] = ["what the card has of it", "what the Mac has of it!"];

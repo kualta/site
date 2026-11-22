@@ -246,6 +246,7 @@ const sum = (clips) => clips.reduce((total, clip) => total + clip.size, 0);
 const idOf = ({ name, size, mtime }) => `${name}/${size}/${mtime}`;
 const isAsListed = (now, { size, mtime }) => Boolean(now) && now.size === size && Math.round(now.mtimeMs) === mtime;
 const unchanged = async (clip) => isAsListed(await statOf(clip.path), clip);
+const unchangedNow = (clip) => isAsListed(statSync(clip.path, { throwIfNoEntry: false }), clip);
 /** Calls of `work` made one after another. */
 function inTurn(work) {
   let last = Promise.resolve();
@@ -371,23 +372,18 @@ export function startOffload({
 
   /** Whether a clip may go: not one that's kept or in use. */
   const mayGo = async (clip) => !(await keeping())(clip) && (await removable(clip));
-  /** Looked at and deleted in one go, so nothing here can write to it in between. */
-  function removeAtOnce(clip) {
-    if (!isAsListed(statSync(clip.path, { throwIfNoEntry: false }), clip)) return false;
-    unlinkSync(clip.path);
-    return true;
-  }
-  async function removeFromCard(clip) {
-    // Looked at without waiting on it first: a camera that's going might take its time to answer.
-    if (!(await unchanged(clip)) || !removeAtOnce(clip)) return false;
-    await rm(lrfOf(clip.path), { force: true });
-    return true;
-  }
-  /** Deletes a clip, unless it's to stay or was written to since it was listed. */
-  async function remove(clip, where) {
+  /**
+   * Deletes a clip, unless it's to stay, was written to since it was listed, or `safe()` says what it was to be deleted on
+   * the strength of doesn't hold any more. That's all looked at and the clip deleted in one go, so nothing here can come
+   * in between.
+   */
+  async function remove(clip, where, safe) {
     if (!(await mayGo(clip))) return;
-    const gone = where === "camera" ? await removeFromCard(clip) : removeAtOnce(clip);
-    if (!gone) return;
+    // A camera that's going might take its time to answer: it's asked without waiting on it first.
+    if (where === "camera" && !(await unchanged(clip))) return;
+    if (!safe() || !unchangedNow(clip)) return;
+    unlinkSync(clip.path);
+    if (where === "camera") await rm(lrfOf(clip.path), { force: true });
     state.freed[where] += clip.size;
     removed(clip, where);
     notify();
@@ -404,8 +400,6 @@ export function startOffload({
   const offCard = new Map();
   /** The card's files (by id) whose copy on the Mac this run made, or checked against them: the copy, as it was then. */
   const copied = new Map();
-  /** The clips this run put in the archive, or found there: name → SHA-256. */
-  const landed = new Map();
 
   // ---- the sound of each clip, taken one at a time, as soon as it's on the Mac so it's transcribed while it goes up ----
 
@@ -457,10 +451,16 @@ export function startOffload({
     return mine?.id === idOf(clip) ? mine.sha256 : null;
   }
   /** Whether the Mac still has the copy this run checked against a clip on the card. */
-  async function copiedStill(clip) {
-    const copy = copied.get(idOf(clip));
-    return Boolean(copy) && unchanged(copy);
+  function copiedStill(clip) {
+    const there = copied.get(idOf(clip));
+    return Boolean(there) && unchangedNow(there);
   }
+  /** Whether this run knows the archive to have just what the card has. */
+  function landedAs(clip) {
+    const mine = readOffCard(clip);
+    return Boolean(mine) && originals.landed.get(clip.name) === mine;
+  }
+  const isCleared = (clip) => landedAs(clip) || (clearCardAfter() === "copied" && copiedStill(clip));
 
   /** Whether the card's file is what's in the archive under `known`'s hash, read off the card if nothing else says so. */
   async function isTheSame(clip, known) {
@@ -503,7 +503,8 @@ export function startOffload({
       if (copy.ending()) break;
       if (unasked && !holds.has(known.sha256)) continue;
       try {
-        if (holds.has(known.sha256) && (await isTheSame(clip, known))) await remove(clip, "camera");
+        if (holds.has(known.sha256) && (await isTheSame(clip, known)))
+          await remove(clip, "camera", () => holds.has(known.sha256));
         else {
           strange.add(idOf(clip));
           again.push(clip);
@@ -537,17 +538,17 @@ export function startOffload({
     };
     for (const clip of card) {
       if (keeps(clip) || copy.passes(clip)) continue;
-      const mine = readOffCard(clip);
       const known = record[clip.name];
-      if (mine && landed.get(clip.name) === mine) clear.push(clip);
+      if (landedAs(clip)) clear.push(clip);
       else if (known?.size === clip.size && !strange.has(idOf(clip))) recorded.push({ clip, known });
-      else if (!(await copiedStill(clip))) left.push(clip);
+      else if (!copiedStill(clip)) left.push(clip);
       else if (clearCardAfter() === "copied") clear.push(clip);
       else awaiting++;
     }
     for (const clip of clear) {
       if (copy.ending()) break;
-      if (!mustWait(clip)) await remove(clip, "camera").catch((error) => copy.failed(clip, error));
+      if (mustWait(clip)) continue;
+      await remove(clip, "camera", () => isCleared(clip)).catch((error) => copy.failed(clip, error));
     }
     const seen = recorded.filter(({ clip }) => !mustWait(clip));
     const { again, unasked } = await clearRecorded(seen);
@@ -591,7 +592,7 @@ export function startOffload({
       void takeSound(here, copy);
       onCopied(here);
       notify();
-      if (clearCardAfter() === "copied" && (await copiedStill(clip))) await remove(clip, "camera");
+      if (clearCardAfter() === "copied") await remove(clip, "camera", () => isCleared(clip));
     } catch (error) {
       if (copy.signal.aborted) return;
       if (!(await statOf(clip.path))) await recoverCamera();
@@ -661,7 +662,7 @@ export function startOffload({
   async function distrust(from, sha256) {
     await from.records.drop(sha256);
     holds.delete(sha256);
-    for (const [name, hash] of landed) if (hash === sha256) landed.delete(name);
+    for (const [name, hash] of from.landed) if (hash === sha256) from.landed.delete(name);
   }
 
   /** Puts a clip in the archive and makes sure of it: anything R2 didn't just check whole is read back first. */
@@ -697,9 +698,18 @@ export function startOffload({
    * What a lane sends: `list()` says the clips, `records` those sent, `project(day)` where a day's are filed, `lasting`
    * whether one there keeps its place, `before(clip)` whether a clip's Mac copy may go yet, `feeding()` whether more may
    * come. `left` are the clips to send as last seen, `flying` those being seen to (true until they're in the archive),
-   * `gone` those a record is wrong about.
+   * `gone` those a record is wrong about. `landed` are those this run put in the archive, or found there: name → SHA-256.
    */
-  const source = (lane, given) => ({ lane, left: [], flying: new Map(), gone: new Set(), ...given });
+  const source = (lane, given) => ({
+    lane,
+    left: [],
+    flying: new Map(),
+    gone: new Set(),
+    landed: new Map(),
+    ...given,
+  });
+  /** Deletes a clip from the Mac, if the archive is still known to have it. */
+  const removeSent = (from, clip, sha256) => remove(clip, from.where, () => from.landed.get(clip.name) === sha256);
   const originals = source(send, {
     where: "mac",
     records,
@@ -741,8 +751,8 @@ export function startOffload({
       const { sha256 } = record[clip.name];
       try {
         if (there.has(sha256) && (await hashFile(clip.path, lane.signal)) === sha256) {
-          landed.set(clip.name, sha256);
-          if (await from.before(clip)) await remove(clip, from.where);
+          from.landed.set(clip.name, sha256);
+          if (await from.before(clip)) await removeSent(from, clip, sha256);
         } else {
           gone.add(idOf(clip));
           from.left.push(clip);
@@ -796,7 +806,7 @@ export function startOffload({
       await store(from, clip, sha256, going);
       await fileInDay(ask, clip.day, [file], lane.signal, from.project(clip.day));
       await from.records.add(clip, sha256, from.proof(clip, sha256));
-      landed.set(clip.name, sha256);
+      from.landed.set(clip.name, sha256);
       flying.set(clip.name, false);
       from.left = from.left.filter((other) => other.name !== clip.name);
       lane.state.done++;
@@ -805,7 +815,7 @@ export function startOffload({
       lane.fine();
       totals();
       notify();
-      if (await from.before(clip)) await remove(clip, from.where);
+      if (await from.before(clip)) await removeSent(from, clip, sha256);
     } catch (error) {
       if (lane.signal.aborted) return;
       going.sent = 0;
