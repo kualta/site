@@ -176,13 +176,15 @@ const gradeFilter = (matrix, cube) => `scale=in_color_matrix=${matrix}:in_range=
  * and the next `frames - 1` frames. It goes after the LUT, not on the log original, because it scales: a change in
  * light is an offset in log code values, so scaling them would leave the shadows flickering and overshoot the
  * highlights, while in the graded Rec.709 picture it's close to a scale, and the brightness evened out is the one
- * the viewer sees. It runs in full-range YUV at 16 bits (`pixFmt`), so black stays black when it scales and no
- * levels are lost. The scale after it is told its frames are full range, as it can't tell on its own; `out` adds what
- * that scale converts them to.
+ * the viewer sees. It runs on that picture as the export is written, BT.709 limited-range YUV, but at 16 bits
+ * (`pixFmt`), so it loses no levels; the scale after it reads it back as such, and `out` adds what that scale makes.
+ * (Full range would keep black exactly still as it scales, but here black moves less than a level, and on x86
+ * swscale's full-to-limited step lands about a third of a level high in every plane, where cutting limited range from
+ * 16 to 8 bits doesn't.)
  */
 const deflickerFilter = (frames, pixFmt, out = "") =>
-  `scale=out_color_matrix=bt709:out_range=pc,format=${pixFmt},deflicker=size=${frames}:mode=am,` +
-  `scale=in_color_matrix=bt709:in_range=pc${out}`;
+  `scale=out_color_matrix=bt709:out_range=tv,format=${pixFmt},deflicker=size=${frames}:mode=am,` +
+  `scale=in_color_matrix=bt709:in_range=tv${out}`;
 
 const exportTail = "format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv";
 
@@ -191,8 +193,9 @@ export function exportFilter({ matrix = "bt709", cube, deflicker = null }) {
   const frames = deflickerFrames(deflicker);
   const grade = gradeFilter(matrix, cube);
   if (!frames) return `${grade},scale=out_color_matrix=bt709:out_range=tv,${exportTail}`;
-  // 4:2:0, as the export ends up: deflicker only touches luma, and it holds that many frames at a time.
-  return `${grade},${deflickerFilter(frames, "yuv420p16le", ":out_color_matrix=bt709:out_range=tv")},${exportTail}`;
+  // 4:2:0, as the export ends up: deflicker only touches luma, it holds that many frames at a time, and what's left
+  // is to cut it to 8 bits.
+  return `${grade},${deflickerFilter(frames, "yuv420p16le", ":out_range=tv")},${exportTail}`;
 }
 
 /**

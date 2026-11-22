@@ -32,9 +32,13 @@ const lumas = (file) => {
   const stats = run(["-i", file, "-vf", vf, "-f", "null", "-"]);
   return [...stats.toString().matchAll(/YAVG=([\d.]+)/g)].map((m) => Number(m[1]));
 };
-/** Frame `k` of a video as small RGB, read as the export writes it (BT.709, limited range). */
+/**
+ * Frame `k` of a video as small RGB, read as the export writes it (BT.709, limited range). accurate_rnd: swscale's
+ * default 8-bit YUV→RGB path reads limited range about 2 levels low.
+ */
 const frameAt = (file, k) => {
-  const vf = `select=eq(n\\,${k}),scale=160:90:flags=area:in_color_matrix=bt709:in_range=tv,format=rgb24`;
+  const scale = "scale=160:90:flags=area+accurate_rnd+full_chroma_int:in_color_matrix=bt709:in_range=tv";
+  const vf = `select=eq(n\\,${k}),${scale},format=rgb24`;
   return run(["-i", file, "-vf", vf, "-frames:v", "1", "-f", "rawvideo", "-"]);
 };
 const still = (png) => run(["-i", png, "-vf", "scale=160:90:flags=area,format=rgb24", "-f", "rawvideo", "-"]);
@@ -77,16 +81,16 @@ test("off, the export's filter graph is the grade alone, as exports were always 
   }
 });
 
-test("on, deflicker comes after the grade LUT, in full-range 16-bit YUV read back as full range", () => {
+test("on, deflicker comes after the grade LUT, in limited-range 16-bit YUV read back as such", () => {
   const deflickered = (pixFmt, size) =>
     [
       "lut3d=file='/tmp/x.cube':interp=tetrahedral",
-      "scale=out_color_matrix=bt709:out_range=pc",
+      "scale=out_color_matrix=bt709:out_range=tv",
       `format=${pixFmt}`,
       `deflicker=size=${size}:mode=am`,
-      "scale=in_color_matrix=bt709:in_range=pc",
+      "scale=in_color_matrix=bt709:in_range=tv",
     ].join(",");
-  const tv = ":out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=";
+  const tv = ":out_range=tv,format=yuv420p,setparams=";
   const graph = (filter, deflicker) => filter({ cube: "/tmp/x.cube", deflicker });
   expect(graph(exportFilter, "light")).toContain(`${deflickered("yuv420p16le", 6)}${tv}`);
   expect(graph(exportFilter, "strong")).toContain(`${deflickered("yuv420p16le", 12)}${tv}`);

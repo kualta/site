@@ -551,5 +551,8 @@ test.if(usable)("exports with deflicker on: its record and key say so, and the e
   const res = await api("/api/export-frame", { method: "POST", body: JSON.stringify({ source: flickerDay, name: flickering, frame: 4 }) });
   expect(res.status).toBe(200);
   const png = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", join(movies, (await res.json()).file), "-vf", "scale=160:90:flags=area,format=rgb24", "-f", "rawvideo", "-"]);
-  expect(meanDiff(png, frameAt(exportedClip, 4))).toBeLessThan(3);
+  // accurate_rnd: swscale's default 8-bit YUV→RGB path reads limited range about 2 levels low.
+  const vf = "select=eq(n\\,4),scale=160:90:flags=area+accurate_rnd+full_chroma_int:in_color_matrix=bt709:in_range=tv,format=rgb24";
+  const exportedFrame = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", exportedClip, "-vf", vf, "-frames:v", "1", "-f", "rawvideo", "-"]);
+  expect(meanDiff(png, exportedFrame)).toBeLessThan(2);
 }, 120_000);
