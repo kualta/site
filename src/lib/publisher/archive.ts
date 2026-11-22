@@ -329,7 +329,7 @@ const isPath = (path: unknown): path is string =>
 
 /**
  * Keeps a project's manifest, once every file it names is in the archive, under the time it was archived. Refuses one
- * that names a file the archive doesn't hold, so a manifest never points at something missing.
+ * that names a file the archive doesn't hold, so a manifest never points at something that was never there.
  */
 export async function saveManifest(archive: ArchiveBucket, name: string, input: unknown, now = new Date()) {
   if (!isProjectName(name)) throw new ArchiveError("Invalid project name");
@@ -351,9 +351,14 @@ export async function saveManifest(archive: ArchiveBucket, name: string, input: 
     folders.every(isPath);
   if (!valid) throw new ArchiveError("Invalid manifest");
   const listed = files as Manifest["files"];
+  // A shoot day's manifest (`_originals-<day>`) is saved again for every clip, hundreds of times: asking for each of its
+  // files each time would cost the Worker more than it has. What the last one names was asked for then, and nothing
+  // takes a file out of the archive, so only what's new is. A film, saved once, has all of its files asked for.
+  const last = name.startsWith("_") ? await readManifest(archive, name) : null;
+  const known = new Set(last?.files.map((f) => f.sha256));
   const missing = await missingBlobs(
     archive,
-    listed.map((f) => f.sha256),
+    listed.map((f) => f.sha256).filter((hash) => !known.has(hash)),
   );
   if (missing.length) throw new ArchiveError(`${missing.length} of its files aren't in the archive yet`);
   const manifest: Manifest = {
