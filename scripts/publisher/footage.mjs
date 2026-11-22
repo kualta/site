@@ -99,13 +99,15 @@ export async function exportedClips({ exported = EXPORTED, exportsFile = EXPORTS
 export async function archiveFootage(request, records = new Map()) {
   const clips = new Map();
   for (const { name: project } of (await request("projects")).projects) {
-    // A shoot day's offloaded originals (`_originals-<day>`) are ungraded: they never go to YouTube.
-    if (project.startsWith("_")) continue;
+    // Of what the grade app keeps here only a day's graded copies (`_graded-<day>`) are footage: its offloaded originals
+    // (`_originals-<day>`) are ungraded, and never go to YouTube.
+    if (project.startsWith("_") && !project.startsWith("_graded-")) continue;
     for (const file of (await request(`projects/${project}`)).files) {
       const name = file.path.split("/").pop();
       if (!/^(zh\/)?assets\//.test(file.path) || !CLIP.test(name) || clips.has(name)) continue;
       const record = records.get(stem(name).toLowerCase());
-      clips.set(name, { name, sha256: file.sha256, size: file.size, record, from: "archive", project });
+      const { sha256, size, mtime } = file;
+      clips.set(name, { name, sha256, size, mtime, record, from: "archive", project });
     }
   }
   return [...clips.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -434,7 +436,8 @@ export async function uploadFootage({
             wait,
           },
         );
-        const kept = clip.from === "archive" ? { sha256: clip.sha256 } : { mtime: clip.mtime };
+        // The time the file had, so one put up from the archive is known when it's brought back to the Mac.
+        const kept = { ...(clip.from === "archive" ? { sha256: clip.sha256 } : {}), mtime: clip.mtime };
         (state.clips[clip.name] ??= []).push({
           video,
           size: clip.size,

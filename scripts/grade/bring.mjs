@@ -212,9 +212,15 @@ async function fetchClip(request, clip, path, { signal, onBytes }) {
 /**
  * Brings one clip into `dir`. Says "landed", or "skipped" when that very clip is there already; throws, leaving nothing of
  * it behind, when another file has its name, what comes isn't what its manifest lists, or `signal` cuts it short.
- * `ready` is called before anything is fetched, and can refuse by throwing.
+ * `ready` is called before anything is fetched, and can refuse by throwing; `placing(clip)` before it takes its name, so
+ * that it's kept out of any offload going on by the time there's a file to take, and can say how to undo that.
  */
-export async function bringClip(request, clip, dir, { signal, onBytes = () => {}, ready = async () => {} } = {}) {
+export async function bringClip(
+  request,
+  clip,
+  dir,
+  { signal, onBytes = () => {}, ready = async () => {}, placing = async () => {} } = {},
+) {
   await mkdir(dir, { recursive: true });
   const taken = (await namesIn(dir)).get(clip.name.toLowerCase());
   const another = () => new ClipError(`Another file is already ${basename(dir)}/${taken ?? clip.name}`);
@@ -222,8 +228,9 @@ export async function bringClip(request, clip, dir, { signal, onBytes = () => {}
     const path = join(dir, taken);
     const info = await stat(path).catch(() => null);
     const same = info?.isFile() && info.size === clip.size && (await hashFile(path, signal)) === clip.sha256;
-    if (same) return "skipped";
-    throw another();
+    if (!same) throw another();
+    await placing(clip);
+    return "skipped";
   }
   await ready();
   const partial = join(dir, `.${clip.name}${PART}`);
@@ -231,8 +238,10 @@ export async function bringClip(request, clip, dir, { signal, onBytes = () => {}
     await fetchClip(request, clip, partial, { signal, onBytes });
     const when = new Date(clip.mtime);
     await utimes(partial, when, when);
+    const undo = await placing(clip);
     // A rename would write over a file put there meanwhile (an export, a clip off the card). A link won't.
-    await link(partial, join(dir, clip.name)).catch((error) => {
+    await link(partial, join(dir, clip.name)).catch(async (error) => {
+      await undo?.();
       throw error.code === "EEXIST" ? another() : error;
     });
     return "landed";
@@ -252,12 +261,20 @@ export async function clearParts(dirs) {
  * Brings clips back, one at a time, in the order they're added. `folders` says where each kind goes, `room()` how many
  * bytes are free there, of which `keepFree` stay so; `claims()` says what else is being written there and how much of it
  * is still to come, `[{ by, bytes }]`: a clip comes only while there's room for both, looked at again every `every` ms.
- * `landed(clip)` hears each one.
+ * `landed(clip)` hears each one, and `placing(clip)` each before it takes its name (bringClip).
  *
  * Says `{ add, stop, state, settled }`: `add(request, clips)` refuses, by throwing, what there's no room for, `stop()` ends
  * the run and keeps what's landed, `state()` says how far it is, `settled()` when it has ended.
  */
-export function bringer({ folders, room, keepFree = 5e9, claims = async () => [], landed = () => {}, every = 5000 }) {
+export function bringer({
+  folders,
+  room,
+  keepFree = 5e9,
+  claims = async () => [],
+  placing = async () => {},
+  landed = () => {},
+  every = 5000,
+}) {
   const blank = () => ({
     total: 0,
     bytes: 0,
@@ -332,7 +349,8 @@ export function bringer({ folders, room, keepFree = 5e9, claims = async () => []
       watch = setInterval(look, every);
     };
     try {
-      const how = await bringClip(request, clip, folders[clip.what], { signal: cutting.signal, onBytes, ready });
+      const options = { signal: cutting.signal, onBytes, ready, placing };
+      const how = await bringClip(request, clip, folders[clip.what], options);
       run[how]++;
       run.doneBytes += clip.size;
       if (how === "landed") {

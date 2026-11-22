@@ -14,10 +14,13 @@ import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { archiveDays, bringer, clearParts, cloudId, dayClips, pickClips, summarise, withHere } from "./bring.mjs";
 import { composeLut, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
-import { dayManifests, startOffload } from "./offload.mjs";
+import { dayManifests, LANES, startOffload } from "./offload.mjs";
+import { keepList } from "./keep.mjs";
+import { RETRY } from "./lane.mjs";
 import {
   archivedFootage,
   comparable,
+  goingToYoutube,
   ledgerCloud,
   mergeLedger,
   pictureName,
@@ -25,6 +28,7 @@ import {
   youtubeUploads,
 } from "./ledger.mjs";
 import { cameraDays, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
+import { saveSettings } from "./settings.mjs";
 import { transcriber } from "./transcripts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -49,10 +53,24 @@ const LEDGER = join(DATA, "ledger.json");
 /** How often the ledger looks again; the archive's projects are asked every 10 minutes of that. */
 const LEDGER_EVERY = Number(process.env.GRADE_LEDGER_EVERY || 30_000);
 const ARCHIVE_EVERY = 10 * 60_000;
+/** Which settings (settings.mjs) the archive has, and when they were last sent: they go along with the ledger. */
+const BACKUP = join(DATA, "backup.json");
+const BACKUP_EVERY = Number(process.env.GRADE_BACKUP_EVERY || 10 * 60_000);
 /** The pages that may frame the app: the composer's Grade tab, and the site run locally. Kept in step with app.mjs. */
 const FRAMED_BY = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
 /** What each clip offloaded to the archive was, by file name: its SHA-256, size and shoot day. */
 const OFFLOADED = join(DATA, "offloaded.json");
+/** The same of each graded copy sent there from Movies/Exported. */
+const GRADED = join(DATA, "graded.json");
+/** What's kept out of offload (keep.mjs), and what's been chosen for it: when the card's copies go. */
+const KEEP = join(DATA, "keep.json");
+const OFFLOAD = join(DATA, "offload.json");
+/** Uploads go on while a page has asked how things are going within this long. */
+const WATCHED_FOR = Number(process.env.GRADE_WATCHED_FOR || 60_000);
+/** A file changed within this long may still be being written. */
+const SETTLE = Number(process.env.GRADE_SETTLE ?? 2 * 60_000);
+/** How long an offload waits before its first try again. */
+const RETRY_FIRST = Number(process.env.GRADE_RETRY_FIRST || 30_000);
 /** What's known of each offloaded clip's transcript (transcripts.mjs); the transcripts themselves are in transcripts/. */
 const TRANSCRIPTS = join(DATA, "transcripts.json");
 /** The look an offloaded log clip without a grade gets, as settings, until it's graded by hand. */
@@ -161,14 +179,16 @@ const isVideo = (f) => VIDEO.test(f) && !f.startsWith(".");
 const CAMERA_ID = /^camera:(\d{4}-\d{2}-\d{2})$/;
 const MAC_ID = /^mac:(\d{4}-\d{2}-\d{2})$/;
 const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** The recording date in a DJI name, or null. */
+const djiDay = (name) => /^DJI_(\d{4})(\d{2})(\d{2})\d{6}_/.exec(name)?.slice(1, 4).join("-") ?? null;
 
 /** The clips in Movies/Original by shoot day: the recording date in a DJI name, or else the file's own date. */
 async function originalDays() {
   const days = new Map();
   for (const name of (await readdir(ORIGINAL).catch(() => [])).filter(isVideo).sort()) {
     const path = join(ORIGINAL, name);
-    const m = /^DJI_(\d{4})(\d{2})(\d{2})\d{6}_/.exec(name);
-    const day = m ? `${m[1]}-${m[2]}-${m[3]}` : localDay((await stat(path)).mtime);
+    const day = djiDay(name) ?? (await stat(path).then((s) => localDay(s.mtime), () => null));
+    if (!day) continue;
     if (!days.has(day)) days.set(day, []);
     days.get(day).push({ name, path });
   }
@@ -206,10 +226,15 @@ const proxyFile = (name) => join(CACHE, "proxies", `${stemOf(name)}.mp4`);
 const thumbFile = (name) => join(CACHE, "thumbs", `${stemOf(name)}.jpg`);
 const exportedFile = (name) => join(EXPORTED, `${stemOf(name)}.mp4`);
 
-/** Clip names (without extension) that have an export in Movies/Exported, made here or put there by hand. */
+/**
+ * Clip names (without extension) that have an export: in Movies/Exported, made here or put there by hand, or made here and
+ * since offloaded to the archive.
+ */
 async function exportedStems() {
   const files = await readdir(EXPORTED).catch(() => []);
-  return new Set(files.filter((f) => f.endsWith(".mp4") && !f.startsWith(".")).map(stemOf));
+  const made = new Set(Object.keys(await readClips(EXPORTS)).map(stemOf));
+  const offloaded = Object.keys(await readClips(GRADED)).filter((f) => made.has(stemOf(f)));
+  return new Set([...files.filter((f) => f.endsWith(".mp4") && !f.startsWith(".")), ...offloaded].map(stemOf));
 }
 
 /** Everything the picker lists: the camera's days, then the days in Movies/Original, each with how many are graded. */
@@ -640,10 +665,12 @@ async function observe(cloud) {
   for (const c of pictures) queueThumb({ id: "ledger", paths: new Map([[c.name, c.path]]) }, c.name, c.meta);
 
   let archive = null;
+  const landed = await offloadedSince(ledger.archiveAt);
   if (cloud && Date.now() - ledger.archiveAt > ARCHIVE_EVERY) {
+    const asked = Date.now();
     try {
       archive = await archivedFootage(cloud.request, ledger.manifests);
-      ledger.archiveAt = Date.now();
+      ledger.archiveAt = asked;
       ledger.archiveError = null;
     } catch (e) {
       // Asked again in two minutes rather than ten.
@@ -661,12 +688,36 @@ async function observe(cloud) {
     grades: Object.keys(await readClips(GRADES)),
     youtube: await youtubeUploads(PUBLISHER),
     archive,
+    landed: archive ? [] : landed,
     projects: await localProjects(),
     transcripts: await transcripts.filed(),
   };
   const moreToProbe = unknown.length > batch.length && batch.length > 0;
   const moreToPicture = unpictured.length > pictures.length && pictures.length > 0;
   return { seen, more: moreToProbe || moreToPicture };
+}
+
+/**
+ * What's been offloaded to the archive since a time, so a clip gone from here shows as there before the archive is asked
+ * again.
+ */
+async function offloadedSince(ms) {
+  const records = await Promise.all([OFFLOADED, GRADED].map(readClips));
+  const all = records.flatMap((clips) => Object.entries(clips));
+  return all.filter(([, { at }]) => Date.parse(at) > ms).map(([name, { size }]) => ({ name, size }));
+}
+
+/** Sends the archive the settings, along with a ledger that's being sent: if they changed, and not often. */
+async function backUpSettings(cloud) {
+  const backup = await readJson(BACKUP, null).catch(() => null) ?? { saved: null, at: 0 };
+  if (Date.now() - backup.at < BACKUP_EVERY) return;
+  try {
+    const saved = await saveSettings(cloud.request, [GRADES, EXPORTS], backup.saved);
+    if (saved !== backup.saved) await writeJson(BACKUP, { saved, at: Date.now() });
+  } catch (e) {
+    ledger.error = `Couldn't save the settings to Cloudflare: ${e.message}`;
+    await writeJson(BACKUP, { ...backup, at: Date.now() });
+  }
 }
 
 /**
@@ -701,6 +752,7 @@ async function ledgerLook() {
       await cloud.write(ledger.current);
       ledger.sent = now;
       ledger.savedAt = ledger.current.updatedAt;
+      await backUpSettings(cloud);
     } catch (e) {
       ledger.error = `Couldn't save the ledger to Cloudflare: ${e.message}`;
     }
@@ -727,14 +779,20 @@ function scheduleLedger(ms = LEDGER_EVERY) {
   }, ms);
 }
 
-// ---- offloading: the card to this Mac, this Mac to the archive (offload.mjs) -----------------------------------------
+// ---- offloading: the camera to this Mac, this Mac and its exports to the archive (offload.mjs) -----------------------
 
-/** The run going, or the last one: offload.mjs's `{ state, stop, done }`. */
+/** The run going, or the last one: offload.mjs's `{ state, start, stop, poke, done }`. */
 let offloading = null;
 /** Set while a run is being started: the clips' profiles are read first. */
 let starting = false;
-/** While a run goes, the composer counts as watching, so graded clips go up to YouTube meanwhile (the helper's job). */
-let footageWatch = null;
+/** How the run was asked to go: on with no page open, and with graded clips going up to YouTube meanwhile. */
+let runOptions = { unattended: false, youtube: true };
+/** When a clip goes from the card, "copied" to this Mac or "sent" to the archive: as last chosen, from run to run. */
+let clearCardAfter = "copied";
+/** When a page last asked how things are going. */
+let polledAt = 0;
+/** What the owner keeps out of it all. */
+const keep = keepList(KEEP);
 /** The shoot days' manifests: every run's saves go through the one. */
 const fileInDay = dayManifests();
 /** Makes the transcripts. An export has the GPU first. */
@@ -745,12 +803,14 @@ const transcripts = transcriber({
   records: { read: () => readClips(TRANSCRIPTS), update: (change) => updateClips(TRANSCRIPTS, change) },
   uvx: process.env.GRADE_UVX,
   busy: () => Boolean(jobs.export.current || jobs.export.queue.length),
+  skip: async (clip) => (await keep.keeping())(clip),
   made: () => offloading?.poke(),
 });
-/** The transcripts waiting to be sent: made, and their clips in the archive. */
+/** The transcripts waiting to be sent: made, and their clips in the archive and not kept out of it since. */
 async function transcriptsToSend() {
   await updating.get(OFFLOADED);
-  return transcripts.ready(await readClips(OFFLOADED));
+  const keeps = await keep.keeping();
+  return (await transcripts.ready(await readClips(OFFLOADED))).filter((transcript) => !keeps(transcript));
 }
 const sizeOfAll = (clips) => clips.reduce((sum, clip) => sum + clip.size, 0);
 async function roomOnMac() {
@@ -758,45 +818,122 @@ async function roomOnMac() {
   return bavail * bsize;
 }
 
-/** The clips in a place, the card ("camera") or Movies/Original ("mac"), each with its size, time and shoot day. */
-async function placeClips(scope) {
-  const days = scope === "camera" ? ((await card()) ?? new Map()) : await originalDays();
+/** A file's size and time, and until when it may still be being written. */
+const fileFacts = ({ size, mtimeMs }) => ({
+  size,
+  mtime: Math.round(mtimeMs),
+  settles: mtimeMs <= Date.now() ? mtimeMs + SETTLE : 0,
+});
+/** A place's clips, oldest first, by shoot day as it's listed: each with its size, time and day. Gone ones are left out. */
+async function clipsOf(days) {
   const clips = [];
   for (const [day, list] of days)
     for (const clip of list) {
       const s = await stat(clip.path).catch(() => null);
-      if (s) clips.push({ name: clip.name, path: clip.path, size: s.size, mtime: Math.round(s.mtimeMs), day });
+      if (s) clips.push({ name: clip.name, path: clip.path, ...fileFacts(s), day });
     }
   return clips.sort((a, b) => a.name.localeCompare(b.name));
 }
+const macClips = async () => clipsOf(await originalDays());
+/** The card's clips; null while it's unplugged, or as it is: what it lists can't all be found. */
+async function cardClips({ fresh = false } = {}) {
+  if (fresh) cardCache = null;
+  const days = await card();
+  if (!days) return null;
+  const clips = await clipsOf(days);
+  return clips.length === [...days.values()].flat().length ? clips : null;
+}
 
-/** A clip an export is making, or is queued to make: it stays where it is. */
-const exporting = (clip) =>
-  jobs.export.current?.name === clip.name || jobs.export.queue.some((job) => job.name === clip.name);
+const sameClip = (a, b) => stemOf(a).toLowerCase() === stemOf(b).toLowerCase();
+/** A clip an export is making, or is queued to make: it stays where it is, and so does the export being made. */
+const exporting = ({ name }) =>
+  [jobs.export.current, ...jobs.export.queue].some((job) => job && sameClip(job.name, name));
+
+/** The graded copies made here, each with its clip's shoot day: as its name says, or the ledger, or else the file's date. */
+async function gradedCopies() {
+  const made = new Set(Object.keys(await readClips(EXPORTS)).map((name) => stemOf(name).toLowerCase()));
+  const files = (await readdir(EXPORTED).catch(() => [])).filter((f) => f.endsWith(".mp4") && !f.startsWith("."));
+  const clips = [];
+  for (const name of files.sort()) {
+    if (!made.has(stemOf(name).toLowerCase()) || exporting({ name })) continue;
+    const path = join(EXPORTED, name);
+    const s = await stat(path).catch(() => null);
+    if (!s?.isFile()) continue;
+    const recorded = ledger.current?.clips[stemOf(name)]?.recorded;
+    clips.push({ name, path, ...fileFacts(s), day: djiDay(name) ?? recorded?.slice(0, 10) ?? localDay(s.mtime) });
+  }
+  return clips;
+}
 
 function offloadState() {
   if (!offloading) return null;
   const { samples, ...state } = offloading.state;
   const [first, last] = [samples[0], samples.at(-1)];
   const speed = first && last && last[0] > first[0] ? ((last[1] - first[1]) / (last[0] - first[0])) * 1000 : null;
-  const inFlight = state.send.current.reduce((sum, clip) => sum + clip.sent, 0);
-  return { ...state, sentBytes: state.send.doneBytes + inFlight, speed };
+  const sentOf = (lane) => lane.doneBytes + lane.current.reduce((sum, clip) => sum + clip.sent, 0);
+  return {
+    ...state,
+    ...runOptions,
+    clearCardAfter,
+    copy: { ...state.copy, ended: !state.copy.on },
+    exports: { ...state.exports, sentBytes: sentOf(state.exports) },
+    sentBytes: sentOf(state.send),
+    speed,
+  };
 }
 
 /**
- * What an offload would take: the card's clips, the Mac's not in the archive yet, the transcripts made since; the room on
- * the Mac; and the run.
+ * The shoot days of the clips here and of those kept, newest first: how many clips each has here, whether all of it is
+ * kept, and which of its clips are by name. A kept clip of no known day comes last, under none.
+ */
+function shootDays(clips, kept) {
+  const days = new Map();
+  const of = (day) => {
+    if (!days.has(day)) days.set(day, { here: new Map(), keptClips: [] });
+    return days.get(day);
+  };
+  for (const day of kept.days) of(day);
+  for (const clip of clips) of(clip.day).here.set(clip.name, clip);
+  for (const name of kept.clips) {
+    const day = clips.find((clip) => sameClip(clip.name, name))?.day ?? djiDay(name);
+    of(day ?? "").keptClips.push(name);
+  }
+  return [...days]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([day, { here, keptClips }]) => ({
+      day,
+      clips: here.size,
+      bytes: sizeOfAll([...here.values()]),
+      kept: kept.days.includes(day),
+      keptClips,
+    }));
+}
+
+/**
+ * What an offload would take: the card's clips, the Mac's and the exports not in the archive yet, the transcripts made
+ * since; what's kept out of it; the room on the Mac; and the run.
  */
 async function offloadSummary() {
-  const record = await readClips(OFFLOADED);
+  const [record, sentGraded, kept, keeps] = await Promise.all([readClips(OFFLOADED), readClips(GRADED), keep.read(), keep.keeping()]);
   const mounted = Boolean(await card());
-  const camera = await placeClips("camera");
-  const mac = (await placeClips("mac")).filter((clip) => record[clip.name]?.size !== clip.size);
+  const [onCard, onMac, made] = await Promise.all([cardClips(), macClips(), gradedCopies()]);
+  const here = [...(onCard ?? []), ...onMac];
+  const counted = new Set([...here, ...made].filter(keeps).map((clip) => stemOf(clip.name).toLowerCase()));
+  const camera = (onCard ?? []).filter((clip) => !keeps(clip));
+  /** The clips of a place to send, and how many are only there still to be deleted. */
+  const toSend = (clips, sent) => {
+    const left = clips.filter((clip) => sent[clip.name]?.size !== clip.size);
+    return { clips: left.length, bytes: sizeOfAll(left), sent: clips.length - left.length };
+  };
   return {
     camera: { mounted, clips: camera.length, bytes: sizeOfAll(camera) },
-    mac: { clips: mac.length, bytes: sizeOfAll(mac) },
+    mac: toSend(onMac.filter((clip) => !keeps(clip)), record),
+    exports: toSend(made.filter((clip) => !keeps(clip)), sentGraded),
     transcripts: { ...transcripts.summary(), toSend: (await transcriptsToSend()).length },
+    kept: { ...kept, count: counted.size },
+    days: shootDays(here, kept),
     room: { free: await roomOnMac(), keepFree: KEEP_FREE },
+    clearCardAfter,
     run: offloadState(),
   };
 }
@@ -817,46 +954,102 @@ async function applyDefaultLook(clips) {
   }
   await Promise.all(Array.from({ length: 8 }, worker));
   // A grade made meanwhile stays.
-  await updateClips(GRADES, (all) => {
-    for (const [name, grade] of Object.entries(added)) all[name] ??= grade;
-  });
+  if (Object.keys(added).length)
+    await updateClips(GRADES, (all) => {
+      for (const [name, grade] of Object.entries(added)) all[name] ??= grade;
+    });
+}
+const withDefaultLook = (clips) => applyDefaultLook(clips).catch((e) => console.error("grade: default look:", e.message));
+
+/** Why uploads wait, if they do: nobody is looking, and the run wasn't told to go on without. */
+const uploadsPaused = () => (runOptions.unattended || Date.now() - polledAt <= WATCHED_FOR ? null : "No Grade page is open");
+
+/** What went to the archive, kept in one of the app's files. `added` hears each clip once it's on disk. */
+const recordsIn = (path, added) => ({
+  read: async () => {
+    await updating.get(path);
+    return readClips(path);
+  },
+  add: async (clip, sha256, proof) => {
+    await updateClips(path, (all) => {
+      all[clip.name] = { sha256, size: clip.size, day: clip.day, at: new Date().toISOString(), ...proof };
+    });
+    added();
+  },
+});
+
+/** What a request to offload asks for. */
+function offloadAsked({ lanes, unattended, youtube, clearCardAfter: after }) {
+  const some = Array.isArray(lanes) && lanes.every((lane) => LANES.includes(lane));
+  if (lanes !== undefined && !some) throw httpError(400, `lanes must be some of ${LANES.join(", ")}`);
+  const flags = Object.entries({ unattended, youtube }).filter(([, value]) => value !== undefined);
+  for (const [name, value] of flags) if (typeof value !== "boolean") throw httpError(400, `${name} must be true or false`);
+  if (after !== undefined && !["copied", "sent"].includes(after)) throw httpError(400, "clearCardAfter must be copied or sent");
+  return { lanes: lanes && [...new Set(lanes)], flags: Object.fromEntries(flags), after };
 }
 
-/** Starts the card (if it's plugged in) and Movies/Original going: it goes on in the background until done or stopped. */
-async function startOffloading() {
-  if (starting || offloading?.state.running) throw httpError(409, "Already offloading");
+/**
+ * Turns switches on: the ones asked for, or the card (if it's plugged in) and Movies/Original, whichever are off. It goes
+ * on in the background until each is done or stopped. Asked for none, it only changes how the run goes.
+ */
+async function startOffloading(asked) {
+  if (starting) throw httpError(409, "Already starting");
   starting = true;
   try {
-    await beginOffload();
+    await beginOffload(asked);
   } finally {
     starting = false;
   }
 }
-async function beginOffload() {
-  const cloud = await ledgerCloud(PUBLISHER);
-  if (!cloud) throw httpError(409, "Pair the crossposter helper first: the offload goes through it");
-  const [camera, mac, record] = await Promise.all([placeClips("camera"), placeClips("mac"), readClips(OFFLOADED)]);
+async function beginOffload({ lanes, flags, after }) {
+  const isOn = (lane) => Boolean(offloading?.state[lane].on);
+  const wanted = lanes ?? ((await card()) ? ["copy", "send"] : ["send"]).filter((lane) => !isOn(lane));
+  if (wanted.some(isOn) || !(lanes || wanted.length)) throw httpError(409, "Already offloading");
+  // A list of kept clips that can't be read stops it here.
+  const keeps = await keep.keeping();
+  const cloud = wanted.length ? await ledgerCloud(PUBLISHER) : null;
+  if (wanted.length && !cloud) throw httpError(409, "Pair the crossposter helper first: the offload goes through it");
+  if (after) {
+    clearCardAfter = after;
+    await writeJson(OFFLOAD, { clearCardAfter });
+  }
+  if (offloading?.state.running) Object.assign(runOptions, flags);
+  if (!wanted.length) return;
+
   await mkdir(ORIGINAL, { recursive: true });
   // Before any clip moves: the look goes by name, the probing by where each clip is now.
-  await applyDefaultLook([...camera, ...mac]).catch((e) => console.error("grade: default look:", e.message));
-  transcripts.retry();
-  offloading = startOffload({
-    camera,
-    mac,
-    record,
+  const taking = [];
+  if (wanted.includes("copy")) taking.push(...((await cardClips()) ?? []));
+  if (wanted.includes("send")) taking.push(...(await macClips()));
+  await withDefaultLook(taking.filter((clip) => !keeps(clip)));
+  if (wanted.includes("send")) transcripts.retry();
+  if (offloading?.state.running) for (const lane of wanted) offloading.start(lane);
+  else runOffload(wanted, cloud, flags);
+}
+function runOffload(lanes, cloud, flags) {
+  runOptions = { unattended: false, youtube: true, ...flags };
+  let added = 0;
+  const landed = () => {
+    added++;
+    scheduleLedger(Math.min(2000, LEDGER_EVERY));
+  };
+  const run = startOffload({
+    lanes,
+    camera: cardClips,
+    mac: macClips,
+    exports: gradedCopies,
+    records: recordsIn(OFFLOADED, landed),
+    graded: recordsIn(GRADED, landed),
     dir: ORIGINAL,
     request: cloud.request,
     room: roomOnMac,
     keepFree: KEEP_FREE,
-    removable: (clip) => !exporting(clip),
-    landed: (clip, sha256) => {
-      void updateClips(OFFLOADED, (all) => {
-        all[clip.name] = { sha256, size: clip.size, day: clip.day, at: new Date().toISOString() };
-      });
-      // The ledger reads the archive again, so the clip shows as in Cloudflare.
-      ledger.archiveAt = 0;
-      scheduleLedger(2000);
-    },
+    removable: async (clip) => !exporting(clip) && clip.name !== (await goingToYoutube(PUBLISHER)),
+    keeping: keep.keeping,
+    paused: uploadsPaused,
+    clearCardAfter: () => clearCardAfter,
+    // A clip that turned up on the card since the run started has no look yet.
+    copied: (clip) => void withDefaultLook([clip]),
     removed: () => {
       cardCache = null;
     },
@@ -869,20 +1062,28 @@ async function beginOffload() {
         scheduleLedger(2000);
       },
     },
+    retry: { ...RETRY, first: RETRY_FIRST },
+    log: (line) => console.error(`grade: offload: ${line}`),
   });
+  offloading = run;
+
+  // While it sends anything, and wasn't told not to, the composer counts as watching, so graded clips go up to YouTube
+  // meanwhile (the helper's job).
   let watchFailed = null;
   async function watch() {
+    const sending = run.state.send.on || run.state.exports.on;
+    if (!runOptions.youtube || !sending || uploadsPaused()) return;
     const failed = await cloud.watchFootage().then(() => null, (e) => e.message);
     if (failed && failed !== watchFailed) console.error("grade: footage uploads:", failed);
     watchFailed = failed;
   }
   void watch();
-  clearInterval(footageWatch);
-  footageWatch = setInterval(watch, 60_000);
-  void offloading.done.finally(() => {
-    clearInterval(footageWatch);
-    footageWatch = null;
+  const watching = setInterval(watch, 60_000);
+  void run.done.then(() => {
+    clearInterval(watching);
     cardCache = null;
+    // What went up meanwhile shows in the ledger without it; now the archive says so itself.
+    if (added) ledger.archiveAt = 0;
     scheduleLedger(2000);
   });
 }
@@ -897,6 +1098,8 @@ const bringing = bringer({
   room: roomOnMac,
   keepFree: KEEP_FREE,
   claims: stillToWrite,
+  // Kept out of offload, or the next one would find it in the archive and take it off again.
+  placing: (clip) => keep.add(clip.name),
   landed: () => scheduleLedger(2000),
 });
 
@@ -911,8 +1114,8 @@ async function stillToWrite() {
     bytes += size * (quality / 100) * (1 - progress);
   }
   if (bytes) claims.push({ by: exports.length === 1 ? "the export" : `the ${exports.length} exports`, bytes });
-  const copy = offloading?.state.running ? offloading.state.copy : null;
-  if (copy && !copy.ended)
+  const copy = offloading?.state.copy;
+  if (copy?.on)
     claims.push({ by: "the camera", bytes: copy.bytes - copy.doneBytes - (copy.current?.sent ?? 0) });
   return claims;
 }
@@ -1046,7 +1249,9 @@ async function sourcePayload(id) {
     if (graded.has(stemOf(name))) {
       // An export without the app's record (put there by hand) counts as graded; its grade just isn't known.
       const r = records[name];
-      exported = r ? { key: r.key, at: r.exportedAt } : { key: null, at: (await stat(exportedFile(name))).mtime.toISOString() };
+      const file = r ? null : await stat(exportedFile(name)).catch(() => null);
+      if (r) exported = { key: r.key, at: r.exportedAt };
+      else if (file) exported = { key: null, at: file.mtime.toISOString() };
     }
     clips.push({
       name,
@@ -1183,7 +1388,9 @@ async function route(req, res) {
     return send(res, 200, { file: await frameOne(src, name, frame) });
   }
 
-  if (p === "/api/jobs" && req.method === "GET")
+  if (p === "/api/jobs" && req.method === "GET") {
+    // Asked by an open page every few seconds: uploads go on while it is.
+    polledAt = Date.now();
     return send(res, 200, {
       thumbs: jobs.thumb.queue.length + jobs.thumb.busy,
       proxy: { queued: jobs.proxy.queue.length, current: jobs.proxy.current && { id: jobs.proxy.current.id, name: jobs.proxy.current.name } },
@@ -1192,19 +1399,28 @@ async function route(req, res) {
       transcripts: transcripts.summary(),
       bring: bringing.state(),
     });
+  }
 
   // Bringing clips back from the archive.
   if (await cloudRoute(req, res, p, url)) return;
 
-  // Offloading: the card to this Mac, this Mac to the archive.
+  // Offloading: the card to this Mac, this Mac and its exports to the archive, each switched on and off by itself.
   if (p === "/api/offload" && req.method === "GET") return send(res, 200, await offloadSummary());
   if (p === "/api/offload" && req.method === "POST") {
-    await startOffloading();
+    await startOffloading(offloadAsked(await body(req)));
     return send(res, 200, await offloadSummary());
   }
   if (p === "/api/offload/stop" && req.method === "POST") {
-    offloading?.stop();
-    return send(res, 200, { stopping: Boolean(offloading?.state.running) });
+    const { now, ...asked } = await body(req);
+    const { lanes } = offloadAsked(asked);
+    offloading?.stop(lanes, { now: now === true });
+    return send(res, 200, { stopping: Boolean(offloading?.state.running), run: offloadState() });
+  }
+  if (p === "/api/offload/keep" && req.method === "GET") return send(res, 200, await keep.read());
+  if (p === "/api/offload/keep" && req.method === "POST") {
+    const list = await keep.set(await body(req));
+    offloading?.poke();
+    return send(res, 200, list);
   }
 
   throw httpError(404, "not found");
@@ -1224,6 +1440,7 @@ const server = createServer(async (req, res) => {
 
 for (const dir of [ORIGINAL, EXPORTED, DATA, CACHE]) await mkdir(dir, { recursive: true });
 await clearParts(Object.values(BRING_TO));
+clearCardAfter = (await readJson(OFFLOAD, null).catch(() => null))?.clearCardAfter === "sent" ? "sent" : "copied";
 await transcripts.resume().catch((e) => console.error("grade: transcripts:", e.message));
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;

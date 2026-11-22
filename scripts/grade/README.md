@@ -56,7 +56,9 @@ Each day shows how many of its clips have an export, and the clip list can show 
   grades.json                             every clip's grade, by file name, saved as you work
   exports.json                            what each export was made with: source, base look, grade, key, quality
   ledger.json                             the footage ledger (below), also kept in the site's archive
-  offloaded.json                          what each offloaded clip was (below)
+  offloaded.json, graded.json             what each offloaded clip and export was (below)
+  keep.json, offload.json                 what's kept out of offload, and when the card's copies go (below)
+  backup.json                             which of the settings above the archive has
   transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each offloaded clip (below)
   transcripts.json                        which clips have one, and which of those are in the archive
   luts/                                   GRADE_LUTS: base looks (below)
@@ -95,8 +97,10 @@ unplugged (the Footage tab says as of when), and the archive between askings (ev
 (`ledger/footage.json`, through `helper/archive/ledger` on the helper's pairing), but only once the archive's copy has
 been read back and merged in, so a fresh `ledger.json` on a new Mac can't drop clips only the archive knows. Each
 clip's thumbnail (made in the cache a dozen per look, from the original's still or a frame, or from the graded copy
-once the original is gone) goes to `ledger/thumbs/<clip>.jpg` once, and the clip's record says `thumb`. Without a
-paired helper the ledger stays on this Mac.
+once the original is gone) goes to `ledger/thumbs/<clip>.jpg` once, and the clip's record says `thumb`. Along with a
+ledger that's sent go `grades.json` and `exports.json`, as the archive's `_settings` project: only if they changed, and
+at most every 10 minutes (`bun run publisher restore _settings <folder>` brings them back). Without a paired helper all
+of it stays on this Mac.
 
 **Grade tab.** post.kualta.dev/grade shows this app in a frame, loaded from http://127.0.0.1:4777: it still reads
 the card and `~/Movies` itself, previews on the browser's GPU and exports with ffmpeg here. The frame is allowed local
@@ -108,39 +112,78 @@ or dark, and says how far its offload and export are, each time it reads `/api/j
 
 ## Offload: the card to this Mac, this Mac to Cloudflare
 
-The foot of the Export button's menu shows what's on the camera, what's on this Mac not in Cloudflare yet, transcripts
-included, and the room on this Mac; **Offload to Cloudflare** takes it all, and nothing starts until you click it. Two
-things go on at once:
+The foot of the Export button's menu has three switches, each started and stopped by itself while the others are on
+or off. Nothing starts until one is clicked, and after a restart of the server nothing starts by itself.
 
-- **Off the card**, a clip at a time, oldest first, while this Mac has room for the next with `GRADE_KEEP_FREE` (5 GB)
-  to spare: copied into `Original/` (as a hidden `.part` until it's checked), hashed (SHA-256) as it's read, read back
-  and checked against that, given the card's time, then deleted from the card with its `.LRF`. The camera is needed
-  only until the last clip is on the Mac: the status line says when to unplug it, and unplugging earlier just ends
-  this half.
-- **Up to Cloudflare**, two clips at a time: each sent unless the archive already holds those bytes (whole up to
-  16 MiB, else 16 MiB a request, so each lands well inside a request's ten minutes on a slow uplink; through
-  `helper/archive` on the helper's pairing), filed in its shoot day's manifest in the archive, `_originals-<day>` (as
-  `assets/<file>`, the manifest saved again after every clip), then deleted from this Mac. That makes room for the
-  next clip off the card. R2 checks a file sent whole against its hash but not one sent in parts, so a clip over 16 MiB
-  is read back in full and hashed before its Mac copy goes: each is downloaded once as well as uploaded. One that
-  doesn't match is sent once more, and if it still doesn't the run stops with the clip on this Mac.
+- **Camera → Mac** copies the card's clips, a clip at a time, oldest first, while this Mac has room for the next with
+  `GRADE_KEEP_FREE` (5 GB) to spare: into `Original/` (as a hidden `.part` until it's checked), hashed (SHA-256) as
+  it's read, read back and checked against that, and given the card's time. Then the card's clip is deleted with its
+  `.LRF`: **Once on this Mac**, or **Once in Cloudflare**, as chosen below the switches (remembered). A clip that's in
+  `Original/` already is checked against the card instead of copied; one of its name that isn't it is never written
+  over. Nothing is sent.
+- **Mac → Cloudflare** sends what's in `Original/`, two clips at a time: each unless the archive already holds those
+  bytes (whole up to 16 MiB, else 16 MiB a request, so each lands well inside a request's ten minutes on a slow uplink;
+  through `helper/archive` on the helper's pairing), filed in its shoot day's manifest in the archive,
+  `_originals-<day>` (as `assets/<file>`, the manifest saved again after every clip), recorded in `offloaded.json`,
+  then deleted from this Mac, which makes room for the next clip off the card. A file changed in the last two minutes
+  may still be being written, and waits. The card isn't looked at.
+- **Exports → Cloudflare** does the same for `Exported/`: the exports the app made (`exports.json` says so), unchanged
+  for two minutes and not being made again, filed in `_graded-<day>` and recorded in `graded.json`. Exported frames and
+  files put there by hand stay, and so does one the YouTube uploads are on until it's up. An offloaded export still
+  counts as exported here, as a graded copy in the ledger, and for the YouTube uploads.
 
-`offloaded.json` (beside `grades.json`) records each clip's hash, size and day. A clip already there whose hash the
-archive still holds is only deleted; one the archive has lost goes again. A clip being exported stays put. The status
-line shows both halves, waiting for room, speed and time left; **Stop offloading** cuts the request in flight and keeps
-what's in. A request that fails stops the run, saying why; the next run picks up where it stopped. With no room on
-this Mac and nothing there to go up, the card half stops and says so.
+Each switch deletes only what it takes from: the card's clips only Camera → Mac, this Mac's only the other two. So with
+**Once in Cloudflare** the card is cleared while both of the first two are on, as each clip is checked (Camera → Mac
+stays on until then), or by Camera → Mac the next time it is. Mac → Cloudflare ends once there's nothing left to send
+and nothing more coming off the card, so start the two together, or Camera → Mac first.
 
-Every save of a day's manifest, from whichever run, waits for the one before it, starts from what the archive has of the
-day by then, and is read back: a clip's Mac copy goes only once its day lists it.
+**Checked before anything goes.** R2 checks a file sent whole against its hash but not one sent in parts, so a clip over
+16 MiB is read back in full and hashed before its Mac copy goes: each is downloaded once as well as uploaded, and one
+that doesn't match is sent once more. Parts are put together only if what went up hashes as the file did. Every save of
+a day's manifest, from whichever run, waits for the one before it, starts from what the archive has of the day by then,
+and is read back: a clip's copies go only once its day lists it and the record is on disk. A clip already recorded is
+only deleted, once the archive says it holds its hash and the file is that one (hashed on the Mac; the card's is read
+only if its hash isn't known to be the card's own); one the archive has lost goes again. Nothing goes that was written
+to since it was listed, that's being exported, or that's kept (below).
+
+**Stop** finishes the files in flight (the clip being copied, the two being sent, their manifest saves and deletions)
+and then stops; a second click (**Stop now**) cuts them. Both the switch and the bar's **Stop offloading** do this, and
+say which it is.
+
+**Picking itself up.** A switch that's on stays on when the camera is unplugged or the network or the site fails
+(a request that times out, a 5xx, a 401, 403 or 429): it says what it's waiting for and tries again after 30 seconds,
+then twice as long each time up to 10 minutes. The clip in flight starts over. With no room on this Mac, Camera → Mac
+waits for some. A clip that fails five times while the rest works (or never reads back as it was sent) is passed over
+until the switch is next started, which the menu, the status line and the log say, with why.
+
+**The pause.** Uploads pause between parts, keeping the parts sent, while no Grade page has asked how things are going
+for a minute, and go on when one does; the switch says so. **Keep going when this tab is closed** (off for each run)
+lets a run go on without. Camera → Mac never pauses.
+
+**Kept.** Shoot days ticked in the menu, and clips named in `keep.json` (those brought back, above all; by name without
+extension, so a clip's original and its export are kept alike), stay on the card and on this Mac: they're never copied,
+sent or deleted, aren't counted, and get no transcript. A day with some of its clips kept shows a dash, and a click lets
+those go. While `keep.json` can't be read nothing is taken or deleted.
+
+`offloaded.json` (beside `grades.json`) records each clip's hash, size and day, and whether the hash is the card's own;
+`graded.json` the same of exports. Started by hand or by a script:
+
+```sh
+curl -X POST http://127.0.0.1:4777/api/offload -H 'X-Grade: 1' -H 'Content-Type: application/json' -d '{
+  "lanes": ["copy", "send"], "unattended": true, "clearCardAfter": "sent", "youtube": false }'
+```
+
+`lanes` are the switches to start (`copy`, `send`, `exports`; without it, the first two, the card's if it's plugged in);
+none only changes how the run goes. `POST /api/offload/stop` takes `lanes` too, and `now`; `GET` and `POST
+/api/offload/keep` read and set `{ "days": [], "clips": [] }`; `GET /api/offload` says how it all stands.
 
 **Transcripts.** As soon as a clip is on the Mac its sound is taken out of it (copied, a second or two) into the cache;
 its Mac copy waits for that and nothing more. Whisper (`mlx-community/whisper-large-v3-turbo` on the GPU, the language
 its own guess) then transcribes the sound in the background, one clip at a time, half a minute or so for ten minutes of
 it, starting none while an export runs. The bar says "Transcribing 3 of 12". Each transcript is kept here as a `.vtt`
-(read it, search it) and a `.json` (Whisper's segments with every word's time), and its sound is deleted. While a run
-goes, finished transcripts are sent up and filed beside their clips in the day's manifest, as `transcripts/<clip>.vtt`
-and `.json`; ones finished after it ended go with the next run, which **Offload to Cloudflare** starts even if they're
+(read it, search it) and a `.json` (Whisper's segments with every word's time), and its sound is deleted. While Mac →
+Cloudflare is on, finished transcripts are sent up and filed beside their clips in the day's manifest, as
+`transcripts/<clip>.vtt` and `.json`; ones finished after it ended go the next time, which it starts for even if they're
 all there is to send. The ledger marks a clip `transcript` once its transcript is in the archive, and counts neither
 file as footage.
 
@@ -149,16 +192,18 @@ need forced alignment.
 
 It runs `uvx --offline --from mlx-whisper mlx_whisper` (uvx by its path, `GRADE_UVX` names another) and downloads
 nothing, so both have to be in their caches already. If it's missing or fails, the bar says how many clips aren't
-transcribed, with why in its tooltip (and once in the log), and their sound is kept: it's tried again when the next
-offload starts and when the server does, which is also when sound left by a restart is picked up. A clip with no sound
-has no transcript, one nobody speaks in an empty one, and one whose sound can't be taken goes on without: its video is
-in the archive all the same.
+transcribed, with why in its tooltip (and once in the log), and their sound is kept: it's tried again when Mac →
+Cloudflare next starts and when the server does, which is also when sound left by a restart is picked up. A clip with no
+sound has no transcript, one nobody speaks in an empty one, and one whose sound can't be taken goes on without: its
+video is in the archive all the same.
 
-While a run goes the grade app keeps the composer counted as watching the footage uploads (`helper/footage/watch`),
-so the helper puts graded clips up to YouTube meanwhile, as it does while the Footage tab is open. Log clips without a
-grade get the default look as settings first (`GRADE_DEFAULT_LOOK`, OpenDRT Colorful), to change before any export.
-The ledger counts offloaded clips as in Cloudflare (an archived file the original's size); `_originals-*` aren't
-films. To bring a day back, transcripts and all: `bun run publisher restore _originals-<day> <folder>`.
+While anything is being sent, and not paused, the grade app keeps the composer counted as watching the footage uploads
+(`helper/footage/watch`), so the helper puts graded clips up to YouTube meanwhile, as it does while the Footage tab is
+open; `"youtube": false` in the request keeps that off for the run. Log clips without a grade get the default look as
+settings first (`GRADE_DEFAULT_LOOK`, OpenDRT Colorful), to change before any export. The ledger counts offloaded clips
+as in Cloudflare (an archived file the original's size) as they go, and reads the archive's own list of them at most
+every 10 minutes and once a run is over; `_originals-*` and `_graded-*` aren't films. To bring a day back, transcripts
+and all: `bun run publisher restore _originals-<day> <folder>`.
 
 ## Bring to Mac: from Cloudflare back here
 
@@ -184,7 +229,8 @@ It starts only if `GRADE_KEEP_FREE` (5 GB) stays free after all that's asked for
 offload's copy off the card has still to write (an export is counted at its original's size, times its quality). That's
 looked at again before each clip and every few seconds during one: when room runs short the clip gives way, saying why.
 
-Clips brought here are on this Mac like any other: the next offload, finding them in the archive, takes them off again.
+A clip brought here, original or graded copy, is kept out of offload (**Kept**, above) from just before it takes its
+name, so one that's on doesn't take it off again: it stays until its day is let go in the Export menu.
 
 ## Grading
 

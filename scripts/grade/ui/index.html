@@ -57,13 +57,24 @@
         <p id="quality-size" class="menu-note">Near lossless</p>
       </div>
       <div class="menu-offload">
+        <div class="lane" data-lane="copy" title="Each clip is copied to this Mac, checked, and deleted from the camera. Log clips without a grade get the Colorful look as settings."><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>
+        <div class="lane" data-lane="send" title="Each clip on this Mac is sent to Cloudflare, read back and checked, and deleted from this Mac. Its transcript is made here and filed beside it. Graded clips go to YouTube meanwhile."><span>Mac → Cloudflare</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
+        <div class="lane" data-lane="exports" title="Each finished export is sent to Cloudflare, read back and checked, and deleted from this Mac. Exported frames stay."><span>Exports → Cloudflare</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-exports"></output></div>
         <div class="offload-places">
-          <div class="menu-row"><span>Camera</span><output id="offload-camera"></output></div>
-          <div class="menu-row"><span>This Mac</span><output id="offload-mac"></output></div>
           <div class="menu-row"><span>Transcripts</span><output id="offload-transcripts"></output></div>
           <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
         </div>
-        <button id="offload-start" class="menu-item" type="button" title="Each clip is copied to this Mac, checked, and deleted from the camera, then sent to Cloudflare, read back and checked, and deleted from this Mac. Its transcript is made here and filed beside it. Graded clips go to YouTube meanwhile; log clips without a grade get the Colorful look as settings."><span id="offload-label">Offload to Cloudflare</span><span class="menu-note">Through this Mac; each copy deleted once the next has it</span></button>
+        <label class="menu-check" title="Otherwise uploads pause between parts once no Grade page has been open for a minute, and go on when one is. This run only."><input type="checkbox" id="offload-unattended">Keep going when this tab is closed</label>
+        <div class="offload-choice">
+          <span id="clear-after-name">Delete from the camera</span>
+          <div class="seg small" role="group" aria-labelledby="clear-after-name">
+            <button type="button" data-clear-after="copied" aria-pressed="true">Once on this Mac</button><button type="button" data-clear-after="sent" aria-pressed="false">Once in Cloudflare</button>
+          </div>
+        </div>
+        <div class="offload-choice">
+          <div class="menu-row"><span>Kept on the camera and Mac</span><output id="offload-kept"></output></div>
+          <div class="offload-days" id="offload-days" role="group" aria-label="Days kept on the camera and this Mac"></div>
+        </div>
       </div>
     </div>
   </div>

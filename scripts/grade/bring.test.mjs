@@ -304,6 +304,48 @@ test("a file put there while a clip comes isn't written over", () =>
     expect(text(folders.graded, graded)).toBe("a newer export");
   }));
 
+test("a clip is kept just before it takes its name, and not if it doesn't; one that can't be kept doesn't come", () =>
+  movies(async (folders) => {
+    const at = site({
+      hold: (rest) => {
+        // Another file of the second's name lands meanwhile.
+        if (rest === `blobs/${sha("the second")}`) writeFileSync(join(folders.original, B), "put here by hand");
+        return null;
+      },
+    });
+    await at.file(`_originals-${day}`, [
+      [`assets/${A}`, "the first"],
+      [`assets/${B}`, "the second"],
+      [`assets/${C}`, "here already"],
+    ]);
+    writeFileSync(join(folders.original, C), "here already");
+    const kept = new Set();
+    const heard = [];
+    const placing = async (clip) => {
+      heard.push([clip.name, files(folders.original).includes(clip.name)]);
+      kept.add(clip.name);
+      return () => kept.delete(clip.name);
+    };
+    const names = [A, B, C];
+    const state = await bringAll(at, folders, { what: "original", names }, { placing });
+    expect(state).toMatchObject({ landed: 1, skipped: 1, failed: [{ name: B }] });
+    expect(heard).toEqual([
+      [A, false],
+      [B, true],
+      [C, true],
+    ]);
+    expect([...kept]).toEqual([A, C]);
+    expect(text(folders.original, B)).toBe("put here by hand");
+
+    rmSync(join(folders.original, A));
+    const refusing = async () => {
+      throw new Error("The list of kept clips can't be read");
+    };
+    const refused = await bringAll(at, folders, { what: "original", names: [A] }, { placing: refusing });
+    expect(refused.error).toBe(`${A} didn't come: The list of kept clips can't be read`);
+    expect(files(folders.original)).toEqual([B, C]);
+  }));
+
 /** An answer that says what it has and then no more, until the request is cut, as fetch cuts it. */
 const stalled = (said, { signal }) =>
   new Response(
@@ -761,6 +803,9 @@ test.if(usable)(
     expect(await json(`/api/find?clip=${name}`)).toEqual({ source: folder, name });
     const { days } = await json("/api/cloud");
     expect(days.find((one) => one.day === clipDay)).toMatchObject({ away: 1, original: { missing: { clips: 0 } } });
+    // It's kept out of offload from now on.
+    expect(await json("/api/offload/keep")).toEqual({ days: [], clips: [name] });
+    expect(await json("/api/offload")).toMatchObject({ mac: { clips: 0 }, kept: { count: 1 } });
 
     // Exported, it's made with that grade.
     expect((await post("/api/export", { source: folder, names: [name] })).status).toBe(200);
@@ -787,6 +832,7 @@ test.if(usable)(
     expect(await brought({ what: "graded", day: clipDay })).toMatchObject({ landed: 1, failed: [] });
     expect(text(exported, gradedName)).toBe("the graded copy");
     expect(files(exported)).toEqual([gradedName]);
+    expect((await json("/api/offload/keep")).clips).toEqual([name, gradedName]);
     // The original of the same name but for its case is another file, and as it was.
     expect(readFileSync(join(original, name))).toEqual(film);
   },
@@ -874,7 +920,7 @@ test.if(usable)(
     vast(join(card, "DJI_20260304090000_0010_D.MP4"));
     // The card's listing is kept a few seconds.
     await until(async () => (await json("/api/offload")).camera.clips === 1);
-    // The Mac's clip is going up, and the archive doesn't answer: the copy waits for the room that would make.
+    // The Mac's clip was brought back, and stays: the copy waits for room.
     held.stall = true;
     expect((await post("/api/offload", {})).status).toBe(200);
     await until(async () => (await json("/api/jobs")).offload.waiting === "room");

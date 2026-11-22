@@ -238,7 +238,24 @@ try {
   await setRange("quality", 100);
   assert.ok(await page.locator("#export-quality").isHidden(), "full quality needs no badge");
   if (shots) await page.screenshot({ path: path.join(shots, "grade-4-menu.png") });
+  // The offload's switches: what each has to do.
   assert.equal(await page.locator("#offload-transcripts").textContent(), "Nothing to send");
+  assert.equal(await page.locator("#offload-camera").textContent(), "Not plugged in");
+  assert.match(await page.locator("#offload-mac").textContent(), /^2 clips · .* to send$/);
+  assert.match(await page.locator("#offload-exports").textContent(), /^1 clip · .* to send$/);
+  assert.ok(await page.getByRole("button", { name: "Start Camera → Mac" }).isDisabled(), "nothing to take off no camera");
+  // A shoot day is kept, and let go again.
+  const days = page.getByRole("group", { name: "Days kept on the camera and this Mac" });
+  await days.getByRole("checkbox", { name: /2026-01-01/ }).check();
+  await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "2 clips", null, { timeout: 5_000 });
+  assert.equal(await page.locator("#offload-mac").textContent(), "Nothing to send");
+  assert.deepEqual(JSON.parse(readFileSync(path.join(data, "keep.json"), "utf8")).days, ["2026-01-01"]);
+  await days.getByRole("checkbox", { name: /2026-01-01/ }).uncheck();
+  await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "None", null, { timeout: 5_000 });
+  // When the camera's copies go is remembered.
+  await page.getByRole("button", { name: "Once in Cloudflare" }).click();
+  await page.waitForFunction(() => document.querySelector('[data-clear-after="sent"]').getAttribute("aria-pressed") === "true");
+  assert.deepEqual(JSON.parse(readFileSync(path.join(data, "offload.json"), "utf8")), { clearCardAfter: "sent" });
 
   // Change the exported clip's grade: the menu's re-export takes that one clip and nothing else.
   await setRange("c-exposure", 0.5);
@@ -361,6 +378,8 @@ try {
   assert.equal(await page.locator("#cloud-graded").textContent(), "All here");
   assert.equal(readFileSync(path.join(exported, gone.replace(".MP4", ".mp4")), "utf8"), "a graded copy");
   await unmoved("a clip come");
+  const keptNow = () => page.evaluate(async () => (await (await fetch("/api/offload/keep")).json()).clips);
+  assert.deepEqual(await keptNow(), [gone, gone.replace(".MP4", ".mp4")].sort(), "what's brought back is kept out of offload");
   await copy(gone, "original").click();
   const broughtRow = page.locator(`.clip[data-name="${gone}"]`);
   await broughtRow.waitFor({ timeout: 10_000 });
@@ -424,8 +443,9 @@ try {
       .catch(async (e) => assert.fail(`${what}: ${e.message}; heard ${await composer.evaluate(() => JSON.stringify(window.heard.at(-1)))}`));
   const offload = (change) => ({
     running: true, sentBytes: 430, speed: null, waiting: null, finished: null, error: null,
-    copy: { total: 1, bytes: 1000, done: 0, doneBytes: 0, current: null, ended: false, error: null },
-    send: { total: 1, bytes: 1000, done: 0, doneBytes: 0, current: [] },
+    copy: { on: true, mode: "on", total: 1, bytes: 1000, done: 0, doneBytes: 0, current: null, waiting: null, skipped: [] },
+    send: { on: true, mode: "on", total: 1, bytes: 1000, done: 0, doneBytes: 0, current: [], waiting: null, skipped: [] },
+    exports: { on: false, mode: "off", total: 0, bytes: 0, done: 0, doneBytes: 0, current: [], waiting: null, skipped: [], sentBytes: 0 },
     ...change,
   });
   await composer.goto("http://127.0.0.1:4321/");
@@ -437,8 +457,12 @@ try {
   await says("an offload too", 0.43, 0.07);
   work = { offload: offload({ sentBytes: 1001 }) };
   await says("an offload that resent a part", 1, null);
-  work = { offload: offload({ sentBytes: 0, send: { total: 0, bytes: 0, done: 0, doneBytes: 0, current: [] } }) };
+  work = { offload: offload({ sentBytes: 0, send: { ...offload().send, total: 0, bytes: 0 } }) };
   await says("an offload with nothing to send", null, null);
+  work = { offload: offload({ send: { ...offload().send, on: false, mode: "off" } }) };
+  await says("only the camera being copied", null, null);
+  work = { offload: offload({ exports: { ...offload().exports, on: true, mode: "on", bytes: 1000, sentBytes: 70 } }) };
+  await says("the exports going up as well", 0.25, null);
   work = { offload: offload() };
   await says("an offload again", 0.43, null);
   work = { offload: offload({ running: false, error: "The camera was unplugged" }) };
@@ -447,6 +471,135 @@ try {
   await says("an offload once more", 0.43, null);
   work = null;
   await says("the app's server gone", null, null);
+
+  // A run of switches, stood in for: each says how it's going in its own room, stops in two steps, and moves nothing.
+  {
+    const menu = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    menu.on("pageerror", (e) => errors.push(e.message));
+    let run = null;
+    let keptDays = [];
+    let keptClips = ["DJI_1.MP4", "DJI_1.mp4"];
+    const asked = [];
+    /** How the run is once the next thing is asked for. */
+    let next = null;
+    const info = () => ({
+      camera: { mounted: true, clips: 12, bytes: 3.2e9 },
+      mac: { clips: 4, bytes: 1.1e9, sent: 0 },
+      exports: { clips: 2, bytes: 5e8, sent: 0 },
+      transcripts: { toSend: 2 },
+      kept: { days: keptDays, clips: keptClips, count: keptDays.length * 227 + keptClips.length },
+      days: [{ day: "2026-11-18", clips: 12, bytes: 3.2e9 }, { day: "2026-11-08", clips: 227, bytes: 7e10 }].map((d) => ({ ...d, kept: keptDays.includes(d.day), keptClips: d.day === "2026-11-18" ? keptClips : [] })),
+      room: { free: 12e9, keepFree: 5e9 },
+      clearCardAfter: "copied",
+      run,
+    });
+    const lane = (change = {}) => ({ on: true, mode: "on", total: 12, bytes: 3.2e9, done: 3, doneBytes: 8e8, current: [], waiting: null, skipped: [], finished: null, error: null, ...change });
+    const off = lane({ on: false, mode: "off", total: 0, bytes: 0, done: 0, doneBytes: 0 });
+    const going = (change = {}) => ({
+      running: true, unattended: false, youtube: true, clearCardAfter: "copied", paused: null, waiting: null, speed: 250_000, sentBytes: 4e8, finished: null, error: null,
+      transcripts: { sent: 0, error: null }, freed: { camera: 0, mac: 0, exports: 0 },
+      copy: lane({ current: null, onCamera: 0 }), send: lane({ total: 16, bytes: 4.3e9 }), exports: { ...off, sentBytes: 0 },
+      ...change,
+    });
+    await menu.route("**/api/jobs", async (route) => route.fulfill({ json: { ...(await (await route.fetch()).json()), offload: run } }));
+    await menu.route(/\/api\/offload(\/\w+)?$/, async (route) => {
+      const request = route.request();
+      const what = new URL(request.url()).pathname.replace("/api/offload", "");
+      if (request.method() === "POST") {
+        asked.push([what, request.postDataJSON()]);
+        run = next ?? run;
+        next = null;
+      }
+      if (request.method() === "POST" && what === "/keep") ({ days: keptDays = keptDays, clips: keptClips = keptClips } = request.postDataJSON());
+      await route.fulfill({ json: info() });
+    });
+    await menu.goto(`http://127.0.0.1:${port}/`);
+    await menu.locator(".clip").first().waitFor({ timeout: 30_000 });
+    await menu.getByRole("button", { name: "More ways to export" }).click();
+    const said = (id) => menu.locator(`#offload-${id}`);
+    const saysNow = (id, text) =>
+      menu
+        .waitForFunction(([i, t]) => document.getElementById(`offload-${i}`).textContent === t, [id, text], { timeout: 5_000 })
+        .catch(async () => assert.fail(`${id} says “${await said(id).textContent()}”, not “${text}”`));
+    await saysNow("camera", "12 clips · 3.2 GB");
+    await saysNow("mac", "4 clips · 1.1 GB to send");
+    await saysNow("exports", "2 clips · 500 MB to send");
+    const spots = () =>
+      menu.evaluate(() =>
+        [...document.querySelectorAll("#export-menu, #export-menu .lane, #export-menu .lane button, #export-menu .menu-row, #export-menu label, #export, #export-more, #footage-link")].map((el) => {
+          const { x, y, width, height } = el.getBoundingClientRect();
+          return [el.id || el.className, x, y, width, height];
+        }),
+      );
+    const still = await spots();
+    if (shots) await menu.screenshot({ path: path.join(shots, "grade-10-offload.png") });
+
+    // Each starts on its own, told whether to go on with the tab closed.
+    await menu.getByRole("checkbox", { name: "Keep going when this tab is closed" }).check();
+    next = going({ send: { ...off }, unattended: true });
+    await menu.getByRole("button", { name: "Start Camera → Mac" }).click();
+    await saysNow("camera", "3 of 12 · 800 MB of 3.2 GB");
+    assert.deepEqual(asked.splice(0), [["", { lanes: ["copy"], unattended: true }]]);
+    await saysNow("mac", "4 clips · 1.1 GB to send");
+    next = going({ unattended: true });
+    await menu.getByRole("button", { name: "Start Mac → Cloudflare" }).click();
+    await saysNow("mac", "3 of 16 · 400 MB of 4.3 GB");
+    assert.deepEqual(asked.splice(0), [["", { lanes: ["send"] }]]);
+    next = going({ unattended: false });
+    await menu.getByRole("checkbox", { name: "Keep going when this tab is closed" }).uncheck();
+    assert.deepEqual(asked.splice(0), [["", { lanes: [], unattended: false }]]);
+
+    // What each waits for.
+    const until = new Date(Date.now() + 60_000).toISOString();
+    run = going({ copy: lane({ current: null, onCamera: 0, waiting: { for: "camera", why: "x", until } }), send: lane({ waiting: { for: "page", why: "No Grade page is open" } }), paused: { for: "page" } });
+    await menu.waitForFunction(() => /^Camera unplugged, tries again \d/.test(document.getElementById("offload-camera").textContent), null, { timeout: 5_000 });
+    await menu.waitForFunction(() => /^Paused while no Grade page was open/.test(document.getElementById("offload-mac").textContent), null, { timeout: 5_000 });
+    run = going({ copy: lane({ current: null, onCamera: 0, waiting: { for: "room", why: "x" } }), send: lane({ waiting: { for: "network", why: "fetch failed", until } }) });
+    await menu.waitForFunction(() => /^Waiting for room/.test(document.getElementById("offload-camera").textContent), null, { timeout: 5_000 });
+    await menu.waitForFunction(() => /^Can't reach Cloudflare, tries again \d/.test(document.getElementById("offload-mac").textContent), null, { timeout: 5_000 });
+    if (shots) await menu.screenshot({ path: path.join(shots, "grade-11-offload-waiting.png") });
+
+    // Stopping: the files in flight are finished, or cut on a second click; which of the two is said.
+    next = going({ copy: lane({ current: { name: "a", sent: 1, size: 2 }, onCamera: 0, mode: "finishing" }), send: lane({ current: [{ sent: 0 }, { sent: 0 }] }) });
+    await menu.getByRole("button", { name: "Stop Camera → Mac", exact: true }).click();
+    assert.deepEqual(asked.splice(0), [["/stop", { lanes: ["copy"] }]]);
+    await menu.waitForFunction(() => document.getElementById("offload-camera").textContent.startsWith("Finishing the clip being copied"), null, { timeout: 5_000 });
+    await menu.getByRole("button", { name: "Stop now Camera → Mac" }).click();
+    await menu.waitForTimeout(300);
+    assert.deepEqual(asked.splice(0), [["/stop", { lanes: ["copy"] }]]);
+    const stop = menu.locator("#stop-offload");
+    assert.equal(await stop.textContent(), "Stop offloading");
+    const stopSpot = await stop.boundingBox();
+    run = going({ copy: lane({ current: null, onCamera: 0, mode: "stopping" }), send: lane({ mode: "finishing", current: [{ sent: 0 }, { sent: 0 }] }) });
+    await menu.waitForFunction(() => document.getElementById("stop-offload").textContent === "Stop now", null, { timeout: 5_000 });
+    await menu.waitForFunction(() => document.getElementById("offload-mac").textContent.startsWith("Finishing 2 uploads"), null, { timeout: 5_000 });
+    assert.deepEqual(await stop.boundingBox(), stopSpot, "the bar's Stop keeps its place, whatever it says");
+    assert.deepEqual(await spots(), still, "nothing in the menu or the bar moves, whatever the offload says");
+    await stop.click();
+    await menu.waitForTimeout(300);
+    assert.deepEqual(asked.splice(0), [["/stop", {}]]);
+    await menu.getByRole("button", { name: "More ways to export" }).click();
+
+    // Done, with a clip passed over, and the next run asks again whether it goes on alone.
+    run = going({ running: false, finished: "done", copy: { ...off, current: null, onCamera: 0 }, send: { ...off, skipped: [{ name: "DJI_1.MP4", why: "doesn't read back" }] } });
+    await saysNow("mac", "1 clip passed over: doesn't read back");
+    await menu.getByText("Offload: 1 clip passed over, DJI_1.MP4: doesn't read back").waitFor({ timeout: 5_000 });
+    assert.ok(await stop.isHidden());
+    assert.ok(!(await menu.getByRole("checkbox", { name: "Keep going when this tab is closed" }).isChecked()));
+
+    // A whole day kept, and a day whose brought clips are: a click lets those go.
+    await menu.getByRole("checkbox", { name: /2026-11-08/ }).click();
+    await saysNow("kept", "229 clips");
+    assert.deepEqual(asked.splice(0), [["/keep", { days: ["2026-11-08"] }]]);
+    const brought = menu.getByRole("checkbox", { name: /2026-11-18/ });
+    assert.ok(await brought.evaluate((el) => el.indeterminate));
+    await menu.getByText("2 clips kept").waitFor({ timeout: 5_000 });
+    await brought.click();
+    await saysNow("kept", "227 clips");
+    assert.deepEqual(asked.splice(0), [["/keep", { days: ["2026-11-08"], clips: [] }]]);
+    assert.ok(!(await brought.evaluate((el) => el.indeterminate || el.checked)));
+    if (shots) await menu.screenshot({ path: path.join(shots, "grade-12-offload-kept.png") });
+  }
 
   assert.deepEqual(errors, []);
   console.log("grade check passed");

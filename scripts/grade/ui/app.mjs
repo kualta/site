@@ -1,5 +1,6 @@
 import { blockMeans, composeLut, gradeKey, inputCurves, resolveGrade, sampleTetra } from "/color.mjs";
 import { bringView, isCloud } from "/ui/bring.mjs";
+import { offloadMenu, offloadMoves, offloadShare } from "/ui/offload.mjs";
 import { Viewer } from "/ui/viewer.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -1089,7 +1090,7 @@ function setExportMenu(open) {
   $("export-more").setAttribute("aria-expanded", String(open));
   if (open) {
     renderQuality();
-    loadOffload();
+    offload.load();
   }
 }
 $("export-more").addEventListener("click", () => setExportMenu(exportMenu.hidden));
@@ -1187,8 +1188,8 @@ function renderStatus() {
   const j = state.jobs;
   const parts = [];
   $("stop-export").hidden = !(j?.export.current || j?.export.queue.length);
-  $("stop-offload").hidden = !j?.offload?.running;
-  const offloadLine = offloadText(j?.offload);
+  offload.renderStop(j?.offload);
+  const offloadLine = offload.text(j?.offload);
   if (offloadLine) parts.push(offloadLine);
   const bringLine = bring.text();
   if (bringLine) parts.push(bringLine);
@@ -1218,85 +1219,9 @@ function transcribingText(t) {
   return t?.failed ? `${t.failed} not transcribed` : "";
 }
 
-// ---- offload: the card to this Mac, this Mac to Cloudflare, each deleted once the next has it -------------------------
+// ---- offload (offload.mjs) --------------------------------------------------------------------------------------------
 
-/** The server's /api/offload answer: the card's clips, the Mac's not in Cloudflare yet, the room on the Mac. */
-let offloadInfo = null;
-const weight = (bytes) => (bytes ? fileSize(bytes) : "0 GB");
-const clipsAndSize = (count, bytes) => `${count} clip${count === 1 ? "" : "s"} · ${weight(bytes)}`;
-
-function timeLeft(seconds) {
-  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min left`;
-  return `${(seconds / 3600).toFixed(1)} h left`;
-}
-
-/** The status line while an offload goes, or after one that ran into something. */
-function offloadText(o) {
-  if (!o) return "";
-  if (!o.running) {
-    if (o.error) return `Offload stopped: ${o.error}`;
-    if (o.copy.error) return `Offload: ${o.copy.error}`;
-    if (o.transcripts?.error) return `Transcripts not sent: ${o.transcripts.error}`;
-    return "";
-  }
-  const parts = [];
-  if (!o.copy.ended) parts.push(`Off the camera ${o.copy.done} of ${o.copy.total}`);
-  else if (o.copy.error) parts.push(o.copy.error);
-  else if (o.copy.total) parts.push("Camera done: unplug it whenever");
-  parts.push(`To Cloudflare ${o.send.done} of ${o.send.total} · ${weight(o.sentBytes)} of ${weight(o.send.bytes)}`);
-  if (o.waiting === "room") parts.push("waiting for room on this Mac");
-  if (o.speed) {
-    const mbit = (o.speed * 8) / 1e6;
-    parts.push(`${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`);
-    parts.push(timeLeft((o.send.bytes - o.sentBytes) / o.speed));
-  }
-  return parts.join(" · ");
-}
-
-function renderOffload() {
-  const info = offloadInfo;
-  if (!info) return;
-  const { camera, mac, room, transcripts: { toSend = 0 } = {} } = info;
-  $("offload-camera").textContent = camera.mounted ? clipsAndSize(camera.clips, camera.bytes) : "Not plugged in";
-  $("offload-mac").textContent = mac.clips ? `${clipsAndSize(mac.clips, mac.bytes)} to send` : "Nothing to send";
-  $("offload-room").textContent = `${weight(Math.max(0, room.free - room.keepFree))} (${weight(room.keepFree)} kept free)`;
-  $("offload-transcripts").textContent = toSend ? `${toSend} to send` : "Nothing to send";
-  const running = state.jobs?.offload?.running ?? info.run?.running;
-  $("offload-start").disabled = Boolean(running) || !(camera.clips || mac.clips || toSend);
-  $("offload-label").textContent = running ? "Offloading…" : "Offload to Cloudflare";
-}
-
-async function loadOffload() {
-  try {
-    offloadInfo = await (await api("/api/offload")).json();
-    renderOffload();
-  } catch (e) {
-    showError(e);
-  }
-}
-$("offload-start").addEventListener("click", async () => {
-  $("offload-start").disabled = true;
-  $("offload-label").textContent = "Starting…";
-  try {
-    await api("/api/offload", { method: "POST" });
-    setExportMenu(false);
-    poll();
-  } catch (e) {
-    showError(e);
-    loadOffload();
-  }
-});
-$("stop-offload").addEventListener("click", async () => {
-  try {
-    await api("/api/offload/stop", { method: "POST" });
-    poll();
-  } catch (e) {
-    showError(e);
-  }
-});
-
-/** How far the offload has moved clips: when it changes, the days they left are read again. */
-const offloadMoves = (o) => (o ? `${o.copy.done}/${o.send.done}/${o.running}` : "");
+const offload = offloadMenu({ api, fileSize, showError, poll });
 
 // ---- ledger and the composer ------------------------------------------------------------------------------------------
 // The ledger (every clip, its grade, where its copies are) is shown in the composer's Footage tab, post.kualta.dev/footage;
@@ -1380,11 +1305,9 @@ function tellComposer(message) {
 }
 /** Tells it how far the offload and the export are: a share of 1 each, or null for one not going or not known. */
 function sayProgress(jobs) {
-  const offload = jobs?.offload;
-  const sending = offload?.running && offload.send.bytes > 0;
   tellComposer({
     type: "grade-progress",
-    offload: sending ? Math.min(1, offload.sentBytes / offload.send.bytes) : null,
+    offload: offloadShare(jobs?.offload),
     export: jobs?.export.current?.progress ?? null,
   });
 }
@@ -1428,7 +1351,7 @@ async function poll() {
     renderStatus();
     updateRows();
     const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || jobs.bring?.running || waiting;
-    if (!exportMenu.hidden) renderOffload();
+    if (!exportMenu.hidden) offload.render(jobs.offload);
     pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {
     if (!jobs) sayProgress(null);

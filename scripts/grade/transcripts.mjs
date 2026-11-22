@@ -114,7 +114,8 @@ async function writeWhole(path, text) {
  *   made      when it was transcribed, with its `language` and how many `words`
  *   sent      when its transcript was filed in the archive
  *
- * `busy()` says when not to start on another clip; `made()` hears each transcript made.
+ * `busy()` says when not to start on another clip, and `skip(clip)` which clips to leave: their audio stays as it is.
+ * `made()` hears each transcript made.
  */
 export function transcriber({
   audio,
@@ -123,6 +124,7 @@ export function transcriber({
   records,
   uvx = null,
   busy = () => false,
+  skip = async () => false,
   pause = 2000,
   extract = extractAudio,
   log = console.error,
@@ -188,6 +190,7 @@ export function transcriber({
     const sound = audioFile(job);
     // The cache was cleared.
     if (!(await exists(sound))) return;
+    if (await skip(job)) return;
     const tool = await findUvx(uvx);
     if (!tool) throw new Error("uvx isn't installed, so Whisper can't run");
     // A folder of its own: should a Whisper outlive the server that started it, what it writes lands in no other clip's.

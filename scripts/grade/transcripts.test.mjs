@@ -316,6 +316,21 @@ test("a clip nobody speaks in gets an empty transcript", async () => {
   expect(list("audio", day)).toEqual([]);
 });
 
+test("a clip kept since its sound was taken isn't transcribed, and its sound waits for when it isn't", async () => {
+  const kept = new Set([A]);
+  const t = start({ skip: async ({ name }) => kept.has(name) });
+  for (const name of [A, B]) await t.take(clip(name));
+  await idle(t);
+  expect(list("kept", day)).toEqual([`${B.slice(0, -4)}.json`, `${B.slice(0, -4)}.vtt`]);
+  expect(list("audio", day)).toEqual([`${A}.m4a`]);
+  expect(t.summary()).toMatchObject({ failed: 0, waiting: 0 });
+  kept.clear();
+  await t.resume();
+  await idle(t);
+  expect(list("kept", day)).toHaveLength(4);
+  expect(list("audio", day)).toEqual([]);
+});
+
 test("clips of one name on two days keep their own transcripts", async () => {
   const t = start();
   await t.take(clip("IMG_4857.MOV", "2026-11-17"));

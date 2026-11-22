@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { archiveClient } from "../publisher/archive.mjs";
+import { SETTINGS } from "./settings.mjs";
 
 export const LEDGER_VERSION = 1;
 const DJI = /^DJI_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_\d+/i;
@@ -69,6 +70,7 @@ const blankGraded = () => ({ look: null, at: null, size: null, mac: false, cloud
  *   grades    the names of clips with a saved grade
  *   youtube   footage.json's uploads, by graded file name → versions; null when it can't be read
  *   archive   [{ name, size, sha256, project }]: the video files the archive's projects hold; null when not asked
+ *   landed    [{ name, size }]: the originals and graded copies offloaded to the archive since it was last asked
  *   projects  [{ name, files }]: the OpenFilm projects on this Mac, each with the video files in its assets
  *   transcripts  the names of clips whose transcripts are in the archive, beside their originals
  *
@@ -175,6 +177,13 @@ export function mergeLedger(previous, seen) {
     }
   }
 
+  for (const { name, size } of seen.landed ?? []) {
+    const entry = lookup(keyOf(name));
+    if (!entry) continue;
+    if (size === entry.size) entry.original.cloudflare = true;
+    else if (entry.graded && size === entry.graded.size) entry.graded.cloudflare = "current";
+  }
+
   for (const name of seen.transcripts ?? []) {
     const entry = lookup(keyOf(name));
     if (entry) entry.transcript = true;
@@ -197,7 +206,7 @@ export function mergeLedger(previous, seen) {
   }
   if (seen.archive)
     for (const file of seen.archive) {
-      // A day's offloaded originals (`_originals-<day>`) aren't a film.
+      // A day's offloaded originals and graded copies (`_originals-<day>`, `_graded-<day>`) aren't a film.
       if (file.project.startsWith("_")) continue;
       film(file.project).archived = true;
       holds(file.project, file.name);
@@ -254,6 +263,7 @@ export function unionLedgers(local, cloud) {
 export async function archivedFootage(request, cache = new Map()) {
   const files = [];
   for (const { name, archivedAt } of (await request("projects")).projects) {
+    if (name === SETTINGS) continue;
     let known = cache.get(name);
     if (known?.archivedAt !== archivedAt) {
       const manifest = await request(`projects/${encodeURIComponent(name)}?at=${encodeURIComponent(archivedAt)}`);
@@ -276,6 +286,15 @@ export async function youtubeUploads(publisherDir) {
     return JSON.parse(await readFile(join(publisherDir, "footage.json"), "utf8")).clips ?? {};
   } catch (error) {
     return error.code === "ENOENT" ? {} : null;
+  }
+}
+
+/** The graded file the footage archive's uploads are on, or were stopped in and pick up from, if there's one. */
+export async function goingToYoutube(publisherDir) {
+  try {
+    return JSON.parse(await readFile(join(publisherDir, "footage.json"), "utf8")).current?.name ?? null;
+  } catch {
+    return null;
   }
 }
 
