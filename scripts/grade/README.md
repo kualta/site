@@ -105,8 +105,9 @@ or dark, and says how far its offload and export are, each time it reads `/api/j
 
 ## Offload: the card to this Mac, this Mac to Cloudflare
 
-The foot of the Export button's menu shows what's on the camera, what's on this Mac not in Cloudflare yet, and the room
-on this Mac; **Offload to Cloudflare** takes it all, and nothing starts until you click it. Two things go on at once:
+The foot of the Export button's menu shows what's on the camera, what's on this Mac not in Cloudflare yet, transcripts
+included, and the room on this Mac; **Offload to Cloudflare** takes it all, and nothing starts until you click it. Two
+things go on at once:
 
 - **Off the card**, a clip at a time, oldest first, while this Mac has room for the next with `GRADE_KEEP_FREE` (5 GB)
   to spare: copied into `Original/` (as a hidden `.part` until it's checked), hashed (SHA-256) as it's read, read back
@@ -133,12 +134,12 @@ day by then, and is read back: a clip's Mac copy goes only once its day lists it
 **Transcripts.** As soon as a clip is on the Mac its sound is taken out of it (copied, a second or two) into the cache;
 its Mac copy waits for that and nothing more. Whisper (`mlx-community/whisper-large-v3-turbo` on the GPU, the language
 its own guess) then transcribes the sound in the background, one clip at a time, half a minute or so for ten minutes of
-it, starting none while an export runs. The bar says "Transcribing 3 of 12". Each transcript is kept here as a `.vtt` (read
-it, search it) and a `.json` (Whisper's segments with every word's time), and its sound is deleted. While a run goes,
-finished transcripts are sent up and filed beside their clips in the day's manifest, as `transcripts/<clip>.vtt` and
-`.json`; ones finished after it ended go with the next run, which **Offload to Cloudflare** starts even if they're all
-there is to send. The ledger marks a clip `transcript` once its transcript is in the archive, and counts neither file as
-footage.
+it, starting none while an export runs. The bar says "Transcribing 3 of 12". Each transcript is kept here as a `.vtt`
+(read it, search it) and a `.json` (Whisper's segments with every word's time), and its sound is deleted. While a run
+goes, finished transcripts are sent up and filed beside their clips in the day's manifest, as `transcripts/<clip>.vtt`
+and `.json`; ones finished after it ended go with the next run, which **Offload to Cloudflare** starts even if they're
+all there is to send. The ledger marks a clip `transcript` once its transcript is in the archive, and counts neither
+file as footage.
 
 Whisper's word times run 0.15-0.5 s early on street audio: the transcript is for reading and searching, and cuts still
 need forced alignment.
