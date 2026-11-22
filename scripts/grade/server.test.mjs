@@ -450,7 +450,8 @@ test.if(usable)("exports the frame on screen as a graded PNG beside the exports:
 
 test.if(usable)("exports below full quality at the share of the original's bitrate it promises", async () => {
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: moving, names: [movingClip], quality: 20 }) })).status).toBe(200);
-  await until(async () => (await json(`/api/sources/${moving}`)).clips[0].exported, 120_000);
+  // Its own export's record, not `exported`: the frame exported before can already count the clip as exported.
+  await until(async () => records()[movingClip]?.quality === 20, 120_000);
   const record = records()[movingClip];
   expect(record.quality).toBe(20);
   // The whole file against what the menu shows: a fifth of the original's video bitrate, plus its sound as is.
@@ -465,6 +466,11 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   const kept = slowClips[1];
   const grades = () => JSON.parse(readFileSync(join(data, "grades.json"), "utf8")).clips;
   expect(grades()[movingClip]).toBeUndefined();
+  // A clip being exported stays on the Mac: let any export end first.
+  await until(async () => {
+    const { export: running } = await json("/api/jobs");
+    return !running.current && !running.queue.length;
+  }, 120_000);
   const before = await json("/api/offload");
   expect(before.camera).toMatchObject({ mounted: true, clips: 1 });
   expect(before.mac).toMatchObject({ clips: 3 });
