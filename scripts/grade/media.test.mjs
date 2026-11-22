@@ -38,7 +38,14 @@ const frameAt = (file, k) => {
   return run(["-i", file, "-vf", vf, "-frames:v", "1", "-f", "rawvideo", "-"]);
 };
 const still = (png) => run(["-i", png, "-vf", "scale=160:90:flags=area,format=rgb24", "-f", "rawvideo", "-"]);
+/** Frame `k` of a video as its own 8-bit Y, Cb and Cr planes. */
+const planesAt = (file, k) => {
+  const raw = run(["-i", file, "-vf", `select=eq(n\\,${k})`, "-frames:v", "1", "-pix_fmt", "yuv420p", "-f", "rawvideo", "-"]);
+  const n = 320 * 180;
+  return { y: raw.subarray(0, n), cb: raw.subarray(n, n * 1.25), cr: raw.subarray(n * 1.25) };
+};
 const meanDiff = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0) / a.length;
+const meanShift = (a, b) => a.reduce((s, v, i) => s + (b[i] - v), 0) / a.length;
 const spread = (values) => Math.max(...values) - Math.min(...values);
 
 beforeAll(() => {
@@ -111,7 +118,14 @@ test.if(usable)("deflicker leaves a clip that doesn't flicker as it was", async 
   const [a, b] = [lumas(off), lumas(on)];
   expect(b.length).toBe(a.length);
   for (let i = 0; i < a.length; i++) expect(Math.abs(a[i] - b[i])).toBeLessThan(0.5);
-  expect(meanDiff(frameAt(off, 10), frameAt(on, 10))).toBeLessThan(1);
+  // No shift in brightness or colour, to an eighth of a level: what differs is the dither of the 16-bit step.
+  const [p, q] = [planesAt(off, 10), planesAt(on, 10)];
+  const planes = ["y", "cb", "cr"];
+  const shifts = Object.fromEntries(planes.map((k) => [k, Math.round(meanShift(p[k], q[k]) * 8) / 8 || 0]));
+  expect({ shifts, noise: Object.fromEntries(planes.map((k) => [k, meanDiff(p[k], q[k]) < 2])) }).toEqual({
+    shifts: { y: 0, cb: 0, cr: 0 },
+    noise: { y: true, cb: true, cr: true },
+  });
 }, 60_000);
 
 test.if(usable)("a frame export with deflicker is that frame of the deflickered export", async () => {
