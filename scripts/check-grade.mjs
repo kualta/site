@@ -206,6 +206,59 @@ try {
   assert.equal(await pressed(), "Off");
   await savedSoon(() => !("deflicker" in saved()) && !("deflicker" in saved(other)), "the Light group's Reset turns it off");
 
+  // Framed by the composer, the app says how far its offload and its export are, and lets go of both once they end or it
+  // can't tell. The work itself is stood in for: nothing is offloaded.
+  const composer = await browser.newPage({ permissions: ["local-network-access"] });
+  composer.on("pageerror", (e) => errors.push(e.message));
+  await composer.route("http://127.0.0.1:4321/", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><script>
+        window.heard = [];
+        addEventListener("message", (e) => e.origin === "http://127.0.0.1:${port}" && heard.push(e.data));
+      </script><iframe src="http://127.0.0.1:${port}/" allow="local-network-access"></iframe>`,
+    }),
+  );
+  let work = {};
+  await composer.route("**/api/jobs", async (route) => {
+    if (!work) return route.fulfill({ status: 500, json: { error: "gone" } });
+    const jobs = await (await route.fetch()).json();
+    return route.fulfill({ json: { ...jobs, ...work, export: { ...jobs.export, ...work.export } } });
+  });
+  const says = (what, offload, exported) =>
+    composer
+      .waitForFunction(
+        (wanted) => JSON.stringify(window.heard.findLast((said) => said.type === "grade-progress")) === wanted,
+        JSON.stringify({ type: "grade-progress", offload, export: exported }),
+        { timeout: 10_000 },
+      )
+      .catch(async (e) => assert.fail(`${what}: ${e.message}; heard ${await composer.evaluate(() => JSON.stringify(window.heard.at(-1)))}`));
+  const offload = (change) => ({
+    running: true, sentBytes: 430, speed: null, waiting: null, finished: null, error: null,
+    copy: { total: 1, bytes: 1000, done: 0, doneBytes: 0, current: null, ended: false, error: null },
+    send: { total: 1, bytes: 1000, done: 0, doneBytes: 0, current: [] },
+    ...change,
+  });
+  await composer.goto("http://127.0.0.1:4321/");
+  await composer.waitForFunction(() => window.heard[0]?.type === "grade-ready");
+  await says("nothing going", null, null);
+  work = { export: { current: { id: "original", name, progress: 0.07 } } };
+  await says("an export", null, 0.07);
+  work = { ...work, offload: offload() };
+  await says("an offload too", 0.43, 0.07);
+  work = { offload: offload({ sentBytes: 1001 }) };
+  await says("an offload that resent a part", 1, null);
+  work = { offload: offload({ sentBytes: 0, send: { total: 0, bytes: 0, done: 0, doneBytes: 0, current: [] } }) };
+  await says("an offload with nothing to send", null, null);
+  work = { offload: offload() };
+  await says("an offload again", 0.43, null);
+  work = { offload: offload({ running: false, error: "The camera was unplugged" }) };
+  await says("an offload that failed", null, null);
+  work = { offload: offload() };
+  await says("an offload once more", 0.43, null);
+  work = null;
+  await says("the app's server gone", null, null);
+
   assert.deepEqual(errors, []);
   console.log("grade check passed");
 } finally {

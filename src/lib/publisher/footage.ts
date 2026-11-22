@@ -35,6 +35,12 @@ async function readStatus(media: MediaBucket, now: number) {
   const text = await new Response(object.body).text();
   return { text, age: object.uploaded ? Math.max(0, now - object.uploaded.getTime()) : null };
 }
+/** What the tab hears. The status went in checked, so it goes out as it is, without parsing it again. */
+function tabReply(watching: boolean, { text, age }: Awaited<ReturnType<typeof readStatus>>): Response {
+  return new Response(`{"watching":${watching},"age":${age},"status":${text}}`, {
+    headers: { "Cache-Control": "no-store", "Content-Type": "application/json" },
+  });
+}
 
 /**
  * Which footage each Pipeline piece is (a film, or a shoot day before there's a film), by the piece's id: one small
@@ -50,11 +56,11 @@ async function readLinks(archive: Pick<ArchiveBucket, "get">): Promise<Record<st
 
 /**
  * The Footage tab's routes, with the caller already checked: `footage` (what's up with the uploads), `footage/watch`
- * (POST keeps the tab counted as open, DELETE says it closed), `footage/ledger` and `footage/thumbs/<clip>.jpg` (the
- * ledger and its pictures, from the archive), `footage/links` (each Pipeline piece's footage; PUT
- * `footage/links/<piece>` sets one), and `helper/footage` (the laptop asks whether the tab is open, and with a POST
- * sends its status; `helper/footage/watch` POST counts the tab as open while an offload the grade app runs goes).
- * Anything else is null.
+ * (POST keeps the tab counted as open and answers as `footage` does, DELETE says it closed), `footage/ledger` and
+ * `footage/thumbs/<clip>.jpg` (the ledger and its pictures, from the archive), `footage/links` (each Pipeline piece's
+ * footage; PUT `footage/links/<piece>` sets one), and `helper/footage` (the laptop asks whether the tab is open, and
+ * with a POST sends its status; `helper/footage/watch` POST counts the tab as open while an offload the grade app runs
+ * goes). Anything else is null.
  */
 export async function footageResponse(
   path: string,
@@ -98,16 +104,15 @@ export async function footageResponse(
     });
   }
   if (path === "footage" && request.method === "GET") {
-    const [watching, { text, age }] = await Promise.all([isWatched(media, now), readStatus(media, now)]);
-    // The status went in checked, so it goes out as it is, without parsing it again.
-    return new Response(`{"watching":${watching},"age":${age},"status":${text}}`, {
-      headers: { ...headers, "Content-Type": "application/json" },
-    });
+    const [watching, status] = await Promise.all([isWatched(media, now), readStatus(media, now)]);
+    return tabReply(watching, status);
   }
-  // The tab keeps the marker fresh while it's open; the grade app does while an offload the owner started goes.
+  // The tab keeps the marker fresh while it's open, and hears how the uploads are going: a hidden one asks nothing else.
+  // The grade app keeps it fresh while an offload the owner started goes.
   if ((path === "footage/watch" || path === "helper/footage/watch") && request.method === "POST") {
     await media.put(WATCHING, String(now + WATCH_TTL), { httpMetadata: { contentType: "text/plain" } });
-    return json({ watching: true });
+    if (path === "helper/footage/watch") return json({ watching: true });
+    return tabReply(true, await readStatus(media, now));
   }
   if (path === "footage/watch" && request.method === "DELETE") {
     await media.delete(WATCHING);

@@ -96,8 +96,8 @@ the card and `~/Movies` itself, previews on the browser's GPU and exports with f
 network access, and Chrome asks once whether post.kualta.dev may reach this device: allow it. Away from the Mac, or
 until it's allowed, the tab says so. Only the composer may frame the app (`frame-ancestors`: post.kualta.dev, and the
 site run locally on port 4321). In the frame the app says it's there, opens the clips the Footage tab's **Grade**
-asks for (`#clip=<file>` in its address, or a message; `/api/find` says which day holds it), and takes the
-composer's light or dark.
+asks for (`#clip=<file>` in its address, or a message; `/api/find` says which day holds it), takes the composer's light
+or dark, and says how far its offload and export are, each time it reads `/api/jobs`, for the composer's title.
 
 ## Offload: the card to this Mac, this Mac to Cloudflare
 

@@ -356,9 +356,10 @@ the part in flight; it isn't a failure, and the upload resumes from where YouTub
 the next time the tab opens. If the site stops answering three times running the helper stops too,
 since it can't tell whether the tab is still open. Both the open marker and the status are small
 objects in the media bucket (`footage/watching`, `footage/status.json`), not D1 rows, so the polling
-costs no D1 reads beyond the helper's sign-in check. While an offload the owner started in the grade
-app goes, the grade app keeps the marker fresh too (`helper/footage/watch`, on the helper's pairing,
-every minute), so graded clips go up meanwhile; it lapses on its own once the offload ends.
+costs no D1 reads beyond the helper's sign-in check. A hidden tab reads nothing, but the answer to its
+saying it's open carries the status, so its title keeps up. While an offload the owner started in the
+grade app goes, the grade app keeps the marker fresh too (`helper/footage/watch`, on the helper's
+pairing, every minute), so graded clips go up meanwhile; it lapses on its own once the offload ends.
 
 It puts up 10 clips a day by default (`bun run publisher footage --daily <clips>` changes it):
 first the grade app's exports in `~/Movies/Exported` (only files `exports.json` records, unchanged
@@ -397,6 +398,11 @@ this device); away from the Mac, or until that's allowed, the tab says so. The a
 below the tabs, edge to edge, and the page doesn't scroll. Once opened it stays loaded while other
 tabs are shown, takes the composer's light or dark, and opens the clips Grade asks for. See
 `scripts/grade/README.md`.
+
+**The page's title** names the open tab (`footage · kualta`). While that tab shows something going up,
+its percentage leads (`43% · footage · kualta`): on Footage the clip going up to YouTube, on Grade the
+app's offload, else its export, as the app tells the tab. The plain name returns once that ends, stops,
+fails or can't be read. Nothing is polled for it (`src/lib/publisher/title.ts`).
 
 ## Instagram stories
 
