@@ -6,6 +6,7 @@ import path from "node:path";
 import ffmpeg from "ffmpeg-static";
 import { createServer } from "vite";
 import { chromium } from "playwright";
+import { findShifts } from "./publisher-shifts.mjs";
 
 // Drives the publisher's composer with a mocked API: what each mix of text and media can reach, and what it queues.
 const root = process.cwd();
@@ -1284,7 +1285,8 @@ try {
     await open("Footage ready", "Hammock physics");
     await editor.getByRole("button", { name: "Delete" }).click();
     await editor.waitFor({ state: "hidden" });
-    assert.equal(await board.getByText("Hammock physics").count(), 0);
+    // The closed editor goes a moment after it's hidden.
+    await page.waitForFunction(() => !document.querySelector(".publisher-pipeline").textContent.includes("Hammock physics"));
     // Composed from its editor, the composer links it, offering only the pieces not yet posted.
     const squareWindows = "00000000-0000-4000-8000-0000000c0005";
     await open("Edit ready", "Square windows");
@@ -1918,6 +1920,16 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
+
+  // Nothing on any tab moves by itself as it loads, polls or says something else; what the owner adds or chooses moves
+  // the rest at once.
+  const moved = await findShifts(browser, {
+    tall: tallClip,
+    wide: wideClip,
+    photo: { name: "photo.png", mimeType: "image/png", buffer: png },
+    broken: { name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("not decodable") },
+  });
+  assert.deepEqual(moved, [], moved.join("\n"));
   console.log("Publisher composer passed on desktop and mobile.");
 } finally {
   rmSync(clips, { recursive: true, force: true });

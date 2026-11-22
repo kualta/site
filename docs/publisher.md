@@ -148,7 +148,7 @@ contain original metadata until the helper prepares each destination's copy.
   four as a gallery. Duplicate a preset to create another; settings save
   immediately, and the title and text draft survives a reload. Uploads are bounded
   to 30 MB/photo and 90 MB/video. Run `node scripts/check-publisher.mjs` to exercise
-  the composer in a browser.
+  the composer in a browser; it also fails when anything on a tab moves by itself.
 - Photos are decoded into fresh pixels, oriented, and encoded as JPEG. The
   location-removal policy restores only camera/lens make/model and exposure
   settings. GPS, comments, timestamps, identifiers, thumbnails, XMP, IPTC and

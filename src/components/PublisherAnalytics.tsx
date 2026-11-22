@@ -23,6 +23,7 @@ import {
 import { kindNames, platformNames, postLabel, type Platform, type PostKind } from "@/lib/publisher/presets";
 import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
 import { saveThumbnail, thumbnailFrom } from "@/lib/publisher/thumbnail";
+import PublisherSteady from "./PublisherSteady";
 import {
   kindsOf,
   periods,
@@ -228,20 +229,24 @@ function share(value: number, total: number) {
   const percent = (value / total) * 100;
   return percent > 0 && percent < 1 ? "<1%" : `${Math.round(percent)}%`;
 }
-/** What each platform adds up to at the latest point. One platform needs no key. */
-function Contributions({ point, busy }: { point: SeriesPoint; busy: boolean }) {
-  const reporting = reportingPlatforms(point);
-  if (reporting.length < 2) return null;
+/**
+ * What each platform adds up to at the latest point. One platform needs no key. Its room is there either way, so a
+ * post's readings coming in move nothing under them.
+ */
+function Contributions({ point, busy }: { point: SeriesPoint | null; busy: boolean }) {
+  const reporting = point ? reportingPlatforms(point) : [];
   return (
-    <ul className="publisher-analytics-legend" data-busy={busy}>
-      {reporting.map((platform) => (
-        <li key={platform}>
-          <i className="publisher-analytics-swatch" style={{ background: platformColor(platform) }} />
-          {platformNames[platform]}
-          <strong>{number(point.parts[platform]!)}</strong>
-          {point.value > 0 && <small>{share(point.parts[platform]!, point.value)}</small>}
-        </li>
-      ))}
+    <ul className="publisher-analytics-legend publisher-analytics-contributions" data-busy={busy}>
+      {point &&
+        reporting.length > 1 &&
+        reporting.map((platform) => (
+          <li key={platform}>
+            <i className="publisher-analytics-swatch" style={{ background: platformColor(platform) }} />
+            {platformNames[platform]}
+            <strong>{number(point.parts[platform]!)}</strong>
+            {point.value > 0 && <small>{share(point.parts[platform]!, point.value)}</small>}
+          </li>
+        ))}
     </ul>
   );
 }
@@ -249,13 +254,14 @@ function Contributions({ point, busy }: { point: SeriesPoint; busy: boolean }) {
 const percent = (fraction: number) => `${Math.round(fraction * 100)}%`;
 /**
  * How long each platform's viewers watched, from what it shows its creator: the average per view, weighed by views
- * across videos. Platforms that don't share it are left out rather than shown as zero.
+ * across videos. Platforms that don't share it are left out rather than shown as zero. `kept` keeps its room when
+ * there's none, where what's shown can change to some.
  */
-function Retention({ readings, scope }: { readings: RetentionReading[]; scope?: string }) {
+function Retention({ readings, scope, kept }: { readings: RetentionReading[]; scope?: string; kept?: boolean }) {
   const rows = retentionByPlatform(readings);
-  if (!rows.length) return null;
+  if (!rows.length && !kept) return null;
   return (
-    <div className="publisher-analytics-retention">
+    <div className="publisher-analytics-retention" data-unsaid={!rows.length || undefined}>
       <p className="publisher-note">Average watch time per view{scope && ` · ${scope}`}</p>
       <ul className="publisher-analytics-legend">
         {rows.map((row) => (
@@ -289,7 +295,7 @@ function WatchCell({ metrics }: { metrics: Metrics | null }) {
 
 function Observations({ points, label, byDay = false }: { points: SeriesPoint[]; label: string; byDay?: boolean }) {
   return (
-    <details>
+    <details data-unsaid={!points.length || undefined}>
       <summary>View observations</summary>
       <div className="publisher-analytics-table publisher-analytics-observations">
         <table>
@@ -416,9 +422,9 @@ function Overview({
         <div className="publisher-analytics-chart" aria-busy={stale}>
           {plot}
         </div>
-        {summary && <Contributions point={summary} busy={stale} />}
-        <Retention readings={watched} scope={days ? `videos posted in the last ${days} days` : "every video"} />
-        {!!points.length && <Observations points={points} label={label} byDay={daily} />}
+        <Contributions point={summary} busy={stale} />
+        <Retention kept readings={watched} scope={days ? `videos posted in the last ${days} days` : "every video"} />
+        <Observations points={points} label={label} byDay={daily} />
       </figure>
     </section>
   );
@@ -471,9 +477,9 @@ function Trend({
       <div className="publisher-analytics-chart" aria-busy={loading}>
         {plot}
       </div>
-      {!!points.length && <Contributions point={points.at(-1)!} busy={loading} />}
+      <Contributions point={points.at(-1) ?? null} busy={loading} />
       <Retention readings={retention} />
-      {!!points.length && <Observations points={points} label={label} />}
+      <Observations points={points} label={label} />
     </figure>
   );
 }
@@ -693,9 +699,14 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
                     {dateTime(post.created_at)} · {kindNames[post.post.kind]}
                   </p>
                 </div>
-                <button disabled={!online || refreshBusy} aria-busy={refreshBusy} onClick={startRefresh}>
+                <button
+                  className="publisher-analytics-refresh"
+                  disabled={!online || refreshBusy}
+                  aria-busy={refreshBusy}
+                  onClick={startRefresh}
+                >
                   {refreshBusy && <Spinner />}
-                  {refreshLabel}
+                  <PublisherSteady among={["Refresh metrics", "Reading 9 of 9…"]}>{refreshLabel}</PublisherSteady>
                 </button>
               </header>
               <div className="publisher-analytics-filters">
@@ -726,17 +737,12 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
               </div>
               <div className="publisher-analytics-total">
                 <strong>{number(total)}</strong>
-                {reporting < published.length && (
-                  <span className="publisher-note">
-                    {reporting} of {published.length} reporting
-                  </span>
-                )}
+                <span className="publisher-note" role="status">
+                  {[reporting < published.length && `${reporting} of ${published.length} reporting`, notice]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
               </div>
-              {notice && (
-                <p role="status" className="publisher-note">
-                  {notice}
-                </p>
-              )}
               <Trend
                 samples={samples}
                 retention={published.map((t) => ({ platform: t.platform, metrics: t.retention }))}
@@ -746,8 +752,19 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
                 failed={seriesFailed}
                 onRetry={() => setAttempt((n) => n + 1)}
               />
-              <div className="publisher-analytics-table">
+              <div className="publisher-analytics-table publisher-analytics-targets">
                 <table>
+                  <colgroup>
+                    <col style={{ width: 150 }} />
+                    <col style={{ width: 100 }} />
+                    {reported("reach") && <col style={{ width: 80 }} />}
+                    <col style={{ width: 80 }} />
+                    <col style={{ width: 86 }} />
+                    <col style={{ width: 62 }} />
+                    <col style={{ width: 58 }} />
+                    {retained && <col style={{ width: 100 }} />}
+                    <col style={{ width: 120 }} />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Platform</th>
@@ -773,7 +790,7 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
                           ) : (
                             platformNames[t.platform]
                           )}
-                          <small>
+                          <small title={targetStatus(t) || undefined}>
                             {checking.has(t.id) ? (
                               <>
                                 <Spinner />
@@ -815,11 +832,6 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
   return (
     <section className="publisher-analytics" aria-label="Post analytics">
       <h1 className="publisher-hidden">Analytics</h1>
-      {error && (
-        <p role="alert" className="publisher-error">
-          {error}
-        </p>
-      )}
       <div className="publisher-analytics-toolbar">
         <div className="publisher-analytics-chips" role="group" aria-label="Post types">
           {postTypes.map((type) => (
@@ -828,20 +840,20 @@ export default function PublisherAnalytics({ request, online, search, onNavigate
             </button>
           ))}
         </div>
-        <div className="publisher-analytics-period">
-          <span className="publisher-note">{updated}</span>
-          <div className="publisher-analytics-view" role="group" aria-label="Period">
-            {periods.map((days) => (
-              <button
-                key={days}
-                type="button"
-                aria-pressed={view.period === days}
-                onClick={() => show({ period: days })}
-              >
-                {days ? `${days}d` : "All time"}
-              </button>
-            ))}
-          </div>
+        {/* When the numbers are from, or why they can't be read again, in a place of its own. */}
+        {error ? (
+          <span role="alert" className="publisher-note publisher-analytics-updated" data-problem title={error}>
+            {error}
+          </span>
+        ) : (
+          <span className="publisher-note publisher-analytics-updated">{updated}</span>
+        )}
+        <div className="publisher-analytics-view" role="group" aria-label="Period">
+          {periods.map((days) => (
+            <button key={days} type="button" aria-pressed={view.period === days} onClick={() => show({ period: days })}>
+              {days ? `${days}d` : "All time"}
+            </button>
+          ))}
         </div>
       </div>
       {body}

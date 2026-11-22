@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDownIcon, TrashIcon, VideoIcon } from "@/components/icons";
 import {
   kindNames,
@@ -20,6 +20,7 @@ import MediaButton from "./MediaButton";
 import PlatformIcon from "./PlatformIcon";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
 import PublisherCover, { type Cover } from "./PublisherCover";
+import PublisherSteady from "./PublisherSteady";
 
 type Target = {
   id: string;
@@ -442,10 +443,15 @@ function LinkPost({ post, request, onDone, onError }: PostActionProps) {
           }}
         />
       </label>
-      {link && "error" in link && <p className="publisher-note">{link.error}</p>}
-      <button disabled={busy || !ready} onClick={() => void send()}>
-        {busy ? "Linking…" : ready ? `Link ${platformNames[ready.platform]} post` : "Link post"}
-      </button>
+      {/* Beside the button, in a place of its own, so what's wrong with a link moves nothing as it's typed. */}
+      <div className="publisher-link-send">
+        <button disabled={busy || !ready} onClick={() => void send()}>
+          <PublisherSteady among={[`Link ${platformNames.xiaohongshu} post`]}>
+            {busy ? "Linking…" : ready ? `Link ${platformNames[ready.platform]} post` : "Link post"}
+          </PublisherSteady>
+        </button>
+        <p className="publisher-note">{link && "error" in link && link.error}</p>
+      </div>
     </fieldset>
   );
 }
@@ -460,33 +466,42 @@ export default function PublisherHistory({
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   // Sent from the terminal and waiting in Cloudflare to be opened and published.
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
+  const [draftsRead, setDraftsRead] = useState(false);
   const [deletingDraft, setDeletingDraft] = useState<string | null>(null);
-  const [page, setPage] = useState<Page>({ posts: [], next: null });
-  const [loading, setLoading] = useState(true);
+  // The page shown, which stays until the next one is in, and the last one that couldn't be read.
+  const [loaded, setLoaded] = useState<{ path: string; page: Page } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   // The destination whose time is being changed, and the time typed so far.
   const [retiming, setRetiming] = useState<{ target: string; value: string } | null>(null);
   const cursor = cursors[cursors.length - 1];
   const path = `history${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`;
+  const page: Page = loaded?.page ?? { posts: [], next: null };
+  const turning = loaded !== null && loaded.path !== path && failed !== path;
   async function refresh() {
-    setPage(await request(path));
+    setLoaded({ path, page: await request(path) });
   }
+  // Posts seen on their way out since the tab opened: each keeps a line for what comes of it, so it moves nothing.
+  const watched = useRef(new Set<string>());
+  for (const post of page.posts)
+    if (post.targets.some((target) => changing(target) || waiting(target))) watched.current.add(post.id);
   // Every read counts against D1's daily cap. A destination that's publishing or being deleted changes within seconds,
   // so it's watched closely; otherwise the list changes only when the composer or this page changes it. A hidden tab
   // reads nothing and catches up when it's shown.
   const pending = page.posts.some((post) => post.targets.some(changing));
-  useEffect(() => setLoading(true), [path]);
   useEffect(() => {
     let active = true;
     const load = async () => {
       try {
         const result = await request(path);
-        if (active) setPage(result);
+        if (!active) return;
+        setLoaded({ path, page: result });
+        setFailed(null);
       } catch (error) {
-        if (active) onError((error as Error).message);
-      } finally {
-        if (active) setLoading(false);
+        if (!active) return;
+        onError((error as Error).message);
+        setFailed(path);
       }
     };
     void load();
@@ -512,6 +527,8 @@ export default function PublisherHistory({
         // Said once; the list keeps what it last read and tries again.
         if (active && !reported) onError((error as Error).message);
         reported = true;
+      } finally {
+        if (active) setDraftsRead(true);
       }
     };
     void load();
@@ -651,6 +668,15 @@ export default function PublisherHistory({
     const stoppable = post.targets.some((t) => ["queued", "working"].includes(t.state));
     const manageable = !deleted || removable || problems.length > 0 || dates.length > 0 || stoppable;
     const expanded = open === post.id;
+    const watching = watched.current.has(post.id);
+    const said = problems.map(
+      (target) =>
+        `${platformNames[target.platform]}: ${target.deletion_message || target.message || status(target).label}`,
+    );
+    const underWay = post.targets
+      .filter((target) => status(target).tone === "busy")
+      .map((target) => `${platformNames[target.platform]}: ${status(target).label}`);
+    const progress = (said.length ? said : underWay).join(" · ");
     return (
       <li key={post.id} className="publisher-history-item" data-deleted={deleted}>
         <Thumbnail post={post.post} />
@@ -699,17 +725,28 @@ export default function PublisherHistory({
                   aria-controls={`manage-${post.id}`}
                   onClick={() => setOpen(expanded ? null : post.id)}
                 >
-                  {expanded ? "Close" : "Manage"}
+                  <PublisherSteady among={["Manage"]}>{expanded ? "Close" : "Manage"}</PublisherSteady>
                   <ChevronDownIcon size={14} />
                 </button>
               </li>
             )}
           </ul>
-          {problems.map((target) => (
-            <p key={target.id} className="publisher-history-problem">
-              {platformNames[target.platform]}: {target.deletion_message || target.message || status(target).label}
-            </p>
-          ))}
+          {watching ? (
+            // One line whatever it says, which opens to the rest of it.
+            <details
+              className="publisher-history-progress"
+              data-problem={said.length > 0 || undefined}
+              inert={!progress}
+            >
+              <summary>{progress}</summary>
+            </details>
+          ) : (
+            said.map((line, i) => (
+              <p key={problems[i].id} className="publisher-history-problem">
+                {line}
+              </p>
+            ))
+          )}
           {manageable && (
             // Stays mounted so opening and closing can animate; inert keeps it out of reach while closed.
             <div id={`manage-${post.id}`} className="publisher-history-panel" data-open={expanded} inert={!expanded}>
@@ -832,8 +869,12 @@ export default function PublisherHistory({
                   {reuploadable && <Reupload post={post} request={request} onDone={refresh} onError={onError} />}
                   {crosspostable && <Crosspost post={post} request={request} onDone={refresh} onError={onError} />}
                   {!deleted && <LinkPost post={post} request={request} onDone={refresh} onError={onError} />}
-                  {removable && (
-                    <button disabled={busy || pending} onClick={() => void remove(post)}>
+                  {(removable || watching) && (
+                    <button
+                      data-unsaid={!removable || undefined}
+                      disabled={busy || pending}
+                      onClick={() => void remove(post)}
+                    >
                       Delete everywhere
                     </button>
                   )}
@@ -897,38 +938,43 @@ export default function PublisherHistory({
       </li>
     );
   }
+  // Drafts come above the posts, so nothing shows until both are in or can't be read.
+  const shown = draftsRead && (loaded !== null || failed !== null);
   return (
-    <section className="publisher-history" aria-label="Posting history">
+    <section className="publisher-history" aria-label="Posting history" aria-busy={!shown || turning}>
       <h1 className="publisher-hidden">History</h1>
-      {cursors.length === 1 && !!drafts.length && (
+      {shown && (loaded?.path ?? path) === "history" && !!drafts.length && (
         <section aria-label="Drafts">
           <h3 className="publisher-history-day">Drafts</h3>
           <ul className="publisher-history-list">{drafts.map(draftItem)}</ul>
         </section>
       )}
-      {loading ? (
-        <p className="publisher-note">Loading history…</p>
-      ) : !page.posts.length ? (
-        <p className="publisher-history-empty">No posts yet.</p>
-      ) : (
+      {!shown && <p className="publisher-note">Loading history…</p>}
+      {shown && !loaded && <p className="publisher-history-empty">History didn't load. Trying again…</p>}
+      {shown && loaded && !page.posts.length && <p className="publisher-history-empty">No posts yet.</p>}
+      {shown &&
         byDay(page.posts).map((group) => (
           <section key={group.day} aria-label={group.day}>
             <h3 className="publisher-history-day">{group.day}</h3>
             <ul className="publisher-history-list">{group.posts.map(item)}</ul>
           </section>
-        ))
+        ))}
+      {shown && loaded && (
+        <div className="publisher-history-pagination">
+          <button
+            disabled={turning || busy || cursors.length === 1}
+            onClick={() => setCursors((values) => values.slice(0, -1))}
+          >
+            Newer
+          </button>
+          <button
+            disabled={turning || busy || !page.next}
+            onClick={() => setCursors((values) => [...values, page.next])}
+          >
+            Older
+          </button>
+        </div>
       )}
-      <div className="publisher-history-pagination">
-        <button
-          disabled={loading || busy || cursors.length === 1}
-          onClick={() => setCursors((values) => values.slice(0, -1))}
-        >
-          Newer
-        </button>
-        <button disabled={loading || busy || !page.next} onClick={() => setCursors((values) => [...values, page.next])}>
-          Older
-        </button>
-      </div>
     </section>
   );
 }

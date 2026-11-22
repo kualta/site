@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, CommentIcon, ImageIcon, VideoIcon } from "@/components/icons";
 import PlatformIcon from "./PlatformIcon";
 import PublisherChinese, { type ChineseDraft } from "./PublisherChinese";
+import PublisherSteady from "./PublisherSteady";
 import type { CalendarPost, CalendarTarget } from "@/lib/publisher/calendar";
 import { needsTitle, platformNames, postLabel, type Platform } from "@/lib/publisher/presets";
 import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
@@ -62,20 +63,11 @@ function firstWeekday(): number {
     return 1;
   }
 }
-/** The month's days in whole weeks, from its first week's first day to its last week's last. */
+/** Six whole weeks from the month's first, whatever its length, so every month takes the same room. */
 function monthGrid(month: string): Date[] {
   const [year, index] = month.split("-").map(Number);
-  const first = new Date(year, index - 1, 1);
-  const start = new Date(year, index - 1, 1 - ((first.getDay() - firstWeekday() + 7) % 7));
-  const last = new Date(year, index, 0);
-  const days: Date[] = [];
-  for (
-    let date = start;
-    date <= last || days.length % 7;
-    date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)
-  )
-    days.push(date);
-  return days;
+  const before = (new Date(year, index - 1, 1).getDay() - firstWeekday() + 7) % 7;
+  return Array.from({ length: 42 }, (_, day) => new Date(year, index - 1, 1 - before + day));
 }
 function shiftMonth(month: string, by: number): string {
   const [year, index] = month.split("-").map(Number);
@@ -254,7 +246,7 @@ function PostEditor({
                 </span>
                 {movable(target) ? (
                   <label>
-                    <span>{state === "scheduled" ? "Scheduled for" : stateWords[state]}</span>
+                    <PublisherSteady among={["Scheduled for"]}>{stateWords[state]}</PublisherSteady>
                     <input
                       type="datetime-local"
                       aria-label={`Time for ${name}`}
@@ -359,19 +351,18 @@ function PostEditor({
         {/* Kept in view however long the post is, with why it can't be saved yet. */}
         {(open.length > 0 || post.targets.some(movable)) && (
           <div className="publisher-calendar-editor-foot">
-            {(problems.length > 0 || (open.length > 0 && settled)) && (
-              <p className="publisher-note" data-problem={problems.length > 0 || undefined}>
-                {problems.length
-                  ? problems.join(" ")
-                  : "Edits reach the destinations still to publish; the rest keep what they got."}
-              </p>
-            )}
+            <p className="publisher-note" data-problem={problems.length > 0 || undefined}>
+              {problems.join(" ") ||
+                (open.length > 0 && settled
+                  ? "Edits reach the destinations still to publish; the rest keep what they got."
+                  : "")}
+            </p>
             <button
               type="submit"
               className="publish-button"
               disabled={busy || problems.length > 0 || !(changedWords || moved.length)}
             >
-              {busy ? "Saving…" : "Save"}
+              <PublisherSteady among={["Saving…"]}>{busy ? "Saving…" : "Save"}</PublisherSteady>
             </button>
           </div>
         )}
@@ -382,11 +373,47 @@ function PostEditor({
 
 type Drag = { post: CalendarPost; day: string; targets: CalendarTarget[] };
 
+const LEGEND =
+  "Filled: published. Outlined: scheduled. Struck through: failed or deleted. Times are yours. Drag a post to another day to move what's still to go out, or click it to edit.";
+
+/** A month's room, with no month in it yet. */
+function MonthFrame() {
+  return (
+    <section className="publisher-calendar" aria-label="Calendar" aria-busy="true">
+      <div className="publisher-calendar-head">
+        <h1>&nbsp;</h1>
+        <div className="publisher-actions">
+          <button type="button" aria-label="Previous month" disabled>
+            <ChevronLeftIcon size={16} />
+          </button>
+          <button type="button" disabled>
+            Today
+          </button>
+          <button type="button" aria-label="Next month" disabled>
+            <ChevronRightIcon size={16} />
+          </button>
+        </div>
+      </div>
+      <p className="publisher-note">{LEGEND}</p>
+      <div className="publisher-calendar-grid">
+        {Array.from({ length: 7 }, (_, i) => (
+          <div key={`name-${i}`} className="publisher-calendar-weekday">
+            &nbsp;
+          </div>
+        ))}
+        {Array.from({ length: 42 }, (_, i) => (
+          <div key={`day-${i}`} className="publisher-calendar-day" data-empty />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /**
  * Posts on a month grid, on the days they published or are scheduled to, each platform marked with its state. A post
- * with destinations still to go drags to another day; clicking one opens it to edit.
+ * with destinations still to go drags to another day; clicking one opens it to edit. A day with more than fits scrolls.
  */
-export default function PublisherCalendar({ request, onError, search, onNavigate, postsVersion }: Props) {
+function Month({ request, onError, search, onNavigate, postsVersion }: Props) {
   const month = readMonth(search);
   const days = useMemo(() => monthGrid(month), [month]);
   const [posts, setPosts] = useState<CalendarPost[]>([]);
@@ -503,23 +530,21 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
           </button>
         </div>
       </div>
-      <p className="publisher-note">
-        Filled: published. Outlined: scheduled. Struck through: failed or deleted. Times are yours. Drag a post to
-        another day to move what's still to go out, or click it to edit.
-      </p>
+      <p className="publisher-note">{LEGEND}</p>
       <div className="publisher-calendar-grid" data-hovered={hovered !== null || undefined}>
         {weekdays.map((name) => (
           <div key={name} className="publisher-calendar-weekday" aria-hidden="true">
             {name}
           </div>
         ))}
-        {days.map((date) => {
+        {days.map((date, cell) => {
           const key = dayKey(date);
           const entries = byDay.get(key) ?? [];
           const droppable = fits(key);
           return (
             <div
-              key={key}
+              // biome-ignore lint/suspicious/noArrayIndexKey: the cell stays where it is; turning the month changes its day
+              key={cell}
               className="publisher-calendar-day"
               data-outside={date.getMonth() !== index - 1 || undefined}
               data-today={key === today || undefined}
@@ -547,61 +572,63 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
                 </span>
                 {date.getDate()}
               </time>
-              {entries.map(({ post, targets }) => {
-                const carried = targets.filter(movable);
-                return (
-                  <button
-                    type="button"
-                    key={post.id}
-                    className="publisher-calendar-post"
-                    aria-haspopup="dialog"
-                    draggable={carried.length > 0}
-                    data-related={hovered === post.id || undefined}
-                    data-carried={(drag?.post.id === post.id && drag.day === key) || undefined}
-                    // A tap would only flash it, so touch leaves it out; a click's focus doesn't hold it either.
-                    onPointerEnter={(event) => event.pointerType !== "touch" && setHovered(post.id)}
-                    onPointerLeave={() => leave(post.id)}
-                    onFocus={(event) => event.currentTarget.matches(":focus-visible") && setHovered(post.id)}
-                    onBlur={() => leave(post.id)}
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = "move";
-                      // Firefox starts a drag only with something to carry.
-                      event.dataTransfer.setData("text/plain", postLabel(post));
-                      setHovered(null);
-                      // After the browser has its picture of the post, so the picture isn't the faded original.
-                      setTimeout(() => setDrag({ post, day: key, targets: carried }));
-                    }}
-                    onDragEnd={endDrag}
-                    onClick={() => setEditing(post.id)}
-                  >
-                    <Thumb post={post} />
-                    <span className="publisher-calendar-text">
-                      <span className="publisher-calendar-label">
-                        <small>{clock(targets[0].at)}</small> {postLabel(post)}
+              <div className="publisher-calendar-posts">
+                {entries.map(({ post, targets }) => {
+                  const carried = targets.filter(movable);
+                  return (
+                    <button
+                      type="button"
+                      key={post.id}
+                      className="publisher-calendar-post"
+                      aria-haspopup="dialog"
+                      draggable={carried.length > 0}
+                      data-related={hovered === post.id || undefined}
+                      data-carried={(drag?.post.id === post.id && drag.day === key) || undefined}
+                      // A tap would only flash it, so touch leaves it out; a click's focus doesn't hold it either.
+                      onPointerEnter={(event) => event.pointerType !== "touch" && setHovered(post.id)}
+                      onPointerLeave={() => leave(post.id)}
+                      onFocus={(event) => event.currentTarget.matches(":focus-visible") && setHovered(post.id)}
+                      onBlur={() => leave(post.id)}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        // Firefox starts a drag only with something to carry.
+                        event.dataTransfer.setData("text/plain", postLabel(post));
+                        setHovered(null);
+                        // After the browser has its picture of the post, so the picture isn't the faded original.
+                        setTimeout(() => setDrag({ post, day: key, targets: carried }));
+                      }}
+                      onDragEnd={endDrag}
+                      onClick={() => setEditing(post.id)}
+                    >
+                      <Thumb post={post} />
+                      <span className="publisher-calendar-text">
+                        <span className="publisher-calendar-label">
+                          <small>{clock(targets[0].at)}</small> {postLabel(post)}
+                        </span>
+                        <span className="publisher-calendar-marks">
+                          {targets.map((target) => {
+                            const state = stateOf(target);
+                            const label = `${platformNames[target.platform]}: ${stateWords[state]} ${clock(target.at)}`;
+                            return (
+                              <span
+                                key={target.id}
+                                className="publisher-calendar-mark"
+                                role="img"
+                                aria-label={label}
+                                title={label}
+                                data-state={state}
+                                data-platform={target.platform}
+                              >
+                                <PlatformIcon platform={target.platform} size={13} />
+                              </span>
+                            );
+                          })}
+                        </span>
                       </span>
-                      <span className="publisher-calendar-marks">
-                        {targets.map((target) => {
-                          const state = stateOf(target);
-                          const label = `${platformNames[target.platform]}: ${stateWords[state]} ${clock(target.at)}`;
-                          return (
-                            <span
-                              key={target.id}
-                              className="publisher-calendar-mark"
-                              role="img"
-                              aria-label={label}
-                              title={label}
-                              data-state={state}
-                              data-platform={target.platform}
-                            >
-                              <PlatformIcon platform={target.platform} size={13} />
-                            </span>
-                          );
-                        })}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -619,4 +646,14 @@ export default function PublisherCalendar({ request, onError, search, onNavigate
       )}
     </section>
   );
+}
+
+/**
+ * The calendar. Which day a week starts on, which day is today and what the month is called are this reader's, which
+ * the server doesn't know, so it sends the month's frame and the browser fills it in before it draws.
+ */
+export default function PublisherCalendar(props: Props) {
+  const [here, setHere] = useState(false);
+  useLayoutEffect(() => setHere(true), []);
+  return here ? <Month {...props} /> : <MonthFrame />;
 }

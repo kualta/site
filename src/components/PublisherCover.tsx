@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { frameAt } from "@/lib/publisher/frame";
+import PublisherSteady from "./PublisherSteady";
 
 /** The cover a video post goes out with, where the platform lets a post choose one. */
 export interface Cover {
@@ -10,22 +11,30 @@ export interface Cover {
   zh?: File;
 }
 interface Props {
-  video: File;
+  /** Missing while a draft's video is still coming down. */
+  video?: File;
   value?: Cover;
   onChange: (cover?: Cover) => void;
   /** The destinations that use it, named. */
   platforms: string;
   disabled: boolean;
+  /** Said in the cover's place while it's on its way. */
+  pending?: string;
   onError: (message: string) => void;
 }
 
 const COVER_TYPES = ["image/jpeg", "image/png"];
 
-/** Pick a frame of the video, or upload an image, as its cover. */
-export default function PublisherCover({ video, value, onChange, platforms, disabled, onError }: Props) {
-  const videoUrl = useMemo(() => URL.createObjectURL(video), [video]);
+/** Pick a frame of the video, or upload an image, as its cover. It's as tall empty, choosing and chosen. */
+export default function PublisherCover({ video, value, onChange, platforms, disabled, pending, onError }: Props) {
+  const videoUrl = useMemo(() => video && URL.createObjectURL(video), [video]);
   const coverUrl = useMemo(() => value && URL.createObjectURL(value.file), [value]);
-  useEffect(() => () => URL.revokeObjectURL(videoUrl), [videoUrl]);
+  useEffect(
+    () => () => {
+      if (videoUrl) URL.revokeObjectURL(videoUrl);
+    },
+    [videoUrl],
+  );
   useEffect(
     () => () => {
       if (coverUrl) URL.revokeObjectURL(coverUrl);
@@ -39,6 +48,7 @@ export default function PublisherCover({ video, value, onChange, platforms, disa
   const [taking, setTaking] = useState(false);
 
   async function takeFrame() {
+    if (!video) return;
     setTaking(true);
     try {
       onChange({ file: await frameAt(video, time), at: time });
@@ -59,18 +69,9 @@ export default function PublisherCover({ video, value, onChange, platforms, disa
       <legend>
         Cover<span className="publisher-for"> · {platforms}</span>
       </legend>
-      {value ? (
-        <div className="publisher-cover-chosen">
-          <img src={coverUrl} alt="The chosen cover" />
-          <div>
-            <p>{value.at === undefined ? "Uploaded image" : `Frame at ${value.at.toFixed(1)} s`}</p>
-            <button type="button" disabled={disabled} onClick={() => onChange(undefined)}>
-              Choose another
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
+      <div className="publisher-stage">
+        {value && <img src={coverUrl} alt="The chosen cover" />}
+        {!value && video && (
           <video
             ref={player}
             src={videoUrl}
@@ -79,7 +80,24 @@ export default function PublisherCover({ video, value, onChange, platforms, disa
             preload="auto"
             onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
           />
+        )}
+        {!value && !video && pending && <p className="publisher-note">{pending}</p>}
+      </div>
+      {value ? (
+        <>
+          <p className="publisher-cover-moment">
+            {value.at === undefined ? "Uploaded image" : `Frame at ${value.at.toFixed(1)} s`}
+          </p>
+          <div className="publisher-actions">
+            <button type="button" disabled={disabled} onClick={() => onChange(undefined)}>
+              Choose another
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
           <input
+            className="publisher-cover-moment"
             type="range"
             min={0}
             max={duration || 0}
@@ -95,7 +113,9 @@ export default function PublisherCover({ video, value, onChange, platforms, disa
           />
           <div className="publisher-actions">
             <button type="button" disabled={disabled || taking || !duration} onClick={() => void takeFrame()}>
-              {taking ? "Taking the frame…" : `Use the frame at ${time.toFixed(1)} s`}
+              <PublisherSteady among={["Use the frame at 000.0 s"]}>
+                {taking ? "Taking the frame…" : `Use the frame at ${time.toFixed(1)} s`}
+              </PublisherSteady>
             </button>
             <input
               ref={picker}
@@ -108,7 +128,7 @@ export default function PublisherCover({ video, value, onChange, platforms, disa
                 upload(file);
               }}
             />
-            <button type="button" disabled={disabled} onClick={() => picker.current?.click()}>
+            <button type="button" disabled={disabled || !video} onClick={() => picker.current?.click()}>
               Upload an image
             </button>
           </div>

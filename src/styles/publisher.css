@@ -7,6 +7,8 @@
 .dark .publisher { --platform-twitter:#C9C7C5; }
 .publisher-page { color-scheme:light; }
 .dark .publisher-page { color-scheme:dark; }
+/* The first is put in before anything is drawn (PublisherFont.astro), so no text is set again once it loads. */
+.publisher-page, .publisher { font-family:"Fredoka Publisher", "Fredoka", "M PLUS Rounded 1c", "Huninn", system-ui, -apple-system, sans-serif; }
 
 /* --- page --- */
 .publisher { width:100%; padding:40px 48px 120px; font-size:16px; line-height:1.5; }
@@ -15,12 +17,23 @@
    window. */
 :where(.publisher > :not(.publisher-calendar, .publisher-pipeline, .publisher-grade-tab, .publisher-toasts),.publisher-calendar > :not(.publisher-calendar-grid), .publisher-pipeline > :not(.publisher-pipeline-board)) { max-width:1104px; margin-inline:auto; }
 .publisher,.publisher * { box-sizing:border-box; }
+/* The page's lower corners frame the window rather than end the page, so a page growing as it loads doesn't move them.
+   A phone's text runs to its edges, so it has none. */
+.publisher-corners { position:fixed; inset:0; z-index:-1; pointer-events:none; }
+@media(max-width:700px) { .publisher-corners { display:none; } }
 .publisher a { color:inherit; text-decoration:none; }
 .publisher-note, .publisher small, .publisher time, .publisher-for { color:var(--publisher-muted); }
 .publisher-note { font-size:13px; line-height:1.5; overflow-wrap:anywhere; }
 .publisher h1 { margin:0; font-size:28px; font-weight:400; line-height:1.2; letter-spacing:0; text-wrap:balance; }
 .publisher h2 { margin:0 0 16px; font-size:20px; font-weight:400; line-height:1.3; text-wrap:balance; }
 .publisher h3 { margin:0; font-size:15px; font-weight:400; }
+/* Words that change in place, as wide as the widest they can be (PublisherSteady). */
+.publisher-steady { display:inline-grid; text-align:left; white-space:nowrap; }
+.publisher-steady::after { content:attr(data-among); height:0; overflow:clip; visibility:hidden; white-space:pre; }
+.publisher button .publisher-steady { justify-items:center; }
+/* A box as big as what's coming, so nothing around it moves when it comes. */
+.publisher-stage { display:grid; grid-template-columns:minmax(0, 1fr); place-items:center; width:100%; height:var(--stage, 360px); margin:0 0 24px; overflow:hidden; border-radius:14px; background:var(--publisher-surface); }
+.publisher-stage > :is(img, video) { display:block; width:100%; height:var(--stage, 360px); object-fit:contain; }
 .publisher-heading { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px 16px; margin-bottom:28px; }
 .publisher-heading > :is(h1, h2) { margin:0; }
 /* Named for screen readers; the open tab already says it on screen. */
@@ -50,6 +63,9 @@
 .publisher textarea { resize:vertical; min-height:60px; }
 .publisher input::placeholder, .publisher textarea::placeholder { color:var(--publisher-muted); opacity:1; }
 .publisher label > small.publisher-note { display:block; margin-top:6px; }
+.publisher-label { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* In its place, but not said: what only some choices bring. */
+.publisher [data-unsaid] { visibility:hidden; }
 .publisher-count { display:block; margin-top:6px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; }
 .publisher-count[data-over="true"] { color:var(--publisher-danger); }
 .publisher input[type=checkbox] { flex:none; width:18px; height:18px; }
@@ -73,14 +89,16 @@
 /* --- compose --- */
 /* One centred column: the post, where it goes and the button that sends it, then what only some destinations need. */
 .publisher-compose { max-width:680px; margin-inline:auto; }
+/* Nothing under the notes is drawn until what it is is known. */
+.publisher-compose[data-unsettled] > .publisher-send-notes ~ * { display:none; }
 .publisher-account-row > * { min-width:0; }
 .publisher-composer { margin-bottom:16px; border:1px solid var(--publisher-edge); border-radius:14px; background:var(--publisher-surface); transition:border-color 160ms, box-shadow 160ms; }
 .publisher-composer:focus-within, .publisher-composer[data-dragging="true"] { border-color:var(--publisher-ink); box-shadow:0 0 0 1px var(--publisher-ink); }
 .publisher .publisher-composer textarea, .publisher .publisher-composer textarea:focus-visible { margin:0; padding:14px 16px; border:0; border-radius:14px 14px 0 0; background:transparent; box-shadow:none; font-size:16px; }
 .publisher-composer-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 10px; border-top:1px solid var(--publisher-line); }
 .publisher .publisher-composer-tools button { padding:6px 12px; border-radius:999px; font-size:13px; }
-.publisher-composer-tools .publisher-count { margin:0 0 0 auto; padding:0 4px; }
-.publisher-draft-loading { display:grid; gap:8px; margin:0 0 24px; padding:14px 16px; border:1px solid var(--publisher-edge); border-radius:14px; background:var(--publisher-surface); }
+.publisher-composer-tools .publisher-count { min-height:18px; margin:0 0 0 auto; padding:0 4px; }
+.publisher-draft-loading { grid-template-columns:minmax(0, 320px); place-content:center; justify-items:start; gap:8px; padding:14px 16px; overflow-wrap:anywhere; }
 .publisher-draft-loading p { margin:0; font-size:14px; }
 .publisher-draft-loading span, .publisher-draft-loading small { color:var(--publisher-muted); }
 .publisher-draft-loading small { font-variant-numeric:tabular-nums; }
@@ -91,8 +109,9 @@
 .publisher-previews { display:flex; gap:8px; overflow:auto; margin:0 0 24px; }
 .publisher-previews figure { position:relative; flex:0 0 auto; width:calc(25% - 6px); min-width:90px; margin:0; }
 .publisher-previews img, .publisher-previews video { display:block; width:100%; aspect-ratio:1; object-fit:cover; border-radius:12px; background:var(--publisher-surface); }
-.publisher-previews[data-single-video] figure { width:auto; min-width:0; max-width:100%; }
-.publisher-previews[data-single-video] video { width:auto; max-width:100%; max-height:360px; aspect-ratio:auto; }
+/* One video plays in a box of a fixed size, whatever its shape, so its picture moves nothing when it's read. */
+.publisher-previews[data-single-video] figure { width:100%; height:var(--stage, 360px); }
+.publisher-previews[data-single-video] video { height:100%; aspect-ratio:auto; object-fit:contain; border-radius:14px; }
 .publisher .publisher-previews figure > button { position:absolute; top:6px; right:6px; display:grid; place-items:center; width:28px; height:28px; padding:0; border:none; border-radius:50%; background:rgb(0 0 0 / 60%); color:#fff; }
 .publisher .publisher-previews figure > button:hover:not(:disabled) { background:rgb(0 0 0 / 78%); }
 .publisher-previews figure > button svg { width:16px; height:16px; }
@@ -108,20 +127,16 @@
 .publisher .publisher-photo input[type=datetime-local] { width:auto; }
 /* Below the wide layout, the date goes under its description. */
 @media(max-width:999px) { .publisher-photo[data-dated] { grid-template-columns:44px minmax(0,1fr); } .publisher-photo[data-dated] input[type=datetime-local] { grid-column:2; justify-self:start; } }
-.publisher-cover > video { justify-self:start; max-width:100%; max-height:300px; margin:0 0 12px; border-radius:12px; background:var(--publisher-surface); }
-.publisher-cover input[type=range] { width:100%; margin:0 0 12px; accent-color:var(--publisher-ink); }
-.publisher-cover .publisher-actions { margin-bottom:12px; }
-.publisher-cover-chosen { display:flex; align-items:center; gap:16px; margin:0 0 12px; }
-.publisher-cover-chosen img { width:72px; aspect-ratio:9/16; object-fit:cover; border-radius:10px; background:var(--publisher-surface); }
-.publisher-cover-chosen p { margin:0 0 8px; font-size:14px; }
+.publisher-cover { --stage:300px; }
+.publisher-cover .publisher-stage { margin-bottom:12px; }
+.publisher .publisher-cover-moment { width:100%; height:21px; margin:0 0 12px; accent-color:var(--publisher-ink); font-size:14px; line-height:21px; }
 /* The Chinese version's name shares its row with Translate. */
 .publisher-zh { grid-template-columns:minmax(0,1fr) auto; column-gap:16px; }
 .publisher-zh > * { grid-column:1 / -1; }
 .publisher-zh > legend { grid-column:1; align-self:center; }
 .publisher-zh > button { grid-column:2; align-self:center; margin:0 0 16px; }
-.publisher-zh-video { margin:0 0 20px; }
-.publisher-zh-video .publisher-previews { margin:0; }
-.publisher-zh-video .publisher-previews[data-single-video] video { max-height:220px; }
+.publisher-zh-video { --stage:220px; margin:0 0 20px; }
+.publisher-zh-video :is(.publisher-previews, .publisher-stage) { margin:0; }
 .publisher .publisher-variants { margin:36px 0 0; padding:20px 0 0; border:0; border-top:1px solid var(--publisher-line); }
 .publisher .publisher-variants > summary { color:var(--publisher-ink); font-size:16px; }
 .publisher .publisher-variants[open] > summary { margin-bottom:8px; }
@@ -134,25 +149,31 @@
 .publisher-variants section > small { display:block; font-size:13px; }
 
 /* --- share to: a toggle per destination, with the post's buttons at the end of the row's last line --- */
-.publisher-destinations { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.publisher-destinations { display:flex; flex-wrap:wrap; align-items:center; gap:10px 8px; }
 .publisher .publisher-destinations label { position:relative; display:inline-flex; align-items:center; gap:6px; margin:0; padding:6px 13px 6px 11px; border:1px solid var(--publisher-line); border-radius:999px; color:var(--publisher-muted); font-size:14px; line-height:1.4; cursor:pointer; transition:background-color 160ms, border-color 160ms, color 160ms; }
 .publisher .publisher-destinations label:hover:not([data-unavailable="true"]) { border-color:var(--publisher-edge); color:var(--publisher-ink); }
 .publisher .publisher-destinations label:has(input:checked) { border-color:var(--publisher-ink); background:var(--publisher-surface); color:var(--publisher-ink); }
 .publisher .publisher-destinations label:has(input:focus-visible) { outline:2px solid var(--publisher-ink); outline-offset:2px; }
 /* The checkbox covers its toggle unseen, so the toggle clicks, focuses and reads as one. */
 .publisher .publisher-destinations input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:inherit; }
-.publisher-destinations label small { color:var(--publisher-muted); font-size:12px; }
+/* What the post becomes there sits on the toggle's edge, so saying it makes no toggle wider and none after it move. */
+.publisher-destinations label small { position:absolute; top:-8px; right:9px; padding:0 4px; border-radius:6px; background:var(--publisher-page); color:var(--publisher-muted); font-size:11px; line-height:14px; white-space:nowrap; }
 .publisher .publisher-destinations label[data-unavailable="true"] { opacity:.45; cursor:default; }
 .publisher-send-actions { display:flex; gap:8px; margin-left:auto; padding-left:8px; }
 .publisher .publisher-send-actions button { justify-content:center; width:auto; padding:9px 20px; border-radius:999px; font-size:15px; }
-.publisher-send-notes { margin:0 0 32px; }
-.publisher-send-notes > p { margin:12px 0 0; }
+.publisher-send-notes { height:62px; padding-top:10px; overflow-y:auto; scrollbar-gutter:stable; }
+.publisher-send-notes p { margin:0 0 2px; }
+.publisher-send-status { display:flex; gap:0 16px; }
+.publisher-send-status > p { min-width:0; min-height:1.5em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-send-status > p[role] { flex:none; max-width:100%; }
 .publisher-options { margin:36px 0 0; padding:20px 0 0; border-top:1px solid var(--publisher-line); }
 .publisher-field-name { display:block; margin:0 0 8px; font-size:14px; }
 .publisher-presets { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 20px; }
 .publisher .publisher-presets button { max-width:100%; padding:7px 14px; border-radius:999px; overflow-wrap:anywhere; }
 .publisher .publisher-presets button[aria-pressed="true"], .publisher .publisher-presets button[aria-pressed="true"]:hover:not(:disabled) { background:var(--publisher-ink); border-color:var(--publisher-ink); color:var(--publisher-on-ink); }
 .publisher label.publisher-option { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.publisher-youtube { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); align-items:end; column-gap:16px; }
+.publisher .publisher-youtube .publisher-option { min-height:44px; }
 .publisher-carousel { margin:0 0 16px; }
 .publisher .publisher-carousel .publisher-option { margin:0; }
 .publisher details { margin-bottom:16px; padding:14px 0; border-top:1px solid var(--publisher-line); }
@@ -176,9 +197,10 @@
 .publisher-problem { margin:12px 0 0; color:var(--publisher-danger); font-size:13px; overflow-wrap:anywhere; }
 
 /* --- status messages float above the page, so they're seen wherever the action was --- */
-.publisher-toasts { position:fixed; z-index:1100; left:50%; bottom:max(20px, env(safe-area-inset-bottom)); display:grid; gap:8px; width:min(560px, calc(100vw - 40px)); transform:translateX(-50%); pointer-events:none; }
+.publisher-toasts { position:fixed; z-index:1100; top:0; left:50%; bottom:max(20px, env(safe-area-inset-bottom)); display:flex; flex-direction:column-reverse; gap:8px; width:min(560px, calc(100vw - 40px)); transform:translateX(-50%); pointer-events:none; }
 .publisher-toast { display:flex; align-items:flex-start; gap:10px; padding:12px 8px 12px 14px; border:1px solid var(--publisher-edge); border-radius:14px; background:var(--publisher-surface); box-shadow:0 8px 28px rgb(0 0 0 / 14%); font-size:14px; pointer-events:auto; animation:publisher-toast-in 200ms var(--ease-out); }
 .dark .publisher-toast { box-shadow:0 8px 28px rgb(0 0 0 / 45%); }
+.publisher-toast[data-gone] { visibility:hidden; pointer-events:none; animation:none; }
 .publisher-toast > svg { flex:none; margin-top:1px; }
 .publisher-toast[data-tone="error"] > svg { color:var(--publisher-danger); }
 .publisher-toast[data-tone="notice"] > svg { color:var(--publisher-success); }
@@ -186,7 +208,6 @@
 .publisher .publisher-toast > button { flex:none; display:grid; place-items:center; width:28px; height:28px; margin:-4px 0; padding:0; border:0; border-radius:8px; background:none; color:var(--publisher-muted); }
 .publisher .publisher-toast > button:hover { color:var(--publisher-ink); }
 @keyframes publisher-toast-in { from { opacity:0; transform:translateY(6px); } }
-.publisher-error { margin:0 0 24px; padding:12px 14px; border-radius:12px; background:color-mix(in srgb, var(--publisher-danger) 10%, transparent); color:var(--publisher-danger); overflow-wrap:anywhere; }
 
 /* --- history --- */
 .publisher .publisher-history-day { margin:28px 0 0; font-size:13px; color:var(--publisher-muted); }
@@ -231,14 +252,20 @@
 .publisher-history-manage[aria-expanded="true"] svg { transform:rotate(180deg); }
 .publisher .publisher-history-manage:hover:not(:disabled) { background:none; color:var(--publisher-ink); }
 .publisher-history-problem { margin:8px 0 0; font-size:13px; color:var(--publisher-danger); overflow-wrap:anywhere; }
+/* Where a post on its way out says how it's going: always one line (two on a phone), and the rest of it once opened. */
+.publisher .publisher-history-progress { margin:8px 0 0; padding:0; border:0; }
+.publisher .publisher-history-progress > summary { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden; height:20px; list-style:none; font-size:13px; line-height:20px; overflow-wrap:anywhere; }
+.publisher-history-progress > summary::-webkit-details-marker { display:none; }
+.publisher .publisher-history-progress[data-problem] > summary { color:var(--publisher-danger); }
+.publisher .publisher-history-progress[open] > summary { display:block; height:auto; margin:0; }
 /* Height animates through a 0fr→1fr grid row; the middle div clips while the body keeps its border. */
 .publisher-history-panel { display:grid; grid-template-rows:0fr; opacity:0; transform:translateY(-4px); transition:grid-template-rows 280ms cubic-bezier(.2,.8,.2,1), opacity 200ms ease, transform 280ms cubic-bezier(.2,.8,.2,1); }
 .publisher-history-panel[data-open="true"] { grid-template-rows:1fr; opacity:1; transform:none; }
 .publisher-history-panel > div { min-height:0; overflow:hidden; }
-.publisher-history-panel-body { display:grid; gap:2px; margin-top:12px; padding:6px; border:1px solid var(--publisher-edge); border-radius:14px; font-size:14px; }
+.publisher-history-panel-body { display:grid; grid-template-columns:minmax(0,1fr); gap:2px; margin-top:12px; padding:6px; border:1px solid var(--publisher-edge); border-radius:14px; font-size:14px; }
 .publisher-history-panel-body button { padding:6px 12px; font-size:13px; }
 /* The whole row lights up softly; the link fills it and actions sit inside on the right. */
-.publisher-history-panel-row { display:flex; align-items:center; gap:4px; padding-right:6px; border-radius:10px; transition:background-color 160ms; }
+.publisher-history-panel-row { display:flex; align-items:center; gap:4px; min-height:44px; padding-right:6px; border-radius:10px; transition:background-color 160ms; }
 .publisher-history-panel-row:has(> a:hover), .publisher-history-panel-row:has(> a:focus-visible) { background:var(--publisher-wash); }
 .publisher-history-panel-row > a, .publisher-history-panel-row > div { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; padding:10px 12px; outline:none; }
 .publisher-history-panel-row > a > span:first-child::after { content:" ↗"; color:var(--publisher-muted); }
@@ -255,6 +282,8 @@
 .publisher-crosspost-options label small { display:block; font-size:12px; }
 .publisher-crosspost-options label[data-unavailable="true"] > span { color:var(--publisher-muted); }
 .publisher-crosspost > button { justify-self:start; margin-top:6px; }
+.publisher-link-send { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:4px 12px; min-height:40px; }
+.publisher .publisher-link-send > p { margin:0; line-height:1.4; }
 .publisher-reupload > .publisher-note { margin:0 0 6px; }
 .publisher-reupload-file { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; min-width:0; padding:2px 0; }
 .publisher-reupload-file > .publisher-note { min-width:0; overflow-wrap:anywhere; }
@@ -263,35 +292,46 @@
 .publisher-history-pagination button { font-size:13px; }
 .publisher-history-empty { padding:40px 0; border-top:1px solid var(--publisher-line); color:var(--publisher-muted); }
 
+/* The page that's leaving, until the next is in. */
+.publisher-history > :is(section, .publisher-history-empty) { transition:opacity 160ms; }
+.publisher-history[aria-busy="true"] > section { opacity:.5; }
+
 /* --- accounts and the laptop --- */
-.publisher-account { padding:12px 0; border-top:1px solid var(--publisher-line); }
+.publisher-account { position:relative; padding:12px 0; border-top:1px solid var(--publisher-line); }
+/* Its name over its state, in two lines whatever the state, beside a button as wide for Connect as for Disconnect. */
 .publisher-account-row { display:flex; align-items:center; gap:12px; }
-.publisher-account-row > span:first-child { flex:1; font-size:15px; }
-.publisher-account-status { display:inline-flex; align-items:center; gap:6px; margin:0; }
+.publisher-account-row > div { flex:1; min-width:0; font-size:15px; line-height:22px; }
+.publisher-account-status { display:flex; align-items:center; gap:6px; margin:0; overflow:hidden; line-height:20px; text-overflow:ellipsis; white-space:nowrap; }
+.publisher .publisher-account-problem { margin:0; padding:0; border:0; }
+.publisher .publisher-account-problem > summary { overflow:hidden; color:var(--publisher-danger); font-size:13px; line-height:20px; list-style:none; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-account-problem > summary::-webkit-details-marker { display:none; }
+.publisher .publisher-account-problem[open] > summary { margin:0; overflow:visible; overflow-wrap:anywhere; white-space:normal; }
 .publisher-account-row button, .publisher-account-actions button { padding:6px 12px; font-size:13px; }
-.publisher-account-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:10px; }
-.publisher-account-actions p { flex-basis:100%; margin:0; overflow-wrap:anywhere; }
+.publisher-account-actions { position:absolute; z-index:3; top:100%; left:0; right:0; display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:10px 12px; padding:14px 16px; border:1px solid var(--publisher-edge); border-radius:14px; background:var(--publisher-surface); box-shadow:0 8px 28px rgb(0 0 0 / 14%); }
+.dark .publisher-account-actions { box-shadow:0 8px 28px rgb(0 0 0 / 45%); }
+/* Its buttons first, Cancel at the end of their line, so neither moves as what to do changes under them. */
+.publisher-account-actions p { order:1; flex-basis:100%; margin:0; overflow-wrap:anywhere; }
 .publisher-account-actions a { text-decoration:underline; text-underline-offset:3px; }
-.publisher-account > .publisher-problem { margin:8px 0 0; }
 @media(min-width:900px) { .publisher-accounts { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); column-gap:56px; align-items:start; } }
 .publisher .publisher-connection { margin-top:56px; margin-bottom:0; padding-bottom:0; }
 
 /* --- archive: graded footage going up to the footage channel while the tab is open --- */
 .publisher .publisher-archive-channel { font-size:13px; color:var(--publisher-muted); }
 .publisher .publisher-archive-channel:hover { color:var(--publisher-ink); }
-.publisher-archive-notice { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin:0 0 28px; padding:12px 16px; border-radius:12px; background:var(--publisher-wash); font-size:14px; overflow-wrap:anywhere; }
+.publisher-archive-notice { max-height:100%; margin:0; overflow-y:auto; font-size:15px; line-height:1.4; overflow-wrap:anywhere; }
 .publisher-archive-notice[data-tone="bad"] { color:var(--publisher-danger); }
-.publisher .publisher-archive-notice button { padding:4px 12px; font-size:13px; }
+.publisher .publisher-archive-notice button { margin:-4px 0 -4px 12px; padding:4px 12px; font-size:13px; }
 .publisher-archive-current { margin:0 0 32px; padding:20px; border:1px solid var(--publisher-line); border-radius:16px; }
-.publisher-archive-current-head { display:flex; justify-content:space-between; align-items:baseline; gap:16px; margin-bottom:12px; }
-.publisher .publisher-archive-current-head h2 { margin:0; font-size:17px; overflow-wrap:anywhere; }
-.publisher-archive-current-head span { flex:none; font-size:17px; font-variant-numeric:tabular-nums; }
+/* Two lines, whether it names the clip going up or says what holds the uploads. */
+.publisher-archive-current-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; height:43px; margin-bottom:12px; }
+.publisher .publisher-archive-current-head h2 { max-height:100%; margin:0; overflow:hidden; font-size:17px; line-height:1.35; overflow-wrap:anywhere; }
+.publisher-archive-current-head > span { flex:none; min-width:4ch; margin-left:auto; text-align:right; line-height:1.35; font-size:17px; font-variant-numeric:tabular-nums; }
 .publisher-archive-bar { height:6px; border-radius:3px; background:var(--publisher-wash); overflow:hidden; }
 .publisher-archive-bar > span { display:block; height:100%; border-radius:inherit; background:var(--publisher-ink); transition:width 400ms ease-out; }
-.publisher-archive-figures, .publisher-archive-totals { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px 24px; margin:16px 0 0; }
-.publisher-archive-totals { margin:0 0 24px; }
+.publisher-archive-figures, .publisher-archive-totals { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px 24px; margin:16px 0 0; }
+.publisher-archive-totals { grid-template-columns:repeat(3, minmax(0,1fr)); margin:0 0 8px; }
 .publisher-archive-figures dt, .publisher-archive-totals dt { font-size:13px; color:var(--publisher-muted); }
-.publisher-archive-figures dd, .publisher-archive-totals dd { margin:2px 0 0; font-size:15px; font-variant-numeric:tabular-nums; }
+.publisher-archive-figures dd, .publisher-archive-totals dd { margin:2px 0 0; overflow:hidden; font-size:15px; font-variant-numeric:tabular-nums; text-overflow:ellipsis; white-space:nowrap; }
 
 /* --- footage ledger: every clip, its grade, and where its original and graded copies are --- */
 .publisher-ledger { margin-top:32px; }
@@ -300,20 +340,24 @@
 .publisher-ledger-storage dt { color:var(--publisher-muted); font-size:13px; }
 .publisher-ledger-storage dd { margin:2px 0 0; font-size:20px; font-variant-numeric:tabular-nums; }
 .publisher .publisher-ledger-storage dd small { display:block; margin-top:2px; color:var(--publisher-muted); font-size:12px; }
-.publisher-ledger-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; margin-bottom:12px; }
-.publisher .publisher-ledger-head > .publisher-note { margin:0; }
+.publisher-ledger-head { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px 24px; margin-bottom:12px; }
+.publisher .publisher-ledger-head > .publisher-note { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .publisher-ledger-filters { display:flex; flex-wrap:wrap; gap:6px; }
 .publisher .publisher-ledger-filters button { padding:5px 12px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; color:var(--publisher-muted); font-size:13px; }
-.publisher .publisher-ledger-filters button span { margin-left:4px; font-variant-numeric:tabular-nums; }
+.publisher .publisher-ledger-filters button span { margin-left:4px; font-variant-numeric:tabular-nums; text-align:left; }
 .publisher .publisher-ledger-filters button[aria-pressed="true"] { border-color:var(--publisher-ink); background:var(--publisher-ink); color:var(--publisher-on-ink); }
+@media(max-width:1000px) { .publisher-ledger-head { grid-template-columns:minmax(0,1fr); } }
 /* Wider than a phone: the table scrolls sideways in its own box, never the page; positioned, so labels for screen
    readers only (absolutely placed) stay in it too. */
 .publisher-ledger-scroll { position:relative; overflow-x:auto; }
-.publisher-ledger-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
+/* Its columns keep their widths as what's in them changes; a clip's films are cut short, and named on hover. */
+.publisher-ledger-table { width:100%; min-width:1088px; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
 .publisher-ledger-table th, .publisher-ledger-table td { padding:6px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--publisher-line); }
 .publisher-ledger-table thead th { color:var(--publisher-muted); font-size:11px; font-weight:400; letter-spacing:.04em; text-transform:uppercase; }
 .publisher-ledger-table thead th.span { text-align:center; }
-.publisher-ledger-table .mark { width:76px; text-align:center; }
+.publisher-ledger-table .mark { text-align:center; }
+.publisher-ledger-table td.mark > * { display:block; line-height:20px; }
+.publisher-ledger-table td.clip { overflow:hidden; text-overflow:ellipsis; }
 .publisher-ledger-table .first { border-left:1px solid var(--publisher-line); }
 .publisher-ledger-table tr.day th { padding-top:18px; color:var(--publisher-ink); font-size:13px; font-weight:400; }
 .publisher-ledger-table tr[data-risk] td:first-child { box-shadow:inset 2px 0 0 var(--publisher-warning); }
@@ -327,6 +371,8 @@
 .publisher-ledger-table .old { color:var(--publisher-warning); font-size:12px; }
 .publisher-ledger-table .busy { color:var(--publisher-ink); }
 .publisher .publisher-ledger-table td.mark a { text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--publisher-edge); }
+/* The tick is the system's: the faces that have one load late, each with its own width. */
+.publisher-ledger-table .tick { font-family:system-ui, -apple-system, sans-serif; }
 /* As tall as its line of text, its margins pulled in, so a picture never makes a row taller. */
 .publisher-ledger-thumb { display:inline-block; width:32px; height:18px; margin:-2px 10px -2px 0; vertical-align:middle; border-radius:3px; object-fit:cover; background:var(--publisher-surface); }
 .publisher .publisher-ledger-table td.open button { padding:2px 10px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; font-size:12px; }
@@ -335,7 +381,8 @@
 /* --- grade: the grade app on the Mac, framed, filling the window below the tabs edge to edge. The header and tabs
    stay where every tab has them; the page under the app doesn't scroll. --- */
 /* Transparent, so the composer's page shows between the grade app's floating cards (its own page is transparent too). */
-.publisher-grade { position:fixed; inset:var(--grade-top, 160px) 0 0 0; z-index:2; display:grid; background:transparent; }
+/* Where the tabs end: measured (PublisherGrade), or until it is, where they end at each width. */
+.publisher-grade { position:fixed; inset:0; top:var(--grade-top, 161px); z-index:2; display:grid; background:transparent; }
 .publisher-grade iframe { display:block; width:100%; height:100%; border:0; background:transparent; }
 .publisher-grade iframe[hidden] { display:none; }
 html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not([hidden])) body { overflow:hidden; }
@@ -352,8 +399,9 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 
 /* --- analytics --- */
 /* What the whole tab lists and how far back its charts reach. */
-.publisher-analytics-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; margin-bottom:40px; }
-.publisher-analytics-period { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; }
+.publisher-analytics-toolbar { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:12px 16px; margin-bottom:40px; }
+.publisher-analytics-updated { min-height:1.5em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-analytics-updated[data-problem] { color:var(--publisher-danger); }
 /* Toggle chips: outlined until chosen, then ink like the segmented controls. */
 .publisher-analytics-chips { display:flex; flex-wrap:wrap; gap:6px; }
 .publisher .publisher-analytics-chips button { padding:5px 12px; border-radius:999px; background:none; color:var(--publisher-muted); font-size:13px; }
@@ -367,8 +415,8 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 .publisher-analytics-post-text { display:grid; gap:4px; min-width:0; padding-top:2px; }
 .publisher-analytics-posts strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font-weight:400; line-height:1.3; overflow-wrap:anywhere; }
 .publisher-analytics-post-text > span { font-size:13px; color:var(--publisher-muted); font-variant-numeric:tabular-nums; }
-.publisher-analytics-post-reach { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; }
-.publisher-analytics-dots { display:inline-flex; gap:3px; }
+.publisher-analytics-post-reach { display:flex; align-items:center; gap:10px; overflow:hidden; white-space:nowrap; }
+.publisher-analytics-dots { display:inline-flex; gap:3px; margin-left:auto; }
 .publisher-analytics-dots i { width:6px; height:6px; border-radius:50%; }
 /* Portrait, since most posts are; a landscape still crops to its middle. */
 .publisher-analytics-thumb { position:relative; flex:none; display:grid; place-items:center; width:56px; height:74px; overflow:hidden; border-radius:10px; background:var(--publisher-wash); color:var(--publisher-muted); }
@@ -382,9 +430,13 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 .publisher .publisher-analytics-post-about p { margin:0; }
 .publisher .publisher-analytics-caption { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:4; overflow:hidden; max-width:72ch; font-size:14px; color:var(--publisher-muted); white-space:pre-wrap; overflow-wrap:anywhere; }
 .publisher-analytics-filters { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 16px; }
-.publisher .publisher-analytics-filters select { width:auto; margin:0 0 0 auto; padding-block:6px; }
+.publisher .publisher-analytics-filters select { width:186px; margin:0 0 0 auto; padding-block:6px; }
 .publisher-analytics-total { display:grid; gap:6px; margin:32px 0 12px; }
 .publisher-analytics-total strong { font-size:48px; font-weight:400; line-height:1.1; font-variant-numeric:tabular-nums; }
+.publisher-analytics-total > .publisher-note { min-height:1.5em; }
+/* Its spinner stands in its edge, so it comes and goes without the words moving. */
+.publisher .publisher-analytics-refresh { position:relative; padding-inline:26px; }
+.publisher .publisher-analytics-refresh .publisher-spinner { position:absolute; left:10px; margin:0; }
 .publisher-analytics-trend { margin:20px 0 32px; }
 .publisher-analytics-overview { margin-bottom:56px; padding-bottom:32px; border-bottom:1px solid var(--publisher-line); }
 .publisher-analytics-overview .publisher-heading { margin-bottom:16px; }
@@ -433,14 +485,16 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 .publisher-analytics-legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin:0 0 16px; padding:0; list-style:none; font-size:13px; transition:opacity 160ms; }
 .publisher-analytics-legend[data-busy="true"] { opacity:.5; }
 .publisher-analytics-legend li { display:flex; align-items:center; gap:6px; }
+/* Each platform in a column, in two rows of them whether there are that many or none. */
+.publisher-analytics-contributions { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); grid-auto-rows:20px; align-content:start; min-height:48px; white-space:nowrap; }
 .publisher-analytics-legend strong { font-weight:400; font-variant-numeric:tabular-nums; }
 .publisher-analytics-legend small { font-size:inherit; font-variant-numeric:tabular-nums; }
 .publisher-analytics-retention { margin:0 0 16px; padding-top:12px; border-top:1px solid var(--publisher-line); }
-.publisher .publisher-analytics-retention p { margin:0 0 8px; font-size:13px; }
-.publisher-analytics-retention .publisher-analytics-legend { margin:0; }
+.publisher .publisher-analytics-retention p { margin:0 0 8px; overflow:hidden; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-analytics-retention .publisher-analytics-legend { flex-wrap:nowrap; min-height:20px; margin:0; overflow-x:auto; scrollbar-width:none; white-space:nowrap; }
 .publisher-analytics-swatch { display:inline-block; flex:none; width:10px; height:10px; border-radius:3px; }
 .publisher-analytics-table th > .publisher-analytics-swatch { margin-right:8px; }
-.publisher-skeleton { flex:none; width:100%; max-width:100%; background:var(--publisher-wash); border-radius:12px; animation:publisher-pulse 1.6s ease-in-out infinite; }
+.publisher-skeleton { flex:none; width:100%; max-width:100%; background:var(--publisher-wash); border-radius:12px; }
 .publisher-spinner { display:inline-block; width:11px; height:11px; margin-right:7px; vertical-align:-1px; border:1.5px solid currentColor; border-right-color:transparent; border-radius:50%; animation:publisher-spin .8s linear infinite; }
 @keyframes publisher-spin { to { transform:rotate(360deg); } }
 .publisher-analytics-loading { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; align-content:start; }
@@ -451,12 +505,22 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 .publisher-analytics-table th { font-weight:400; }
 .publisher-analytics-table thead th { padding-top:0; color:var(--publisher-muted); font-size:13px; }
 .publisher-analytics-table td:last-child { white-space:nowrap; }
+/* Columns as wide whatever they say, and rows as tall: a destination's state has two lines, said or not. */
+.publisher-analytics-targets table { table-layout:fixed; }
+.publisher-analytics-targets :is(th, td) { padding-inline:8px; }
+.publisher-analytics-targets :is(th, td):first-child { padding-left:0; }
+.publisher-analytics-targets tbody th > small { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; height:36px; overflow:hidden; line-height:18px; }
 .publisher-analytics-table a { text-decoration:underline; text-underline-offset:3px; }
 .publisher-analytics-table small { display:block; min-width:80px; max-width:230px; margin-top:6px; font-size:12px; }
 .publisher-analytics-empty { padding:64px 0; color:var(--publisher-muted); }
 
 /* --- narrower screens --- */
-@media(max-width:850px) { .publisher-analytics-layout { grid-template-columns:minmax(0,1fr); gap:32px; } .publisher-analytics-posts { display:flex; overflow-x:auto; padding-bottom:8px; } .publisher .publisher-analytics-posts button { flex:none; width:260px; } .publisher-analytics-posts .publisher-skeleton { width:260px; } }
+@media(max-width:700px) {
+  .publisher-analytics-toolbar { grid-template-columns:minmax(0,1fr); justify-items:start; }
+  .publisher-analytics-updated { order:1; max-width:100%; }
+  .publisher-analytics-contributions { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:max-content; min-height:20px; overflow-x:auto; scrollbar-width:none; }
+}
+@media(max-width:850px) { .publisher-analytics-targets table { min-width:756px; } .publisher-analytics-layout { grid-template-columns:minmax(0,1fr); gap:32px; } .publisher-analytics-posts { display:flex; overflow-x:auto; padding-bottom:8px; } .publisher .publisher-analytics-posts button { flex:none; width:260px; } .publisher-analytics-posts .publisher-skeleton { width:260px; } }
 @media(max-width:600px) {
   .publisher-analytics-post { grid-template-columns:auto minmax(0,1fr); gap:16px; }
   .publisher-analytics-post > button { grid-column:1 / -1; justify-self:start; }
@@ -468,6 +532,18 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
   .publisher-tabs { margin-bottom:28px; }
   .publisher h1 { font-size:26px; }
   .publisher-send-actions { flex:1 1 100%; padding-left:0; margin-top:4px; }
+  .publisher-send-notes { height:83px; }
+  .publisher-send-status { flex-direction:column; }
+  .publisher .publisher-history-progress > summary { -webkit-line-clamp:2; height:40px; }
+  .publisher-grade { top:var(--grade-top, 137px); }
+  .publisher-archive-current { padding:16px; }
+  .publisher-archive-figures, .publisher-archive-totals { grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
+  .publisher-ledger-head { grid-template-columns:minmax(0,1fr); }
+  .publisher .publisher-ledger-head > .publisher-note { height:3em; white-space:normal; }
+  .publisher .publisher-ledger-storage dd small { min-height:3em; }
+  .publisher-stage, .publisher-previews[data-single-video] { --stage:300px; }
+  .publisher-zh-video :is(.publisher-stage, .publisher-previews[data-single-video]) { --stage:220px; }
+  .publisher-composer-tools .publisher-count { flex:1 0 100%; }
   .publisher .publisher-send-actions button { flex:1; }
   /* Below 16px, phones zoom in on the field when it's tapped. */
   .publisher :is(input:not([type=checkbox]):not([type=file]):not([type=range]), textarea, select) { font-size:16px; }
@@ -477,28 +553,46 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
   /* Seven tabs fit from a 430px phone up; a narrower one scrolls them sideways, the open one kept in view. */
   .publisher-tabs { gap:12px; overflow-x:auto; scrollbar-width:none; }
   .publisher .publisher-tabs button { font-size:14px; }
+  /* A tab that starts out of sight is brought into it before the page draws. */
+  .publisher .publisher-tabs button[aria-pressed="true"]:nth-child(n + 6) { scroll-initial-target:nearest; }
   .publisher-tabs::-webkit-scrollbar { display:none; }
   .publisher-header-tools { gap:12px; }
   .publisher-header a { font-size:22px; }
-  .publisher-account-row { flex-wrap:wrap; gap:8px; }
+  /* A destination's name and state on a line, what can be done about it on the next, which is there whatever it is. */
+  .publisher-grade { top:var(--grade-top, 133px); }
+  .publisher-history-panel-row { flex-wrap:wrap; align-content:flex-start; justify-content:flex-end; min-height:80px; }
+  .publisher-history-panel-row > :is(a, div) { flex:1 0 100%; flex-wrap:nowrap; }
+  .publisher-history-panel-row > :is(a, div) > span { flex:none; white-space:nowrap; }
+  .publisher-history-panel-row > :is(a, div) > .publisher-note { flex:0 1 auto; overflow:hidden; text-overflow:ellipsis; }
+  .publisher .publisher-history-panel-row > button:not(.publisher-history-icon) { padding:6px 9px; font-size:12px; }
+}
+@media (max-width:360px) {
+  .publisher-grade { top:var(--grade-top, 181px); }
+  .publisher-history-panel-row { min-height:116px; }
 }
 @media (prefers-reduced-motion:reduce) {
   .publisher button, .publisher a, .publisher-composer, .publisher .publisher-destinations label, .publisher summary, .publisher :is(input, textarea, select), .publisher-history-panel, .publisher-history-manage svg, .publisher-history-panel-row, .publisher-archive-bar > span { transition:none; }
-  .publisher-history-pill[data-tone="busy"] > span, .publisher-account-status[data-tone="busy"]::before, .publisher-skeleton, .publisher-spinner, .publisher-toast { animation:none; }
+  .publisher-history-pill[data-tone="busy"] > span, .publisher-account-status[data-tone="busy"]::before, .publisher-spinner, .publisher-toast { animation:none; }
 }
 
 /* --- calendar: posts on the days they published or are scheduled to --- */
-.publisher-calendar-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:8px; }
+.publisher-calendar-head { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:38px; margin-bottom:8px; }
 .publisher-calendar-head h1 { margin:0; }
 .publisher-calendar-head .publisher-actions { flex:none; flex-wrap:nowrap; }
 .publisher-calendar > .publisher-note { margin-top:0; margin-bottom:20px; }
 .publisher-calendar[data-loading] .publisher-calendar-grid { opacity:.6; }
-.publisher-calendar-grid { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); border-top:1px solid var(--publisher-line); border-left:1px solid var(--publisher-line); transition:opacity 160ms; }
+/* Every week is as tall whatever's on it, so posts coming in move no day; a taller window gives them more room. */
+.publisher-calendar-grid { display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); grid-template-rows:auto repeat(6, max(140px, (100svh - 340px) / 6)); border-top:1px solid var(--publisher-line); border-left:1px solid var(--publisher-line); transition:opacity 160ms; }
 .publisher-calendar-weekday { padding:8px; border-right:1px solid var(--publisher-line); border-bottom:1px solid var(--publisher-line); color:var(--publisher-muted); font-size:12px; }
-.publisher-calendar-day { display:flex; flex-direction:column; gap:4px; min-width:0; min-height:112px; padding:6px; border-right:1px solid var(--publisher-line); border-bottom:1px solid var(--publisher-line); }
-.publisher-calendar-day > time { font-size:12px; }
+.publisher-calendar-day { display:flex; flex-direction:column; gap:4px; min-width:0; min-height:0; padding:6px; border-right:1px solid var(--publisher-line); border-bottom:1px solid var(--publisher-line); }
+/* Today's number is filled in, with no more room than any other. */
+.publisher-calendar-day > time { align-self:flex-start; margin-left:-2px; padding:0 6px; border-radius:999px; font-size:12px; }
 .publisher-calendar-day[data-outside] > time { opacity:.45; }
-.publisher-calendar-day[data-today] > time { align-self:flex-start; padding:0 6px; border-radius:999px; background:var(--publisher-ink); color:var(--publisher-on-ink); }
+.publisher-calendar-day[data-today] > time { background:var(--publisher-ink); color:var(--publisher-on-ink); }
+.publisher-calendar-day > time { flex:none; }
+/* Past its edges by as much as a post's outline takes. */
+.publisher-calendar-posts { flex:1; display:flex; flex-direction:column; gap:4px; min-height:0; margin:-4px; padding:4px; overflow-y:auto; scrollbar-width:thin; }
+.publisher-calendar-posts > * { flex:none; }
 .publisher-calendar-weekname { display:none; }
 .publisher .publisher-calendar-post { display:flex; align-items:flex-start; gap:6px; width:100%; min-width:0; padding:4px; border-radius:8px; border-color:transparent; background:var(--publisher-surface); text-align:left; font-size:12px; line-height:1.3; }
 /* Hovering a post lights it on every day it's on, and fades every other post back. */
@@ -523,7 +617,8 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 .publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"]) { border-color:var(--publisher-muted); color:var(--publisher-muted); }
 .publisher-calendar-mark:is([data-state="failed"], [data-state="deleted"], [data-state="check"], [data-state="stopped"])::after { content:""; position:absolute; left:-1px; right:-1px; top:calc(50% - 1px); height:2px; border-radius:1px; background:currentColor; box-shadow:0 0 0 1.5px var(--publisher-surface); transform:rotate(40deg); }
 /* --- calendar editor: one post's destinations, their times, and its words; the Pipeline's piece editor shares its frame --- */
-.publisher-calendar-editor, .publisher-pipeline-editor { width:min(560px, calc(100vw - 32px)); max-height:calc(100dvh - 32px); margin:auto; padding:0; border:1px solid var(--publisher-edge); border-radius:16px; background:var(--publisher-page); color:var(--publisher-ink); overflow:auto; }
+/* Held from the top, so its fields stay where they are when what's under them changes. */
+.publisher-calendar-editor, .publisher-pipeline-editor { --editor-top:clamp(16px, 8vh, 72px); width:min(560px, calc(100vw - 32px)); max-height:calc(100dvh - 2 * var(--editor-top)); margin:var(--editor-top) auto auto; padding:0; scrollbar-gutter:stable; border:1px solid var(--publisher-edge); border-radius:16px; background:var(--publisher-page); color:var(--publisher-ink); overflow:auto; }
 .publisher-calendar-editor::backdrop, .publisher-pipeline-editor::backdrop { background:rgb(0 0 0 / 40%); }
 :is(.publisher-calendar-editor, .publisher-pipeline-editor) form { padding:20px 24px 24px; }
 .publisher-calendar-editor-head, .publisher-pipeline-editor-head { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
@@ -532,46 +627,53 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 .publisher-calendar-editor .publisher-calendar-thumb { width:40px; height:52px; border-radius:8px; }
 .publisher-calendar-destinations { margin:0 0 24px; padding:0; list-style:none; }
 /* Each destination: its name, then its state or time field, then Cancel; on a phone the time takes a line of its own. */
-.publisher-calendar-destinations li { display:grid; grid-template-columns:112px minmax(0,1fr) auto; grid-template-areas:"name when action"; align-items:center; gap:8px 12px; min-height:52px; padding:8px 0; border-bottom:1px solid var(--publisher-line); font-size:14px; }
+.publisher-calendar-destinations li { display:grid; grid-template-columns:112px minmax(0,1fr) 76px; grid-template-areas:"name when action"; align-items:center; gap:8px 12px; min-height:52px; padding:8px 0; border-bottom:1px solid var(--publisher-line); font-size:14px; }
 .publisher-calendar-destinations li > span:first-child { grid-area:name; display:inline-flex; align-items:center; gap:8px; }
 .publisher-calendar-destinations li > :nth-child(2) { grid-area:when; min-width:0; color:var(--publisher-muted); }
-.publisher-calendar-destinations li > button { grid-area:action; }
+.publisher-calendar-destinations li > button { grid-area:action; justify-self:end; }
 .publisher-calendar-destinations li:is([data-state="failed"], [data-state="check"]) > :nth-child(2) { color:var(--publisher-danger); }
 .publisher .publisher-calendar-destinations label { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:0; font-size:14px; }
-.publisher .publisher-calendar-destinations input { width:auto; margin:0; padding:6px 10px; font-size:14px; }
+.publisher .publisher-calendar-destinations input { width:212px; max-width:100%; margin:0; padding:6px 10px; font-size:14px; }
 .publisher .publisher-calendar-destinations button { padding:6px 12px; font-size:13px; }
 .publisher-calendar-editor-foot, .publisher-pipeline-editor-foot { position:sticky; bottom:0; margin:8px -24px -24px; padding:16px 24px 24px; border-top:1px solid var(--publisher-line); background:var(--publisher-page); }
-.publisher-calendar-editor-foot .publisher-note { margin:0 0 12px; }
+/* Two lines, said or not; more scroll. */
+.publisher-calendar-editor-foot .publisher-note { height:3em; margin:0 0 12px; overflow-y:auto; }
 .publisher-calendar-editor-foot .publisher-note[data-problem] { color:var(--publisher-danger); }
 /* A phone gets the month as a list of its days with posts. */
 @media(max-width:700px) {
   .publisher-calendar-grid { display:block; border:0; }
   .publisher-calendar-weekday, .publisher-calendar-day:is([data-empty], [data-outside]) { display:none; }
-  .publisher-calendar-day { min-height:0; padding:12px 0; border-right:0; border-bottom:1px solid var(--publisher-line); }
+  .publisher-calendar-day { padding:12px 0; border-right:0; border-bottom:1px solid var(--publisher-line); }
+  .publisher-calendar-posts { overflow:visible; }
+  .publisher-calendar-head { flex-direction:column; align-items:flex-start; gap:12px; margin-bottom:12px; }
+  .publisher-calendar-head h1 { min-height:1.2em; }
   .publisher-calendar-weekname { display:inline; }
   .publisher-calendar-day > time { font-size:13px; }
   .publisher .publisher-calendar-post { font-size:14px; }
   :is(.publisher-calendar-editor, .publisher-pipeline-editor) form { padding:16px 16px 20px; }
   .publisher-calendar-editor-foot, .publisher-pipeline-editor-foot { margin:8px -16px -20px; padding:12px 16px 16px; }
-  .publisher-calendar-destinations li { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"name action" "when when"; }
+  .publisher-calendar-destinations li { grid-template-columns:minmax(0,1fr) auto; grid-template-rows:44px auto; grid-template-areas:"name action" "when when"; }
   .publisher .publisher-calendar-destinations label { display:grid; gap:4px; }
   .publisher .publisher-calendar-destinations input { width:100%; }
 }
 
 /* --- pipeline: each piece of content in a column for its stage, from idea to posted. The board takes the whole window,
    as the calendar's month does, down to its bottom, and each column scrolls on its own. --- */
-.publisher:has(> .publisher-pipeline) { padding-bottom:24px; }
-.publisher-pipeline-new { display:flex; gap:8px; margin-bottom:24px; }
+.publisher:has(> .publisher-pipeline) { display:flex; flex-direction:column; min-height:100svh; padding-bottom:24px; }
+/* The header, the tabs and the new idea keep the width they have outside a flex column. */
+.publisher:has(> .publisher-pipeline) > :is(.publisher-header, .publisher-tabs) { width:100%; }
+.publisher-pipeline { flex:1; display:flex; flex-direction:column; }
+.publisher-pipeline-new { display:flex; gap:8px; width:100%; margin-bottom:24px; }
 .publisher .publisher-pipeline-new input { flex:0 1 480px; min-width:0; margin:0; }
 .publisher .publisher-pipeline-new button { flex:none; }
-.publisher-pipeline-board { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(200px, 1fr); gap:12px; overflow-x:auto; overscroll-behavior-x:contain; }
+.publisher-pipeline-board { flex:1 1 420px; min-height:420px; height:0; display:grid; grid-template-rows:minmax(0, 1fr); grid-auto-flow:column; grid-auto-columns:minmax(200px, 1fr); gap:12px; overflow-x:auto; overscroll-behavior-x:contain; }
 .publisher-pipeline-stage { display:flex; flex-direction:column; min-width:0; min-height:0; border-radius:14px; background:var(--publisher-wash); transition:box-shadow 160ms, background-color 160ms; }
 /* While a card is dragged, the columns that would take it show it; the one under it most. */
 .publisher-pipeline-stage[data-droppable] { box-shadow:inset 0 0 0 1px var(--publisher-edge); }
 .publisher-pipeline-stage[data-drop] { box-shadow:inset 0 0 0 2px var(--publisher-ink); }
 .publisher .publisher-pipeline-stage h2 { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin:0; padding:12px 14px 10px; font-size:13px; color:var(--publisher-muted); }
-.publisher-pipeline-stage h2 small { font-size:12px; font-variant-numeric:tabular-nums; }
-.publisher-pipeline-stage ul { display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; margin:0; padding:0 10px 10px; overflow-y:auto; overscroll-behavior-y:contain; list-style:none; }
+.publisher-pipeline-stage h2 small { min-width:2ch; font-size:12px; font-variant-numeric:tabular-nums; text-align:right; }
+.publisher-pipeline-stage ul { display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; margin:0; padding:0 10px 10px; overflow-y:auto; scrollbar-gutter:stable; overscroll-behavior-y:contain; list-style:none; }
 .publisher-pipeline-empty { margin:0 10px 10px; padding:14px 12px; border:1px dashed var(--publisher-edge); border-radius:12px; color:var(--publisher-muted); font-size:13px; }
 /* A card is one button: click opens it, drag moves it. */
 .publisher-pipeline-card { flex:none; transition:opacity 160ms; }
@@ -582,12 +684,14 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
 .publisher-pipeline-info { display:grid; gap:2px; }
 .publisher-pipeline-info strong { display:-webkit-box; font-weight:400; font-size:15px; line-height:1.3; overflow:hidden; overflow-wrap:anywhere; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
 .publisher-pipeline-info small { color:var(--publisher-muted); font-size:12px; }
-.publisher-pipeline-info .publisher-pipeline-footage { overflow-wrap:anywhere; }
+/* Two lines, each cut short rather than wrapped, so new counts never make a card taller. */
+.publisher-pipeline-footage > span:not(.publisher-hidden) { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .publisher-pipeline-notes { display:-webkit-box; overflow:hidden; color:var(--publisher-muted); font-size:13px; line-height:1.45; white-space:pre-line; overflow-wrap:anywhere; -webkit-line-clamp:3; -webkit-box-orient:vertical; }
 /* With a picture, the picture is the card and what it is sits over its top. Videos are vertical; photos 4:5. */
 .publisher .publisher-pipeline-card[data-picture] .publisher-pipeline-open { padding:0; border:0; background:#000; }
-.publisher-pipeline-card[data-picture] .publisher-pipeline-open > :is(img, video) { display:block; width:100%; aspect-ratio:4/5; object-fit:cover; pointer-events:none; transition:opacity 160ms; }
-.publisher-pipeline-card[data-picture][data-kind="video"] .publisher-pipeline-open > :is(img, video) { aspect-ratio:9/16; }
+.publisher-pipeline-card[data-picture] .publisher-pipeline-open > :is(img, video, .publisher-pipeline-blank) { display:block; width:100%; aspect-ratio:4/5; object-fit:cover; pointer-events:none; transition:opacity 160ms; }
+.publisher-pipeline-card[data-picture][data-kind="video"] .publisher-pipeline-open > :is(img, video, .publisher-pipeline-blank) { aspect-ratio:9/16; }
+.publisher-pipeline-card[data-picture] .publisher-pipeline-open > .publisher-pipeline-blank { display:grid; place-items:center; color:rgb(255 255 255 / 40%); }
 .publisher-pipeline-card[data-picture] .publisher-pipeline-open:hover > :is(img, video) { opacity:.85; }
 .publisher-pipeline-card[data-picture] .publisher-pipeline-info { position:absolute; inset:0 0 auto; padding:12px 12px 40px; background:linear-gradient(rgb(0 0 0 / 72%), rgb(0 0 0 / 40%) 60%, transparent); color:#fff; }
 .publisher .publisher-pipeline-card[data-picture] .publisher-pipeline-info :is(small, time) { color:rgb(255 255 255 / 80%); }

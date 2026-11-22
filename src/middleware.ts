@@ -21,7 +21,7 @@ export const onRequest = defineMiddleware((ctx, next) => {
     return Response.redirect(`https://post.kualta.dev${publish[1] ?? "/"}${ctx.url.search}`, 302);
   // src/pages/history.astro and the other tabs' pages give those paths a route here; on other hosts they're a 404.
   if (hostname === "post.kualta.dev" && (ctx.url.pathname === "/" || TAB_PATHS.includes(ctx.url.pathname.slice(1))))
-    return ctx.rewrite(ctx.url.pathname === "/" ? "/publish" : `/publish${ctx.url.pathname}`);
+    return ctx.rewrite(`/publish${ctx.url.pathname === "/" ? "" : ctx.url.pathname}${ctx.url.search}`);
 
   return next();
 });

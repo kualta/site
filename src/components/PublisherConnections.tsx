@@ -7,6 +7,7 @@ import {
   platforms,
   platformNames,
 } from "@/lib/publisher/presets";
+import PublisherSteady from "./PublisherSteady";
 
 export interface Connection {
   id: string;
@@ -85,13 +86,27 @@ export default function PublisherConnections({ online, connected, connections, r
           else if (active.action === "disconnect") status = "Disconnecting…";
         }
         const connecting = current && active.state === "working" && active.action === "connect";
+        const problem = !current && latest?.state === "failed" ? latest.message : null;
         return (
           <div className="publisher-account" key={platform}>
             <div className="publisher-account-row">
-              <span>{label}</span>
-              <span className="publisher-note publisher-account-status" data-tone={tone}>
-                {status}
-              </span>
+              <div>
+                <span>{label}</span>
+                {/* Its state, and why it couldn't connect, on a line that's always there; a long one opens. */}
+                {problem ? (
+                  <details className="publisher-account-problem">
+                    <summary>
+                      <span role="status">
+                        {status} · {problem}
+                      </span>
+                    </summary>
+                  </details>
+                ) : (
+                  <span className="publisher-note publisher-account-status" data-tone={tone}>
+                    {status}
+                  </span>
+                )}
+              </div>
               <button
                 disabled={!online || busy || !!active}
                 onClick={() => {
@@ -104,9 +119,10 @@ export default function PublisherConnections({ online, connected, connections, r
                   } else void send("accounts", { platform, action: "connect" });
                 }}
               >
-                {ready ? "Disconnect" : "Connect"}
+                <PublisherSteady among={["Disconnect"]}>{ready ? "Disconnect" : "Connect"}</PublisherSteady>
               </button>
             </div>
+            {/* Over the accounts under it, which wait meanwhile, rather than among them. */}
             {current && (
               <div className="publisher-account-actions">
                 {connecting && platform === "grain" && (
@@ -135,11 +151,6 @@ export default function PublisherConnections({ online, connected, connections, r
                   Cancel
                 </button>
               </div>
-            )}
-            {!current && latest?.state === "failed" && (
-              <p role="status" className="publisher-problem">
-                {latest.message}
-              </p>
             )}
           </div>
         );

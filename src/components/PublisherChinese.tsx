@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { parseTags, renderVariant, usage, xiaohongshuTitleLength } from "@/lib/publisher/variants";
+import PublisherSteady from "./PublisherSteady";
 
 export interface ChineseDraft {
   title: string;
@@ -41,7 +42,9 @@ export default function PublisherChinese({
         Chinese<span className="publisher-for"> · Xiaohongshu</span>
       </legend>
       <button type="button" disabled={disabled || translating || !canTranslate} onClick={onTranslate}>
-        {translating ? "Translating…" : value.title || value.text ? "Translate again" : "Translate"}
+        <PublisherSteady among={["Translate again"]}>
+          {translating ? "Translating…" : value.title || value.text ? "Translate again" : "Translate"}
+        </PublisherSteady>
       </button>
       {children}
       <label>
@@ -54,7 +57,7 @@ export default function PublisherChinese({
           placeholder="标题"
         />
         <small className="publisher-count" data-over={titleLength > 20}>
-          {titleLength} / 20
+          <PublisherSteady among={["00 / 20"]}>{`${titleLength} / 20`}</PublisherSteady>
         </small>
       </label>
       {place}
@@ -69,7 +72,7 @@ export default function PublisherChinese({
           placeholder="正文"
         />
         <small className="publisher-count" data-over={text.used > text.limit}>
-          {text.used} / {text.limit}
+          <PublisherSteady among={[`0000 / ${text.limit}`]}>{`${text.used} / ${text.limit}`}</PublisherSteady>
         </small>
       </label>
       <label>
