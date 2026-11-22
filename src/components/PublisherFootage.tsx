@@ -42,6 +42,8 @@ interface Props {
   onGrade: (clip: string) => void;
   /** Where a post's numbers are. */
   statsHref: (job: string) => string;
+  /** How far the clip going up is, in percent, for the page's title; null with none. */
+  onProgress: (percent: number | null) => void;
 }
 
 /** The laptop reports every 5 seconds during an upload and every 10 otherwise; older than this, it hasn't started. */
@@ -102,23 +104,34 @@ function noticeFor(
  * footage going up to the footage archive's YouTube channel. The laptop uploads only while this tab is open, so it
  * says so on opening and every 30 seconds, and says it closed on leaving.
  */
-export default function PublisherFootage({ request, online, connected, onAccounts, onGrade, statsHref }: Props) {
+export default function PublisherFootage({
+  request,
+  online,
+  connected,
+  onAccounts,
+  onGrade,
+  statsHref,
+  onProgress,
+}: Props) {
   const [reply, setReply] = useState<Reply | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let active = true;
-    const watch = () => request("footage/watch", {}).catch(() => {});
-    // A hidden tab keeps the uploads going but reads nothing; it catches up once it's shown.
-    const read = async () => {
-      if (document.hidden) return;
+    const load = async (path: string, body?: unknown) => {
       try {
-        const next = (await request("footage")) as Reply;
+        const next = (await request(path, body)) as Reply;
         if (!active) return;
         setReply(next);
         setFailed(false);
       } catch {
         if (active) setFailed(true);
       }
+    };
+    // The answer says how the uploads are going, so a hidden tab's title keeps up.
+    const watch = () => load("footage/watch", {});
+    // A hidden tab keeps the uploads going but reads nothing; it catches up once it's shown.
+    const read = async () => {
+      if (!document.hidden) await load("footage");
     };
     // Sent as the page goes away, so it has to outlive it.
     const leave = () => {
@@ -155,6 +168,12 @@ export default function PublisherFootage({ request, online, connected, onAccount
   const share = current?.size ? Math.min(100, Math.floor((current.sent / current.size) * 100)) : 0;
   const clipLeft = current && speed ? (current.size - current.sent) / speed : null;
   const todayLeft = current && speed && status && status.totals.today > 1 ? status.totals.todayBytes / speed : null;
+  // Unheard from, the upload may be over, so the title lets go of it.
+  const percent = current && !failed ? share : null;
+  useEffect(() => {
+    onProgress(percent);
+    return () => onProgress(null);
+  }, [onProgress, percent]);
 
   return (
     <section className="publisher-archive" aria-label="Footage">

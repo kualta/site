@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { wholePercent } from "@/lib/publisher/title";
 
 /**
  * Where the grade app listens on the Mac. It stays a local app: the frame loads it from there, so it reads the card and
@@ -13,6 +14,8 @@ interface Props {
   open: { clip: string; n: number } | null;
   /** The tab is the one shown: the app stays loaded behind the others. */
   active: boolean;
+  /** How far the app's offload or export is, in percent, for the page's title; null with neither. */
+  onProgress: (percent: number | null) => void;
 }
 
 const theme = () => (document.documentElement.classList.contains("dark") ? "dark" : "light");
@@ -21,7 +24,7 @@ const theme = () => (document.documentElement.classList.contains("dark") ? "dark
  * The composer's Grade tab: the grade app on the Mac, in a frame. Chrome asks once to let post.kualta.dev reach this
  * device (the frame is allowed local network access). Away from the Mac, or until that's allowed, it says so.
  */
-export default function PublisherGrade({ open, active }: Props) {
+export default function PublisherGrade({ open, active, onProgress }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const box = useRef<HTMLElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "away">("loading");
@@ -39,17 +42,21 @@ export default function PublisherGrade({ open, active }: Props) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new attempt is the trigger to wait again
   useEffect(() => {
     setState("loading");
-    const hello = (event: MessageEvent) => {
+    const hear = (event: MessageEvent) => {
       if (event.origin !== GRADE_APP || event.source !== frame.current?.contentWindow) return;
-      if (event.data?.type !== "grade-ready") return;
+      const { type, offload, export: exported } = event.data ?? {};
+      // The offload first, as in the app's own status line.
+      if (type === "grade-progress") onProgress(wholePercent(offload) ?? wholePercent(exported));
+      if (type !== "grade-ready") return;
       setState("ready");
       post({ type: "theme", theme: theme() });
     };
-    window.addEventListener("message", hello);
+    window.addEventListener("message", hear);
     const timer = window.setTimeout(() => setState((now) => (now === "ready" ? now : "away")), PATIENCE);
     return () => {
-      window.removeEventListener("message", hello);
+      window.removeEventListener("message", hear);
       clearTimeout(timer);
+      onProgress(null);
     };
   }, [attempt]);
 

@@ -7,6 +7,7 @@ import { env } from "cloudflare:workers";
 import { publisherSession } from "@/lib/publisher/auth";
 import { accounts, type Account } from "@/lib/publisher/presets";
 import { readPath, TAB_PATHS } from "@/lib/publisher/route";
+import { tabTitle } from "@/lib/publisher/title";
 import "@/styles/globals.css";
 export const prerender = false;
 // The composer, or another tab by its path; the tab then keeps its own place in the query.
@@ -45,7 +46,7 @@ Astro.response.headers.set("Referrer-Policy", "same-origin");
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>{initialTab === "analytics" ? "analytics · kualta" : "post · kualta"}</title>
+    <title>{tabTitle(initialTab)}</title>
     <link rel="icon" href="/favicon.ico" />
     <link rel="preload" href={fredoka} as="font" type="font/woff2" crossorigin />
     <ThemeInit />

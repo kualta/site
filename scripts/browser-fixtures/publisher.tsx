@@ -416,9 +416,11 @@ let pieces: Piece[] = [
   },
 ];
 // The Archive tab: the laptop is putting a clip up at 20 Mbit/s, two wait (one off the laptop) and one is up;
-// ?archive=paused, limit, done or stale shows the uploads held up instead.
-const archiveState = new URLSearchParams(location.search).get("archive");
+// ?archive=paused, limit, done or stale shows the uploads held up instead, and the check moves them along itself.
+const upload = { state: new URLSearchParams(location.search).get("archive"), sent: 736_000_000, unreadable: false };
+Object.assign(window, { publisherUpload: upload });
 function footage() {
+  const archiveState = upload.state;
   const clips = [
     ["DJI_20261121101500_0402_D.mp4", "2026-11-21 10:15:00 · clip 0402", 1_840_000_000, "exported", "uploading", null],
     ["DJI_20261120183012_0399_D.mp4", "2026-11-20 18:30:12 · clip 0399", 912_000_000, "exported", "due", "earlier1234"],
@@ -426,7 +428,7 @@ function footage() {
     ["DJI_20261108122204_0086_D.mp4", "2026-11-08 12:22:04 · clip 0086", 2_780_000_000, "archive", "due", null],
   ].map(([name, title, size, from, state, video]) => ({ name, title, size, from, state, video, uploadedAt: null }));
   const uploading = !archiveState || archiveState === "stale";
-  const sent = uploading ? 736_000_000 : 0;
+  const sent = uploading ? upload.sent : 0;
   return {
     watching: true,
     age: archiveState === "stale" ? 3_600_000 : 2_000,
@@ -571,7 +573,10 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
           ]
         : [],
     });
-  if (path === "footage/watch") return json({ watching: method !== "DELETE" });
+  if (path === "footage" || path === "footage/watch") {
+    if (method === "DELETE") return json({ watching: false });
+    return upload.unreadable ? json({ error: "Publisher unavailable" }, 503) : json(footage());
+  }
   if (path === "footage/ledger") return json(ledger);
   if (path === "footage/links") return json({ links });
   if (path.startsWith("footage/links/") && method === "PUT") {
@@ -581,7 +586,6 @@ window.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     else delete links[id];
     return json({ links });
   }
-  if (path === "footage") return json(footage());
   if (path === "history") return json(history);
   if (path === "drafts") return json({ drafts });
   // Bluesky posted an hour ago, so its next free slot keeps its gap from that.

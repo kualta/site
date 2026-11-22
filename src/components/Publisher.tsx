@@ -44,6 +44,7 @@ import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost, validId 
 import { stageNames, stages, type Content } from "@/lib/publisher/content";
 import { parseTags, problem, renderVariant, usage } from "@/lib/publisher/variants";
 import { readPath, tabPath, type Tab } from "@/lib/publisher/route";
+import { tabTitle } from "@/lib/publisher/title";
 import {
   defaultSchedule,
   localInput,
@@ -165,9 +166,14 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
+  // The percentage of what's going up in each tab, which leads the title while that tab is open.
+  const [footagePercent, setFootagePercent] = useState<number | null>(null);
+  const [gradePercent, setGradePercent] = useState<number | null>(null);
+  const percents: Partial<Record<Tab, number | null>> = { footage: footagePercent, grade: gradePercent };
+  const pageTitle = tabTitle(tab, percents[tab]);
   useEffect(() => {
-    document.title = tab === "analytics" ? "analytics · kualta" : "post · kualta";
-  }, [tab]);
+    document.title = pageTitle;
+  }, [pageTitle]);
   function navigate(pathname: string, search: string, replace = false) {
     if (pathname === location.pathname && search === location.search) return;
     window.history[replace ? "replaceState" : "pushState"](null, "", pathname + search);
@@ -1182,12 +1188,13 @@ export default function Publisher({ initialAccess = "loading", initialHelper, in
                 openTab("grade");
               }}
               statsHref={(job) => `${tabPath(base, "analytics")}?post=${job}`}
+              onProgress={setFootagePercent}
             />
           )}
           {/* Once opened, the grade app stays loaded while other tabs are shown, so coming back doesn't load it again. */}
           {gradeOpened && (
             <div className="publisher-grade-tab" hidden={tab !== "grade"}>
-              <PublisherGrade open={gradeClip} active={tab === "grade"} />
+              <PublisherGrade open={gradeClip} active={tab === "grade"} onProgress={setGradePercent} />
             </div>
           )}
           {tab === "accounts" && (

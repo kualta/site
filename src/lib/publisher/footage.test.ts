@@ -52,6 +52,11 @@ test("the laptop's status reaches the tab as sent, with how long ago it came", a
   expect(body.status).toEqual(status);
   expect(body.age).toBeGreaterThanOrEqual(1_900);
   expect(body.age).toBeLessThan(5_000);
+  // Saying it's open answers the same, so a hidden tab, which reads nothing else, hears how the upload is going.
+  const beat = (await (await answer(bucket, "footage/watch", "POST", {})).json()) as typeof body;
+  expect(beat.watching).toBe(true);
+  expect(beat.status).toEqual(status);
+  expect(beat.age).toBeLessThan(5_000);
 });
 
 test("before the laptop has said anything the tab reads no status", async () => {

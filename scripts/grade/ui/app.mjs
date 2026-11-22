@@ -1245,7 +1245,7 @@ const offloadMoves = (o) => (o ? `${o.copy.done}/${o.send.done}/${o.running}` : 
 // ---- ledger and the composer ------------------------------------------------------------------------------------------
 // The ledger (every clip, its grade, where its copies are) is shown in the composer's Footage tab, post.kualta.dev/footage;
 // here it's the line under the selected clip saying where its copies are. The composer's Grade tab shows this app in a
-// frame: it asks for a clip to open, and says whether it's light or dark.
+// frame: it asks for a clip to open, says whether it's light or dark, and hears how far the work is for its title.
 
 /** The pages that may frame the app and talk to it; the server's frame-ancestors names the same. */
 const COMPOSERS = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
@@ -1316,10 +1316,20 @@ if (framed) {
     if (type === "theme" && (theme === "light" || theme === "dark")) document.documentElement.dataset.theme = theme;
   });
 }
-/** Tells the framing composer the app is there, so it shows it. */
-function sayReady() {
+/** Posts a message to that composer, and to no other page. */
+function tellComposer(message) {
   const origin = framed && composer();
-  if (origin) window.parent.postMessage({ type: "grade-ready" }, origin);
+  if (origin) window.parent.postMessage(message, origin);
+}
+/** Tells it how far the offload and the export are: a share of 1 each, or null for one not going or not known. */
+function sayProgress(jobs) {
+  const offload = jobs?.offload;
+  const sending = offload?.running && offload.send.bytes > 0;
+  tellComposer({
+    type: "grade-progress",
+    offload: sending ? Math.min(1, offload.sentBytes / offload.send.bytes) : null,
+    export: jobs?.export.current?.progress ?? null,
+  });
 }
 
 let pollTimer = null;
@@ -1328,9 +1338,11 @@ let lastMoves = "";
 let libraryAt = 0;
 async function poll() {
   clearTimeout(pollTimer);
+  let jobs = null;
   try {
-    const jobs = await (await api("/api/jobs")).json();
+    jobs = await (await api("/api/jobs")).json();
     state.jobs = jobs;
+    sayProgress(jobs);
     const done = jobs.export.done.length;
     const waiting = jobs.thumbs > 0 || state.clips.some((c) => c.proxy === "queued" || c.proxy === "working");
     // The library is re-read every few seconds, so the camera appears when it's plugged in and graded counts update.
@@ -1361,6 +1373,7 @@ async function poll() {
     if (!exportMenu.hidden) renderOffload();
     pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {
+    if (!jobs) sayProgress(null);
     showError(e);
     pollTimer = setTimeout(poll, 3000);
   }
@@ -1420,7 +1433,8 @@ $("shoot").addEventListener("change", (e) => openSource(e.target.value));
 // ---- start --------------------------------------------------------------------------------------------------------
 
 buildControls();
-sayReady();
+// The composer shows the app once it hears it's there.
+tellComposer({ type: "grade-ready" });
 loadLedger();
 try {
   await calibrate();

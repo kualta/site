@@ -1622,7 +1622,7 @@ try {
     // Compose and back returns to where the tab was left; Back and Forward move between the two.
     await page.getByRole("button", { name: "Compose" }).click();
     assert.equal(address(), "/publisher.html");
-    assert.equal(await page.title(), "post · kualta");
+    assert.equal(await page.title(), "compose · kualta");
     await page.getByRole("button", { name: "Analytics" }).click();
     assert.equal(address(), "/publisher.html/analytics?platform=tiktok&period=7");
     await page.goBack();
@@ -1670,6 +1670,134 @@ try {
     await card("Why Bogotá has no seasons").getByText("013-maybe-later · 2 clips · 2 graded").waitFor();
     if (shots) await page.screenshot({ path: path.join(shots, "pipeline-footage.png") });
     assert.deepEqual(errors, []);
+    await context.close();
+  }
+
+  // The page's title names the open tab, by its address, on a click and on Back and Forward, and a tab showing something
+  // going up leads with how far it is. The grade app is stood in for; nothing reaches the one on this Mac.
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    // As an older grade app, it says it's there and nothing of its work.
+    await context.route("http://127.0.0.1:4777/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<!doctype html><script>parent.postMessage({ type: "grade-ready" }, "*")</script>',
+      }),
+    );
+    const composer = "http://127.0.0.1:8797/publisher.html";
+    const titled = (title) =>
+      page
+        .waitForFunction((wanted) => document.title === wanted, title, { timeout: 10_000 })
+        .catch(async () => assert.equal(await page.title(), title));
+    const tabs = page.getByRole("navigation", { name: "Publisher sections" });
+    const open = (name) => tabs.getByRole("button", { name, exact: true }).click();
+    // Read again at once, as when the window is shown again, rather than at the next read.
+    const set = (change) =>
+      page.evaluate((next) => {
+        Object.assign(window.publisherUpload, next);
+        document.dispatchEvent(new Event("visibilitychange"));
+      }, change);
+
+    for (const tab of ["pipeline", "history", "calendar", "analytics", "grade", "accounts"]) {
+      await page.goto(`${composer}/${tab}`);
+      await titled(`${tab} · kualta`);
+    }
+    await page.goto(`${composer}/archive?archive=done`);
+    await titled("footage · kualta");
+    await page.goto(`${composer}?archive=done`);
+    await titled("compose · kualta");
+    for (const name of ["Pipeline", "History", "Calendar", "Analytics", "Footage", "Grade", "Accounts", "Compose"]) {
+      await open(name);
+      await titled(`${name.toLowerCase()} · kualta`);
+    }
+    await page.goBack();
+    await titled("accounts · kualta");
+    await page.goBack();
+    await titled("grade · kualta");
+    await page.goForward();
+    await titled("accounts · kualta");
+
+    // Footage: the clip going up to YouTube, as its bar has it, until it's up, held up or can't be read.
+    await set({ state: null });
+    await open("Footage");
+    await titled("40% · footage · kualta");
+    await set({ sent: 805_000_000 });
+    await titled("43% · footage · kualta");
+    for (const state of ["done", "paused", "limit", "stale"]) {
+      await set({ state });
+      await titled("footage · kualta");
+      await set({ state: null });
+      await titled("43% · footage · kualta");
+    }
+    await set({ unreadable: true });
+    await titled("footage · kualta");
+    await set({ unreadable: false });
+    await titled("43% · footage · kualta");
+    // Another tab isn't the one uploading, and coming back finds it again.
+    await open("History");
+    await titled("history · kualta");
+    await page.goBack();
+    await titled("43% · footage · kualta");
+
+    // Grade: the app's offload, else its export, as it says so itself.
+    await open("Grade");
+    await titled("grade · kualta");
+    const app = await page.locator('iframe[title="Grade app"]').elementHandle();
+    const say = async (message) => (await app.contentFrame()).evaluate((said) => parent.postMessage(said, "*"), message);
+    const progress = (offload, exported) => say({ type: "grade-progress", offload, export: exported });
+    await progress(0, null);
+    await titled("0% · grade · kualta");
+    await progress(0.4376, 0.9);
+    await titled("43% · grade · kualta");
+    await progress(null, 0.07);
+    await titled("7% · grade · kualta");
+    await open("Compose");
+    await titled("compose · kualta");
+    // It goes on in the app behind the other tabs.
+    await progress(null, 0.5);
+    await open("Grade");
+    await titled("50% · grade · kualta");
+    await progress(null, null);
+    await titled("grade · kualta");
+    // Anything but a share of 1, or from anywhere but the app's own frame, says nothing.
+    for (const wrong of ["0.5", 1.5, -0.5, Number.NaN, true, { valueOf: 0.5 }, undefined]) {
+      await progress(0.2, null);
+      await titled("20% · grade · kualta");
+      await progress(wrong, wrong);
+      await titled("grade · kualta");
+    }
+    await page.evaluate(async () => {
+      window.postMessage({ type: "grade-progress", offload: 0.9, export: null }, "*");
+      const other = document.createElement("iframe");
+      other.name = "other";
+      other.src = "http://127.0.0.1:4777/other";
+      document.body.append(other);
+      await new Promise((resolve) => other.addEventListener("load", resolve));
+    });
+    await page
+      .frame("other")
+      .evaluate(() => parent.postMessage({ type: "grade-progress", offload: 0.9, export: null }, "*"));
+    await page.waitForTimeout(200);
+    assert.equal(await page.title(), "grade · kualta");
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+
+  // A hidden tab reads nothing, so its title goes by the answer to its saying it's open.
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    await page.addInitScript(() => Object.defineProperty(document, "hidden", { get: () => true }));
+    await page.clock.install();
+    await page.goto("http://127.0.0.1:8797/publisher.html/footage");
+    await page.waitForFunction(() => document.title === "40% · footage · kualta");
+    await page.evaluate(() => Object.assign(window.publisherUpload, { state: "done" }));
+    await page.clock.runFor(30_000);
+    await page.waitForFunction(() => document.title === "footage · kualta");
+    assert.equal(await page.evaluate(() => window.publisherRequests.some((r) => r.path === "footage")), false);
     await context.close();
   }
 
