@@ -49,8 +49,16 @@ for (let b = 0, i = 0; b < size; b++)
     }
 writeFileSync(path.join(data, "luts/dlog2-to-rec709-aces2.cube"), writeCube(size, base, "check base"));
 
+// The sound of two clips offloaded before, and a stand-in for the Whisper that transcribes it, which waits for `go`.
+const cache = path.join(root, "cache");
+mkdirSync(path.join(cache, "audio/2025-12-31"), { recursive: true });
+for (const n of [1, 2]) writeFileSync(path.join(cache, `audio/2025-12-31/DJI_2025123112000${n}_000${n}_D.MP4.m4a`), "sound");
+const uvx = path.join(root, "uvx");
+const go = path.join(root, "go");
+writeFileSync(uvx, `#!/bin/sh\nwhile [ ! -e "${go}" ]; do [ -e "${uvx}" ] || exit 1; sleep 0.1; done\necho "error: no GPU" >&2\nexit 1\n`, { mode: 0o755 });
+
 const server = spawn(process.execPath, ["scripts/grade/server.mjs"], {
-  env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: path.join(root, "cache"), GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port) },
+  env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: cache, GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port), GRADE_UVX: uvx },
   stdio: ["ignore", "pipe", "inherit"],
 });
 await new Promise((resolve, reject) => {
@@ -70,6 +78,34 @@ try {
   await page.waitForFunction(() => document.getElementById("empty").hidden, null, { timeout: 60_000 });
   await page.waitForTimeout(1200);
   if (shots) await page.screenshot({ path: path.join(shots, "grade-1-opened.png") });
+
+  // What Whisper is doing has its own room in the bar: saying it, or not, moves nothing.
+  const transcribing = page.locator("#transcribing");
+  await page.getByText("Transcribing 1 of 2", { exact: true }).waitFor({ timeout: 5_000 });
+  const places = () =>
+    page.evaluate(() =>
+      ["footage-link", "transcribing", "export", "export-more"].map((id) => {
+        const { x, width } = document.getElementById(id).getBoundingClientRect();
+        return [id, x, width];
+      }),
+    );
+  const saying = await places();
+  const fits = await transcribing.evaluate((el) => {
+    const { textContent } = el;
+    el.textContent = "Transcribing 88 of 88";
+    const room = el.scrollWidth <= el.clientWidth;
+    el.textContent = textContent;
+    return room;
+  });
+  assert.ok(fits, "two-digit counts fit the room");
+  writeFileSync(go, "");
+  await page.getByText("2 not transcribed", { exact: true }).waitFor({ timeout: 10_000 });
+  assert.equal(await transcribing.getAttribute("title"), "no GPU");
+  assert.deepEqual(await places(), saying, "failing moves nothing");
+  await transcribing.evaluate((el) => {
+    el.textContent = "";
+  });
+  assert.deepEqual(await places(), saying, "nor does saying nothing");
 
   const setRange = (id, value) =>
     page.evaluate(([id, value]) => {
@@ -158,6 +194,7 @@ try {
   await setRange("quality", 100);
   assert.ok(await page.locator("#export-quality").isHidden(), "full quality needs no badge");
   if (shots) await page.screenshot({ path: path.join(shots, "grade-4-menu.png") });
+  assert.equal(await page.locator("#offload-transcripts").textContent(), "Nothing to send");
 
   // Change the exported clip's grade: the menu's re-export takes that one clip and nothing else.
   await setRange("c-exposure", 0.5);

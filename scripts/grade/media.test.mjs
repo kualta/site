@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ffmpegStatic from "ffmpeg-static";
 import { writeCube } from "./color.mjs";
-import { exportClip, exportFilter, exportFrame, frameFilter } from "./media.mjs";
+import { exportClip, exportFilter, exportFrame, extractAudio, FFPROBE, frameFilter } from "./media.mjs";
 
 // The export's filter graph, and ffmpeg's deflicker in it: off it's the graph exports were always made with; on, a
 // flickering clip comes out steady, a steady one comes out as it was, and a frame export is that frame of the export.
@@ -146,3 +146,42 @@ test.if(usable)("a frame export with deflicker is that frame of the deflickered 
   // Frame 10 is on a bright swing: without deflicker the still is that much brighter than the export's frame.
   expect(meanDiff(still(off), exported)).toBeGreaterThan(5);
 }, 60_000);
+
+/** The codecs a file's streams are in. */
+const codecs = (file) => {
+  const ask = ["-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0", file];
+  return execFileSync(FFPROBE, ask).toString().trim().split(/[\s,]+/);
+};
+/** A digest of a file's sound as it's encoded. */
+const soundOf = (file) => run(["-i", file, "-map", "0:a:0", "-c", "copy", "-f", "md5", "-"]).toString();
+/** A second of picture with `sound` on it, if any. */
+function withSound(name, sound) {
+  const file = join(root, name);
+  const tone = sound ? ["-f", "lavfi", "-i", "sine=d=1:r=48000"] : [];
+  const codec = sound ? ["-c:a", sound, "-shortest"] : [];
+  run(["-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=24:d=1", ...tone, "-c:v", "libx264", ...codec, file]);
+  return file;
+}
+
+test.if(usable)("takes a clip's sound as it is, or as AAC when an .m4a can't hold it", async () => {
+  const aac = withSound("sound.mp4", "aac");
+  const out = join(root, "audio/2026-11-18/sound.mp4.m4a");
+  expect(await extractAudio(aac, out)).toBe(true);
+  expect(codecs(out)).toEqual(["aac"]);
+  expect(soundOf(out)).toBe(soundOf(aac));
+  const pcm = join(root, "audio/pcm.mov.m4a");
+  expect(await extractAudio(withSound("pcm.mov", "pcm_s16le"), pcm)).toBe(true);
+  expect(codecs(pcm)).toEqual(["aac"]);
+});
+
+test.if(usable)("a clip without sound has none to take, and one cut short leaves nothing", async () => {
+  const none = join(root, "audio/none.mp4.m4a");
+  expect(await extractAudio(withSound("none.mp4", null), none)).toBe(false);
+  expect(existsSync(none)).toBe(false);
+  const clipWithSound = withSound("cut.mp4", "aac");
+  await expect(
+    extractAudio(clipWithSound, join(root, "cut/cut.m4a"), { signal: AbortSignal.abort() }),
+  ).rejects.toThrow();
+  await expect(extractAudio(join(root, "missing.mp4"), join(root, "cut/missing.m4a"))).rejects.toThrow();
+  expect(existsSync(join(root, "cut")) ? readdirSync(join(root, "cut")) : []).toEqual([]);
+});

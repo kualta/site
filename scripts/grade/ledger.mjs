@@ -70,6 +70,7 @@ const blankGraded = () => ({ look: null, at: null, size: null, mac: false, cloud
  *   youtube   footage.json's uploads, by graded file name → versions; null when it can't be read
  *   archive   [{ name, size, sha256, project }]: the video files the archive's projects hold; null when not asked
  *   projects  [{ name, files }]: the OpenFilm projects on this Mac, each with the video files in its assets
+ *   transcripts  the names of clips whose transcripts are in the archive, beside their originals
  *
  * What isn't looked at keeps its last value: the card's clips while it's unplugged, the archive between askings.
  * A graded copy in the archive or on YouTube is the current one when its size is the export's.
@@ -172,6 +173,11 @@ export function mergeLedger(previous, seen) {
         entry.graded.cloudflare = "current";
       else entry.graded.cloudflare = "earlier";
     }
+  }
+
+  for (const name of seen.transcripts ?? []) {
+    const entry = lookup(keyOf(name));
+    if (entry) entry.transcript = true;
   }
 
   // Films: the ledger's clips each OpenFilm project holds, on this Mac and in the archive. Between askings of the

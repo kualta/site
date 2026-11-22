@@ -34,7 +34,7 @@ let server;
 // The site's archive as the ledger meets it: a film holding a clip no longer anywhere else, and the ledger it's sent.
 const publisher = join(root, "publisher");
 const token = "a".repeat(64);
-const site = { ledger: null, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0 };
+const site = { ledger: null, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0, filed: 0 };
 const bytesOf = async (req) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -60,6 +60,7 @@ const siteServer = createServer(async (req, res) => {
     return reply(200, { missing: blobs.filter((hash) => !site.blobs.has(hash)) });
   }
   if (path.startsWith("blobs/") && req.method === "PUT") {
+    site.filed++;
     site.blobs.set(path.slice("blobs/".length), await bytesOf(req));
     return reply(201, { ok: true });
   }
@@ -86,6 +87,7 @@ const siteServer = createServer(async (req, res) => {
   }
   const day = /^projects\/(_originals-[\d-]+)(\?.*)?$/.exec(path)?.[1];
   if (day && req.method === "PUT") {
+    site.filed++;
     site.manifests.set(day, { ...JSON.parse(await bytesOf(req)), archivedAt: new Date().toISOString() });
     return reply(201, { key: `projects/${day}` });
   }
@@ -160,6 +162,37 @@ const frames = (f) => Number([...spawnSync(ffmpeg, ["-hide_banner", "-i", f, "-m
 const patch = (f) =>
   execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", f, "-map", "0:v:0", "-frames:v", "1", "-vf", "crop=16:16:40:40,scale=1:1:flags=area+accurate_rnd+full_chroma_int,format=rgb24", "-f", "rawvideo", "-"]);
 
+// A stand-in for uvx and the Whisper it runs: it waits for `go`, then says the name of the clip it was given.
+const uvx = join(root, "uvx");
+const go = join(root, "go");
+const STAND_IN = `#!/bin/sh
+name=$(basename "$5" .m4a)
+while [ $# -gt 0 ]; do [ "$1" = --output-dir ] && out="$2"; shift; done
+while [ ! -e "${go}" ]; do [ -e "${uvx}" ] || exit 1; sleep 0.05; done
+echo '{"language": "en", "segments": [{"start": 0, "end": 1, "text": " '"$name"'", "words": [{"word": " x", "start": 0.2, "end": 0.9}]}]}' > "$out/transcript.json"
+`;
+
+async function startServer() {
+  server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
+    env: {
+      ...process.env,
+      GRADE_ROOT: movies,
+      GRADE_DATA: data,
+      GRADE_CACHE: join(root, "cache"),
+      GRADE_CAMERA: camera,
+      GRADE_PORT: String(port),
+      GRADE_TRASH: trash,
+      GRADE_PUBLISHER: publisher,
+      GRADE_LEDGER_EVERY: "300",
+      GRADE_DEFAULT_LOOK: "agx-punchy",
+      GRADE_KEEP_FREE: "1000000",
+      GRADE_UVX: uvx,
+    },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  await new Promise((resolve) => server.stdout.on("data", (c) => String(c).includes("grade:") && resolve()));
+}
+
 beforeAll(async () => {
   if (!usable) return;
   mkdirSync(original, { recursive: true });
@@ -185,23 +218,8 @@ beforeAll(async () => {
   writeFileSync(join(publisher, "config.json"), JSON.stringify({ origin: `http://127.0.0.1:${siteServer.address().port}`, token }));
   const uploads = { [withStill.replace(".MP4", ".mp4")]: [{ video: "vid1", size: 123, uploadedAt: "2026-02-06T10:00:00Z" }] };
   writeFileSync(join(publisher, "footage.json"), JSON.stringify({ clips: uploads, days: {} }));
-  server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
-    env: {
-      ...process.env,
-      GRADE_ROOT: movies,
-      GRADE_DATA: data,
-      GRADE_CACHE: join(root, "cache"),
-      GRADE_CAMERA: camera,
-      GRADE_PORT: String(port),
-      GRADE_TRASH: trash,
-      GRADE_PUBLISHER: publisher,
-      GRADE_LEDGER_EVERY: "300",
-      GRADE_DEFAULT_LOOK: "agx-punchy",
-      GRADE_KEEP_FREE: "1000000",
-    },
-    stdio: ["ignore", "pipe", "inherit"],
-  });
-  await new Promise((resolve) => server.stdout.on("data", (c) => String(c).includes("grade:") && resolve()));
+  writeFileSync(uvx, STAND_IN, { mode: 0o755 });
+  await startServer();
 }, 120_000);
 
 afterAll(() => {
@@ -469,6 +487,12 @@ test.if(usable)("exports below full quality at the share of the original's bitra
   expect(exportedFiles().every((f) => /\.(mp4|png)$/.test(f) && !f.startsWith("."))).toBe(true);
 }, 180_000);
 
+const audioLeft = () => {
+  const days = readdirSync(join(root, "cache/audio"));
+  return days.flatMap((on) => readdirSync(join(root, "cache/audio", on))).sort();
+};
+const paths = (manifest) => manifest.files.map((f) => f.path).sort();
+
 test.if(usable)("offloads the card through this Mac to the archive by day, deleting each once the next has it, with the default look", async () => {
   const kept = slowClips[1];
   const grades = () => JSON.parse(readFileSync(join(data, "grades.json"), "utf8")).clips;
@@ -505,6 +529,10 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   ]);
   expect(site.manifests.get("_originals-2026-02-05").files.map((f) => f.path)).toEqual([`assets/${withStill}`]);
   expect(site.blobs.size).toBe(4);
+  // Each clip's sound was taken before it went; Whisper, still on the first, held nothing up.
+  expect(after.transcripts).toEqual({ done: 0, total: 4, current: name, waiting: 3, failed: 0, error: null, toSend: 0 });
+  expect((await json("/api/jobs")).transcripts).toMatchObject({ current: name, waiting: 3 });
+  expect(audioLeft()).toHaveLength(4);
   // The composer counted as watching meanwhile, so graded clips went up to YouTube too.
   expect(site.watched).toBeGreaterThan(0);
   // The log clips without a grade got the default look; the graded one kept its own, the Rec.709 one has none.
@@ -527,6 +555,64 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   expect(ledger.clips.DJI_20260205090000_0001_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(ledger.clips.DJI_20260203101500_0007_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(Object.keys(ledger.projects).some((film) => film.startsWith("_"))).toBe(false);
+}, 120_000);
+
+test.if(usable)("transcribes the offloaded clips meanwhile, through a restart, and files each beside its clip in the next run", async () => {
+  // The server is stopped with Whisper on its first clip.
+  const exited = new Promise((resolve) => server.once("exit", resolve));
+  server.kill("SIGKILL");
+  await exited;
+  await startServer();
+  expect((await json("/api/jobs")).transcripts).toMatchObject({ done: 0, total: 4, waiting: 3, failed: 0 });
+  const filed = site.filed;
+  const before = new Map(site.manifests);
+  writeFileSync(go, "");
+  const made = await until(async () => {
+    const { transcripts } = await json("/api/offload");
+    return !transcripts.current && !transcripts.waiting && transcripts;
+  });
+  expect(made).toMatchObject({ done: 4, total: 4, failed: 0, error: null, toSend: 4 });
+  expect(audioLeft()).toEqual([]);
+  const stem = withStill.replace(".MP4", "");
+  const kept = join(data, "transcripts", day);
+  expect(readdirSync(kept).sort()).toEqual([`${stem}.json`, `${stem}.vtt`]);
+  expect(readFileSync(join(kept, `${stem}.vtt`), "utf8")).toBe(`WEBVTT\n\n00:00:00.200 --> 00:00:00.900\n${withStill}\n`);
+  // They go nowhere by themselves, however often the server looks.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  expect(site.filed).toBe(filed);
+  const unsent = (await json("/api/ledger")).ledger;
+  expect(Object.values(unsent.clips).some((clip) => clip.transcript)).toBe(false);
+
+  // The next run has only them to send.
+  expect((await api("/api/offload", { method: "POST" })).status).toBe(200);
+  const after = await until(async () => {
+    const summary = await json("/api/offload");
+    return !summary.run.running && summary;
+  });
+  expect(after.run).toMatchObject({ finished: "done", error: null, transcripts: { sent: 4, error: null } });
+  expect(after.run.send.total).toBe(0);
+  expect(after.transcripts.toSend).toBe(0);
+  // Every day keeps its clip, as it was filed, and has the transcript beside it.
+  expect(site.manifests.size).toBe(4);
+  for (const [on, manifest] of site.manifests) {
+    const [asset] = before.get(on).files;
+    const clipStem = asset.path.slice("assets/".length, -".MP4".length);
+    expect(paths(manifest)).toEqual([asset.path, `transcripts/${clipStem}.json`, `transcripts/${clipStem}.vtt`]);
+    expect(manifest.files).toContainEqual(asset);
+    const transcript = manifest.files.find((f) => f.path.endsWith(".json"));
+    const stored = site.blobs.get(transcript.sha256);
+    expect(stored.length).toBe(transcript.size);
+    expect(JSON.parse(stored)).toMatchObject({ clip: `${clipStem}.MP4`, day: on.slice("_originals-".length), language: "en" });
+  }
+  // The ledger marks the clips, and takes no transcript for a clip, a graded copy or a film.
+  const ledger = await until(async () => {
+    const body = await json("/api/ledger");
+    return body.ledger.clips[stem].transcript && body.ledger;
+  });
+  expect(Object.keys(ledger.clips)).toEqual(Object.keys(unsent.clips));
+  expect(ledger.clips[stem].original).toEqual({ camera: false, mac: false, cloudflare: true });
+  expect(ledger.clips[stem].graded).toEqual(unsent.clips[stem].graded);
+  expect(ledger.projects).toEqual(unsent.projects);
 }, 120_000);
 
 // After the offload's counts of this Mac's originals: a clip of its own whose light flickers.

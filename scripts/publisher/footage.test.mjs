@@ -562,11 +562,19 @@ test("a site that's down is logged once, not every time the helper asks", async 
   expect(logs).toEqual(["Footage archive: fetch failed", "Footage archive: Publisher request failed (503)"]);
 });
 
-test("a shoot day's offloaded originals aren't graded footage, so they never go to YouTube", async () => {
+test("a shoot day's offloaded originals and their transcripts aren't graded footage, so they never go to YouTube", async () => {
   const file = (name) => ({ path: `assets/${name}`, sha256: "ab", size: 1 });
+  const transcripts = (clip) =>
+    ["vtt", "json", "mp4"].map((ext) => ({ path: `transcripts/${clip}.${ext}`, sha256: "cd", size: 1 }));
   const projects = {
-    "_originals-2026-11-08": [file("DJI_20261108115341_0022_D.MP4")],
-    "014-walk": [file("DJI_20261115224628_0313_D.mp4")],
+    "_originals-2026-11-08": [file("DJI_20261108115341_0022_D.MP4"), ...transcripts("DJI_20261108115341_0022_D")],
+    // Nor would they from a film a day was brought back into.
+    "014-walk": [
+      file("DJI_20261115224628_0313_D.mp4"),
+      ...transcripts("DJI_20261115224628_0314_D"),
+      file("DJI_20261115224628_0315_D.vtt"),
+      file("DJI_20261115224628_0315_D.json"),
+    ],
   };
   const request = async (path) =>
     path === "projects"

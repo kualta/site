@@ -142,6 +142,35 @@ test("an offloaded original counts as the original in Cloudflare, and its day is
   expect(ledger.projects).toEqual({});
 });
 
+test("a transcript in a day's originals is no footage: it only marks its clip", async () => {
+  const request = async (path) =>
+    path === "projects"
+      ? { projects: [{ name: "_originals-2026-11-11", archivedAt: "2026-11-21T09:00:00.000Z", versions: 3 }] }
+      : {
+          files: [
+            { path: `assets/${A}.MP4`, size: 1000, sha256: "ab" },
+            { path: `transcripts/${A}.vtt`, size: 20, sha256: "cd" },
+            { path: `transcripts/${A}.json`, size: 30, sha256: "ef" },
+            // However a clip is named, what's in transcripts/ isn't it.
+            { path: `transcripts/${B}.mp4`, size: 40, sha256: "01" },
+          ],
+        };
+  const archive = await archivedFootage(request);
+  expect(archive).toEqual([{ name: `${A}.MP4`, size: 1000, sha256: "ab", project: "_originals-2026-11-11" }]);
+
+  const card = { name: "Pocket 4P", mounted: true, clips: [{ name: `${A}.MP4`, size: 1000 }] };
+  const before = mergeLedger(null, seen("2026-11-21T10:00:00Z", { camera: card, archive, transcripts: [] }));
+  expect(before.clips[A].graded).toBeNull();
+  expect(before.clips[A]).not.toHaveProperty("transcript");
+  // Once it's filed, and for good; a clip the ledger doesn't know isn't made one by its transcript.
+  const transcripts = [`${A}.MP4`, `${B}.MP4`];
+  const filed = mergeLedger(before, seen("2026-11-21T10:01:00Z", { camera: card, archive, transcripts }));
+  expect(Object.keys(filed.clips)).toEqual([A]);
+  expect(filed.clips[A].transcript).toBe(true);
+  expect(comparable(filed)).not.toBe(comparable(before));
+  expect(mergeLedger(filed, seen("2026-11-21T10:02:00Z")).clips[A].transcript).toBe(true);
+});
+
 test("a film's clips come from its project on this Mac and from the archive, kept between askings", () => {
   const card = {
     name: "Pocket 4P",

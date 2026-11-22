@@ -53,8 +53,12 @@ Each day shows how many of its clips have an export, and the clip list can show 
   grades.json                             every clip's grade, by file name, saved as you work
   exports.json                            what each export was made with: source, base look, grade, key, quality
   ledger.json                             the footage ledger (below), also kept in the site's archive
+  offloaded.json                          what each offloaded clip was (below)
+  transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each offloaded clip (below)
+  transcripts.json                        which clips have one, and which of those are in the archive
   luts/                                   GRADE_LUTS: base looks (below)
-~/Library/Caches/Grade/                   GRADE_CACHE: metadata, thumbnails, previews; safe to delete
+~/Library/Caches/Grade/                   GRADE_CACHE: metadata, thumbnails, previews; safe to delete, but for
+  audio/<day>/                              the sound of offloaded clips not transcribed yet
 ```
 
 Clips are known by file name, so a clip graded off the card and the same clip copied into `Original/` share one grade
@@ -101,8 +105,9 @@ or dark, and says how far its offload and export are, each time it reads `/api/j
 
 ## Offload: the card to this Mac, this Mac to Cloudflare
 
-The foot of the Export button's menu shows what's on the camera, what's on this Mac not in Cloudflare yet, and the room
-on this Mac; **Offload to Cloudflare** takes it all, and nothing starts until you click it. Two things go on at once:
+The foot of the Export button's menu shows what's on the camera, what's on this Mac not in Cloudflare yet, transcripts
+included, and the room on this Mac; **Offload to Cloudflare** takes it all, and nothing starts until you click it. Two
+things go on at once:
 
 - **Off the card**, a clip at a time, oldest first, while this Mac has room for the next with `GRADE_KEEP_FREE` (5 GB)
   to spare: copied into `Original/` (as a hidden `.part` until it's checked), hashed (SHA-256) as it's read, read back
@@ -123,11 +128,34 @@ line shows both halves, waiting for room, speed and time left; **Stop offloading
 what's in. A request that fails stops the run, saying why; the next run picks up where it stopped. With no room on
 this Mac and nothing there to go up, the card half stops and says so.
 
+Every save of a day's manifest, from whichever run, waits for the one before it, starts from what the archive has of the
+day by then, and is read back: a clip's Mac copy goes only once its day lists it.
+
+**Transcripts.** As soon as a clip is on the Mac its sound is taken out of it (copied, a second or two) into the cache;
+its Mac copy waits for that and nothing more. Whisper (`mlx-community/whisper-large-v3-turbo` on the GPU, the language
+its own guess) then transcribes the sound in the background, one clip at a time, half a minute or so for ten minutes of
+it, starting none while an export runs. The bar says "Transcribing 3 of 12". Each transcript is kept here as a `.vtt`
+(read it, search it) and a `.json` (Whisper's segments with every word's time), and its sound is deleted. While a run
+goes, finished transcripts are sent up and filed beside their clips in the day's manifest, as `transcripts/<clip>.vtt`
+and `.json`; ones finished after it ended go with the next run, which **Offload to Cloudflare** starts even if they're
+all there is to send. The ledger marks a clip `transcript` once its transcript is in the archive, and counts neither
+file as footage.
+
+Whisper's word times run 0.15-0.5 s early on street audio: the transcript is for reading and searching, and cuts still
+need forced alignment.
+
+It runs `uvx --offline --from mlx-whisper mlx_whisper` (uvx by its path, `GRADE_UVX` names another) and downloads
+nothing, so both have to be in their caches already. If it's missing or fails, the bar says how many clips aren't
+transcribed, with why in its tooltip (and once in the log), and their sound is kept: it's tried again when the next
+offload starts and when the server does, which is also when sound left by a restart is picked up. A clip with no sound
+has no transcript, one nobody speaks in an empty one, and one whose sound can't be taken goes on without: its video is
+in the archive all the same.
+
 While a run goes the grade app keeps the composer counted as watching the footage uploads (`helper/footage/watch`),
 so the helper puts graded clips up to YouTube meanwhile, as it does while the Footage tab is open. Log clips without a
 grade get the default look as settings first (`GRADE_DEFAULT_LOOK`, OpenDRT Colorful), to change before any export.
 The ledger counts offloaded clips as in Cloudflare (an archived file the original's size); `_originals-*` aren't
-films. To bring a day back: `bun run publisher restore _originals-<day> <folder>`.
+films. To bring a day back, transcripts and all: `bun run publisher restore _originals-<day> <folder>`.
 
 ## Grading
 
