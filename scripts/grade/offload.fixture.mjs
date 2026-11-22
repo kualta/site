@@ -139,6 +139,9 @@ export function records(clips = {}, added = () => {}) {
       clips[clip.name] = { sha256, size: clip.size, day: clip.day, ...proof };
       await added(clip, sha256);
     },
+    drop: async (sha256) => {
+      for (const [name, record] of Object.entries(clips)) if (record.sha256 === sha256) delete clips[name];
+    },
   };
 }
 

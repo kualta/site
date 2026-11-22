@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { closeSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { rename, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -721,11 +721,64 @@ test("with the card cleared once it's sent, nothing goes from it before Cloudfla
   await sleep(30);
   expect(files(at.dcim)).toEqual(onCard(one));
   expect(files(at.original)).toEqual([one]);
-  expect(run.state.copy).toMatchObject({ on: true, done: 2, onCamera: 1, waiting: { for: "cloudflare" } });
+  expect(run.state.copy).toMatchObject({ on: true, done: 2, onCamera: 1 });
+  await until(() => run.state.copy.waiting?.for === "cloudflare");
   reading.go();
   await run.done;
   expect(run.state).toMatchObject({ finished: "done", copy: { done: 2, onCamera: 0, finished: "done" } });
   expect(files(at.dcim)).toEqual([]);
+  expect(files(at.original)).toEqual([]);
+});
+
+test("the sending ending as the card is looked over, its last clip is cleared all the same", async () => {
+  const at = await given([
+    [one, "a clip", day],
+    [two, "in the archive, being exported", day],
+  ]);
+  const held = stall();
+  const request = site({ hold: (rest, init, pass) => (savesDay(rest, init) ? held.hold(init, pass) : null) });
+  const { sha256, size } = await put(request, `assets/${two}`, "in the archive, being exported");
+  let armed = false;
+  const run = begin(at, {
+    request,
+    clearCardAfter: sent,
+    records: records({ [two]: { sha256, size, day, card: true } }),
+    removable: async (clip) => {
+      if (clip.name !== two) return true;
+      // Asked with the first still waiting for the archive, and answered once the sending is over.
+      if (armed) {
+        armed = false;
+        held.go();
+        await until(() => !run.state.send.on);
+      }
+      return false;
+    },
+  });
+  await until(() => run.state.copy.waiting?.for === "cloudflare");
+  armed = true;
+  await run.done;
+  expect(run.state).toMatchObject({ finished: "done", send: { done: 1 }, copy: { onCamera: 0 } });
+  expect(files(at.dcim)).toEqual(onCard(two));
+});
+
+test("a clip brought as the sending looks for the last time is sent all the same", async () => {
+  const at = await given([[one, "a clip", day]]);
+  let hooked = false;
+  const run = begin(at, {
+    request: site(),
+    mac: async () => {
+      const was = await at.mac();
+      // Listed before the copy lands, and said once the copying is over.
+      if (!hooked && !was.length) {
+        hooked = true;
+        await until(() => !run.state.copy.on);
+      }
+      return was;
+    },
+    together: 1,
+  });
+  await run.done;
+  expect(run.state).toMatchObject({ finished: "done", copy: { done: 1 }, send: { done: 1 } });
   expect(files(at.original)).toEqual([]);
 });
 
@@ -755,7 +808,7 @@ test("a clip the manifest won't list, or the record can't keep, stays on the car
   expect(files(unlisted.original)).toEqual([one]);
 
   const unrecorded = await given([[one, "a clip", day]]);
-  const full = { read: async () => ({}), add: () => Promise.reject(new Error("ENOSPC: no space left on device")) };
+  const full = { ...records(), add: () => Promise.reject(new Error("ENOSPC: no space left on device")) };
   const second = begin(unrecorded, { request: site(), clearCardAfter: sent, records: full });
   await second.done;
   expect(second.state.send.skipped).toEqual([{ name: one, why: "ENOSPC: no space left on device" }]);
@@ -858,6 +911,87 @@ test("what a record says the archive has, and it hasn't, isn't deleted from the 
   expect(files(at.dcim)).toEqual([]);
 });
 
+test("a hash that doesn't read back as its clip is vouched for by no record from then on", async () => {
+  // The same clip under two names: the one recorded on the card, the other sent from the Mac and read back.
+  const at = await given([[one, LONG, day]], [[two, LONG, day]]);
+  let spoiling = true;
+  const request = site({
+    hold: (rest, init, pass) => {
+      if (spoiling && rest.startsWith("uploads/") && init.method === "PUT")
+        init.body = Buffer.from(Buffer.from(init.body).map((byte) => byte ^ 1));
+      return pass();
+    },
+  });
+  await request.archive.bucket.put(`blobs/${sha(LONG)}`, "something else by now");
+  const known = records({ [one]: { sha256: sha(LONG), size: LONG.length, day, card: true } });
+  const options = { request, part: 8, records: known };
+  await begin(at, { ...options, lanes: ["send"] }).done;
+  expect(known.clips).toEqual({});
+  const run = begin(at, { ...options, lanes: ["copy"], clearCardAfter: sent });
+  await run.done;
+  expect(run.state.copy).toMatchObject({ done: 1, onCamera: 1 });
+  expect(files(at.dcim)).toEqual(onCard(one));
+  // Read back right at last, it's all cleared.
+  spoiling = false;
+  await begin(at, { ...options, clearCardAfter: sent }).done;
+  expect(files(at.dcim)).toEqual([]);
+  expect(files(at.original)).toEqual([]);
+  expect(await (await request(`blobs/${sha(LONG)}`, { raw: true })).text()).toBe(LONG);
+});
+
+test("a recorded clip the archive lost, sent again and cut before it's read back, isn't taken for checked after", async () => {
+  for (const where of ["card", "mac"]) {
+    const clip = [one, LONG, day];
+    const at = await (where === "card" ? given([clip]) : given([], [clip]));
+    let holding = true;
+    const reading = stall();
+    const request = site({
+      hold: (rest, init, pass) => (holding && readsBlob(rest, init) ? reading.hold(init, pass) : null),
+    });
+    const known = records({ [one]: { sha256: sha(LONG), size: LONG.length, day, card: true } });
+    const gone = [];
+    const options = { request, part: 8, records: known, clearCardAfter: sent, removed: (_, from) => gone.push(from) };
+    const run = begin(at, options);
+    await reading.reached;
+    run.stop(undefined, { now: true });
+    await run.done;
+    expect(known.clips).toEqual({});
+    expect(gone).toEqual([]);
+    holding = false;
+    const asked = request.asked.length;
+    const next = begin(at, {
+      ...options,
+      removed: (_, from) => {
+        expect(request.asked.slice(asked)).toContain(`GET blobs/${sha(LONG)}`);
+        gone.push(from);
+      },
+    });
+    await next.done;
+    expect(gone.sort()).toEqual(where === "card" ? ["camera", "mac"] : ["mac"]);
+  }
+});
+
+test("the sending waits for a card clip that's to be tried again, recorded or not", async () => {
+  const at = await given([[one, "the card's own clip", day]]);
+  const request = site();
+  // Recorded as something else of its size, and unreadable at first.
+  const { sha256, size } = await put(request, `assets/${one}`, "what the Mac had on");
+  expect(size).toBe(19);
+  chmodSync(join(at.dcim, one), 0o000);
+  const run = begin(at, {
+    request,
+    records: records({ [one]: { sha256, size, day } }),
+    retry: { first: 120, most: 200, tries: 5 },
+  });
+  await sleep(50);
+  expect(run.state).toMatchObject({ copy: { on: true, current: null }, send: { on: true } });
+  chmodSync(join(at.dcim, one), 0o644);
+  await run.done;
+  expect(run.state).toMatchObject({ finished: "done", copy: { done: 1 }, send: { done: 1 } });
+  expect(files(at.dcim)).toEqual([]);
+  expect(files(at.original)).toEqual([]);
+});
+
 test("with the archive out of reach, what a record says it has stays on the card till it can be asked", async () => {
   const at = await given([
     [one, "sent before", day],
@@ -891,31 +1025,37 @@ test("a card clip of a recorded one's name and size that isn't it, isn't deleted
   expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha("this one's the card's") });
 });
 
-test("the Mac's copy changed before it was sent: the card keeps its own until that's been sent as well", async () => {
+test("the Mac's copy changed before it was sent: the card keeps its own, which isn't in the archive", async () => {
   const at = await given([[one, "the card's bytes", day]]);
   const request = site();
-  const known = records();
   let edited = false;
+  let looked = false;
   const cleared = [];
+  const known = records();
   const options = {
     request,
     clearCardAfter: sent,
     records: known,
+    // The card is next looked at once what was made of the copy is in the archive.
+    camera: async () => {
+      if (edited && !looked) {
+        looked = true;
+        await until(() => known.clips[one] && !files(at.original).length);
+      }
+      return at.camera();
+    },
     copied: (clip) => {
       // Before it's sent, and of the same size.
       if (!edited) writeFileSync(clip.path, "someone's edits!");
       edited = true;
     },
-    removed: (clip, where) => where === "camera" && cleared.push(known.clips[clip.name].sha256),
+    removed: (clip, where) => where === "camera" && cleared.push(clip.name),
   };
   await begin(at, options).done;
-  if (!cleared.length) expect(files(at.dcim)).toEqual(onCard(one));
-  // What was made of it meanwhile is in the archive.
-  expect(await (await request(`blobs/${sha("someone's edits!")}`, { raw: true })).text()).toBe("someone's edits!");
-  await begin(at, options).done;
-  expect(cleared).toEqual([sha("the card's bytes")]);
-  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha("the card's bytes") });
-  expect(files(at.dcim)).toEqual([]);
+  for (let n = 0; n < 2; n++) await begin(at, { ...options, camera: at.camera }).done;
+  expect(cleared).toEqual([]);
+  expect(files(at.dcim)).toEqual(onCard(one));
+  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha("someone's edits!") });
 });
 
 test("a copy changed on the Mac since an earlier run isn't taken for the card's", async () => {
@@ -1030,7 +1170,7 @@ test("a file that changes as it's sent in parts is never put together in the arc
   expect(request.archive.uploads.size).toBe(0);
 });
 
-test("a clip written to since it was sent isn't deleted: it's sent again as it is now", async () => {
+test("a clip written to since it was sent isn't deleted: it stays, and doesn't take the other's place, nor go up", async () => {
   const at = await given([], [[one, "before", day]]);
   const held = stall();
   let saves = 0;
@@ -1042,9 +1182,31 @@ test("a clip written to since it was sent isn't deleted: it's sent again as it i
   await writeFile(join(at.original, one), "after!");
   held.go();
   await run.done;
-  expect(run.state.send.done).toBe(2);
-  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha("after!") });
-  expect(files(at.original)).toEqual([]);
+  expect(run.state.send).toMatchObject({
+    done: 1,
+    skipped: [{ name: one, why: `Another ${one}, no smaller, is in Cloudflare already: this one stays where it is` }],
+  });
+  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha("before") });
+  expect(files(at.original)).toEqual([one]);
+  expect(request.asked).not.toContain(`PUT blobs/${sha("after!")}`);
+});
+
+test("part of a clip never takes its place in the archive, and the whole takes a part's", async () => {
+  const request = site();
+  const part = await given([], [[one, LONG.slice(0, 20), day]]);
+  const whole = await given([], [[one, LONG, day]]);
+  await begin(part, { lanes: ["send"], request, part: 8 }).done;
+  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha(LONG.slice(0, 20)) });
+  await begin(whole, { lanes: ["send"], request, part: 8 }).done;
+  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha(LONG) });
+  expect(files(whole.original)).toEqual([]);
+  // From a Mac that knows nothing of it.
+  const again = await given([], [[one, LONG.slice(0, 20), day]]);
+  const run = begin(again, { lanes: ["send"], request, part: 8 });
+  await run.done;
+  expect(run.state.send).toMatchObject({ done: 0, skipped: [{ name: one }] });
+  expect(files(again.original)).toEqual([one]);
+  expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha(LONG) });
 });
 
 test("a recorded clip on the Mac is deleted only if it's what was recorded, and the archive holds it", async () => {
@@ -1105,6 +1267,27 @@ test("a clip being exported stays on the card and on the Mac, and goes once it i
   expect(next.state).toMatchObject({ copy: { total: 0 }, send: { total: 0 } });
   expect(files(at.dcim)).toEqual([]);
   expect(files(at.original)).toEqual([]);
+});
+
+test("a card clip written to since it was listed isn't deleted", async () => {
+  const at = await given([[one, "before", day]]);
+  let written = false;
+  const run = begin(at, {
+    lanes: ["copy"],
+    request: site(),
+    // Asked just before it's deleted.
+    removable: async (clip) => {
+      if (!written) writeFileSync(clip.path, "after, and longer");
+      written = true;
+      return true;
+    },
+  });
+  await run.done;
+  expect(files(at.dcim)).toEqual(onCard(one));
+  expect(readFileSync(join(at.dcim, one), "utf8")).toBe("after, and longer");
+  // The Mac's copy of what it was isn't written over, so the card keeps what it is.
+  expect(run.state.copy).toMatchObject({ done: 1, skipped: [{ name: one }] });
+  expect(readFileSync(join(at.original, one), "utf8")).toBe("before");
 });
 
 test("a Mac copy that's gone before the card's could be deleted: the card's is copied again", async () => {

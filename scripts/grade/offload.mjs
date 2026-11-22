@@ -177,11 +177,19 @@ async function projectFiles(request, project, signal) {
   }
 }
 
+/** Refuses a file that would take the place of another in a manifest, unless it's larger: part of a clip isn't the clip. */
+function mayReplace(held, { path, sha256, size }) {
+  const was = held.get(path);
+  if (was && was.sha256 !== sha256 && was.size >= size)
+    throw final(`Another ${path.split("/").pop()}, no smaller, is in Cloudflare already: this one stays where it is`);
+}
+
 /** Files in a project's manifest all it holds and these, until the manifest reads back with them. */
 async function saveProject(request, project, files, signal) {
   for (let saves = 0; ; saves++) {
     const held = await projectFiles(request, project, signal);
     const filing = files.filter(({ beside }) => !beside || held.has(beside));
+    for (const file of filing) if (file.lasting) mayReplace(held, file);
     const listed = ({ path, sha256, size }) => held.get(path)?.sha256 === sha256 && held.get(path).size === size;
     if (filing.every(listed)) return filing.map(({ path }) => path);
     if (saves === 3) throw new Error(`${project} doesn't list what was filed in it`);
@@ -197,7 +205,8 @@ async function saveProject(request, project, files, signal) {
  * out the earlier of the two.
  *
  * `fileInDay(request, day, files, signal)` takes `{ path, sha256, size, mtime }`, and with `beside` files one only if the
- * day holds that path. It says the paths filed. `project` is the day's originals unless it's said.
+ * day holds that path, and with `lasting` only if it's not over another that's no smaller. It says the paths filed.
+ * `project` is the day's originals unless it's said.
  */
 export function dayManifests() {
   const turns = new Map();
@@ -222,7 +231,7 @@ const onTheWay = ({ reaching, status }) =>
 /** No transcripts: an offload of clips alone. */
 const NO_TRANSCRIPTS = { take: async () => {}, ready: async () => [], sent: async () => {} };
 /** No exports: an offload of originals alone. */
-const NO_RECORDS = { read: async () => ({}), add: async () => {} };
+const NO_RECORDS = { read: async () => ({}), add: async () => {}, drop: async () => {} };
 
 const UNPLUGGED = "The camera isn't plugged in";
 const WAITS_FOR_CLOUDFLARE = "Clips stay on the camera until they're in Cloudflare";
@@ -248,8 +257,8 @@ function inTurn(work) {
  * until which it may still be being written. `dir` is Movies/Original; `room()` says how many bytes are free there.
  *
  * `records` (`graded` for the exports) keeps what went to the archive: `read()` says name → `{ sha256, size, card }`, and
- * `add(clip, sha256, { card })` is done once it's on disk. A clip there that the archive still holds is only deleted.
- * `card` says the hash is the card's own, as it was read off it.
+ * `add(clip, sha256, { card })` is done once it's on disk, as `drop(sha256)` is, which forgets a hash. A clip there that
+ * the archive still holds is only deleted. `card` says the hash is the card's own, as it was read off it.
  *
  * Nothing is deleted that's kept or in use: `keeping()` says which clips are kept out of all this (`(clip) => boolean`),
  * asked again at each deletion, and one `removable(clip)` says no to (being exported, say) stays where it is.
@@ -533,13 +542,16 @@ export function startOffload({
       if (copy.ending()) break;
       if (!mustWait(clip)) await remove(clip, "camera").catch((error) => copy.failed(clip, error));
     }
-    const { again, unasked } = await clearRecorded(recorded.filter(({ clip }) => !mustWait(clip)));
+    const seen = recorded.filter(({ clip }) => !mustWait(clip));
+    const { again, unasked } = await clearRecorded(seen);
     left.push(...again);
     cardLeft = left;
     copy.state.onCamera = awaiting;
     totals();
     const next = left.find((clip) => !mustWait(clip));
-    return { next, awaiting, later, unasked };
+    // Any of these may turn out to need copying.
+    const unsure = seen.length < recorded.length || Boolean(unasked);
+    return { next, awaiting, later, unasked, unsure };
   }
 
   /** Copies a clip to the Mac, if there's room, and deletes it from the card if that's all it waits for. */
@@ -600,12 +612,14 @@ export function startOffload({
           await recoverCamera();
           continue;
         }
-        const { next, awaiting, later, unasked } = await lookOver(card);
+        // Asked before looking: what lands as the sending ends is seen to have by the look after.
+        const sending = send.state.on;
+        const { next, awaiting, later, unasked, unsure } = await lookOver(card);
         if (copy.ending()) return;
         // A card being pulled can look like an empty one: it's not taken for that until it's looked at again.
         const sure = fresh;
         fresh = !next;
-        bringing = cardLeft.length > 0 || !sure;
+        bringing = cardLeft.length > 0 || unsure || !sure;
         if (!bringing) notify();
         if (next) await takeOffCard(next);
         else if (!sure) continue;
@@ -613,8 +627,7 @@ export function startOffload({
           await recover(copy, reaching(unasked));
           askAt = 0;
         } else if (later !== null) await change(Math.min(later, look));
-        else if (awaiting && send.state.on)
-          await copy.hold({ for: "cloudflare", why: WAITS_FOR_CLOUDFLARE }, change(look));
+        else if (awaiting && sending) await copy.hold({ for: "cloudflare", why: WAITS_FOR_CLOUDFLARE }, change(look));
         else return;
       } catch (error) {
         if (copy.signal.aborted) return;
@@ -637,13 +650,22 @@ export function startOffload({
     }
   }
 
+  /** Forgets that the archive holds a hash, till it's been checked again: a run cut short before then leaves no record. */
+  async function distrust(from, sha256) {
+    await from.records.drop(sha256);
+    holds.delete(sha256);
+    for (const [name, hash] of landed) if (hash === sha256) landed.delete(name);
+  }
+
   /** Puts a clip in the archive and makes sure of it: anything R2 didn't just check whole is read back first. */
-  async function store(lane, clip, sha256, going) {
+  async function store(from, clip, sha256, going) {
+    const { lane } = from;
     const { signal } = lane;
     const { missing } = await ask("missing", { method: "POST", json: { blobs: [sha256] }, signal });
     let sending = missing.length > 0;
     for (let attempt = 1; attempt <= 2; attempt++) {
       if (sending) {
+        await distrust(from, sha256);
         going.sent = 0;
         await sendBlob(ask, { abs: clip.path, size: clip.size }, sha256, {
           part,
@@ -665,9 +687,10 @@ export function startOffload({
   }
 
   /**
-   * What a lane sends: `list()` says the clips, `records` those sent, `project(day)` where a day's are filed, `before(clip)`
-   * whether a clip's Mac copy may go yet, `feeding()` whether more may come. `left` are the clips to send as last seen,
-   * `flying` those being seen to (true until they're in the archive), `gone` those a record is wrong about.
+   * What a lane sends: `list()` says the clips, `records` those sent, `project(day)` where a day's are filed, `lasting`
+   * whether one there keeps its place, `before(clip)` whether a clip's Mac copy may go yet, `feeding()` whether more may
+   * come. `left` are the clips to send as last seen, `flying` those being seen to (true until they're in the archive),
+   * `gone` those a record is wrong about.
    */
   const source = (lane, given) => ({ lane, left: [], flying: new Map(), gone: new Set(), ...given });
   const originals = source(send, {
@@ -675,6 +698,7 @@ export function startOffload({
     records,
     list: mac,
     project: originalsName,
+    lasting: true,
     before: (clip) => takeSound(clip, send),
     feeding: () => copy.state.on && bringing,
     // The hash is the card's own, so the card's copy can go on the strength of it.
@@ -685,6 +709,8 @@ export function startOffload({
     records: graded,
     list: exports,
     project: gradedName,
+    // A clip graded and exported again is its graded copy from then on.
+    lasting: false,
     before: async () => true,
     feeding: () => false,
     proof: () => ({}),
@@ -751,8 +777,13 @@ export function startOffload({
     try {
       const sha256 = await hashFile(clip.path, lane.signal);
       going.hashing = false;
-      await store(lane, clip, sha256, going);
-      const file = { path: clipPath(clip.name), sha256, size: clip.size, mtime: clip.mtime };
+      const { lasting } = from;
+      const file = { path: clipPath(clip.name), sha256, size: clip.size, mtime: clip.mtime, lasting };
+      // One recorded as another is looked up before it's sent, for hours maybe, only to be refused.
+      const known = (await from.records.read())[clip.name];
+      if (lasting && known && known.sha256 !== sha256)
+        mayReplace(await projectFiles(ask, from.project(clip.day), lane.signal), file);
+      await store(from, clip, sha256, going);
       await fileInDay(ask, clip.day, [file], lane.signal, from.project(clip.day));
       await from.records.add(clip, sha256, from.proof(clip, sha256));
       landed.set(clip.name, sha256);
@@ -788,10 +819,12 @@ export function startOffload({
           await lane.hold({ for: "page", why }, change(gateLook));
           continue;
         }
+        // Asked before looking: what's brought as the copying ends is there by the look after.
+        const feeding = from.feeding();
         const { clip, later } = await nextOf(from);
         if (clip && lane.ending()) from.flying.delete(clip.name);
         else if (clip) await sendOne(from, clip);
-        else if (later !== null || from.feeding()) await change(Math.min(later ?? look, look));
+        else if (later !== null || feeding) await change(Math.min(later ?? look, look));
         else return;
       } catch (error) {
         if (lane.signal.aborted) return;

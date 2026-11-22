@@ -143,8 +143,10 @@ that doesn't match is sent once more. Parts are put together only if what went u
 a day's manifest, from whichever run, waits for the one before it, starts from what the archive has of the day by then,
 and is read back: a clip's copies go only once its day lists it and the record is on disk. A clip already recorded is
 only deleted, once the archive says it holds its hash and the file is that one (hashed on the Mac; the card's is read
-only if its hash isn't known to be the card's own); one the archive has lost goes again. Nothing goes that was written
-to since it was listed, that's being exported, or that's kept (below).
+only if its hash isn't known to be the card's own); one the archive has lost goes again, its record forgotten till it's
+checked. An original listed in the archive gives way only to a larger one of its name, so part of a clip never takes its
+place: another is passed over, and stays. Nothing goes that was written to since it was listed, that's being exported, or
+that's kept (below).
 
 **Stop** finishes the files in flight (the clip being copied, the two being sent, their manifest saves and deletions)
 and then stops; a second click (**Stop now**) cuts them. Both the switch and the bar's **Stop offloading** do this, and

@@ -976,6 +976,14 @@ const recordsIn = (path, added) => ({
     });
     added();
   },
+  drop: async (sha256) => {
+    await updating.get(path);
+    const held = Object.values(await readClips(path)).some((record) => record.sha256 === sha256);
+    if (!held) return;
+    await updateClips(path, (all) => {
+      for (const [name, record] of Object.entries(all)) if (record.sha256 === sha256) delete all[name];
+    });
+  },
 });
 
 /** What a request to offload asks for. */

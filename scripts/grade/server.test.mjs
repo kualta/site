@@ -289,7 +289,8 @@ test.if(usable)("exports a clip from Movies/Original into Movies/Exported, recor
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: folder, names: [name] }) })).status).toBe(200);
   const s = await until(async () => {
     const body = await json(`/api/sources/${folder}`);
-    return body.clips[0].exported && body;
+    // Its record is written once the file is in place.
+    return body.clips[0].exported?.key && body;
   });
   const record = records()[name];
   expect(record).toMatchObject({ source: `Original/${name}`, file: "Exported/DJI_20260203101500_0007_D.mp4", key: gradeKey(grade), quality: 100 });
@@ -811,7 +812,7 @@ test.if(usable)("pauses what it sends while no page is open, and goes on once on
   expect(readdirSync(original)).toEqual([]);
 
   // Told to, it goes on with nobody looking.
-  clip(movingFile(), "D-Log2");
+  clip(join(original, "DJI_20260221100000_0011_D.MP4"), "D-Log2");
   await new Promise((resolve) => setTimeout(resolve, 800));
   expect((await post("/api/offload", { lanes: ["send"] })).status).toBe(200);
   await until(async () => (await json("/api/offload")).run.paused);
@@ -856,7 +857,8 @@ test.if(usable)("takes the card's clips alone, remembers to leave them there til
 
 test.if(usable)("stops a switch by itself, finishing what's in flight, or at once", async () => {
   expect(await (await post("/api/offload/stop")).json()).toMatchObject({ stopping: false });
-  clip(movingFile(), "D-Log2");
+  const waiting = "DJI_20260222100000_0012_D.MP4";
+  clip(join(original, waiting), "D-Log2");
   await new Promise((resolve) => setTimeout(resolve, 800));
   expect((await post("/api/offload", { lanes: ["send"], youtube: false })).status).toBe(200);
   await until(async () => (await json("/api/offload")).run.paused);
@@ -865,7 +867,7 @@ test.if(usable)("stops a switch by itself, finishing what's in flight, or at onc
   expect((await json("/api/offload")).run.send).toMatchObject({ on: true, mode: "on" });
   expect((await post("/api/offload/stop", { lanes: ["send"] })).status).toBe(200);
   expect((await ended()).run).toMatchObject({ finished: "stopped", send: { done: 0, finished: "stopped" } });
-  expect(readdirSync(original)).toEqual([movingClip]);
+  expect(readdirSync(original)).toEqual([waiting]);
   expect((await post("/api/offload/stop", { lanes: ["all"] })).status).toBe(400);
 }, 60_000);
 
