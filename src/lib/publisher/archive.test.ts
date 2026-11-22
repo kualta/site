@@ -7,6 +7,7 @@ import {
   archiveRecentPosts,
   archiveResponse,
   archiveUploads,
+  saveManifest,
   sized,
   withArchive,
 } from "./archive";
@@ -183,6 +184,40 @@ describe("the laptop's archive requests", () => {
     expect(archive.uploads.size).toBe(1);
     expect((await call(`uploads/${a}?upload=${encodeURIComponent(second)}`, { method: "DELETE" })).status).toBe(200);
     expect(archive.uploads.size).toBe(0);
+  });
+
+  test("a shoot day saved again asks only for its new files; a film, all of its files", async () => {
+    const { bucket } = memoryArchive();
+    let asked = 0;
+    const counted: typeof bucket = {
+      ...bucket,
+      head: (key) => {
+        asked++;
+        return bucket.head(key);
+      },
+    };
+    const files: { path: string; sha256: string; size: number; mtime: number }[] = [];
+    const add = async (name: string, stored = true) => {
+      const hash = await sha256(name);
+      if (stored) await bucket.put(`blobs/${hash}`, name);
+      files.push({ path: `assets/${name}`, sha256: hash, size: name.length, mtime: 1 });
+    };
+    const save = async (project: string, minute: number) => {
+      asked = 0;
+      await saveManifest(counted, project, { files }, new Date(Date.UTC(2026, 10, 8, 12, minute)));
+      return asked;
+    };
+    await add("1.MP4");
+    await add("2.MP4");
+    expect(await save("_originals-2026-11-08", 1)).toBe(2);
+    await add("3.MP4");
+    expect(await save("_originals-2026-11-08", 2)).toBe(1);
+    expect(await save("_originals-2026-11-08", 3)).toBe(0);
+    expect(await save("014-walk", 4)).toBe(3);
+    expect(await save("014-walk", 5)).toBe(3);
+    // A new file that isn't there is still refused.
+    await add("4.MP4", false);
+    await expect(save("_originals-2026-11-08", 6)).rejects.toThrow("aren't in the archive");
   });
 
   test("a manifest is kept only once every file it names is archived, and the latest is read back", async () => {
