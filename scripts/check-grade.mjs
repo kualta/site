@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegStatic from "ffmpeg-static";
@@ -57,8 +59,50 @@ const uvx = path.join(root, "uvx");
 const go = path.join(root, "go");
 writeFileSync(uvx, `#!/bin/sh\nwhile [ ! -e "${go}" ]; do [ -e "${uvx}" ] || exit 1; sleep 0.1; done\necho "error: no GPU" >&2\nexit 1\n`, { mode: 0o755 });
 
+// A stand-in for the site's archive, holding a shoot day of 227 clips offloaded before: two are real ones, the first
+// graded before it went, with its graded copy; one's bytes stop partway.
+const cloud = { blobs: new Map(), manifests: {}, held: null, down: false };
+const cloudDay = "2025-12-30";
+const cloudClip = (n) => `DJI_20251230${String(100000 + n)}_${String(n).padStart(4, "0")}_D`;
+const [gone, partial, second, missing] = [101, 102, 103, 227].map((n) => `${cloudClip(n)}.MP4`);
+const file = (project, at, bytes) => {
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  cloud.blobs.set(sha256, bytes);
+  cloud.manifests[project] ??= { archivedAt: "2025-12-31T00:00:00.000Z", files: [] };
+  cloud.manifests[project].files.push({ path: at, sha256, size: bytes.length, mtime: Date.parse("2025-12-30T10:00:00Z") });
+  return sha256;
+};
+for (let n = 1; n <= 227; n++) {
+  const at = `assets/${cloudClip(n)}.MP4`;
+  if (at.endsWith(gone) || at.endsWith(second)) file(`_originals-${cloudDay}`, at, readFileSync(path.join(original, name)));
+  else if (at.endsWith(partial)) cloud.held = file(`_originals-${cloudDay}`, at, Buffer.alloc(1_000_000, "held"));
+  else file(`_originals-${cloudDay}`, at, Buffer.from(`clip ${n}`));
+}
+file(`_originals-${cloudDay}`, `transcripts/${gone.replace(".MP4", ".vtt")}`, Buffer.from("WEBVTT"));
+file(`_graded-${cloudDay}`, `assets/${gone.replace(".MP4", ".mp4")}`, Buffer.from("a graded copy"));
+const archive = createServer((req, res) => {
+  const at = decodeURIComponent(req.url.replace("/api/publisher/helper/archive/", "").split("?")[0]);
+  const reply = (status, body) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+  };
+  if (cloud.down) return req.socket.destroy();
+  if (req.method !== "GET") return req.resume().on("end", () => reply(200, { ok: true }));
+  if (at === "projects") return reply(200, { projects: Object.entries(cloud.manifests).map(([project, { archivedAt }]) => ({ name: project, archivedAt })) });
+  if (at.startsWith("projects/")) return reply(200, cloud.manifests[at.slice("projects/".length)]);
+  const blob = cloud.blobs.get(at.replace("blobs/", ""));
+  if (!blob) return reply(404, { error: "Not found" });
+  res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": blob.length });
+  if (at === `blobs/${cloud.held}`) res.write(blob.subarray(0, 420_000));
+  else res.end(blob);
+});
+await new Promise((resolve) => archive.listen(0, "127.0.0.1", resolve));
+mkdirSync(path.join(root, "publisher"));
+writeFileSync(path.join(root, "publisher/config.json"), JSON.stringify({ origin: `http://127.0.0.1:${archive.address().port}`, token: "t" }));
+writeFileSync(path.join(data, "grades.json"), JSON.stringify({ version: 1, clips: { [gone]: { base: "aces", exposure: 0.4, kelvin: null, tint: 0, contrast: 1, saturation: 1 } } }));
+
 const server = spawn(process.execPath, ["scripts/grade/server.mjs"], {
-  env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: cache, GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port), GRADE_UVX: uvx },
+  env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: cache, GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port), GRADE_UVX: uvx, GRADE_PUBLISHER: path.join(root, "publisher"), GRADE_KEEP_FREE: "1000000" },
   stdio: ["ignore", "pipe", "inherit"],
 });
 await new Promise((resolve, reject) => {
@@ -243,6 +287,114 @@ try {
   assert.equal(await pressed(), "Off");
   await savedSoon(() => !("deflicker" in saved()) && !("deflicker" in saved(other)), "the Light group's Reset turns it off");
 
+  // Cloudflare: the picker lists the day whose clips are there and not here; its clips come back one at a time, into
+  // their own day, with the grade they had, and nothing in the list or the bar moves as they do.
+  const picker = page.locator("#shoot");
+  const option = picker.locator(`option[value="cloud:${cloudDay}"]`);
+  await option.waitFor({ state: "attached", timeout: 10_000 });
+  assert.equal(await option.textContent(), `${cloudDay} · 227 clips`);
+  assert.equal(await option.evaluate((el) => el.parentElement.label), "Cloudflare");
+  await picker.selectOption(`cloud:${cloudDay}`);
+  const cloudRow = (file) => page.locator(`.cloud-clip[data-stem="${file.replace(/\.MP4$/, "")}"]`);
+  const copy = (file, what) => cloudRow(file).locator(`[data-what="${what}"] button`);
+  await copy(gone, "original").waitFor({ timeout: 10_000 });
+  assert.equal(await page.locator(".cloud-clip").count(), 227);
+  assert.equal(await page.locator("#cloud-count").textContent(), "227 not here");
+  assert.equal(await page.locator("#cloud-graded").textContent(), "1 · 1 KB");
+  assert.ok(await page.locator("#clip-list").isHidden(), "the clip list makes way");
+  assert.ok(await page.locator("#export").isDisabled(), "nothing here to export");
+  assert.equal(await cloudRow(gone).locator(".when").textContent(), "10:01 · transcript");
+  // Where things are, the rows from the top of their list, however it's scrolled.
+  const cloudPlaces = () =>
+    page.evaluate(() => {
+      const list = document.getElementById("cloud-list").getBoundingClientRect();
+      return [...document.querySelectorAll("#cloud-head > *, .cloud-clip, .cloud-file button, #export, #shoot, .frame")].map((el) => {
+        const { x, y, width, height } = el.getBoundingClientRect();
+        return [el.id || el.className, x, el.closest("#cloud-list") ? y - list.y : y, width, height].join(" ");
+      });
+    });
+  const unmoved = async (what) => {
+    const now = await cloudPlaces();
+    assert.deepEqual(now.filter((at, i) => at !== before[i]), [], `${what} moves nothing`);
+  };
+  const before = await cloudPlaces();
+  // Every label fits, at the widths the bin has, however much there is to bring.
+  for (const width of [1000, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const cut = await page.evaluate(() => {
+      const size = document.getElementById("cloud-original");
+      const { textContent } = size;
+      size.textContent = "227 · 118.0 GB";
+      const labels = document.querySelectorAll("#cloud-head span, #cloud-head button, #cloud-head output, .cloud-file *");
+      const over = [...labels].filter((el) => el.offsetHeight > 24 || (el.clientWidth && el.scrollWidth > el.clientWidth));
+      const texts = over.map((el) => el.textContent);
+      size.textContent = textContent;
+      return texts;
+    });
+    assert.deepEqual(cut, [], `nothing is cut at ${width} px`);
+  }
+  if (shots) await page.screenshot({ path: path.join(shots, "grade-6-cloud.png") });
+
+  // One that stalls, and one waiting behind it: the share, then stopped, and nothing of either kept.
+  await copy(partial, "original").click();
+  await copy(partial, "original").getByText("42%").waitFor({ timeout: 10_000 });
+  await copy(missing, "original").click();
+  await copy(missing, "original").getByText("Queued").waitFor({ timeout: 5_000 });
+  await page.getByText(/^Bringing 1 of 2 · 0102 · 420 KB of 1\.0 MB/).waitFor({ timeout: 5_000 });
+  await unmoved("a clip coming");
+  if (shots) await page.screenshot({ path: path.join(shots, "grade-7-bringing.png") });
+  await page.getByRole("button", { name: "Stop bringing" }).click();
+  await copy(partial, "original").getByText("Bring", { exact: true }).waitFor({ timeout: 5_000 });
+  await copy(missing, "original").getByText("Bring", { exact: true }).waitFor({ timeout: 5_000 });
+  assert.ok(await page.getByRole("button", { name: "Stop bringing" }).isHidden());
+  await unmoved("stopping");
+  assert.deepEqual(readdirSync(original).sort(), [other, name].sort(), "a stopped clip leaves nothing");
+
+  // One that comes: it's the clip it was, in its own day, and its grade still applies.
+  await copy(gone, "original").click();
+  await copy(gone, "original").getByText("Grade", { exact: true }).waitFor({ timeout: 10_000 });
+  assert.deepEqual(readFileSync(path.join(original, gone)), readFileSync(path.join(original, name)));
+  assert.equal(await page.locator("#cloud-count").textContent(), "227 not here", "its graded copy isn't here yet");
+  await page.locator("#bring-graded").click();
+  await copy(gone, "graded").getByText("Here", { exact: true }).waitFor({ timeout: 10_000 });
+  assert.equal(await page.locator("#cloud-count").textContent(), "226 not here");
+  assert.equal(await page.locator("#cloud-graded").textContent(), "All here");
+  assert.equal(readFileSync(path.join(exported, gone.replace(".MP4", ".mp4")), "utf8"), "a graded copy");
+  await unmoved("a clip come");
+  await copy(gone, "original").click();
+  const broughtRow = page.locator(`.clip[data-name="${gone}"]`);
+  await broughtRow.waitFor({ timeout: 10_000 });
+  assert.equal(await picker.inputValue(), `mac:${cloudDay}`);
+  assert.equal(await broughtRow.getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("#n-exposure").inputValue(), "+0.40", "its grade applies");
+  assert.ok(await page.locator("#cloud-list").isHidden(), "the clip list is back");
+  if (shots) await page.screenshot({ path: path.join(shots, "grade-8-brought.png") });
+
+  // Another comes to the day that's open: it joins the list, and the clip on screen stays as it is.
+  const shown = await page.locator("#video").evaluate((el) => el.src);
+  await page.evaluate((clip) => fetch("/api/bring", { method: "POST", headers: { "X-Grade": "1" }, body: JSON.stringify({ what: "original", names: [clip] }) }), second);
+  await page.locator(`.clip[data-name="${second}"]`).waitFor({ timeout: 15_000 });
+  assert.deepEqual(await page.locator("#clip-list .clip").evaluateAll((all) => all.map((el) => el.dataset.name)), [gone, second]);
+  assert.equal(await broughtRow.getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator("#video").evaluate((el) => el.src), shown, "the clip on screen stays");
+
+  // A clip the address asks for, as the Footage tab's Grade does: one that's only in Cloudflare opens its day there.
+  await page.evaluate((clip) => {
+    location.hash = `clip=${encodeURIComponent(clip)}`;
+  }, missing);
+  await page.locator(`.cloud-clip[aria-current="true"][data-stem="${missing.replace(".MP4", "")}"]`).waitFor({ timeout: 10_000 });
+  assert.equal(await picker.inputValue(), `cloud:${cloudDay}`);
+  assert.ok(await cloudRow(missing).evaluate((el) => {
+    const { top, bottom } = el.getBoundingClientRect();
+    return top > 0 && bottom < window.innerHeight;
+  }), "and shows it");
+  cloud.down = true;
+  await page.locator("#cloud-refresh").click();
+  await page.getByText(/^Couldn't read the Cloudflare archive/).first().waitFor({ timeout: 10_000 });
+  assert.ok((await page.locator(".cloud-clip").count()) >= 225, "the day stays as last read");
+  if (shots) await page.screenshot({ path: path.join(shots, "grade-9-cloud-away.png") });
+  cloud.down = false;
+
   // Framed by the composer, the app says how far its offload and its export are, and lets go of both once they end or it
   // can't tell. The work itself is stood in for: nothing is offloaded.
   const composer = await browser.newPage({ permissions: ["local-network-access"] });
@@ -301,5 +453,7 @@ try {
 } finally {
   await browser.close();
   server.kill();
+  archive.closeAllConnections();
+  archive.close();
   rmSync(root, { recursive: true, force: true });
 }

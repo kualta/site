@@ -12,6 +12,7 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { archiveDays, bringer, clearParts, cloudId, dayClips, pickClips, summarise, withHere } from "./bring.mjs";
 import { composeLut, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
 import { dayManifests, startOffload } from "./offload.mjs";
 import {
@@ -886,6 +887,97 @@ async function beginOffload() {
   });
 }
 
+// ---- bringing clips back from the archive (bring.mjs) -----------------------------------------------------------------
+
+/** Where each kind of clip goes. */
+const BRING_TO = { original: ORIGINAL, graded: EXPORTED };
+const cloudDays = archiveDays({ every: 60 * 60_000 });
+const bringing = bringer({
+  folders: BRING_TO,
+  room: roomOnMac,
+  keepFree: KEEP_FREE,
+  claims: stillToWrite,
+  landed: () => scheduleLedger(2000),
+});
+
+/** What's still to come onto this Mac from the exports, going by their originals' sizes, and from the card. */
+async function stillToWrite() {
+  const claims = [];
+  const exports = [jobs.export.current, ...jobs.export.queue].filter(Boolean);
+  let bytes = 0;
+  for (const { id, name, quality, progress = 0 } of exports) {
+    const path = (await source(id).catch(() => null))?.paths.get(name);
+    const size = path ? (await sizeOf(path))?.size ?? 0 : 0;
+    bytes += size * (quality / 100) * (1 - progress);
+  }
+  if (bytes) claims.push({ by: exports.length === 1 ? "the export" : `the ${exports.length} exports`, bytes });
+  const copy = offloading?.state.running ? offloading.state.copy : null;
+  if (copy && !copy.ended)
+    claims.push({ by: "the camera", bytes: copy.bytes - copy.doneBytes - (copy.current?.sent ?? 0) });
+  return claims;
+}
+
+/** The offload that had ended when the archive was last read: the days it filed clips in show once it has. */
+let filedBy = null;
+/** Every clip in the archive's shoot days, and whether it's on this Mac; null while the helper isn't paired. */
+async function cloudClips({ refresh = false } = {}) {
+  const cloud = await ledgerCloud(PUBLISHER);
+  if (!cloud) return null;
+  const ended = offloading && !offloading.state.running ? offloading : null;
+  const held = await cloudDays.read(cloud.request, { refresh: refresh || ended !== filedBy });
+  filedBy = ended;
+  return { ...held, request: cloud.request, clips: await withHere(held.clips, BRING_TO) };
+}
+
+/** The archive's shoot days, each with how much of it isn't on this Mac; with `day`, that day's clips too. */
+async function cloudSummary({ refresh, day }) {
+  const held = await cloudClips({ refresh });
+  const room = { free: await roomOnMac(), keepFree: KEEP_FREE };
+  if (!held) return { paired: false, readAt: null, error: null, room, days: [] };
+  const { clips, readAt, error } = held;
+  const summary = { paired: true, readAt, error, room, days: summarise(clips) };
+  if (!day) return summary;
+  const pictured = await thumbStems();
+  const rows = dayClips(clips, day).map((row) => ({ ...row, thumb: pictured.has(row.stem.toLowerCase()) }));
+  return { ...summary, day, clips: rows };
+}
+
+/** Starts bringing a day's clips that aren't here, or the named ones. Says how many. */
+async function startBringing(asked) {
+  const held = await cloudClips();
+  if (!held) throw httpError(409, "Pair the crossposter helper first: clips come back through it");
+  if (!held.readAt) throw httpError(502, held.error);
+  return bringing.add(held.request, pickClips(held.clips, asked));
+}
+
+/** Where a clip that's on neither the card nor this Mac is in the archive: its original's day, else its graded copy's. */
+async function findInCloud(stem) {
+  const held = await cloudClips();
+  const named = (held?.clips ?? []).filter((clip) => stemOf(clip.name).toLowerCase() === stem);
+  const hit = named.find((clip) => clip.what === "original") ?? named[0];
+  if (hit) return { source: cloudId(hit.day), name: hit.name };
+  if (held?.error) throw httpError(404, `That clip isn't on the camera or this Mac. ${held.error}`);
+  throw httpError(404, "That clip isn't on the camera, this Mac or in Cloudflare");
+}
+
+/** Answers the requests about the archive's clips; says whether this was one. */
+async function cloudRoute(req, res, p, url) {
+  if (p === "/api/cloud" && req.method === "GET") {
+    const asked = { refresh: url.searchParams.has("refresh"), day: url.searchParams.get("day") };
+    send(res, 200, await cloudSummary(asked));
+  } else if (p === "/api/bring" && req.method === "POST") {
+    const { what, names, day } = await body(req);
+    send(res, 200, { queued: await startBringing({ what, names, day }), bring: bringing.state() });
+  } else if (p === "/api/bring/stop" && req.method === "POST") send(res, 200, { stopping: bringing.stop() });
+  else if (p.startsWith("/media/cloud/")) {
+    // The thumbnail its clip left in the cache.
+    const file = (await thumbFiles()).get(stemOf(p.slice("/media/cloud/".length)).toLowerCase());
+    if (!file) throw httpError(404, "not found");
+    await serveFile(req, res, join(CACHE, "thumbs", file));
+  } else return false;
+  return true;
+}
+
 // ---- HTTP -----------------------------------------------------------------------------------------------------------
 
 function send(res, status, body, type = "application/json") {
@@ -992,7 +1084,8 @@ async function route(req, res) {
       savedAt: ledger.savedAt,
       error: ledger.error ?? ledger.archiveError,
     });
-  // Where a clip is, by its name, for the Footage tab's Grade: the card's day holding it, else Movies/Original's.
+  // Where a clip is, by its name, for the Footage tab's Grade: the card's day holding it, else Movies/Original's, else
+  // the archive's.
   if (p === "/api/find" && req.method === "GET") {
     const wanted = stemOf(url.searchParams.get("clip") ?? "").toLowerCase();
     const places = [
@@ -1004,7 +1097,7 @@ async function route(req, res) {
         const hit = list.find((c) => stemOf(c.name).toLowerCase() === wanted);
         if (hit) return send(res, 200, { source: `${kind}:${day}`, name: hit.name });
       }
-    throw httpError(404, "That clip isn't on the camera or this Mac");
+    return send(res, 200, await findInCloud(wanted));
   }
   if (p === "/api/bases" && req.method === "GET") return send(res, 200, await bases());
   if (p === "/api/calibration" && req.method === "GET") {
@@ -1097,7 +1190,11 @@ async function route(req, res) {
       export: jobs.export,
       offload: offloadState(),
       transcripts: transcripts.summary(),
+      bring: bringing.state(),
     });
+
+  // Bringing clips back from the archive.
+  if (await cloudRoute(req, res, p, url)) return;
 
   // Offloading: the card to this Mac, this Mac to the archive.
   if (p === "/api/offload" && req.method === "GET") return send(res, 200, await offloadSummary());
@@ -1126,6 +1223,7 @@ const server = createServer(async (req, res) => {
 });
 
 for (const dir of [ORIGINAL, EXPORTED, DATA, CACHE]) await mkdir(dir, { recursive: true });
+await clearParts(Object.values(BRING_TO));
 await transcripts.resume().catch((e) => console.error("grade: transcripts:", e.message));
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;

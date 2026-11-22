@@ -44,6 +44,7 @@
   <p class="status" id="status" role="status"></p>
   <button id="stop-offload" class="btn" type="button" hidden>Stop offloading</button>
   <button id="stop-export" class="btn" type="button" hidden>Stop exporting</button>
+  <button id="stop-bring" class="btn" type="button" hidden>Stop bringing</button>
   <div class="split" id="export-group">
     <button id="export" class="btn primary" type="button" disabled><svg><use href="#i-export"/></svg><span id="export-label">Export</span><span id="export-quality" class="badge" hidden></span></button>
     <button id="export-more" class="btn primary" type="button" aria-label="More ways to export" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu"><svg><use href="#i-chevron"/></svg></button>
@@ -81,6 +82,18 @@
       </div>
     </div>
     <ol id="clip-list" class="clip-list"></ol>
+    <div class="bin-head" id="cloud-head">
+      <div class="bin-row">
+        <span class="cap">Cloudflare</span>
+        <span id="cloud-count" class="count"></span>
+        <button id="cloud-refresh" class="link" type="button" title="Read the archive again">Refresh</button>
+      </div>
+      <div class="cloud-kind"><span>Originals</span><output id="cloud-original"></output><button id="bring-original" class="btn small" type="button" title="Bring the day's originals that aren't here to Movies/Original" disabled>Bring all</button></div>
+      <div class="cloud-kind"><span>Graded</span><output id="cloud-graded"></output><button id="bring-graded" class="btn small" type="button" title="Bring the day's graded copies that aren't here to Movies/Exported" disabled>Bring all</button></div>
+      <div class="cloud-kind" title="Room for clips on this Mac, past what is always kept free"><span>Room</span><output id="cloud-room"></output></div>
+      <p id="cloud-note" class="cloud-note" role="status"></p>
+    </div>
+    <ol id="cloud-list" class="clip-list"></ol>
   </aside>
 
   <section class="stage" id="stage" aria-label="Preview">
