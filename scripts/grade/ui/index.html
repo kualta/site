@@ -42,18 +42,6 @@
   <a id="footage-link" class="btn" href="https://post.kualta.dev/footage" target="_blank" rel="noreferrer" title="Every clip and where its copies are, in the composer's Footage tab">Footage</a>
   <p class="status" id="status" role="status"></p>
   <button id="stop-offload" class="btn" type="button" hidden>Stop offloading</button>
-  <div class="split" id="offload-group">
-    <button id="offload-open" class="btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="offload-menu">Offload<svg><use href="#i-chevron"/></svg></button>
-    <div class="menu" id="offload-menu" hidden>
-      <div class="offload-places">
-        <div class="menu-row"><span>Camera</span><output id="offload-camera"></output></div>
-        <div class="menu-row"><span>This Mac</span><output id="offload-mac"></output></div>
-        <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
-      </div>
-      <button id="offload-start" class="btn primary" type="button">Start offloading</button>
-      <p class="menu-note menu-foot">Each clip is copied to this Mac, checked, and deleted from the camera, then sent to Cloudflare, checked by its hash, and deleted from this Mac. Graded clips go to YouTube meanwhile. Log clips without a grade get the Colorful look as settings.</p>
-    </div>
-  </div>
   <button id="stop-export" class="btn" type="button" hidden>Stop exporting</button>
   <div class="split" id="export-group">
     <button id="export" class="btn primary" type="button" disabled><svg><use href="#i-export"/></svg><span id="export-label">Export</span><span id="export-quality" class="badge" hidden></span></button>
@@ -65,6 +53,14 @@
         <div class="menu-row"><label for="quality">Quality</label><output id="quality-out" for="quality">100%</output></div>
         <span class="rail" id="quality-rail"><input type="range" id="quality" min="10" max="100" step="5" value="100"></span>
         <p id="quality-size" class="menu-note">Near lossless</p>
+      </div>
+      <div class="menu-offload">
+        <div class="offload-places">
+          <div class="menu-row"><span>Camera</span><output id="offload-camera"></output></div>
+          <div class="menu-row"><span>This Mac</span><output id="offload-mac"></output></div>
+          <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
+        </div>
+        <button id="offload-start" class="menu-item" type="button" title="Each clip is copied to this Mac, checked, and deleted from the camera, then sent to Cloudflare, checked by its hash, and deleted from this Mac. Graded clips go to YouTube meanwhile; log clips without a grade get the Colorful look as settings."><span id="offload-label">Offload to Cloudflare</span><span class="menu-note">Through this Mac; each copy deleted once the next has it</span></button>
       </div>
     </div>
   </div>

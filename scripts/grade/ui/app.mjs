@@ -1043,7 +1043,10 @@ const exportMenu = $("export-menu");
 function setExportMenu(open) {
   exportMenu.hidden = !open;
   $("export-more").setAttribute("aria-expanded", String(open));
-  if (open) renderQuality();
+  if (open) {
+    renderQuality();
+    loadOffload();
+  }
 }
 $("export-more").addEventListener("click", () => setExportMenu(exportMenu.hidden));
 document.addEventListener("pointerdown", (e) => {
@@ -1163,7 +1166,6 @@ function renderStatus() {
 
 // ---- offload: the card to this Mac, this Mac to Cloudflare, each deleted once the next has it -------------------------
 
-const offloadMenu = $("offload-menu");
 /** The server's /api/offload answer: the card's clips, the Mac's not in Cloudflare yet, the room on the Mac. */
 let offloadInfo = null;
 const weight = (bytes) => (bytes ? fileSize(bytes) : "0 GB");
@@ -1196,7 +1198,7 @@ function offloadText(o) {
   return parts.join(" · ");
 }
 
-function renderOffloadMenu() {
+function renderOffload() {
   const info = offloadInfo;
   if (!info) return;
   const { camera, mac, room } = info;
@@ -1204,35 +1206,24 @@ function renderOffloadMenu() {
   $("offload-mac").textContent = mac.clips ? `${clipsAndSize(mac.clips, mac.bytes)} to send` : "Nothing to send";
   $("offload-room").textContent = `${weight(Math.max(0, room.free - room.keepFree))} (${weight(room.keepFree)} kept free)`;
   const running = state.jobs?.offload?.running ?? info.run?.running;
-  const start = $("offload-start");
-  start.disabled = Boolean(running) || !(camera.clips || mac.clips);
-  start.textContent = running ? "Offloading…" : "Start offloading";
+  $("offload-start").disabled = Boolean(running) || !(camera.clips || mac.clips);
+  $("offload-label").textContent = running ? "Offloading…" : "Offload to Cloudflare";
 }
 
 async function loadOffload() {
   try {
     offloadInfo = await (await api("/api/offload")).json();
-    renderOffloadMenu();
+    renderOffload();
   } catch (e) {
     showError(e);
   }
 }
-function setOffloadMenu(open) {
-  offloadMenu.hidden = !open;
-  $("offload-open").setAttribute("aria-expanded", String(open));
-  if (open) loadOffload();
-}
-$("offload-open").addEventListener("click", () => setOffloadMenu(offloadMenu.hidden));
-document.addEventListener("pointerdown", (e) => {
-  if (!offloadMenu.hidden && !e.target.closest("#offload-group")) setOffloadMenu(false);
-});
 $("offload-start").addEventListener("click", async () => {
-  const start = $("offload-start");
-  start.disabled = true;
-  start.textContent = "Starting…";
+  $("offload-start").disabled = true;
+  $("offload-label").textContent = "Starting…";
   try {
     await api("/api/offload", { method: "POST" });
-    setOffloadMenu(false);
+    setExportMenu(false);
     poll();
   } catch (e) {
     showError(e);
@@ -1367,7 +1358,7 @@ async function poll() {
     renderStatus();
     updateRows();
     const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || waiting;
-    if (!offloadMenu.hidden) renderOffloadMenu();
+    if (!exportMenu.hidden) renderOffload();
     pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {
     showError(e);

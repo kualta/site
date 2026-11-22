@@ -101,8 +101,8 @@ composer's light or dark.
 
 ## Offload: the card to this Mac, this Mac to Cloudflare
 
-**Offload** (top bar) shows what's on the camera, what's on this Mac not in Cloudflare yet, and the room on this Mac;
-**Start offloading** takes it all, and nothing starts until you click it. Two things go on at once:
+The foot of the Export button's menu shows what's on the camera, what's on this Mac not in Cloudflare yet, and the room
+on this Mac; **Offload to Cloudflare** takes it all, and nothing starts until you click it. Two things go on at once:
 
 - **Off the card**, a clip at a time, oldest first, while this Mac has room for the next with `GRADE_KEEP_FREE` (5 GB)
   to spare: copied into `Original/` (as a hidden `.part` until it's checked), hashed (SHA-256) as it's read, read back
