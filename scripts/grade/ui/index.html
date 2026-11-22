@@ -40,6 +40,7 @@
     <span class="select"><select id="shoot"></select><svg><use href="#i-chevron"/></svg></span>
   </div>
   <a id="footage-link" class="btn" href="https://post.kualta.dev/footage" target="_blank" rel="noreferrer" title="Every clip and where its copies are, in the composer's Footage tab">Footage</a>
+  <span class="transcribing" id="transcribing"></span>
   <p class="status" id="status" role="status"></p>
   <button id="stop-offload" class="btn" type="button" hidden>Stop offloading</button>
   <button id="stop-export" class="btn" type="button" hidden>Stop exporting</button>
@@ -58,9 +59,10 @@
         <div class="offload-places">
           <div class="menu-row"><span>Camera</span><output id="offload-camera"></output></div>
           <div class="menu-row"><span>This Mac</span><output id="offload-mac"></output></div>
+          <div class="menu-row"><span>Transcripts</span><output id="offload-transcripts"></output></div>
           <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
         </div>
-        <button id="offload-start" class="menu-item" type="button" title="Each clip is copied to this Mac, checked, and deleted from the camera, then sent to Cloudflare, read back and checked, and deleted from this Mac. Graded clips go to YouTube meanwhile; log clips without a grade get the Colorful look as settings."><span id="offload-label">Offload to Cloudflare</span><span class="menu-note">Through this Mac; each copy deleted once the next has it</span></button>
+        <button id="offload-start" class="menu-item" type="button" title="Each clip is copied to this Mac, checked, and deleted from the camera, then sent to Cloudflare, read back and checked, and deleted from this Mac. Its transcript is made here and filed beside it. Graded clips go to YouTube meanwhile; log clips without a grade get the Colorful look as settings."><span id="offload-label">Offload to Cloudflare</span><span class="menu-note">Through this Mac; each copy deleted once the next has it</span></button>
       </div>
     </div>
   </div>

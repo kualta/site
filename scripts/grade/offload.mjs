@@ -10,9 +10,12 @@
 // again after every clip so a clip is safe the moment it's in. The ledger counts an archived file the original's size as
 // the original in Cloudflare; the leading `_` keeps these out of the films. `bun run publisher restore _originals-<day>`
 // brings a day back.
+//
+// Each clip's sound is taken before its Mac copy goes, to be transcribed meanwhile or later (transcripts.mjs). A
+// transcript is filed beside its clip, as `transcripts/<clip>.vtt` and `.json`, while a run goes, and never stops one.
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { rename, rm, stat, utimes } from "node:fs/promises";
+import { readFile, rename, rm, stat, utimes } from "node:fs/promises";
 import { join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -22,6 +25,7 @@ import { readRange } from "../publisher/archive.mjs";
 export const OFFLOAD_PART = 16 * 1024 * 1024;
 
 export const originalsName = (day) => `_originals-${day}`;
+const clipPath = (name) => `assets/${name}`;
 const lrfOf = (path) => path.replace(/\.mp4$/i, ".LRF");
 const gb = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`;
 
@@ -134,15 +138,61 @@ async function dayFiles(request, day, signal) {
   }
 }
 
+/** Files in a day's manifest all it holds and these, until the manifest reads back with them. */
+async function saveDay(request, day, files, signal) {
+  for (let saves = 0; ; saves++) {
+    const held = await dayFiles(request, day, signal);
+    const filing = files.filter(({ beside }) => !beside || held.has(beside));
+    const listed = ({ path, sha256, size }) => held.get(path)?.sha256 === sha256 && held.get(path).size === size;
+    if (filing.every(listed)) return filing.map(({ path }) => path);
+    if (saves === 3) throw new Error(`${originalsName(day)} doesn't list what was filed in it`);
+    for (const { path, sha256, size, mtime } of filing) held.set(path, { path, sha256, size, mtime });
+    await request(`projects/${originalsName(day)}`, {
+      method: "PUT",
+      json: { files: [...held.values()], folders: [] },
+      signal,
+    });
+  }
+}
+
+/**
+ * Files into the shoot days' manifests. A manifest is saved whole, so every save of a day's, whichever run or transcript
+ * asks for it, waits for the one before it and keeps all the day has in the archive by then. It's done once the manifest
+ * reads back with what was filed: the archive dates a manifest by a Worker's clock, so one saved after another can come
+ * out the earlier of the two.
+ *
+ * `fileInDay(request, day, files, signal)` takes `{ path, sha256, size, mtime }`, and with `beside` files one only if the
+ * day holds that path. It says the paths filed.
+ */
+export function dayManifests() {
+  const turns = new Map();
+  return function fileInDay(request, day, files, signal = null) {
+    const save = (turns.get(day) ?? Promise.resolve()).then(() => saveDay(request, day, files, signal));
+    turns.set(
+      day,
+      save.catch(() => {}),
+    );
+    return save;
+  };
+}
+
+/** No transcripts: an offload of clips alone. */
+const NO_TRANSCRIPTS = { take: async () => {}, ready: async () => [], sent: async () => {} };
+
 /**
  * Starts offloading. `camera`: the card's clips, `mac`: Movies/Original's, each `{ name, path, size, mtime, day }`,
  * oldest first. `record` (name → { sha256, size }) is what went to the archive before: those it still holds are only
  * deleted. `dir` is Movies/Original; `room()` says how many bytes are free there. A clip `removable` says no to (one
  * being exported) stays where it is. `landed(clip, sha256)` hears each clip once the archive has it, `removed(clip)` each
- * one deleted from the card or the Mac.
+ * one deleted from the card or the Mac. `fileInDay` is the days' manifests: the one `dayManifests()` for every run.
  *
- * Says `{ state, stop, done }`: `state` is read as it goes; `stop()` ends it, keeping what's in; `done` settles when it
- * has ended, `state.finished` then saying "done" or "stopped", or `state.error` what went wrong.
+ * `transcripts` is what the transcriber does: `take(clip, signal)` takes a clip's sound from its Mac copy, which waits for
+ * it; `ready()` says the transcripts to send, each `{ key, name, day, files: [{ path, abs, mtime }] }`; `sent(keys)` hears
+ * the ones filed.
+ *
+ * Says `{ state, stop, poke, done }`: `state` is read as it goes; `stop()` ends it, keeping what's in; `poke()` says a
+ * transcript is ready; `done` settles when it has ended, `state.finished` then saying "done" or "stopped", or `state.error`
+ * what went wrong.
  */
 export function startOffload({
   camera,
@@ -157,6 +207,8 @@ export function startOffload({
   together = 2,
   landed = () => {},
   removed = () => {},
+  fileInDay = dayManifests(),
+  transcripts = NO_TRANSCRIPTS,
 }) {
   const stopping = new AbortController();
   const { signal } = stopping;
@@ -167,6 +219,8 @@ export function startOffload({
     copy: { total: camera.length, bytes: sum(camera), done: 0, doneBytes: 0, current: null, ended: false, error: null },
     /** Up to the archive: what's on the Mac now and all that comes off the card. */
     send: { total: camera.length + mac.length, bytes: sum(camera) + sum(mac), done: 0, doneBytes: 0, current: [] },
+    /** Transcripts filed, and why one couldn't be: it waits for the next run. */
+    transcripts: { sent: 0, error: null },
     /** Set while the next clip off the card waits for room on the Mac. */
     waiting: null,
     /** Bytes sent to the archive: [time, total] over the last minute or so, for the speed. */
@@ -210,27 +264,29 @@ export function startOffload({
     notify();
   }
 
-  // Each day's manifest is saved in turn, so the last save always has every clip before it.
-  const days = new Map();
-  function fileInDay(clip, sha256) {
-    if (!days.has(clip.day)) days.set(clip.day, { files: null, turn: Promise.resolve() });
-    const day = days.get(clip.day);
-    const save = day.turn.then(async () => {
-      day.files ??= await dayFiles(request, clip.day, signal);
-      const path = `assets/${clip.name}`;
-      day.files.set(path, { path, sha256, size: clip.size, mtime: clip.mtime });
-      await request(`projects/${originalsName(clip.day)}`, {
-        method: "PUT",
-        json: { files: [...day.files.values()], folders: [] },
-        signal,
-      });
-    });
-    day.turn = save.catch(() => {});
-    return save;
-  }
+  const fileClip = (clip, sha256) =>
+    fileInDay(request, clip.day, [{ path: clipPath(clip.name), sha256, size: clip.size, mtime: clip.mtime }], signal);
 
   const queue = [];
   let copying = true;
+
+  /**
+   * Takes a clip's sound. Says whether its Mac copy may go: not if this was cut short, but a sound that can't be taken
+   * keeps no clip here.
+   */
+  async function takeSound(clip) {
+    if (signal.aborted) return false;
+    await transcripts.take(clip, signal).catch(() => {});
+    return !signal.aborted;
+  }
+  // Taken as soon as the clip is on the Mac, one at a time, so it's transcribed while the clip goes up.
+  const sounds = new Map();
+  let taking = Promise.resolve();
+  function onMac(clip) {
+    taking = taking.then(() => takeSound(clip));
+    sounds.set(clip, taking);
+    queue.push(clip);
+  }
 
   async function copyAll(clips) {
     try {
@@ -259,7 +315,7 @@ export function startOffload({
           if (!(await stat(clip.path).catch(() => null))) throw new Error("The camera was unplugged");
           throw error;
         }
-        queue.push({ ...clip, path: join(dir, clip.name), sha256 });
+        onMac({ ...clip, path: join(dir, clip.name), sha256 });
         state.copy.done++;
         state.copy.doneBytes += clip.size;
         state.copy.current = null;
@@ -316,14 +372,50 @@ export function startOffload({
         const sha256 = clip.sha256 ?? (await hashFile(clip.path, signal));
         going.hashing = false;
         await store(clip, sha256, going);
-        await fileInDay(clip, sha256);
+        await fileClip(clip, sha256);
         state.send.done++;
         state.send.doneBytes += clip.size;
         landed(clip, sha256);
-        await remove(clip, "mac");
+        if (await sounds.get(clip)) await remove(clip, "mac");
       } finally {
         state.send.current.splice(state.send.current.indexOf(going), 1);
       }
+    }
+  }
+
+  /** Sends a day's transcripts and files each beside its clip. */
+  async function sendDay(day, ready) {
+    const files = [];
+    for (const { name, files: made } of ready)
+      for (const { path, abs, mtime } of made) {
+        const body = await readFile(abs);
+        const sha256 = createHash("sha256").update(body).digest("hex");
+        await request(`blobs/${sha256}`, { method: "PUT", body, signal });
+        files.push({ path, sha256, size: body.length, mtime, beside: clipPath(name) });
+      }
+    const filed = new Set(await fileInDay(request, day, files, signal));
+    const sent = ready.filter(({ files: made }) => made.every(({ path }) => filed.has(path)));
+    await transcripts.sent(sent.map(({ key }) => key));
+    state.transcripts.sent += sent.length;
+  }
+
+  // Transcripts go up as they're made, and those left from earlier runs, until the clips are all in. Each is tried once a
+  // run, and none is waited for: what isn't made by then goes with the next run.
+  let sending = true;
+  async function sendTranscripts() {
+    const tried = new Set();
+    while (!signal.aborted) {
+      const last = !sending;
+      const ready = (await transcripts.ready()).filter(({ key }) => !tried.has(key));
+      for (const [day, ofDay] of Map.groupBy(ready, (transcript) => transcript.day)) {
+        for (const { key } of ofDay) tried.add(key);
+        await sendDay(day, ofDay).catch((error) => {
+          if (!signal.aborted) state.transcripts.error = error.message;
+        });
+      }
+      if (ready.length) continue;
+      if (last) return;
+      if (sending) await change(10_000);
     }
   }
 
@@ -334,7 +426,7 @@ export function startOffload({
     const holds = await held(request, recorded, signal);
     const safe = (clip) => holds.has(recordedHash(clip));
     for (const clip of camera.filter(safe)) await remove(clip, "camera");
-    for (const clip of mac.filter(safe)) await remove(clip, "mac");
+    for (const clip of mac.filter(safe)) if (await takeSound(clip)) await remove(clip, "mac");
     const fromCamera = camera.filter((clip) => !safe(clip));
     const fromMac = mac.filter((clip) => !safe(clip));
     Object.assign(state.copy, { total: fromCamera.length, bytes: sum(fromCamera) });
@@ -342,7 +434,7 @@ export function startOffload({
       total: fromCamera.length + fromMac.length,
       bytes: sum(fromCamera) + sum(fromMac),
     });
-    queue.push(...fromMac);
+    for (const clip of fromMac) onMac(clip);
     // A sender failing stops the rest, and the copy: the next run picks up where this one stopped.
     const senders = Array.from({ length: together }, () =>
       sendAll().catch((error) => {
@@ -350,7 +442,14 @@ export function startOffload({
         stopping.abort();
       }),
     );
-    await Promise.all([copyAll(fromCamera), ...senders]);
+    const clipsSent = Promise.all([copyAll(fromCamera), ...senders]).then(() => {
+      sending = false;
+      notify();
+    });
+    const transcriptsSent = sendTranscripts().catch((error) => {
+      state.transcripts.error = error.message;
+    });
+    await Promise.all([clipsSent, transcriptsSent]);
   }
 
   const done = run()
@@ -364,5 +463,5 @@ export function startOffload({
       state.running = false;
       state.waiting = null;
     });
-  return { state, stop: () => stopping.abort(), done };
+  return { state, stop: () => stopping.abort(), poke: notify, done };
 }

@@ -13,7 +13,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { composeLut, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
-import { startOffload } from "./offload.mjs";
+import { dayManifests, startOffload } from "./offload.mjs";
 import {
   archivedFootage,
   comparable,
@@ -24,6 +24,7 @@ import {
   youtubeUploads,
 } from "./ledger.mjs";
 import { cameraDays, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
+import { transcriber } from "./transcripts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MOVIES = process.env.GRADE_ROOT || join(homedir(), "Movies");
@@ -51,6 +52,8 @@ const ARCHIVE_EVERY = 10 * 60_000;
 const FRAMED_BY = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
 /** What each clip offloaded to the archive was, by file name: its SHA-256, size and shoot day. */
 const OFFLOADED = join(DATA, "offloaded.json");
+/** What's known of each offloaded clip's transcript (transcripts.mjs); the transcripts themselves are in transcripts/. */
+const TRANSCRIPTS = join(DATA, "transcripts.json");
 /** The look an offloaded log clip without a grade gets, as settings, until it's graded by hand. */
 const DEFAULT_LOOK = process.env.GRADE_DEFAULT_LOOK || "opendrt-colorful";
 /** Clips come off the card only while this much stays free on the Mac, for exports and the system. */
@@ -658,6 +661,7 @@ async function observe(cloud) {
     youtube: await youtubeUploads(PUBLISHER),
     archive,
     projects: await localProjects(),
+    transcripts: await transcripts.filed(),
   };
   const moreToProbe = unknown.length > batch.length && batch.length > 0;
   const moreToPicture = unpictured.length > pictures.length && pictures.length > 0;
@@ -730,6 +734,23 @@ let offloading = null;
 let starting = false;
 /** While a run goes, the composer counts as watching, so graded clips go up to YouTube meanwhile (the helper's job). */
 let footageWatch = null;
+/** The shoot days' manifests: every run's saves go through the one. */
+const fileInDay = dayManifests();
+/** Makes the transcripts. An export has the GPU first. */
+const transcripts = transcriber({
+  audio: join(CACHE, "audio"),
+  dir: join(DATA, "transcripts"),
+  scratch: join(CACHE, "transcribing"),
+  records: { read: () => readClips(TRANSCRIPTS), update: (change) => updateClips(TRANSCRIPTS, change) },
+  uvx: process.env.GRADE_UVX,
+  busy: () => Boolean(jobs.export.current || jobs.export.queue.length),
+  made: () => offloading?.poke(),
+});
+/** The transcripts waiting to be sent: made, and their clips in the archive. */
+async function transcriptsToSend() {
+  await updating.get(OFFLOADED);
+  return transcripts.ready(await readClips(OFFLOADED));
+}
 const sizeOfAll = (clips) => clips.reduce((sum, clip) => sum + clip.size, 0);
 async function roomOnMac() {
   const { bavail, bsize } = await statfs(MOVIES);
@@ -761,7 +782,10 @@ function offloadState() {
   return { ...state, sentBytes: state.send.doneBytes + inFlight, speed };
 }
 
-/** What an offload would take: the card's clips, the Mac's not in the archive yet, the room on the Mac; and the run. */
+/**
+ * What an offload would take: the card's clips, the Mac's not in the archive yet, the transcripts made since; the room on
+ * the Mac; and the run.
+ */
 async function offloadSummary() {
   const record = await readClips(OFFLOADED);
   const mounted = Boolean(await card());
@@ -770,6 +794,7 @@ async function offloadSummary() {
   return {
     camera: { mounted, clips: camera.length, bytes: sizeOfAll(camera) },
     mac: { clips: mac.length, bytes: sizeOfAll(mac) },
+    transcripts: { ...transcripts.summary(), toSend: (await transcriptsToSend()).length },
     room: { free: await roomOnMac(), keepFree: KEEP_FREE },
     run: offloadState(),
   };
@@ -813,6 +838,7 @@ async function beginOffload() {
   await mkdir(ORIGINAL, { recursive: true });
   // Before any clip moves: the look goes by name, the probing by where each clip is now.
   await applyDefaultLook([...camera, ...mac]).catch((e) => console.error("grade: default look:", e.message));
+  transcripts.retry();
   offloading = startOffload({
     camera,
     mac,
@@ -832,6 +858,15 @@ async function beginOffload() {
     },
     removed: () => {
       cardCache = null;
+    },
+    fileInDay,
+    transcripts: {
+      take: transcripts.take,
+      ready: transcriptsToSend,
+      sent: async (keys) => {
+        await transcripts.sent(keys);
+        scheduleLedger(2000);
+      },
     },
   });
   let watchFailed = null;
@@ -1061,6 +1096,7 @@ async function route(req, res) {
       proxy: { queued: jobs.proxy.queue.length, current: jobs.proxy.current && { id: jobs.proxy.current.id, name: jobs.proxy.current.name } },
       export: jobs.export,
       offload: offloadState(),
+      transcripts: transcripts.summary(),
     });
 
   // Offloading: the card to this Mac, this Mac to the archive.
@@ -1090,6 +1126,7 @@ const server = createServer(async (req, res) => {
 });
 
 for (const dir of [ORIGINAL, EXPORTED, DATA, CACHE]) await mkdir(dir, { recursive: true });
+await transcripts.resume().catch((e) => console.error("grade: transcripts:", e.message));
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;
   console.log(`grade: ${address}  (movies ${MOVIES}, camera ${CAMERA}, data ${DATA}, LUTs ${LUTS})`);

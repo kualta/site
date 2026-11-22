@@ -1162,6 +1162,14 @@ function renderStatus() {
   if (statusNote && (statusFirst || !parts.length)) parts.unshift(statusNote);
   $("status").textContent = parts.join(" · ");
   $("status").title = $("status").textContent;
+  $("transcribing").textContent = transcribingText(j?.transcripts);
+  $("transcribing").title = j?.transcripts?.error ?? "";
+}
+/** What Whisper is doing, in a few words: the clip it's on, those waiting for an export to end, or those it couldn't do. */
+function transcribingText(t) {
+  if (t?.current) return `Transcribing ${t.done + 1} of ${t.total}`;
+  if (t?.waiting) return `${t.waiting} to transcribe`;
+  return t?.failed ? `${t.failed} not transcribed` : "";
 }
 
 // ---- offload: the card to this Mac, this Mac to Cloudflare, each deleted once the next has it -------------------------
@@ -1182,6 +1190,7 @@ function offloadText(o) {
   if (!o.running) {
     if (o.error) return `Offload stopped: ${o.error}`;
     if (o.copy.error) return `Offload: ${o.copy.error}`;
+    if (o.transcripts?.error) return `Transcripts not sent: ${o.transcripts.error}`;
     return "";
   }
   const parts = [];
@@ -1201,12 +1210,13 @@ function offloadText(o) {
 function renderOffload() {
   const info = offloadInfo;
   if (!info) return;
-  const { camera, mac, room } = info;
+  const { camera, mac, room, transcripts: { toSend = 0 } = {} } = info;
   $("offload-camera").textContent = camera.mounted ? clipsAndSize(camera.clips, camera.bytes) : "Not plugged in";
   $("offload-mac").textContent = mac.clips ? `${clipsAndSize(mac.clips, mac.bytes)} to send` : "Nothing to send";
   $("offload-room").textContent = `${weight(Math.max(0, room.free - room.keepFree))} (${weight(room.keepFree)} kept free)`;
+  $("offload-transcripts").textContent = toSend ? `${toSend} to send` : "Nothing to send";
   const running = state.jobs?.offload?.running ?? info.run?.running;
-  $("offload-start").disabled = Boolean(running) || !(camera.clips || mac.clips);
+  $("offload-start").disabled = Boolean(running) || !(camera.clips || mac.clips || toSend);
   $("offload-label").textContent = running ? "Offloading…" : "Offload to Cloudflare";
 }
 

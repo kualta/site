@@ -19,6 +19,8 @@ export interface LedgerClip {
   gradePending: boolean;
   /** Its small picture is in the archive. */
   thumb?: boolean;
+  /** Its transcript is in the archive, beside its original. */
+  transcript?: boolean;
 }
 /** A film (an OpenFilm project): the ledger's clips in it, and whether it's on the Mac and in the archive. */
 export interface LedgerProject {

@@ -148,6 +148,20 @@ export async function makeThumb(src, dst, { still = null, at = 1 } = {}) {
 }
 
 /**
+ * A clip's sound alone, as it is in the file (encoded only when an .m4a can't hold it), for Whisper to hear once the clip
+ * has gone. Says whether the clip has any.
+ */
+export async function extractAudio(src, dst, { signal } = {}) {
+  const ask = ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", src];
+  const { stdout } = await exec(FFPROBE, ask, { signal });
+  const [codec] = stdout.trim().split(/[\s,]/);
+  if (!codec) return false;
+  const sound = codec === "aac" || codec === "alac" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "192k"];
+  await writeAtomically(dst, (tmp) => run(["-i", src, "-map", "0:a:0", "-vn", ...sound, tmp], { signal }));
+  return true;
+}
+
+/**
  * Bake a grade into a graded copy, from the 10-bit original at 16-bit precision: the clip's LUT through ffmpeg's
  * tetrahedral lut3d, out as 8-bit H.264 BT.709 with a key frame every quarter second, sound copied: near lossless at
  * full `quality`, or a known share of the original's `videoBitrate` below it (exportRate). `deflicker`, the grade's

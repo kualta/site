@@ -144,6 +144,8 @@ kbd {
 .offload-places { display: grid; gap: 6px; padding: 6px 10px 4px; }
 .menu-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 12.5px; }
 .menu-row output { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* What Whisper is doing. Its room is kept when it says nothing, so nothing in the bar moves when it does. */
+.transcribing { flex: none; width: 132px; color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status { margin: 0 0 0 auto; color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ---- layout ---------------------------------------------------------------------------------------------- */
