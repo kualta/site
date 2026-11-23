@@ -908,7 +908,8 @@ test.if(usable)("takes the card's clips alone, remembers to leave them there til
   server.kill("SIGKILL");
   await exited;
   await startServer();
-  expect(await json("/api/offload")).toMatchObject({ clearCardAfter: "sent", run: null, camera: { clips: 1 }, mac: { clips: 1 } });
+  // The clip still on the card is copied: nothing is left to copy, and one to send.
+  expect(await json("/api/offload")).toMatchObject({ clearCardAfter: "sent", run: null, camera: { clips: 0 }, mac: { clips: 1 } });
   expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
   const sent = await ended();
   expect(sent.run).toMatchObject({ finished: "done", send: { done: 1 }, copy: { on: false } });
@@ -1085,13 +1086,16 @@ test.if(usable)("starts and pauses each switch as the Footage tab asks, as the o
   // Everything paused from the tab first: started meanwhile, the switch is on, held before anything goes.
   site.paused = { since: Date.now() };
   await until(async () => (await json("/api/jobs")).paused);
+  // How the card is cleared is the owner's last choice, which a Start from the tab keeps.
+  expect((await post("/api/offload", { lanes: [], clearCardAfter: "copied" })).status).toBe(200);
   const started = Date.now();
   site.lanes = { send: { want: "start", at: started } };
   const run = await until(async () => {
     const { run } = await json("/api/offload");
     return run?.send.waiting?.for === "owner" && run;
   });
-  expect(run).toMatchObject({ running: true, unattended: true, youtube: false, clearCardAfter: "sent", copy: { on: false } });
+  expect(run).toMatchObject({ running: true, unattended: true, youtube: false, clearCardAfter: "copied", copy: { on: false } });
+  expect((await post("/api/offload", { lanes: [], clearCardAfter: "sent" })).status).toBe(200);
   // The report says it's taken, at once rather than at its pace.
   await until(() => site.reports.at(-1)?.report.heard.send?.at === started, 5_000);
   expect(site.reports.at(-1).report.lanes.send.state).toBe("paused");
