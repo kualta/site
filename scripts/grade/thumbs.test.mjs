@@ -29,7 +29,10 @@ const ROTATE = lutOf(2, ([r, g, b]) => [b, r, g]);
 const SQUARE = lutOf(33, (c) => c.map((v) => v * v));
 const IDENTITY = lutOf(2, (c) => c);
 
-/** A flat picture as makeThumb writes one: a JPEG holding `colour`'s Y'CbCr in `matrix`, full range. */
+/**
+ * A flat picture as makeThumb writes one: a JPEG holding `colour`'s Y'CbCr in `matrix`, full range. accurate_rnd: without
+ * it, swscale's quick RGB to 4:2:0 step on x86 takes BT.601 whatever matrix it's asked for.
+ */
 const still = (colour, matrix = "bt601") =>
   run([
     "-f",
@@ -39,7 +42,7 @@ const still = (colour, matrix = "bt601") =>
     "-frames:v",
     "1",
     "-vf",
-    `scale=out_color_matrix=${matrix}:out_range=pc,format=yuvj420p`,
+    `scale=out_color_matrix=${matrix}:out_range=pc:flags=accurate_rnd+full_chroma_int,format=yuvj420p`,
     "-q:v",
     "3",
     "-f",
