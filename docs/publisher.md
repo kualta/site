@@ -358,13 +358,15 @@ since it can't tell whether the tab is still open. Both the open marker and the 
 objects in the media bucket (`footage/watching`, `footage/status.json`), not D1 rows, so the polling
 costs no D1 reads beyond the helper's sign-in check. A hidden tab reads nothing, but the answer to its
 saying it's open carries the status, so its title keeps up. While an offload the owner started in the
-grade app goes, the grade app keeps the marker fresh too (`helper/footage/watch`, on the helper's
-pairing, every minute), so graded clips go up meanwhile; it lapses on its own once the offload ends.
+grade app sends anything, the grade app keeps the marker fresh too (`helper/footage/watch`, on the
+helper's pairing, every minute), so graded clips go up meanwhile, unless the offload was told not to;
+it lapses on its own once the offload pauses or ends.
 
 It puts up 10 clips a day by default (`bun run publisher footage --daily <clips>` changes it):
 first the grade app's exports in `~/Movies/Exported` (only files `exports.json` records, unchanged
 for two minutes), then graded clips the laptop has let go of, fetched from the archive's projects
-(listed once each time the tab opens) and checked against their hash. A clip graded again goes up
+(the films and the grade app's offloaded exports, `_graded-<day>`, but not the originals, listed once
+each time the tab opens) and checked against their hash. A clip graded again goes up
 again as a new video. Each goes in 16 MiB parts through YouTube's resumable upload, from where
 YouTube says it stopped when a part fails, the helper restarts or the tab closes, titled by the
 camera's clock (`2026-11-15 22:46:28 · clip 0313`) and described by its source and grade. A failure

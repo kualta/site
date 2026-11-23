@@ -1,77 +1,21 @@
 import { expect, setSystemTime, test } from "bun:test";
-import { Database } from "bun:sqlite";
-import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, stat, utimes, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { archiveResponse } from "../../src/lib/publisher/archive.ts";
-import { memoryArchive, memoryMedia } from "../../src/lib/publisher/memory-archive.ts";
-import { archiveClient } from "../publisher/archive.mjs";
-import { dayManifests, originalsName, startOffload } from "./offload.mjs";
-
-const sha = (text) => createHash("sha256").update(text).digest("hex");
-
-/**
- * The site's archive routes, answered in memory, as the grade app's fetch reaches them; `hold` can answer a request itself,
- * or stall it and then `pass` it on.
- */
-function site({ hold = () => null } = {}) {
-  const sqlite = new Database(":memory:");
-  sqlite.exec(readFileSync("migrations/0002_publisher.sql", "utf8"));
-  const db = {
-    prepare: (sql) => {
-      let values = [];
-      const statement = {
-        bind: (...v) => {
-          values = v;
-          return statement;
-        },
-        first: async () => sqlite.query(sql).get(...values),
-        all: async () => ({ results: sqlite.query(sql).all(...values) }),
-      };
-      return statement;
-    },
-  };
-  const archive = memoryArchive();
-  const media = memoryMedia();
-  const fetcher = async (url, init = {}) => {
-    const rest = new URL(url).pathname.replace(/^\/api\/publisher\/helper\/archive\//, "");
-    const pass = () => {
-      const headers = new Headers(init.headers);
-      if (init.body !== undefined) headers.set("Content-Length", String(Buffer.byteLength(init.body)));
-      const request = new Request(url, { method: init.method, headers, body: init.body });
-      return archiveResponse(rest, request, { db, media: media.bucket, archive: archive.bucket });
-    };
-    return hold(rest, init, pass) ?? pass();
-  };
-  return archiveClient({ origin: "https://post.kualta.dev", token: "token", fetcher });
-}
-
-/** A card (DCIM/DJI_001, each clip with its .LRF) and a Movies/Original, with these clips on them. */
-async function place(card, mac = []) {
-  const root = await mkdtemp(join(tmpdir(), "offload-"));
-  const dcim = join(root, "DCIM/DJI_001");
-  const original = join(root, "Original");
-  await mkdir(dcim, { recursive: true });
-  await mkdir(original);
-  const make = async (dir, [name, body, day], lrf) => {
-    const path = join(dir, name);
-    await writeFile(path, body);
-    const when = new Date("2026-11-18T12:00:00Z");
-    await utimes(path, when, when);
-    if (lrf) await writeFile(path.replace(/\.MP4$/, ".LRF"), "low-res");
-    return { name, path, size: Buffer.byteLength(body), mtime: when.getTime(), day };
-  };
-  const camera = [];
-  for (const clip of card) camera.push(await make(dcim, clip, true));
-  const onMac = [];
-  for (const clip of mac) onMac.push(await make(original, clip, false));
-  return { root, dcim, original, camera, mac: onMac, done: () => rm(root, { recursive: true, force: true }) };
-}
-
-const files = (dir) => readdirSync(dir).sort();
-const plenty = async () => 1e12;
+import {
+  begin,
+  files,
+  listed,
+  place,
+  put,
+  readsBlob,
+  records,
+  savesDay,
+  sha,
+  site,
+  sleep,
+  until,
+} from "./offload.fixture.mjs";
+import { dayManifests, originalsName } from "./offload.mjs";
 
 test("the card goes to the Mac and the Mac to the archive, each deleted once the next has it, by day", async () => {
   const at = await place(
@@ -86,31 +30,29 @@ test("the card goes to the Mac and the Mac to the archive, each deleted once the
     const request = site();
     const landed = [];
     const removed = [];
-    const run = startOffload({
-      camera: at.camera,
-      mac: at.mac,
-      dir: at.original,
+    const run = begin(at, {
       request,
-      room: plenty,
       keepFree: 0,
       part: 8,
-      landed: (clip, sha256) => landed.push([clip.name, sha256]),
+      records: records({}, (clip, sha256) => landed.push([clip.name, sha256])),
       removed: (clip, where) => removed.push([where, clip.name]),
     });
     await run.done;
     expect(run.state).toMatchObject({ running: false, finished: "done", error: null });
-    expect(run.state.copy).toMatchObject({ total: 3, done: 3, ended: true, error: null });
-    expect(run.state.send).toMatchObject({ total: 4, done: 4, current: [] });
-    expect(run.state.freed).toEqual({ camera: 50, mac: 68 });
+    expect(run.state.copy).toMatchObject({ total: 3, done: 3, on: false, finished: "done", skipped: [] });
+    expect(run.state.send).toMatchObject({ total: 4, done: 4, current: [], finished: "done", skipped: [] });
+    expect(run.state.freed).toEqual({ camera: 50, mac: 68, exports: 0 });
     expect(Object.fromEntries(landed)).toEqual({
       "DJI_20261118203054_0316_D.MP4": sha("a clip long enough to go in parts"),
       "DJI_20261118203937_0317_D.MP4": sha("short"),
       "DJI_20261119090000_0318_D.MP4": sha("the next day"),
       "DJI_20261117090000_0300_D.MP4": sha("already on the Mac"),
     });
-    expect(removed.filter(([where]) => where === "camera").map(([, name]) => name)).toEqual(
-      at.camera.map((c) => c.name),
-    );
+    expect(removed.filter(([where]) => where === "camera").map(([, name]) => name)).toEqual([
+      "DJI_20261118203054_0316_D.MP4",
+      "DJI_20261118203937_0317_D.MP4",
+      "DJI_20261119090000_0318_D.MP4",
+    ]);
     expect(removed.filter(([where]) => where === "mac")).toHaveLength(4);
     // Nothing left on the card, .LRF included, nor on the Mac, half-copied files included.
     expect(files(at.dcim)).toEqual([]);
@@ -145,24 +87,20 @@ test("a clip comes off the card only when the Mac has room for it, made by the c
       return total;
     };
     const most = [];
-    let waited = false;
-    const run = startOffload({
-      camera: at.camera,
-      mac: [],
-      dir: at.original,
+    const run = begin(at, {
       request: site(),
-      room: async () => {
-        waited ||= run?.state.waiting === "room";
-        return 30 - (await used());
-      },
+      room: async () => 30 - (await used()),
       keepFree: 0,
-      landed: async () => most.push(files(at.original).length),
+      records: records({}, async () => {
+        // The next one waits for this one to be gone from the Mac.
+        if (most.length < 2) await until(() => run.state.waiting === "room");
+        most.push(files(at.original).length);
+      }),
     });
     await run.done;
     expect(run.state).toMatchObject({ finished: "done", error: null });
     expect(run.state.send.done).toBe(3);
     expect(most).toEqual([1, 1, 1]);
-    expect(waited).toBe(true);
     expect(files(at.dcim)).toEqual([]);
     expect(files(at.original)).toEqual([]);
   } finally {
@@ -170,14 +108,22 @@ test("a clip comes off the card only when the Mac has room for it, made by the c
   }
 });
 
-test("with no room on the Mac and nothing there to go up, the copy says so and the card keeps its clips", async () => {
+test("with no room on the Mac the copy waits for some, says so, and goes on once there is", async () => {
   const at = await place([["DJI_20261118100000_0001_D.MP4", "a clip", "2026-11-18"]]);
   try {
-    const run = startOffload({ camera: at.camera, mac: [], dir: at.original, request: site(), room: async () => 3e9 });
-    await run.done;
-    expect(run.state.finished).toBe("done");
-    expect(run.state.copy.error).toBe("No room on this Mac for the next clip: 3.0 GB free, 5.0 GB kept free");
+    let free = 3e9;
+    const run = begin(at, { request: site(), room: async () => free });
+    await until(() => run.state.waiting === "room");
+    expect(run.state.copy.waiting).toEqual({
+      for: "room",
+      why: "No room on this Mac for the next clip: 3.0 GB free, 5.0 GB kept free",
+    });
     expect(files(at.dcim)).toEqual(["DJI_20261118100000_0001_D.LRF", "DJI_20261118100000_0001_D.MP4"]);
+    expect(files(at.original)).toEqual([]);
+    free = 6e9;
+    await run.done;
+    expect(run.state).toMatchObject({ finished: "done", waiting: null });
+    expect(files(at.dcim)).toEqual([]);
   } finally {
     await at.done();
   }
@@ -191,20 +137,12 @@ test("what the archive holds already is only deleted; what it's lost goes again"
   try {
     const request = site();
     await request(`blobs/${sha("in the archive")}`, { method: "PUT", body: "in the archive" });
+    const landed = [];
     const record = {
       "DJI_20261118100000_0001_D.MP4": { sha256: sha("in the archive"), size: 14 },
       "DJI_20261117100000_0001_D.MP4": { sha256: sha("recorded, but the archive lost it"), size: 33 },
     };
-    const landed = [];
-    const run = startOffload({
-      camera: at.camera,
-      mac: at.mac,
-      record,
-      dir: at.original,
-      request,
-      room: plenty,
-      landed: (clip) => landed.push(clip.name),
-    });
+    const run = begin(at, { request, records: records(record, (clip) => landed.push(clip.name)) });
     await run.done;
     expect(run.state.copy.total).toBe(0);
     expect(landed).toEqual(["DJI_20261117100000_0001_D.MP4"]);
@@ -215,7 +153,7 @@ test("what the archive holds already is only deleted; what it's lost goes again"
   }
 });
 
-test("stopping cuts the part in flight, keeps what's in, and keeps the clip on the Mac", async () => {
+test("stopping now cuts the part in flight, keeps what's in, and keeps the clip on the Mac", async () => {
   const at = await place([], [["DJI_20261117100000_0001_D.MP4", "a clip long enough to go in parts", "2026-11-17"]]);
   try {
     let stalled = null;
@@ -228,15 +166,18 @@ test("stopping cuts the part in flight, keeps what's in, and keeps the clip on t
         });
       },
     });
-    const run = startOffload({ camera: at.camera, mac: at.mac, dir: at.original, request, room: plenty, part: 8 });
-    await new Promise((resolve) => {
+    const reached = new Promise((resolve) => {
       stalled = resolve;
     });
+    const run = begin(at, { request, part: 8 });
+    await reached;
     expect(run.state.send.current).toMatchObject([{ name: "DJI_20261117100000_0001_D.MP4", sent: 8 }]);
-    run.stop();
+    run.stop(["copy", "send"], { now: true });
     await run.done;
     expect(run.state).toMatchObject({ finished: "stopped", error: null, running: false });
     expect(run.state.send.done).toBe(0);
+    // The part-sent file is given up.
+    expect(request.archive.uploads.size).toBe(0);
     expect(files(at.original)).toEqual(["DJI_20261117100000_0001_D.MP4"]);
   } finally {
     await at.done();
@@ -244,9 +185,9 @@ test("stopping cuts the part in flight, keeps what's in, and keeps the clip on t
 });
 
 test("a clip sent in parts that doesn't read back is sent once more, and stays on the Mac if it still doesn't", async () => {
-  for (const [bad, finished] of [
-    [1, "done"],
-    [2, null],
+  for (const [bad, sent] of [
+    [1, 1],
+    [2, 0],
   ]) {
     const at = await place([], [["DJI_20261117100000_0001_D.MP4", "a clip long enough to go in parts", "2026-11-17"]]);
     try {
@@ -255,18 +196,22 @@ test("a clip sent in parts that doesn't read back is sent once more, and stays o
       const request = site({
         hold: (rest, init) => {
           if (rest === "uploads") begun++;
-          if (!rest.startsWith("blobs/") || (init.method ?? "GET") !== "GET") return null;
-          return ++reads <= bad ? new Response("not the clip") : null;
+          return readsBlob(rest, init) && ++reads <= bad ? new Response("not the clip") : null;
         },
       });
-      const run = startOffload({ camera: [], mac: at.mac, dir: at.original, request, room: plenty, part: 8 });
+      const run = begin(at, { request, part: 8 });
       await run.done;
       expect(begun).toBe(2);
-      expect(run.state.finished).toBe(finished);
-      expect(run.state.send.done).toBe(finished ? 1 : 0);
-      if (finished) expect(files(at.original)).toEqual([]);
+      expect(run.state.finished).toBe("done");
+      expect(run.state.send.done).toBe(sent);
+      if (sent) expect(files(at.original)).toEqual([]);
       else {
-        expect(run.state.error).toMatch(/doesn't read back from Cloudflare/);
+        expect(run.state.send.skipped).toEqual([
+          {
+            name: "DJI_20261117100000_0001_D.MP4",
+            why: expect.stringMatching(/doesn't read back from Cloudflare/),
+          },
+        ]);
         expect(files(at.original)).toEqual(["DJI_20261117100000_0001_D.MP4"]);
       }
     } finally {
@@ -281,12 +226,12 @@ test("a file the archive already has, but no record vouches for, is read back be
     let reads = 0;
     const request = site({
       hold: (rest, init) => {
-        if (rest.startsWith("blobs/") && (init.method ?? "GET") === "GET") reads++;
+        if (readsBlob(rest, init)) reads++;
         return null;
       },
     });
     await request(`blobs/${sha("here already")}`, { method: "PUT", body: "here already" });
-    const run = startOffload({ camera: [], mac: at.mac, dir: at.original, request, room: plenty });
+    const run = begin(at, { request });
     await run.done;
     expect(reads).toBe(1);
     expect(run.state.finished).toBe("done");
@@ -296,37 +241,7 @@ test("a file the archive already has, but no record vouches for, is read back be
   }
 });
 
-test("a request that fails stops it all, saying why, and nothing is deleted that isn't in", async () => {
-  const at = await place(
-    [["DJI_20261118100000_0001_D.MP4", "off the card", "2026-11-18"]],
-    [["DJI_20261117100000_0001_D.MP4", "on the Mac", "2026-11-17"]],
-  );
-  try {
-    const request = site({
-      hold: (rest) => (rest === "missing" ? Response.json({ error: "Archive unavailable" }, { status: 400 }) : null),
-    });
-    const run = startOffload({ camera: at.camera, mac: at.mac, dir: at.original, request, room: plenty, together: 1 });
-    await run.done;
-    expect(run.state).toMatchObject({ finished: null, error: "Archive unavailable", running: false });
-    expect(run.state.send.done).toBe(0);
-    expect(files(at.original).filter((f) => f.endsWith(".MP4")).length).toBeGreaterThanOrEqual(1);
-  } finally {
-    await at.done();
-  }
-});
-
 const day = "2026-11-18";
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-/** What a day's manifest lists, path → hash. */
-const listed = async (request, on = day) =>
-  Object.fromEntries((await request(`projects/${originalsName(on)}`)).files.map((f) => [f.path, f.sha256]));
-/** Puts a file in the archive, as a manifest names it. */
-async function put(request, path, body, extra = {}) {
-  await request(`blobs/${sha(body)}`, { method: "PUT", body });
-  return { path, sha256: sha(body), size: Buffer.byteLength(body), mtime: 1_700_000_000_000, ...extra };
-}
-const savesDay = (rest, init) => rest.startsWith("projects/_originals-") && init.method === "PUT";
-
 test("a day's saves keep each other's files, however they're asked for at once, and after a restart", async () => {
   // Saves not made in turn would each read the day as it was before any of them, and land over the one before.
   let out = 0;
@@ -358,7 +273,7 @@ test("a day's saves keep each other's files, however they're asked for at once, 
   // A server started since knows nothing of the day but what the archive has.
   const restarted = dayManifests();
   await Promise.all([save(restarted, day, "transcripts/late.vtt"), save(restarted, day, "assets/late.MP4")]);
-  expect(await listed(request)).toEqual(filed[day]);
+  expect(await listed(request, day)).toEqual(filed[day]);
   expect(Object.keys(filed[day])).toHaveLength(26);
 });
 
@@ -376,7 +291,7 @@ test("a save that fails doesn't hold up the next, nor lose what's there", async 
   await expect(fileInDay(request, day, [two])).rejects.toThrow("Busy");
   failing = false;
   await fileInDay(request, day, [three]);
-  expect(Object.keys(await listed(request))).toEqual(["assets/one.MP4", "assets/three.MP4"]);
+  expect(Object.keys(await listed(request, day))).toEqual(["assets/one.MP4", "assets/three.MP4"]);
 });
 
 test("a save that comes out dated before the last one, or isn't kept, is made again", async () => {
@@ -397,11 +312,11 @@ test("a save that comes out dated before the last one, or isn't kept, is made ag
   await fileInDay(request, day, [await put(request, "assets/one.MP4", "one")]);
   await fileInDay(request, day, [await put(request, "assets/two.MP4", "two")]);
   expect(saves).toBe(3);
-  expect(Object.keys(await listed(request))).toEqual(["assets/one.MP4", "assets/two.MP4"]);
+  expect(Object.keys(await listed(request, day))).toEqual(["assets/one.MP4", "assets/two.MP4"]);
 
   lost = 1;
   await fileInDay(request, day, [await put(request, "assets/three.MP4", "three")]);
-  expect(Object.keys(await listed(request))).toHaveLength(3);
+  expect(Object.keys(await listed(request, day))).toHaveLength(3);
   // One it never lists is a failure: what waits on it isn't deleted.
   lost = 99;
   await expect(fileInDay(request, day, [await put(request, "assets/four.MP4", "four")])).rejects.toThrow(
@@ -415,9 +330,9 @@ test("a clip the day's manifest won't list stays on the Mac", async () => {
     const request = site({
       hold: (rest, init) => (savesDay(rest, init) ? Response.json({ ok: true }, { status: 201 }) : null),
     });
-    const run = startOffload({ camera: [], mac: at.mac, dir: at.original, request, room: plenty });
+    const run = begin(at, { request });
     await run.done;
-    expect(run.state.error).toMatch(/doesn't list what was filed/);
+    expect(run.state.send.skipped[0].why).toMatch(/doesn't list what was filed/);
     expect(files(at.original)).toEqual(["DJI_20261118100000_0001_D.MP4"]);
   } finally {
     await at.done();
@@ -483,39 +398,37 @@ test("transcripts go up beside their clips while a run goes, and the later ones 
     });
     const fileInDay = dayManifests();
     const said = speech(at.root);
-    const options = { dir: at.original, request, room: plenty, keepFree: 0, fileInDay, ...said };
+    const options = { request, keepFree: 0, fileInDay, transcripts: said.transcripts };
     // The second's transcript is made before it lands, the first's a little after, the third's only once the run is over.
     await said.make({ name: second, day });
-    const run = startOffload({
+    const run = begin(at, {
       ...options,
-      camera: at.camera,
-      mac: at.mac,
-      landed: async (clip) => {
+      records: records({}, (clip) => {
         said.landed(clip);
         if (clip.name !== first) return;
-        await sleep(5);
-        await said.make(clip);
-        run.poke();
-      },
+        void sleep(5)
+          .then(() => said.make(clip))
+          .then(() => run.poke());
+      }),
     });
     await run.done;
     expect(run.state).toMatchObject({ finished: "done", error: null, transcripts: { error: null } });
     expect(said.taken.sort()).toEqual([first, second, third]);
     expect(files(at.original)).toEqual([]);
-    expect(Object.keys(await listed(request))).toEqual(expect.arrayContaining(pathsOf(second)));
-    for (const name of [first, third]) expect(Object.keys(await listed(request))).toContain(`assets/${name}`);
+    expect(Object.keys(await listed(request, day))).toEqual(expect.arrayContaining(pathsOf(second)));
+    for (const name of [first, third]) expect(Object.keys(await listed(request, day))).toContain(`assets/${name}`);
 
     // Made after the run: nothing goes up until the next, which has nothing else to do.
     await said.make({ name: first, day });
     await said.make({ name: third, day });
-    const before = await listed(request);
+    const before = await listed(request, day);
     await sleep(30);
-    expect(await listed(request)).toEqual(before);
-    const next = startOffload({ ...options, camera: [], mac: [] });
+    expect(await listed(request, day)).toEqual(before);
+    const next = begin(at, options);
     await next.done;
     expect(next.state).toMatchObject({ finished: "done", error: null, send: { total: 0 } });
     expect(next.state.transcripts.sent + run.state.transcripts.sent).toBe(3);
-    const all = await listed(request);
+    const all = await listed(request, day);
     expect(Object.keys(all).sort()).toEqual([first, second, third].flatMap(pathsOf).sort());
     expect(all[`assets/${first}`]).toBe(sha("off the card"));
     expect(all[`transcripts/${third.slice(0, -4)}.vtt`]).toBe(sha(`vtt of ${third}`));
@@ -523,7 +436,7 @@ test("transcripts go up beside their clips while a run goes, and the later ones 
     expect(await blob.text()).toBe(`json of ${first}`);
 
     // Sent once.
-    const again = startOffload({ ...options, camera: [], mac: [] });
+    const again = begin(at, options);
     await again.done;
     expect(again.state.transcripts.sent).toBe(0);
   } finally {
@@ -560,19 +473,24 @@ test("a run stopped as it saves the day, and the one after it, lose nothing eith
     });
     const fileInDay = dayManifests();
     const said = speech(at.root);
-    const options = { camera: [], dir: at.original, request, room: plenty, fileInDay, ...said };
-    const stopped = startOffload({ ...options, mac: at.mac, together: 1 });
+    const options = {
+      request,
+      fileInDay,
+      records: records({}, said.landed),
+      transcripts: said.transcripts,
+    };
+    const stopped = begin(at, { ...options, together: 1 });
     await saving;
     // The next run starts with the last one's save still out.
-    stopped.stop();
+    stopped.stop(["send"], { now: true });
     stall = false;
     await said.make({ name: first, day });
     await said.make({ name: second, day });
-    const next = startOffload({ ...options, mac: at.mac });
+    const next = begin(at, options);
     await Promise.all([stopped.done, next.done]);
     expect(stopped.state.finished).toBe("stopped");
     expect(next.state).toMatchObject({ finished: "done", error: null, transcripts: { sent: 2, error: null } });
-    expect(Object.keys(await listed(request)).sort()).toEqual([first, second].flatMap(pathsOf).sort());
+    expect(Object.keys(await listed(request, day)).sort()).toEqual([first, second].flatMap(pathsOf).sort());
     expect(files(at.original)).toEqual([]);
   } finally {
     await at.done();
@@ -598,10 +516,10 @@ test("a clip's Mac copy waits for its sound, and for nothing else: one that can'
             })
           : Promise.reject(new Error("no such codec")),
     });
-    const run = startOffload({ camera: [], mac: at.mac, dir: at.original, request, room: plenty, ...said });
+    const run = begin(at, { request, transcripts: said.transcripts });
     while (run.state.send.done < 2) await sleep(5);
     // Both are in and filed; the Mac still has them, the first's sound not taken and the second's after it.
-    expect(Object.keys(await listed(request)).sort()).toEqual([`assets/${first}`, `assets/${second}`]);
+    expect(Object.keys(await listed(request, day)).sort()).toEqual([`assets/${first}`, `assets/${second}`]);
     await sleep(20);
     expect(files(at.original)).toEqual([first, second]);
     take();
@@ -621,17 +539,10 @@ test("a run stopped before a clip's sound is taken leaves the clip on the Mac; t
       took: (_clip, signal) =>
         new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true })),
     });
-    const record = {};
-    const options = { camera: [], mac: at.mac, dir: at.original, request, room: plenty, record };
-    const run = startOffload({
-      ...options,
-      ...cut,
-      landed: (clip, sha256) => {
-        record[clip.name] = { sha256, size: clip.size };
-      },
-    });
+    const options = { request, records: records() };
+    const run = begin(at, { ...options, transcripts: cut.transcripts });
     while (run.state.send.done < 1) await sleep(5);
-    run.stop();
+    run.stop(["send"], { now: true });
     await run.done;
     expect(run.state.finished).toBe("stopped");
     expect(files(at.original)).toEqual([first]);
@@ -644,7 +555,11 @@ test("a run stopped before a clip's sound is taken leaves the clip on the Mac; t
         order.push(`taken, ${files(at.original).length} on the Mac`);
       },
     });
-    const next = startOffload({ ...options, ...said, removed: () => order.push("removed") });
+    const next = begin(at, {
+      ...options,
+      transcripts: said.transcripts,
+      removed: () => order.push("removed"),
+    });
     await next.done;
     expect(next.state.send.total).toBe(0);
     expect(order).toEqual(["taken, 1 on the Mac", "removed"]);
@@ -666,8 +581,13 @@ test("a transcript that can't be sent waits for the next run, and the clips go o
     });
     const said = speech(at.root);
     await said.make({ name: first, day });
-    const options = { camera: [], dir: at.original, request, room: plenty, fileInDay: dayManifests(), ...said };
-    const run = startOffload({ ...options, mac: at.mac });
+    const options = {
+      request,
+      fileInDay: dayManifests(),
+      records: records({}, said.landed),
+      transcripts: said.transcripts,
+    };
+    const run = begin(at, options);
     await run.done;
     expect(run.state).toMatchObject({
       finished: "done",
@@ -676,13 +596,13 @@ test("a transcript that can't be sent waits for the next run, and the clips go o
     });
     expect(files(at.original)).toEqual([]);
     expect(said.sentKeys).toEqual([]);
-    expect(Object.keys(await listed(request))).toEqual([`assets/${first}`]);
+    expect(Object.keys(await listed(request, day))).toEqual([`assets/${first}`]);
 
     refusing = false;
-    const next = startOffload({ ...options, mac: [] });
+    const next = begin(at, options);
     await next.done;
     expect(next.state.transcripts).toEqual({ sent: 1, error: null });
-    expect(Object.keys(await listed(request)).sort()).toEqual(pathsOf(first).sort());
+    expect(Object.keys(await listed(request, day)).sort()).toEqual(pathsOf(first).sort());
   } finally {
     await at.done();
   }
@@ -697,12 +617,10 @@ test("two runs at once over the same manifests drop nothing of each other's", as
       hold: (rest, init, pass) => (savesDay(rest, init) ? sleep(40 * ++saves).then(pass) : null),
     });
     const fileInDay = dayManifests();
-    const runs = at.map(({ mac, original }) =>
-      startOffload({ camera: [], mac, dir: original, request, room: plenty, fileInDay }),
-    );
+    const runs = at.map((one) => begin(one, { request, fileInDay }));
     await Promise.all(runs.map((run) => run.done));
     for (const run of runs) expect(run.state).toMatchObject({ finished: "done", error: null });
-    expect(Object.keys(await listed(request)).sort()).toEqual([`assets/${first}`, `assets/${second}`]);
+    expect(Object.keys(await listed(request, day)).sort()).toEqual([`assets/${first}`, `assets/${second}`]);
     for (const { original } of at) expect(files(original)).toEqual([]);
   } finally {
     for (const { done } of at) await done();
@@ -715,14 +633,16 @@ test("a clip that stays on the Mac, being exported, has its transcript sent all 
     const request = site();
     const said = speech(at.root);
     await said.make({ name: first, day });
-    const run = startOffload({
-      ...{ camera: [], mac: at.mac, dir: at.original, request, room: plenty, ...said },
+    const run = begin(at, {
+      request,
+      records: records({}, said.landed),
+      transcripts: said.transcripts,
       removable: () => false,
     });
     await run.done;
     expect(run.state).toMatchObject({ finished: "done", transcripts: { sent: 1, error: null } });
     expect(files(at.original)).toEqual([first]);
-    expect(Object.keys(await listed(request)).sort()).toEqual(pathsOf(first).sort());
+    expect(Object.keys(await listed(request, day)).sort()).toEqual(pathsOf(first).sort());
   } finally {
     await at.done();
   }
@@ -739,11 +659,11 @@ test("a transcript is filed only beside its clip", async () => {
       await said.make({ name, day });
       said.landed({ name });
     }
-    const run = startOffload({ camera: [], mac: [], dir: at.original, request, room: plenty, fileInDay, ...said });
+    const run = begin(at, { request, fileInDay, transcripts: said.transcripts });
     await run.done;
     expect(run.state.transcripts).toEqual({ sent: 1, error: null });
     expect(said.sentKeys).toEqual([`${day}/${first}`]);
-    expect(Object.keys(await listed(request)).sort()).toEqual(pathsOf(first).sort());
+    expect(Object.keys(await listed(request, day)).sort()).toEqual(pathsOf(first).sort());
   } finally {
     await at.done();
   }

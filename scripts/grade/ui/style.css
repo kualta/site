@@ -118,6 +118,8 @@ kbd {
 /* No bar of its own: its controls sit on the page above the cards. */
 .bar { display: flex; align-items: center; gap: 14px; min-height: 32px; padding: 0 2px; min-width: 0; }
 .bar-field { display: flex; align-items: center; gap: 8px; }
+/* A long status line is cut short rather than squeezing what's beside it. */
+.bar > :not(.status) { flex: none; }
 .bar-field .select select { min-width: 170px; }
 /* Export and its menu, joined as one split button at the right of the bar. */
 .split { position: relative; display: flex; flex: none; }
@@ -139,9 +141,21 @@ kbd {
 .menu-note { margin: 0; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .menu-quality { display: grid; gap: 6px; margin-top: 4px; padding: 10px 10px 6px; border-top: 1px solid var(--line); }
 .menu-foot { margin-top: 4px; padding: 8px 10px 4px; border-top: 1px solid var(--line); line-height: 1.4; }
-#export-menu { width: 300px; }
-.menu-offload { display: grid; gap: 2px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+#export-menu { width: 380px; max-height: calc(100vh - 70px); overflow: auto; }
+.menu-offload { display: grid; gap: 2px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
 .offload-places { display: grid; gap: 6px; padding: 6px 10px 4px; }
+/* A switch: its name, its button, and a line saying how it is. The line and the button keep their room whatever they say. */
+.lane { display: grid; grid-template-columns: minmax(0, 1fr) 78px; align-items: center; column-gap: 10px; padding: 4px 10px; font-size: 12.5px; }
+.lane .btn { grid-row: 1 / span 2; grid-column: 2; padding: 0; }
+.lane output { min-height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-check, .offload-days label { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.menu-check { padding: 6px 10px; }
+.menu-offload input[type="checkbox"] { margin: 0; accent-color: var(--mark); }
+.offload-choice { display: grid; gap: 6px; padding: 6px 10px 4px; font-size: 12.5px; }
+.offload-choice .seg.small { grid-template-columns: 1fr 1fr; }
+.offload-days { display: grid; align-content: start; gap: 4px; height: 84px; overflow: auto; }
+.offload-days .menu-note { margin-left: auto; }
+#stop-offload { min-width: 124px; }
 .menu-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 12.5px; }
 .menu-row output { color: var(--ink-2); font-variant-numeric: tabular-nums; }
 /* What Whisper is doing. Its room is kept when it says nothing, so nothing in the bar moves when it does. */

@@ -117,7 +117,10 @@ export function archiveClient({ origin, token, fetcher = fetch, log = () => {} }
         log(`${method} ${route} answered ${response.status}; trying again`);
         continue;
       }
-      throw new Error(data.error || `Archive request failed (${response.status})`);
+      // The status tells one file the site won't take from a site that's taking nothing.
+      throw Object.assign(new Error(data.error || `Archive request failed (${response.status})`), {
+        status: response.status,
+      });
     }
   };
 }

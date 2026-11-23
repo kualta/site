@@ -6,7 +6,6 @@ const KINDS = { original: "Original", graded: "Graded" };
 const PREFIX = "cloud:";
 /** How often the list is looked at again: this Mac's files change under it. The server keeps what the archive said. */
 const EVERY = 60_000;
-const NOTE = "The next offload takes clips brought here off this Mac again: they're already in Cloudflare.";
 
 export const isCloud = (id) => Boolean(id?.startsWith(PREFIX));
 
@@ -185,7 +184,7 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     }
     const spare = list ? Math.max(0, list.room.free - list.room.keepFree) : 0;
     $("cloud-room").textContent = list ? fileSize(spare) : "";
-    const note = refused || run?.error || list?.error || NOTE;
+    const note = refused || run?.error || list?.error || "";
     $("cloud-note").textContent = note;
     $("cloud-note").title = note;
   }

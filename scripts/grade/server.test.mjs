@@ -34,7 +34,7 @@ let server;
 // The site's archive as the ledger meets it: a film holding a clip no longer anywhere else, and the ledger it's sent.
 const publisher = join(root, "publisher");
 const token = "a".repeat(64);
-const site = { ledger: null, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0, filed: 0 };
+const site = { ledger: null, sends: 0, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0, listings: 0, asked: 0, settings: [], slow: 0 };
 const bytesOf = async (req) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -42,6 +42,7 @@ const bytesOf = async (req) => {
 };
 const siteServer = createServer(async (req, res) => {
   site.auth.add(req.headers.authorization);
+  site.asked++;
   const path = req.url.replace("/api/publisher/helper/archive/", "");
   const reply = (status, body) => {
     res.writeHead(status, { "Content-Type": "application/json" });
@@ -54,13 +55,12 @@ const siteServer = createServer(async (req, res) => {
     site.watched++;
     return reply(200, { watching: true });
   }
-  // The offload's originals: files by hash (whole, or in parts), and a manifest per shoot day.
+  // What's offloaded: files by hash (whole, or in parts), and a manifest per shoot day; and the settings.
   if (path === "missing" && req.method === "POST") {
     const { blobs } = JSON.parse(await bytesOf(req));
     return reply(200, { missing: blobs.filter((hash) => !site.blobs.has(hash)) });
   }
   if (path.startsWith("blobs/") && req.method === "PUT") {
-    site.filed++;
     site.blobs.set(path.slice("blobs/".length), await bytesOf(req));
     return reply(201, { ok: true });
   }
@@ -85,10 +85,12 @@ const siteServer = createServer(async (req, res) => {
     site.blobs.set(completing, Buffer.concat(site.uploads.get(completing)));
     return reply(200, { ok: true });
   }
-  const day = /^projects\/(_originals-[\d-]+)(\?.*)?$/.exec(path)?.[1];
+  const day = /^projects\/(_[\w-]+)(\?.*)?$/.exec(path)?.[1];
   if (day && req.method === "PUT") {
-    site.filed++;
-    site.manifests.set(day, { ...JSON.parse(await bytesOf(req)), archivedAt: new Date().toISOString() });
+    await new Promise((resolve) => setTimeout(resolve, site.slow));
+    const manifest = JSON.parse(await bytesOf(req));
+    if (day === "_settings") site.settings.push({ at: Date.now(), files: manifest.files });
+    site.manifests.set(day, { ...manifest, archivedAt: new Date().toISOString() });
     return reply(201, { key: `projects/${day}` });
   }
   if (day) return site.manifests.has(day) ? reply(200, site.manifests.get(day)) : reply(404, { error: "No such archived project" });
@@ -96,6 +98,7 @@ const siteServer = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
     site.ledger = body;
+    site.sends++;
     return reply(200, { ok: true });
   }
   if (path.startsWith("ledger/thumbs/") && req.method === "PUT") {
@@ -105,13 +108,15 @@ const siteServer = createServer(async (req, res) => {
     return reply(200, { ok: true });
   }
   if (path === "ledger") return site.ledger ? reply(200, site.ledger) : reply(404, { error: "No ledger yet" });
-  if (path === "projects")
+  if (path === "projects") {
+    site.listings++;
     return reply(200, {
       projects: [
         { name: "001-film", archivedAt: "2026-02-10T00:00:00.000Z", versions: 1 },
         ...[...site.manifests].map(([name, manifest]) => ({ name, archivedAt: manifest.archivedAt, versions: 1 })),
       ],
     });
+  }
   if (path.startsWith("projects/001-film?"))
     return reply(200, { files: [{ path: "assets/DJI_20260101120000_0099_D.mp4", size: 17, sha256: "ab" }] });
   reply(404, { error: "Not found" });
@@ -186,6 +191,9 @@ async function startServer() {
       GRADE_LEDGER_EVERY: "300",
       GRADE_DEFAULT_LOOK: "agx-punchy",
       GRADE_KEEP_FREE: "1000000",
+      GRADE_SETTLE: "300",
+      GRADE_WATCHED_FOR: "700",
+      GRADE_BACKUP_EVERY: "3000",
       GRADE_UVX: uvx,
     },
     stdio: ["ignore", "pipe", "inherit"],
@@ -281,7 +289,8 @@ test.if(usable)("exports a clip from Movies/Original into Movies/Exported, recor
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: folder, names: [name] }) })).status).toBe(200);
   const s = await until(async () => {
     const body = await json(`/api/sources/${folder}`);
-    return body.clips[0].exported && body;
+    // Its record is written once the file is in place.
+    return body.clips[0].exported?.key && body;
   });
   const record = records()[name];
   expect(record).toMatchObject({ source: `Original/${name}`, file: "Exported/DJI_20260203101500_0007_D.mp4", key: gradeKey(grade), quality: 100 });
@@ -493,6 +502,49 @@ const audioLeft = () => {
 };
 const paths = (manifest) => manifest.files.map((f) => f.path).sort();
 
+const post = (p, body = {}) => api(p, { method: "POST", body: JSON.stringify(body) });
+/** The run as it ended. */
+const ended = () =>
+  until(async () => {
+    const summary = await json("/api/offload");
+    return !summary.run.running && summary;
+  });
+const daysFiled = () => [...site.manifests.keys()].filter((project) => project !== "_settings").sort();
+
+test.if(usable)("keeps days and clips out of offload: counted apart, and nothing it doesn't understand is kept", async () => {
+  expect(await json("/api/offload/keep")).toEqual({ days: [], clips: [] });
+  const before = await json("/api/offload");
+  expect(before).toMatchObject({ mac: { clips: 3 }, kept: { days: [], clips: [], count: 0 } });
+  expect(before.days.map((d) => [d.day, d.clips, d.kept])).toEqual([
+    ["2026-02-13", 1, false],
+    ["2026-02-07", 1, false],
+    ["2026-02-05", 1, false],
+    ["2026-02-03", 1, false],
+  ]);
+  for (const bad of [{ days: "2026-02-05" }, { days: ["yesterday"] }, { clips: ["../x.MP4"] }, { clips: [7] }])
+    expect((await post("/api/offload/keep", bad)).status).toBe(400);
+  expect((await fetch(url("/api/offload/keep"), { method: "POST", body: "{}" })).status).toBe(403);
+  const kept = await post("/api/offload/keep", { days: [day], clips: [name] });
+  expect(await kept.json()).toEqual({ days: [day], clips: [name] });
+  expect(await json("/api/offload")).toMatchObject({ camera: { clips: 0 }, mac: { clips: 2 }, kept: { count: 2 } });
+  // What isn't given stays.
+  expect(await (await post("/api/offload/keep", { days: [] })).json()).toEqual({ days: [], clips: [name] });
+  expect(JSON.parse(readFileSync(join(data, "keep.json"), "utf8"))).toMatchObject({ days: [], clips: [name] });
+  expect(await (await post("/api/offload/keep", { clips: [] })).json()).toEqual({ days: [], clips: [] });
+});
+
+test.if(usable)("won't start on what it doesn't understand, nor on a list of kept clips it can't read", async () => {
+  for (const bad of [{ lanes: ["everything"] }, { lanes: "copy" }, { unattended: "yes" }, { youtube: 0 }, { clearCardAfter: "never" }])
+    expect((await post("/api/offload", bad)).status).toBe(400);
+  writeFileSync(join(data, "keep.json"), "{ half written");
+  const refused = await post("/api/offload", { unattended: true });
+  expect(refused.status).toBe(500);
+  expect((await refused.json()).error).toMatch(/list of kept clips can't be read/);
+  rmSync(join(data, "keep.json"));
+  expect((await json("/api/offload")).run).toBeNull();
+  expect(daysFiled()).toEqual([]);
+});
+
 test.if(usable)("offloads the card through this Mac to the archive by day, deleting each once the next has it, with the default look", async () => {
   const kept = slowClips[1];
   const grades = () => JSON.parse(readFileSync(join(data, "grades.json"), "utf8")).clips;
@@ -508,11 +560,14 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   expect(before.room.keepFree).toBe(1_000_000);
   expect(before.run).toBeNull();
 
-  expect((await api("/api/offload", { method: "POST" })).status).toBe(200);
-  const after = await until(async () => {
-    const summary = await json("/api/offload");
-    return !summary.run.running && summary;
-  });
+  // The clips land further apart than the ledger's looks.
+  const listings = site.listings;
+  site.slow = 700;
+  expect((await post("/api/offload", { unattended: true })).status).toBe(200);
+  await until(async () => (await json("/api/offload")).run.send.done === 4);
+  expect(site.listings).toBe(listings);
+  const after = await ended();
+  site.slow = 0;
   expect(after.run).toMatchObject({ finished: "done", error: null, waiting: null });
   expect(after.run.copy).toMatchObject({ total: 1, done: 1, ended: true, error: null });
   expect(after.run.send).toMatchObject({ total: 4, done: 4, current: [] });
@@ -521,14 +576,14 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   // Off the card, .LRF and all; through the Mac, leaving nothing behind.
   expect(readdirSync(join(camera, "DJI_001"))).toEqual([]);
   expect(readdirSync(original)).toEqual([]);
-  expect([...site.manifests.keys()].sort()).toEqual([
+  expect(daysFiled()).toEqual([
     "_originals-2026-02-03",
     "_originals-2026-02-05",
     "_originals-2026-02-07",
     "_originals-2026-02-13",
   ]);
   expect(site.manifests.get("_originals-2026-02-05").files.map((f) => f.path)).toEqual([`assets/${withStill}`]);
-  expect(site.blobs.size).toBe(4);
+  for (const project of daysFiled()) for (const file of site.manifests.get(project).files) expect(site.blobs.get(file.sha256).length).toBe(file.size);
   // Each clip's sound was taken before it went; Whisper, still on the first, held nothing up.
   expect(after.transcripts).toEqual({ done: 0, total: 4, current: name, waiting: 3, failed: 0, error: null, toSend: 0 });
   expect((await json("/api/jobs")).transcripts).toMatchObject({ current: name, waiting: 3 });
@@ -541,11 +596,8 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   expect(grades()[name].base).toBe("aces");
   expect(grades()[withStill]).toBeUndefined();
   // Nothing more to take.
-  expect((await api("/api/offload", { method: "POST" })).status).toBe(200);
-  const again = await until(async () => {
-    const summary = await json("/api/offload");
-    return !summary.run.running && summary;
-  });
+  expect((await post("/api/offload", { unattended: true })).status).toBe(200);
+  const again = await ended();
   expect(again.run.send.total).toBe(0);
   // The ledger has them in Cloudflare, though they're on neither the card nor the Mac, and no day of them is a film.
   const ledger = await until(async () => {
@@ -555,6 +607,10 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   expect(ledger.clips.DJI_20260205090000_0001_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(ledger.clips.DJI_20260203101500_0007_D.original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(Object.keys(ledger.projects).some((film) => film.startsWith("_"))).toBe(false);
+  // The archive's projects were listed once for all four clips, at the end.
+  await until(() => site.listings > listings);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect(site.listings - listings).toBe(1);
 }, 120_000);
 
 test.if(usable)("transcribes the offloaded clips meanwhile, through a restart, and files each beside its clip in the next run", async () => {
@@ -564,7 +620,7 @@ test.if(usable)("transcribes the offloaded clips meanwhile, through a restart, a
   await exited;
   await startServer();
   expect((await json("/api/jobs")).transcripts).toMatchObject({ done: 0, total: 4, waiting: 3, failed: 0 });
-  const filed = site.filed;
+  const filed = daysFiled().map((project) => site.manifests.get(project).archivedAt);
   const before = new Map(site.manifests);
   writeFileSync(go, "");
   const made = await until(async () => {
@@ -579,22 +635,20 @@ test.if(usable)("transcribes the offloaded clips meanwhile, through a restart, a
   expect(readFileSync(join(kept, `${stem}.vtt`), "utf8")).toBe(`WEBVTT\n\n00:00:00.200 --> 00:00:00.900\n${withStill}\n`);
   // They go nowhere by themselves, however often the server looks.
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  expect(site.filed).toBe(filed);
+  expect(daysFiled().map((project) => site.manifests.get(project).archivedAt)).toEqual(filed);
   const unsent = (await json("/api/ledger")).ledger;
   expect(Object.values(unsent.clips).some((clip) => clip.transcript)).toBe(false);
 
   // The next run has only them to send.
-  expect((await api("/api/offload", { method: "POST" })).status).toBe(200);
-  const after = await until(async () => {
-    const summary = await json("/api/offload");
-    return !summary.run.running && summary;
-  });
+  expect((await post("/api/offload", { unattended: true })).status).toBe(200);
+  const after = await ended();
   expect(after.run).toMatchObject({ finished: "done", error: null, transcripts: { sent: 4, error: null } });
   expect(after.run.send.total).toBe(0);
   expect(after.transcripts.toSend).toBe(0);
   // Every day keeps its clip, as it was filed, and has the transcript beside it.
-  expect(site.manifests.size).toBe(4);
-  for (const [on, manifest] of site.manifests) {
+  expect(daysFiled()).toHaveLength(4);
+  for (const on of daysFiled()) {
+    const manifest = site.manifests.get(on);
     const [asset] = before.get(on).files;
     const clipStem = asset.path.slice("assets/".length, -".MP4".length);
     expect(paths(manifest)).toEqual([asset.path, `transcripts/${clipStem}.json`, `transcripts/${clipStem}.vtt`]);
@@ -648,3 +702,201 @@ test.if(usable)("exports with deflicker on: its record and key say so, and the e
   const exportedFrame = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", exportedClip, "-vf", vf, "-frames:v", "1", "-f", "rawvideo", "-"]);
   expect(meanDiff(png, exportedFrame)).toBeLessThan(2);
 }, 120_000);
+
+// The flickering clip is the one original left, its export and the earlier ones beside it.
+test.if(usable)("sends the exports alone, when that's asked for, and they count as exported and as in Cloudflare", async () => {
+  const stem = "DJI_20260217100000_0001_D";
+  const before = await until(async () => {
+    const summary = await json("/api/offload");
+    return summary.exports.clips === 4 && summary;
+  });
+  expect(before.run.exports).toMatchObject({ on: false, total: 0 });
+  // The first one's clip is kept, and the footage uploads have begun putting up another.
+  await post("/api/offload/keep", { days: ["2026-02-03"] });
+  const uploads = JSON.parse(readFileSync(join(publisher, "footage.json"), "utf8"));
+  const goingUp = movingClip.replace(".MP4", ".mp4");
+  writeFileSync(join(publisher, "footage.json"), JSON.stringify({ ...uploads, current: { name: goingUp } }));
+  const watched = site.watched;
+  expect((await post("/api/offload", { lanes: ["exports"], unattended: true, youtube: false })).status).toBe(200);
+  const after = await ended();
+  expect(after.run).toMatchObject({ finished: "done", youtube: false, exports: { done: 3, total: 3, skipped: [] }, send: { on: false, total: 0 }, copy: { total: 0 } });
+  // One put there by hand has no record of how it was made; a frame is no export.
+  const left = exportedFiles();
+  expect(left.filter((f) => f.endsWith(".mp4"))).toEqual(["DJI_20260203101500_0007_D.mp4", "DJI_20260205090100_0002_D.mp4", goingUp]);
+  expect(left.filter((f) => f.endsWith(".png")).length).toBeGreaterThan(0);
+  expect(readdirSync(original)).toEqual([`${stem}.MP4`]);
+  expect(daysFiled().filter((project) => project.startsWith("_graded"))).toEqual([
+    "_graded-2026-02-05",
+    "_graded-2026-02-13",
+    "_graded-2026-02-17",
+  ]);
+  expect(paths(site.manifests.get("_graded-2026-02-17"))).toEqual([`assets/${stem}.mp4`]);
+  const sent = JSON.parse(readFileSync(join(data, "graded.json"), "utf8")).clips;
+  expect(Object.keys(sent)).toContain(`${stem}.mp4`);
+  expect(Object.keys(JSON.parse(readFileSync(join(data, "offloaded.json"), "utf8")).clips)).not.toContain(`${stem}.mp4`);
+  // The YouTube uploads weren't told anyone's watching.
+  expect(site.watched).toBe(watched);
+  // The clip still counts as exported, with that grade.
+  const [c] = (await json("/api/sources/mac:2026-02-17")).clips;
+  expect(c.exported.key).toBe(records()[`${stem}.MP4`].key);
+  const ledger = await until(async () => {
+    const body = await json("/api/ledger");
+    const { graded } = body.ledger.clips[stem] ?? {};
+    return graded?.cloudflare === "current" && !graded.mac && body.ledger;
+  });
+  expect(ledger.clips[stem].original).toEqual({ camera: false, mac: true, cloudflare: false });
+  expect(Object.keys(ledger.projects).some((film) => film.startsWith("_"))).toBe(false);
+
+  // Put up, the other goes too: it's in the archive already.
+  writeFileSync(join(publisher, "footage.json"), JSON.stringify(uploads));
+  expect((await post("/api/offload", { lanes: ["exports"], unattended: true, youtube: false })).status).toBe(200);
+  expect((await ended()).run.exports).toMatchObject({ total: 0, done: 0 });
+  expect(exportedFiles()).not.toContain(goingUp);
+  await post("/api/offload/keep", { days: [] });
+}, 120_000);
+
+test.if(usable)("what's brought back is kept: the next offload leaves it, whichever switches are on, till it's let go", async () => {
+  const gradedName = withStill.replace(".MP4", ".mp4");
+  const bring = async (asked) => {
+    expect((await post("/api/bring", asked)).status).toBe(200);
+    return until(async () => {
+      const { bring: run } = await json("/api/jobs");
+      return !run.running && run;
+    });
+  };
+  // The one original left is none of this, nor the export kept before.
+  await post("/api/offload/keep", { days: ["2026-02-03", "2026-02-17"] });
+  expect(await bring({ what: "original", names: [withStill] })).toMatchObject({ landed: 1, failed: [] });
+  expect(await bring({ what: "graded", names: [gradedName] })).toMatchObject({ landed: 1, failed: [] });
+  expect(await json("/api/offload/keep")).toEqual({ days: ["2026-02-03", "2026-02-17"], clips: [withStill, gradedName] });
+  const here = await json("/api/offload");
+  expect(here.kept.count).toBe(3);
+  expect(here.days.find((d) => d.day === day)).toMatchObject({ clips: 1, kept: false, keptClips: [withStill, gradedName] });
+  const offload = async () => {
+    const options = { lanes: ["copy", "send", "exports"], unattended: true, youtube: false };
+    expect((await post("/api/offload", options)).status).toBe(200);
+    return (await ended()).run;
+  };
+  expect(await offload()).toMatchObject({ send: { total: 0 }, exports: { total: 0 } });
+  expect(readdirSync(original)).toContain(withStill);
+  expect(exportedFiles()).toContain(gradedName);
+
+  // Let go, they're in the archive already and only deleted.
+  await post("/api/offload/keep", { clips: [] });
+  expect(await offload()).toMatchObject({ send: { total: 0 }, exports: { total: 0 } });
+  expect(readdirSync(original)).not.toContain(withStill);
+  expect(exportedFiles()).not.toContain(gradedName);
+  await post("/api/offload/keep", { days: [] });
+}, 120_000);
+
+test.if(usable)("pauses what it sends while no page is open, and goes on once one asks", async () => {
+  const stem = "DJI_20260217100000_0001_D";
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  expect((await post("/api/offload", { lanes: ["send"], youtube: false })).status).toBe(200);
+  const paused = await until(async () => {
+    const { run } = await json("/api/offload");
+    return run.paused && run;
+  });
+  expect(paused).toMatchObject({ running: true, unattended: false, paused: { for: "page", why: "No Grade page is open" } });
+  const filed = daysFiled();
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  expect(daysFiled()).toEqual(filed);
+  expect(readdirSync(original)).toEqual([`${stem}.MP4`]);
+  expect((await json("/api/jobs")).offload.paused).not.toBeNull();
+  const after = await until(async () => {
+    await json("/api/jobs");
+    const summary = await json("/api/offload");
+    return !summary.run.running && summary;
+  });
+  expect(after.run).toMatchObject({ finished: "done", paused: null, send: { done: 1 } });
+  expect(readdirSync(original)).toEqual([]);
+
+  // Told to, it goes on with nobody looking.
+  clip(join(original, "DJI_20260221100000_0011_D.MP4"), "D-Log2");
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  expect((await post("/api/offload", { lanes: ["send"] })).status).toBe(200);
+  await until(async () => (await json("/api/offload")).run.paused);
+  expect((await post("/api/offload", { lanes: ["send"] })).status).toBe(409);
+  expect((await post("/api/offload", { lanes: [], unattended: true })).status).toBe(200);
+  expect((await ended()).run).toMatchObject({ finished: "done", unattended: true, send: { done: 1 } });
+}, 120_000);
+
+test.if(usable)("takes the card's clips alone, remembers to leave them there till they're sent, and then clears them", async () => {
+  const onCard = "DJI_20260219100000_0009_D.MP4";
+  const dir = join(camera, "DJI_001");
+  clip(join(dir, onCard), "D-Log2");
+  writeFileSync(join(dir, onCard.replace(".MP4", ".LRF")), "the camera's low-res proxy");
+  const filed = daysFiled();
+  expect((await post("/api/offload", { lanes: ["copy"], unattended: true, clearCardAfter: "sent" })).status).toBe(200);
+  const copied = await ended();
+  expect(copied.run.copy).toMatchObject({ done: 1, onCamera: 1, finished: "done" });
+  expect(daysFiled()).toEqual(filed);
+  expect(readdirSync(dir).sort()).toEqual([onCard, onCard.replace(".MP4", ".LRF")].sort());
+  expect(readdirSync(original)).toEqual([onCard]);
+  expect(copied.clearCardAfter).toBe("sent");
+  expect(JSON.parse(readFileSync(join(data, "offload.json"), "utf8"))).toEqual({ clearCardAfter: "sent" });
+
+  // Through a restart: nothing starts by itself, and the choice is kept.
+  const exited = new Promise((resolve) => server.once("exit", resolve));
+  server.kill("SIGKILL");
+  await exited;
+  await startServer();
+  expect(await json("/api/offload")).toMatchObject({ clearCardAfter: "sent", run: null, camera: { clips: 1 }, mac: { clips: 1 } });
+  expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
+  const sent = await ended();
+  expect(sent.run).toMatchObject({ finished: "done", send: { done: 1 }, copy: { on: false } });
+  // Mac → Cloudflare deletes from the Mac; the card is Camera → Mac's to clear.
+  expect(readdirSync(original)).toEqual([]);
+  expect(readdirSync(dir)).toHaveLength(2);
+  expect((await post("/api/offload", { lanes: ["copy"], unattended: true })).status).toBe(200);
+  const cleared = await ended();
+  expect(cleared.run.copy).toMatchObject({ total: 0, done: 0, finished: "done" });
+  expect(readdirSync(dir)).toEqual([]);
+  expect(readdirSync(original)).toEqual([]);
+}, 120_000);
+
+test.if(usable)("stops a switch by itself, finishing what's in flight, or at once", async () => {
+  expect(await (await post("/api/offload/stop")).json()).toMatchObject({ stopping: false });
+  const waiting = "DJI_20260222100000_0012_D.MP4";
+  clip(join(original, waiting), "D-Log2");
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  expect((await post("/api/offload", { lanes: ["send"], youtube: false })).status).toBe(200);
+  await until(async () => (await json("/api/offload")).run.paused);
+  // Nothing in flight: it ends, the clip where it was.
+  expect((await post("/api/offload/stop", { lanes: ["copy"] })).status).toBe(200);
+  expect((await json("/api/offload")).run.send).toMatchObject({ on: true, mode: "on" });
+  expect((await post("/api/offload/stop", { lanes: ["send"] })).status).toBe(200);
+  expect((await ended()).run).toMatchObject({ finished: "stopped", send: { done: 0, finished: "stopped" } });
+  expect(readdirSync(original)).toEqual([waiting]);
+  expect((await post("/api/offload/stop", { lanes: ["all"] })).status).toBe(400);
+}, 60_000);
+
+test.if(usable)("backs up the settings with a ledger that's sent, when they've changed and not often, and asks nothing when nothing has", async () => {
+  // A grade and a ledger that change twice a second.
+  const before = { sends: site.sends, settings: site.settings.length };
+  for (let n = 1; n <= 12; n++) {
+    writeFileSync(join(original, `IMG_90${n}.MOV`), "no video");
+    const grades = JSON.parse(readFileSync(join(data, "grades.json"), "utf8"));
+    grades.clips[`IMG_90${n}.MOV`] = { base: "none" };
+    writeFileSync(join(data, "grades.json"), JSON.stringify(grades));
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect(site.sends - before.sends).toBeGreaterThan(1);
+  expect(site.settings.length - before.settings).toBeGreaterThan(0);
+  expect(site.settings.length - before.settings).toBeLessThanOrEqual(site.sends - before.sends);
+  // Over all the tests: each time something new, and no two close together.
+  for (const [i, { at, files }] of site.settings.entries()) {
+    if (!i) continue;
+    expect(at - site.settings[i - 1].at).toBeGreaterThanOrEqual(2900);
+    expect(files.map((f) => f.sha256)).not.toEqual(site.settings[i - 1].files.map((f) => f.sha256));
+  }
+  const { files } = site.settings.at(-1);
+  expect(files.map((f) => f.path)).toEqual(["grades.json", "exports.json"]);
+  expect(JSON.parse(site.blobs.get(files[1].sha256)).clips[name].key).toBe(records()[name].key);
+  // Quiet: the server looks every 300 ms, and the site hears nothing of it.
+  await until(async () => {
+    const asked = site.asked;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return site.asked === asked;
+  });
+}, 60_000);
