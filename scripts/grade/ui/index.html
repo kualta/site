@@ -55,6 +55,12 @@
         <div class="menu-row"><label for="quality">Quality</label><output id="quality-out" for="quality">100%</output></div>
         <span class="rail" id="quality-rail"><input type="range" id="quality" min="10" max="100" step="5" value="100"></span>
         <p id="quality-size" class="menu-note">Near lossless</p>
+        <div class="menu-row" title="The GPU is faster. A clip it can't encode is encoded on the CPU."><span id="encoder-name">Encode on</span>
+          <div class="seg small" role="group" aria-labelledby="encoder-name">
+            <button type="button" data-encoder="gpu" aria-pressed="true">GPU</button><button type="button" data-encoder="cpu" aria-pressed="false">CPU</button>
+          </div>
+        </div>
+        <p class="menu-note">Below 50% always the CPU: it keeps more at that size</p>
       </div>
       <div class="menu-offload">
         <div class="lane" data-lane="copy" title="Each clip is copied to this Mac, checked, and deleted from the camera. Log clips without a grade get the Colorful look as settings."><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>

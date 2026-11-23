@@ -237,6 +237,14 @@ try {
   assert.equal(await page.locator("#export-quality").textContent(), "50%");
   await setRange("quality", 100);
   assert.ok(await page.locator("#export-quality").isHidden(), "full quality needs no badge");
+  // What encodes exports is chosen beside it, the GPU till then, and remembered.
+  const encodeOn = page.getByRole("group", { name: "Encode on" });
+  const pressedEncoder = async () => (await encodeOn.locator('[aria-pressed="true"]').textContent()).trim();
+  assert.equal(await pressedEncoder(), "GPU");
+  await encodeOn.getByRole("button", { name: "CPU" }).click();
+  await encodeOn.locator('[data-encoder="cpu"][aria-pressed="true"]').waitFor({ timeout: 5_000 });
+  assert.equal(await pressedEncoder(), "CPU");
+  assert.deepEqual(JSON.parse(readFileSync(path.join(data, "encoder.json"), "utf8")), { exportEncoder: "cpu" });
   if (shots) await page.screenshot({ path: path.join(shots, "grade-4-menu.png") });
   // The offload's switches: what each has to do.
   assert.equal(await page.locator("#offload-transcripts").textContent(), "Nothing to send");
@@ -269,6 +277,7 @@ try {
   await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
   assert.ok(!existsSync(path.join(exported, "DJI_20260101120500_0002_D.mp4")), "the never-graded clip was left alone");
   assert.equal(record().grade.exposure, 0.5);
+  assert.equal(record().encoder, "cpu", "the re-export is encoded as chosen");
 
   // Deflicker: Off, Light or Strong, saved with the grade and counted in its key; the panel says it's export only.
   const deflicker = page.getByRole("group", { name: "Deflicker" });
@@ -453,6 +462,10 @@ try {
   await says("nothing going", null, null);
   work = { export: { current: { id: "original", name, progress: 0.07 } } };
   await says("an export", null, 0.07);
+  work = { export: { current: { ...work.export.current, encoder: "cpu", fallback: "no VideoToolbox" } } };
+  // The frame is too narrow to show the whole line; its tooltip has it.
+  const said = composer.frameLocator("iframe").locator(`#status[title$="on the CPU, the GPU couldn't: no VideoToolbox · 7%"]`);
+  await said.waitFor({ state: "attached", timeout: 5_000 });
   work = { ...work, offload: offload() };
   await says("an offload too", 0.43, 0.07);
   work = { offload: offload({ sentBytes: 1001 }) };

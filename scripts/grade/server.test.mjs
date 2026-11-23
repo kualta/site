@@ -13,6 +13,8 @@ import { gradeKey, writeCube } from "./color.mjs";
 // its HTTP surface.
 const ffmpeg = process.env.FFMPEG_PATH || ffmpegStatic;
 const usable = spawnSync(ffmpeg, ["-version"]).status === 0;
+const GPU_TRY = ["-loglevel", "quiet", "-f", "lavfi", "-i", "color=s=320x180:d=0.2", "-c:v", "h264_videotoolbox", "-f", "null", "-"];
+const gpu = usable && spawnSync(ffmpeg, GPU_TRY).status === 0;
 const port = 8900 + Math.floor(Math.random() * 90);
 const url = (p) => `http://127.0.0.1:${port}${p}`;
 const root = mkdtempSync(join(tmpdir(), "grade-test-"));
@@ -177,10 +179,21 @@ while [ ! -e "${go}" ]; do [ -e "${uvx}" ] || exit 1; sleep 0.05; done
 echo '{"language": "en", "segments": [{"start": 0, "end": 1, "text": " '"$name"'", "words": [{"word": " x", "start": 0.2, "end": 0.9}]}]}' > "$out/transcript.json"
 `;
 
+// The server's ffmpeg: the real one, but for the GPU's encoder, which it doesn't have while `noGpu` is there.
+const serverFfmpeg = join(root, "ffmpeg");
+const noGpu = join(root, "no-gpu");
+const WITHOUT_GPU = `#!/bin/sh
+if [ -e "${noGpu}" ]; then
+  case " $* " in *" h264_videotoolbox "*) echo "Unknown encoder 'h264_videotoolbox'" >&2; exit 1 ;; esac
+fi
+exec "${ffmpeg}" "$@"
+`;
+
 async function startServer() {
   server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
     env: {
       ...process.env,
+      FFMPEG_PATH: serverFfmpeg,
       GRADE_ROOT: movies,
       GRADE_DATA: data,
       GRADE_CACHE: join(root, "cache"),
@@ -227,6 +240,7 @@ beforeAll(async () => {
   const uploads = { [withStill.replace(".MP4", ".mp4")]: [{ video: "vid1", size: 123, uploadedAt: "2026-02-06T10:00:00Z" }] };
   writeFileSync(join(publisher, "footage.json"), JSON.stringify({ clips: uploads, days: {} }));
   writeFileSync(uvx, STAND_IN, { mode: 0o755 });
+  writeFileSync(serverFfmpeg, WITHOUT_GPU, { mode: 0o755 });
   await startServer();
 }, 120_000);
 
@@ -294,6 +308,7 @@ test.if(usable)("exports a clip from Movies/Original into Movies/Exported, recor
   });
   const record = records()[name];
   expect(record).toMatchObject({ source: `Original/${name}`, file: "Exported/DJI_20260203101500_0007_D.mp4", key: gradeKey(grade), quality: 100 });
+  expect(["gpu", "cpu"]).toContain(record.encoder);
   expect(s.clips[0].exported.key).toBe(record.key);
   expect(exportedFiles()).toEqual(["DJI_20260203101500_0007_D.mp4"]);
   const graded = join(movies, record.file);
@@ -406,6 +421,59 @@ test.if(usable)("stops exporting: drops the queue, and the clip in progress leav
   expect(exportedFiles().filter((f) => f.includes("20260207"))).toEqual([]);
   expect(records()[slowClips[0]]).toBeUndefined();
   expect((await json(`/api/sources/${slow}`)).clips.map((c) => c.exported)).toEqual([null, null]);
+}, 120_000);
+
+const encoder = async () => (await json("/api/jobs")).export.encoder;
+const encodeOn = (on) => api("/api/export/encoder", { method: "POST", body: JSON.stringify({ encoder: on }) });
+/** Exports the clip off the card again: the record of it, once it's written. */
+async function exportAgain(asked) {
+  const { exportedAt } = records()[withStill];
+  const res = await api("/api/export", { method: "POST", body: JSON.stringify({ source: camId, names: [withStill], ...asked }) });
+  expect(res.status).toBe(200);
+  return until(() => records()[withStill].exportedAt !== exportedAt && records()[withStill]);
+}
+
+test.if(usable)("exports are encoded on the GPU till the CPU is chosen, and neither makes an export stale", async () => {
+  expect(await encoder()).toBe("gpu");
+  for (const bad of ["tpu", "", null, undefined, "constructor"]) expect((await encodeOn(bad)).status).toBe(400);
+  expect((await fetch(url("/api/export/encoder"), { method: "POST", body: '{"encoder":"cpu"}' })).status).toBe(403);
+  expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: camId, names: [withStill], encoder: "tpu" }) })).status).toBe(400);
+  expect(await encoder()).toBe("gpu");
+
+  const before = records()[withStill];
+  expect((await encodeOn("cpu")).status).toBe(200);
+  expect(await encoder()).toBe("cpu");
+  const onCpu = await exportAgain();
+  expect(onCpu.encoder).toBe("cpu");
+  expect(onCpu).not.toHaveProperty("fallback");
+  // What encoded it is the record's alone: its key is the grade's, and an export from before this was recorded stays current.
+  expect(onCpu.key).toBe(before.key);
+  expect((await json(`/api/sources/${encodeURIComponent(camId)}`)).clips[0].exported.key).toBe(before.key);
+  const { encoder: _, ...old } = before;
+  const all = JSON.parse(readFileSync(join(data, "exports.json"), "utf8"));
+  writeFileSync(join(data, "exports.json"), JSON.stringify({ ...all, clips: { ...all.clips, [withStill]: old } }));
+  expect((await json(`/api/sources/${encodeURIComponent(camId)}`)).clips[0].exported.key).toBe(before.key);
+  expect((await encodeOn("gpu")).status).toBe(200);
+  expect(await encoder()).toBe("gpu");
+}, 120_000);
+
+test.if(usable)("a clip the GPU can't encode is exported on the CPU, and its record and the app say why", async () => {
+  writeFileSync(noGpu, "");
+  const why = "Unknown encoder 'h264_videotoolbox'";
+  const record = await exportAgain();
+  expect(record).toMatchObject({ encoder: "cpu", fallback: why });
+  expect(frames(join(movies, record.file))).toBe(frames(join(camera, "DJI_001", withStill)));
+  const { export: jobs } = await until(async () => {
+    const now = await json("/api/jobs");
+    return !now.export.current && now;
+  });
+  expect(jobs.done[0]).toMatchObject({ name: withStill, encoder: "cpu", fallback: why });
+  expect(jobs.failed).toEqual([]);
+  expect((await json(`/api/sources/${encodeURIComponent(camId)}`)).clips[0].exported).toMatchObject({ fallback: why });
+  // Asked for the CPU, there's nothing to fall back from; the next export on the GPU is tried there again.
+  expect(await exportAgain({ encoder: "cpu" })).not.toHaveProperty("fallback");
+  rmSync(noGpu);
+  expect((await exportAgain()).encoder).toBe(gpu ? "gpu" : "cpu");
 }, 120_000);
 
 test.if(usable)("refuses other origins' requests, unknown clips, missing days and paths out of the library", async () => {
@@ -836,7 +904,8 @@ test.if(usable)("takes the card's clips alone, remembers to leave them there til
   expect(copied.clearCardAfter).toBe("sent");
   expect(JSON.parse(readFileSync(join(data, "offload.json"), "utf8"))).toEqual({ clearCardAfter: "sent" });
 
-  // Through a restart: nothing starts by itself, and the choice is kept.
+  // Through a restart: nothing starts by itself, and the choice is kept, as is what encodes exports.
+  expect((await encodeOn("cpu")).status).toBe(200);
   const exited = new Promise((resolve) => server.once("exit", resolve));
   server.kill("SIGKILL");
   await exited;
@@ -853,6 +922,7 @@ test.if(usable)("takes the card's clips alone, remembers to leave them there til
   expect(cleared.run.copy).toMatchObject({ total: 0, done: 0, finished: "done" });
   expect(readdirSync(dir)).toEqual([]);
   expect(readdirSync(original)).toEqual([]);
+  expect(await encoder()).toBe("cpu");
 }, 120_000);
 
 test.if(usable)("stops a switch by itself, finishing what's in flight, or at once", async () => {
