@@ -54,6 +54,8 @@
 .publisher .publisher-tabs button { padding:10px 0 12px; border:0; border-bottom:2px solid transparent; border-radius:0; background:none; color:var(--publisher-muted); font-size:15px; }
 .publisher .publisher-tabs button:hover:not(:disabled) { background:none; color:var(--publisher-ink); }
 .publisher .publisher-tabs button[aria-pressed="true"] { color:var(--publisher-ink); border-bottom-color:currentColor; }
+/* Nine tabs fit at full spacing from about 870px; below it they close up, and scroll sideways once they don't fit. */
+@media (max-width:860px) { .publisher-tabs { gap:20px; overflow-x:auto; scrollbar-width:none; } .publisher-tabs::-webkit-scrollbar { display:none; } }
 
 /* --- fields --- */
 .publisher label { display:block; margin-bottom:20px; font-size:14px; color:inherit; }
