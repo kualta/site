@@ -87,7 +87,9 @@ export function offloadLine(o) {
     const { bytes, sent } = sending(o);
     after = ` · ${timeLeft((bytes - sent) / o.speed)}`;
   }
-  return `Offloading ${lane.done} / ${lane.total}${after}`;
+  // Kept awake while it works (#357): said, so a Mac that won't sleep isn't a mystery.
+  const awake = o.keepingAwake ? " · keeping this Mac awake" : "";
+  return `Offloading ${lane.done} / ${lane.total}${after}${awake}`;
 }
 
 /**

@@ -197,6 +197,19 @@ then twice as long each time up to 10 minutes. The clip in flight starts over. W
 waits for some. A clip that fails five times while the rest works (or never reads back as it was sent) is passed over
 until the switch is next started, which the menu, the status line and the log say, with why.
 
+**Asleep.** A try this Mac slept through, a request cut short by it, isn't one of a clip's five and makes the waits no
+longer: once it wakes, the network has 10 seconds to come back and the clip goes again. The log says so once a wake
+("the Mac slept 14 min; not counted"). With its lid closed on battery it wakes for a moment every quarter of an hour,
+and a request longer than that would otherwise fail at each. Node's own clocks and timers go on through a sleep on
+macOS as the wall clock does, so a sleep is told by the server not having run for over 30 seconds.
+
+**Kept awake.** While a switch is at work (copying, hashing, sending, reading back or filing), this Mac is kept from
+sleeping when idle, by one `caffeinate -i -w <the server's pid>`, which goes with the server however it ends. It's let
+go once none has been at work for 10 seconds: all off, paused, or waiting for the camera, room or the network. The
+display may sleep, a closed lid sleeps the Mac all the same, and no power setting is touched. The status line says
+"keeping this Mac awake", and `GET /api/offload` `keepingAwake`; `"keepAwake": false` in a request keeps it off for the
+run.
+
 **The pause.** Uploads pause between parts, keeping the parts sent, while no Grade page has asked how things are going
 for a minute, and go on when one does; the switch says so. **Keep going when this tab is closed** (off for each run)
 lets a run go on without. Camera → Mac doesn't pause for this; only for **Pause all** (above).

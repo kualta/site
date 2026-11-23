@@ -19,6 +19,10 @@
 // Each clip's sound is taken before its Mac copy goes, to be transcribed meanwhile or later (transcripts.mjs). A
 // transcript is filed beside its clip, as `transcripts/<clip>.vtt` and `.json`, while Mac → Cloudflare is on, and never
 // stops it.
+//
+// While a switch is at work this Mac is kept from sleeping when idle, and a try it slept through anyway (its lid closed)
+// isn't counted against a clip (lane.mjs).
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, createWriteStream, statSync, unlinkSync } from "node:fs";
 import { readFile, rename, rm, stat, utimes } from "node:fs/promises";
@@ -26,7 +30,7 @@ import { join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { readRange } from "../publisher/archive.mjs";
-import { makeLane, RETRY } from "./lane.mjs";
+import { makeLane, RETRY, sleepWatch } from "./lane.mjs";
 
 /** Each request carries this much of a clip: on a slow uplink one still lands well inside a request's ten minutes. */
 export const OFFLOAD_PART = 16 * 1024 * 1024;
@@ -256,6 +260,44 @@ function inTurn(work) {
 }
 
 /**
+ * Keeps this Mac from sleeping when idle while it's held: one `caffeinate -i -w <pid>` at most, which goes once `pid`
+ * (this process) does, however it ends. The display may sleep, and a closed lid sleeps it all the same; no power setting
+ * is touched. `held` says whether it's being kept awake; without caffeinate it isn't, which `log` hears once.
+ */
+export function wakeLock({ command = "caffeinate", pid = process.pid, log = () => {} } = {}) {
+  /** The caffeinate running, till it's gone; it's killed once it isn't wanted, and a new one waits for that. */
+  let child = null;
+  let wanted = false;
+  let missing = false;
+  function begin() {
+    const mine = spawn(command, ["-i", "-w", String(pid)], { stdio: "ignore" });
+    child = mine;
+    mine.once("error", (error) => {
+      missing = true;
+      log(`can't keep this Mac awake: ${error.message}`);
+    });
+    mine.once("close", () => {
+      if (child === mine) child = null;
+      // One that ended by itself is started again on the next ask; one killed, at once if it's wanted again by now.
+      if (mine.killed) sync();
+    });
+  }
+  function sync() {
+    if (wanted && !child && !missing) begin();
+    else if (!wanted && child && !child.killed) child.kill();
+  }
+  return {
+    hold(on) {
+      wanted = on;
+      sync();
+    },
+    get held() {
+      return Boolean(child) && !child.killed && !missing;
+    },
+  };
+}
+
+/**
  * Starts offloading, with the switches `lanes` on. What there is to take is listed as it goes: `camera({ fresh })` says the
  * card's clips, or null while it's unplugged (`fresh`: not from a listing a few seconds old); `mac()` Movies/Original's.
  * Each clip is `{ name, path, size, mtime, day }`, oldest first, with `settles` the time until which it may still be
@@ -277,6 +319,10 @@ function inTurn(work) {
  * `transcripts` is what the transcriber does: `take(clip, signal)` takes a clip's sound from its Mac copy, which waits for
  * it; `ready()` says the transcripts to send, each `{ key, name, day, files: [{ path, abs, mtime }] }`; `sent(keys)` hears
  * the ones filed.
+ *
+ * `awake(on)` hears whether to keep this Mac awake, as that changes: at once while a switch is at work (copying, hashing,
+ * sending, reading back or filing) and `stayAwake()` says to, and only after `look` of none being so, or once every
+ * switch is off. `sleeps` notices the Mac sleeping (lane.mjs), a watch of its own unless it's given.
  *
  * Says `{ state, start, stop, poke, done }`: `state` is read as it goes; `start(lane)` turns another switch on while the
  * run goes; `stop(lanes, { now })` turns them off (lane.mjs); `poke()` says something may have changed, like a transcript
@@ -305,7 +351,11 @@ export function startOffload({
   retry = RETRY,
   look = 10_000,
   log = () => {},
+  stayAwake = () => true,
+  awake = () => {},
+  sleeps = null,
 }) {
+  const watch = sleeps ?? sleepWatch();
   const ask = async (...asked) => {
     try {
       return await request(...asked);
@@ -315,9 +365,9 @@ export function startOffload({
   };
   const lanes = {
     /** Off the card onto the Mac. `onCamera`: clips staying on the card until they're in the archive. */
-    copy: makeLane({ current: null, onCamera: 0 }, { retry, log }),
+    copy: makeLane({ current: null, onCamera: 0 }, { retry, log, sleeps: watch }),
     /** Up to the archive: what's on the Mac, and what Camera → Mac brings while it's on. */
-    send: makeLane({ current: [] }, { retry, log }),
+    send: makeLane({ current: [] }, { retry, log, sleeps: watch }),
   };
   const { copy, send } = lanes;
   const state = {
@@ -389,9 +439,11 @@ export function startOffload({
   /** The cheapest request there is, to tell whether the site can be reached. */
   const reachSite = (lane) => () =>
     ask("missing", { method: "POST", json: { blobs: [] }, signal: lane.signal, timeout: 60_000 });
-  /** Waits out what stopped a lane. Says whether it was an outage. */
-  const recover = (lane, error) =>
-    onTheWay(error) ? lane.recover("network", error, reachSite(lane)) : lane.recover("trouble", error, async () => {});
+  /** Waits out what stopped a lane, in a try begun at `began`. Says whether it was an outage. */
+  const recover = (lane, error, began) =>
+    onTheWay(error)
+      ? lane.recover("network", error, reachSite(lane), began)
+      : lane.recover("trouble", error, async () => {}, began);
 
   /** The clips this run read off the card: name → the file's id and time there, and its SHA-256. */
   const offCard = new Map();
@@ -497,8 +549,9 @@ export function startOffload({
     for (const { clip, known } of going) {
       if (copy.ending()) break;
       if (unasked && !holds.has(known.sha256)) continue;
+      const began = copy.mark();
       try {
-        if (holds.has(known.sha256) && (await isTheSame(clip, known)))
+        if (holds.has(known.sha256) && (await copy.at(() => isTheSame(clip, known))))
           await remove(clip, "camera", () => holds.has(known.sha256));
         else {
           strange.add(idOf(clip));
@@ -507,7 +560,7 @@ export function startOffload({
       } catch (error) {
         if (copy.signal.aborted) throw error;
         if (!(await statOf(clip.path))) throw Object.assign(new Error(UNPLUGGED), { unplugged: true });
-        copy.failed(clip, error);
+        copy.failed(clip, error, { from: began });
       }
     }
     return { again, unasked };
@@ -543,7 +596,8 @@ export function startOffload({
     for (const clip of clear) {
       if (copy.ending()) break;
       if (mustWait(clip)) continue;
-      await remove(clip, "camera", () => isCleared(clip)).catch((error) => copy.failed(clip, error));
+      const began = copy.mark();
+      await remove(clip, "camera", () => isCleared(clip)).catch((error) => copy.failed(clip, error, { from: began }));
     }
     const seen = recorded.filter(({ clip }) => !mustWait(clip));
     const { again, unasked } = await clearRecorded(seen);
@@ -559,6 +613,7 @@ export function startOffload({
 
   /** Copies a clip to the Mac, if there's room, and deletes it from the card if that's all it waits for. */
   async function takeOffCard(clip) {
+    const began = copy.mark();
     const path = join(dir, clip.name);
     if ((await statOf(path))?.size !== clip.size) {
       const free = await room();
@@ -590,19 +645,19 @@ export function startOffload({
       if (clearCardAfter() === "copied") await remove(clip, "camera", () => isCleared(clip));
     } catch (error) {
       if (copy.signal.aborted) return;
-      if (!(await statOf(clip.path))) await recoverCamera();
+      if (!(await statOf(clip.path))) await recoverCamera(began);
       else if (error.code === "ENOSPC") await copy.hold({ for: "room", why: error.message }, change(look));
-      else copy.failed(clip, error);
+      else copy.failed(clip, error, { from: began });
     } finally {
       copy.state.current = null;
       notify();
     }
   }
 
-  const recoverCamera = () =>
-    copy.recover("camera", new Error(UNPLUGGED), async () => {
-      if (!(await camera({ fresh: true }))) throw new Error(UNPLUGGED);
-    });
+  async function cameraBack() {
+    if (!(await camera({ fresh: true }))) throw new Error(UNPLUGGED);
+  }
+  const recoverCamera = (began) => copy.recover("camera", new Error(UNPLUGGED), cameraBack, began);
 
   async function copyAll() {
     bringing = true;
@@ -615,10 +670,12 @@ export function startOffload({
         await copy.hold({ for: "owner", why: owner }, change(gateLook));
         continue;
       }
+      // After the pause: time held for the owner isn't part of a try.
+      const began = copy.mark();
       try {
         const card = await camera({ fresh });
         if (!card) {
-          await recoverCamera();
+          await recoverCamera(began);
           continue;
         }
         // Asked before looking: what lands as the sending ends is seen to have by the look after.
@@ -630,18 +687,18 @@ export function startOffload({
         fresh = !next;
         bringing = cardLeft.length > 0 || unsure || !sure;
         if (!bringing) notify();
-        if (next) await takeOffCard(next);
+        if (next) await copy.at(() => takeOffCard(next));
         else if (!sure) continue;
         else if (unasked) {
-          await recover(copy, reaching(unasked));
+          await recover(copy, reaching(unasked), began);
           askAt = 0;
         } else if (later !== null) await change(Math.min(later, look));
         else if (awaiting && sending) await copy.hold({ for: "cloudflare", why: WAITS_FOR_CLOUDFLARE }, change(look));
         else return;
       } catch (error) {
         if (copy.signal.aborted) return;
-        if (error.unplugged) await recoverCamera();
-        else await recover(copy, error);
+        if (error.unplugged) await recoverCamera(began);
+        else await recover(copy, error, began);
       }
     }
   }
@@ -746,8 +803,9 @@ export function startOffload({
     for (const clip of going) {
       if (lane.ending()) return;
       const { sha256 } = record[clip.name];
+      const began = lane.mark();
       try {
-        if (there.has(sha256) && (await hashFile(clip.path, lane.signal)) === sha256) {
+        if (there.has(sha256) && (await lane.at(() => hashFile(clip.path, lane.signal))) === sha256) {
           from.landed.set(clip.name, sha256);
           if (await from.before(clip)) await removeSent(from, clip, sha256);
         } else {
@@ -756,7 +814,7 @@ export function startOffload({
         }
       } catch (error) {
         if (lane.signal.aborted) throw error;
-        lane.failed(clip, error);
+        lane.failed(clip, error, { from: began });
       }
     }
   }
@@ -789,6 +847,7 @@ export function startOffload({
   /** Sends a clip, files it, records it and deletes its Mac copy, in that order. */
   async function sendOne(from, clip) {
     const { lane, flying } = from;
+    const began = lane.mark();
     const going = { name: clip.name, sent: 0, size: clip.size, hashing: true };
     lane.state.current.push(going);
     try {
@@ -817,8 +876,8 @@ export function startOffload({
       if (lane.signal.aborted) return;
       going.sent = 0;
       // The site answering all the same, it's a try of this clip's: it may be what fails.
-      const outage = onTheWay(error) && (await recover(lane, error));
-      if (!outage) lane.failed(clip, error, { soon: onTheWay(error) });
+      const outage = onTheWay(error) && (await recover(lane, error, began));
+      if (!outage) lane.failed(clip, error, { soon: onTheWay(error), from: began });
     } finally {
       lane.state.current.splice(lane.state.current.indexOf(going), 1);
       flying.delete(clip.name);
@@ -829,6 +888,7 @@ export function startOffload({
   async function sendAll(from) {
     const { lane } = from;
     while (!lane.ending()) {
+      const began = lane.mark();
       try {
         await lane.recovered();
         const hold = holding();
@@ -840,12 +900,12 @@ export function startOffload({
         const feeding = from.feeding();
         const { clip, later } = await nextOf(from);
         if (clip && lane.ending()) from.flying.delete(clip.name);
-        else if (clip) await sendOne(from, clip);
+        else if (clip) await lane.at(() => sendOne(from, clip));
         else if (later !== null || feeding) await change(Math.min(later ?? look, look));
         else return;
       } catch (error) {
         if (lane.signal.aborted) return;
-        await recover(lane, error);
+        await recover(lane, error, began);
       }
     }
   }
@@ -880,13 +940,15 @@ export function startOffload({
     const tries = new Map();
     /** Sends what's ready of a day's. */
     async function trySending(day, ready) {
+      const began = send.mark();
       try {
-        await sendDay(day, ready);
+        await send.at(() => sendDay(day, ready));
       } catch (error) {
         if (send.signal.aborted) return;
-        tries.set(day, (tries.get(day) ?? 0) + 1);
-        if (onTheWay(error) && tries.get(day) < retry.tries) {
-          if (await recover(send, error)) tries.delete(day);
+        const network = onTheWay(error);
+        if (!network || !send.slept(began)) tries.set(day, (tries.get(day) ?? 0) + 1);
+        if (network && (tries.get(day) ?? 0) < retry.tries) {
+          if (await recover(send, error, began)) tries.delete(day);
           return;
         }
         state.transcripts.error = error.message;
@@ -927,6 +989,26 @@ export function startOffload({
   let over;
   const done = new Promise((resolve) => {
     over = resolve;
+  });
+
+  // Kept awake at once when a switch is at work; let sleep once none has been for a while, so the moment between two
+  // clips doesn't let it.
+  let keptAwake = false;
+  let restingSince = Date.now();
+  const awaken = (on) => {
+    if (on === keptAwake) return;
+    keptAwake = on;
+    awake(on);
+  };
+  const wakeful = setInterval(() => {
+    const working = LANES.some((name) => lanes[name].working);
+    if (working) restingSince = Date.now();
+    awaken(stayAwake() && (working || (keptAwake && Date.now() - restingSince < look)));
+  }, gateLook);
+  void done.then(() => {
+    clearInterval(wakeful);
+    awaken(false);
+    if (!sleeps) watch.stop();
   });
   function start(name) {
     if (!state.running || lanes[name].state.on) return false;

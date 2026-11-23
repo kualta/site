@@ -573,6 +573,10 @@ try {
     await menu.getByRole("checkbox", { name: "Keep going when this tab is closed" }).uncheck();
     assert.deepEqual(asked.splice(0), [["", { lanes: [], unattended: false }]]);
 
+    // While it works, the status line says this Mac is kept awake.
+    run = going({ keepingAwake: true });
+    await menu.locator("#status", { hasText: / · keeping this Mac awake$/ }).waitFor({ timeout: 5_000 });
+
     // What each waits for.
     const until = new Date(Date.now() + 60_000).toISOString();
     run = going({ copy: lane({ current: null, onCamera: 0, waiting: { for: "camera", why: "x", until } }), send: lane({ waiting: { for: "page", why: "No Grade page is open" } }), paused: { for: "page" } });
