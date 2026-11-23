@@ -222,19 +222,23 @@ test.if(usable)("sent again when its grade changes, and only then", async () => 
   expect(clips[name].thumb).toBe(keyFor(undefined));
 });
 
-test.if(usable)("the first pass sends what went ungraded before a look's worth at a time", async () => {
-  const clips = {};
-  for (let i = 0; i < 30; i++)
-    clips[clip(`DJI_20261108130000_${String(100 + i).padStart(4, "0")}_D`, "dlog2")] = { thumb: AS_MADE };
-  const { sent, send } = archive();
-  expect(await send(clips)).toEqual({ more: true, error: null });
-  expect(sent.length).toBe(THUMBS_AT_ONCE);
-  expect(await send(clips)).toEqual({ more: false, error: null });
-  expect(sent.length).toBe(30);
-  expect(new Set(sent.map(([c]) => c)).size).toBe(30);
-  await send(clips);
-  expect(sent.length).toBe(30);
-}, 30_000);
+test.if(usable)(
+  "the first pass sends what went ungraded before a look's worth at a time",
+  async () => {
+    const clips = {};
+    for (let i = 0; i < 30; i++)
+      clips[clip(`DJI_20261108130000_${String(100 + i).padStart(4, "0")}_D`, "dlog2")] = { thumb: AS_MADE };
+    const { sent, send } = archive();
+    expect(await send(clips)).toEqual({ more: true, error: null });
+    expect(sent.length).toBe(THUMBS_AT_ONCE);
+    expect(await send(clips)).toEqual({ more: false, error: null });
+    expect(sent.length).toBe(30);
+    expect(new Set(sent.map(([c]) => c)).size).toBe(30);
+    await send(clips);
+    expect(sent.length).toBe(30);
+  },
+  30_000,
+);
 
 test.if(usable)(
   "what can't be graded goes as made: no LUT for its look (logged once), or made from the graded copy",
