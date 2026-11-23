@@ -39,7 +39,7 @@
     <label for="shoot" class="cap">Clips from</label>
     <span class="select"><select id="shoot"></select><svg><use href="#i-chevron"/></svg></span>
   </div>
-  <a id="footage-link" class="btn" href="https://post.kualta.dev/footage" target="_blank" rel="noreferrer" title="Every clip and where its copies are, in the composer's Footage tab">Footage</a>
+  <a id="footage-link" class="btn" href="https://post.kualta.dev/footage" target="_blank" rel="noreferrer">Footage</a>
   <span class="transcribing" id="transcribing"></span>
   <p class="status" id="status" role="status"></p>
   <button id="stop-offload" class="btn" type="button" hidden>Stop offloading</button>
@@ -49,28 +49,28 @@
     <button id="export" class="btn primary" type="button" disabled><svg><use href="#i-export"/></svg><span id="export-label">Export</span><span id="export-quality" class="badge" hidden></span></button>
     <button id="export-more" class="btn primary" type="button" aria-label="More ways to export" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu"><svg><use href="#i-chevron"/></svg></button>
     <div class="menu" id="export-menu" hidden>
-      <button id="export-frame" class="menu-item" type="button">Export frame<span class="menu-note">PNG of the frame on screen</span></button>
-      <button id="export-changed" class="menu-item" type="button" title="Export again every graded clip whose grade changed since its export">All up to date</button>
+      <button id="export-frame" class="menu-item" type="button">Export frame</button>
+      <button id="export-changed" class="menu-item" type="button">All up to date</button>
       <div class="menu-quality">
         <div class="menu-row"><label for="quality">Quality</label><output id="quality-out" for="quality">100%</output></div>
         <span class="rail" id="quality-rail"><input type="range" id="quality" min="10" max="100" step="5" value="100"></span>
         <p id="quality-size" class="menu-note">Near lossless</p>
-        <div class="menu-row" title="The GPU is faster. A clip it can't encode is encoded on the CPU."><span id="encoder-name">Encode on</span>
+        <div class="menu-row"><span id="encoder-name">Encode on</span>
           <div class="seg small" role="group" aria-labelledby="encoder-name">
             <button type="button" data-encoder="gpu" aria-pressed="true">GPU</button><button type="button" data-encoder="cpu" aria-pressed="false">CPU</button>
           </div>
         </div>
-        <p class="menu-note">Below 50% always the CPU: it keeps more at that size</p>
+        <p class="menu-note">Below 50% always the CPU</p>
       </div>
-      <label class="menu-check" title="A film's preview copies are small graded copies of whole clips, kept in the cache. On, one whose clip is graded again is made again a few seconds after the grade stops changing; off, it stays as it was until a film asks for it again."><input type="checkbox" id="previews-remake">Remake a film's preview copies after a regrade</label>
+      <label class="menu-check"><input type="checkbox" id="previews-remake">Remake a film's preview copies after a regrade</label>
       <div class="menu-offload">
-        <div class="lane" data-lane="copy" title="Each clip is copied to this Mac, checked, and deleted from the camera. Log clips without a grade get the Colorful look as settings."><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>
-        <div class="lane" data-lane="send" title="Each clip on this Mac is sent to Cloudflare, read back and checked, and deleted from this Mac. Its transcript is made here and filed beside it. Graded clips go to YouTube meanwhile."><span>Mac → Cloudflare</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
+        <div class="lane" data-lane="copy"><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>
+        <div class="lane" data-lane="send"><span>Mac → Cloudflare</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
         <div class="offload-places">
           <div class="menu-row"><span>Transcripts</span><output id="offload-transcripts"></output></div>
           <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
         </div>
-        <label class="menu-check" title="Otherwise uploads pause between parts once no Grade page has been open for a minute, and go on when one is. This run only."><input type="checkbox" id="offload-unattended">Keep going when this tab is closed</label>
+        <label class="menu-check" title="This run only"><input type="checkbox" id="offload-unattended">Keep going when this tab is closed</label>
         <div class="offload-choice">
           <span id="clear-after-name">Delete from the camera</span>
           <div class="seg small" role="group" aria-labelledby="clear-after-name">
@@ -103,7 +103,7 @@
       <div class="bin-row">
         <span class="cap">Cloudflare</span>
         <span id="cloud-count" class="count"></span>
-        <button id="cloud-refresh" class="link" type="button" title="Read the archive again">Refresh</button>
+        <button id="cloud-refresh" class="link" type="button">Refresh</button>
       </div>
       <div class="cloud-kind"><span>Originals</span><output id="cloud-original"></output><button id="bring-original" class="btn small" type="button" title="Bring the day's originals that aren't here to Movies/Original" disabled>Bring all</button></div>
       <div class="cloud-kind" title="Room for clips on this Mac, past what is always kept free"><span>Room</span><output id="cloud-room"></output></div>
@@ -137,7 +137,7 @@
 
   <aside class="panel" aria-label="Grade">
     <header class="panel-head">
-      <p class="cap" id="editing">Nothing selected</p>
+      <p class="cap" id="editing">&nbsp;</p>
       <h2 id="clip-title">—</h2>
       <div class="meta" id="clip-meta"></div>
       <p class="kept" id="clip-kept"></p>
@@ -156,7 +156,7 @@
       <div class="group-head"><span class="cap">Light</span><button class="link" type="button" data-reset-group="light">Reset</button></div>
       <div class="controls" data-group="light"></div>
       <div class="ctl choice" data-field="deflicker">
-        <span class="ctl-label" id="deflicker-name" title="Double-click for Off"><span class="name">Deflicker</span><span class="mixed" hidden>Mixed</span></span>
+        <span class="ctl-label" id="deflicker-name"><span class="name">Deflicker</span><span class="mixed" hidden>Mixed</span></span>
         <div class="seg" role="group" aria-labelledby="deflicker-name" id="deflicker">
           <button type="button" data-deflicker="" aria-pressed="true">Off</button><button type="button" data-deflicker="light" aria-pressed="false" title="Evens out fast flicker, and keeps brightness that changes as the camera moves">Light</button><button type="button" data-deflicker="strong" aria-pressed="false" title="Evens out more, for tripod and timelapse shots">Strong</button>
         </div>

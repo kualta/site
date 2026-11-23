@@ -1596,15 +1596,7 @@ export default function Publisher({
                 />
               </label>
               <label>
-                <span className="publisher-label">
-                  Pipeline
-                  {linkedPiece && (
-                    <span className="publisher-for">
-                      {" · "}
-                      <span>Moves to Posted once the post is queued.</span>
-                    </span>
-                  )}
-                </span>
+                <span className="publisher-label">Pipeline</span>
                 <select
                   value={linkedPiece?.id ?? ""}
                   disabled={busy || submitted}
@@ -1774,7 +1766,7 @@ export default function Publisher({
                         <MediaButton
                           accept="video/*"
                           label="Chinese version"
-                          hint="The same video made for Chinese audiences, up to 90 MB"
+                          hint="Up to 90 MB"
                           Icon={VideoIcon}
                           disabled={busy || submitted}
                           onFiles={([file]) => file && chooseChineseVideo(file)}

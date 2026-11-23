@@ -587,9 +587,7 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
                   ))}
                 </ul>
               )}
-              {shown && !here.length && (
-                <p className="publisher-pipeline-empty">{stage === "idea" ? "Add an idea above" : "Drop here"}</p>
-              )}
+              {shown && !here.length && <p className="publisher-pipeline-empty">{"\u00a0"}</p>}
             </section>
           );
         })}
