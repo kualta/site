@@ -3,42 +3,57 @@ import {
   formatDuration,
   formatRate,
   formatWhen,
+  type Heard,
   LANE_NAMES,
+  type LaneAsk,
+  type LaneAsks,
+  type LaneWant,
   MAC_LANES,
   MAC_STALE,
   type MacLane,
   type MacLaneName,
   type MacLaneState,
   type MacReport,
-  type Paused,
-  pausedText,
+  type Space,
 } from "@/lib/publisher/mac";
 
-/** What `footage/mac` answers: the grade app's last report, and how long ago it came. */
+/** What `footage/mac` answers: the grade app's last report, how long ago it came, and the owner's Start and Pause. */
 export interface MacReply {
   age: number | null;
   report: MacReport | null;
+  lanes: LaneAsks;
 }
 interface Props {
-  request: (path: string) => Promise<any>;
+  request: (path: string, body?: unknown, method?: string) => Promise<any>;
   /** When the Grade tab last asked for this section: it's brought into view then, as by `#this-mac`. */
   shown: number | null;
-  /** Everything paused from the Footage tab, as it last read. */
-  paused: Paused | null;
 }
 
 const STATES: Record<MacLaneState, string> = {
-  idle: "Idle",
+  idle: "Paused",
   running: "Running",
-  paused: "Paused",
+  paused: "Held",
   waiting: "Waiting",
-  stopping: "Stopping",
+  stopping: "Pausing",
   done: "Done",
-  stopped: "Stopped",
+  stopped: "Paused",
   failed: "Failed",
 };
+/** A switch that's on, whatever it's doing. */
+const ON: MacLaneState[] = ["running", "paused", "waiting", "stopping"];
+/** Where each switch takes its clips from, whose space it shows. */
+const FROM: Record<MacLaneName, string> = { copy: "Camera", send: "Mac" };
+
 const gb = (bytes: number) => (bytes / 1e9).toFixed(1);
+/** GB as a volume's size is said: tenths below 100, whole above. */
+const volumeGb = (bytes: number) => (bytes >= 100e9 ? String(Math.round(bytes / 1e9)) : gb(bytes));
+/** How full a volume is, in whole percent: 100 only when it is. */
+const share = ({ used, total }: Space) =>
+  total ? Math.min(used < total ? 99 : 100, Math.round((used / total) * 100)) : 0;
+export const spaceText = (space: Space) => `${volumeGb(space.used)} of ${volumeGb(space.total)} GB · ${share(space)}%`;
 const clips = (count: number) => `${count} ${count === 1 ? "clip" : "clips"}`;
+/** The camera's number for a clip (DJI_20261120183012_0399_D.MP4 → 0399), or its name. */
+const clipNumber = (name: string) => /^DJI_\d{14}_(\d+)/.exec(name)?.[1] ?? name;
 /** How long a time is, roughly: 25 min, 3 h, 2 days. */
 function howLong(ms: number) {
   const minutes = Math.floor(ms / 60_000);
@@ -47,61 +62,110 @@ function howLong(ms: number) {
   return hours < 48 ? `${hours} h` : `${Math.floor(hours / 24)} days`;
 }
 const ago = (ms: number) => (ms < 60_000 ? "just now" : `${howLong(ms)} ago`);
-/** Which run the figures it frees are of. */
-function runName(report: MacReport) {
-  if (report.running) return "this run";
-  return report.endedAt ? "last run" : "";
+
+/**
+ * What a switch shows and what its button does: its state as the Mac last said, unless the owner has asked for the
+ * other since and the Mac hasn't done it yet. The button always asks for the other of what was last wanted, so a Start
+ * still on its way can be taken back.
+ */
+export function laneControl(
+  lane: MacLane | undefined,
+  ask: LaneAsk | undefined,
+  heard: Heard | null | undefined,
+): { state: string; next: LaneWant; asked: LaneWant | null } {
+  const going = Boolean(lane && ON.includes(lane.state) && lane.state !== "stopping");
+  const asked = ask && ask.at > (heard?.at ?? 0) ? ask.want : null;
+  let state = lane ? STATES[lane.state] : "—";
+  if (asked === "start" && !going) state = "Starting…";
+  if (asked === "pause" && going) state = "Pausing…";
+  return { state, next: (asked ? asked === "start" : going) ? "pause" : "start", asked };
 }
 
-/** What a lane waits for, what it's doing, or what's left for it, in a line. */
-function laneLine(name: MacLaneName, lane: MacLane, report: MacReport) {
+/** What's in a switch's way, or what it's doing that its state doesn't say, in a line; or the clips it passed over. */
+function laneLine(name: MacLaneName, lane: MacLane, report: MacReport, trouble: string | null) {
+  if (trouble) return { text: trouble };
+  if (lane.state === "failed") return { text: lane.error ?? "Failed" };
   const { waiting } = lane;
-  const again = waiting?.until ? `, tries again ${formatWhen(Date.parse(waiting.until))}` : "";
-  if (lane.state === "running") return `${name === "copy" ? "Copying" : "Sending"}, ${lane.total - lane.done} to go`;
-  if (lane.state === "stopping") return "Stopping once what's in flight is done";
-  if (lane.state === "failed") return lane.error ?? "Failed";
-  if (lane.state === "paused") return waiting?.for === "owner" ? "Paused by you" : "Paused while no Grade page is open";
-  if (waiting) {
-    if (waiting.for === "camera") return `Waiting for the camera${again}`;
-    if (waiting.for === "network") return `Can't reach Cloudflare${again}`;
-    if (waiting.for === "cloudflare") return "Keeping clips on the camera until Cloudflare has them";
-    return `${waiting.why}${again}`;
+  const held = waiting?.for === "owner";
+  if (lane.state === "stopping") {
+    const after = name === "copy" ? "After the clip in flight" : "After the clips in flight";
+    return { text: held ? `${after}, once you resume all` : after };
   }
-  if (name === "send")
-    return report.mac.clips ? `${clips(report.mac.clips)} · ${gb(report.mac.bytes)} GB to send` : "Nothing to send";
-  if (report.camera.mounted && report.camera.clips)
-    return `${clips(report.camera.clips)} · ${gb(report.camera.bytes)} GB on the camera`;
-  if (lane.state === "done") return "All copied: unplug the camera whenever";
-  return report.camera.mounted ? "Nothing on the camera to copy" : "Camera not plugged in";
+  if (lane.state === "paused") return { text: held ? "Held by Pause all" : "Held until a Grade page is open" };
+  if (waiting) {
+    const again = waiting.until ? `, tries again ${formatWhen(Date.parse(waiting.until))}` : "";
+    if (waiting.for === "camera") return { text: `Waiting for the camera${again}` };
+    if (waiting.for === "network") return { text: `Can't reach Cloudflare${again}`, title: waiting.why };
+    if (waiting.for === "cloudflare") return { text: "Keeping clips on the camera until Cloudflare has them" };
+    return { text: `${waiting.why}${again}` };
+  }
+  const passed = report.skipped.filter((clip) => clip.lane === name);
+  if (!passed.length) return { text: "" };
+  const [first] = passed;
+  const what = `${clipNumber(first.name)}: ${first.why}`;
+  return {
+    text: passed.length === 1 ? `Passed over ${what}` : `${passed.length} passed over · ${what}`,
+    title: passed.map((clip) => `${clip.name}: ${clip.why}`).join("\n"),
+  };
 }
 
-/** One switch: its state, its share done, its numbers and a line on what it's about, all in places that keep. */
-function Lane({ name, report }: { name: MacLaneName; report: MacReport | null }) {
+/** One switch: its state and button, the space where it takes clips from, what's left for it and how fast it goes. */
+function Lane({
+  name,
+  report,
+  ask,
+  trouble,
+  busy,
+  onAsk,
+}: {
+  name: MacLaneName;
+  report: MacReport | null;
+  ask: LaneAsk | undefined;
+  trouble: string | null;
+  busy: boolean;
+  onAsk: (lane: MacLaneName, want: LaneWant) => void;
+}) {
   const lane = report?.lanes[name];
-  // A switch that hasn't run yet counts what waits for it.
-  const waits = name === "copy" ? report?.camera : report?.mac;
-  const pending = lane?.state === "idle" ? waits : undefined;
-  const total = lane?.total || pending?.clips || 0;
-  const bytes = lane?.totalBytes || pending?.bytes || 0;
-  const share = lane && bytes ? Math.min(100, (lane.sentBytes / bytes) * 100) : 0;
+  const heard = report?.heard?.[name];
+  const control = laneControl(lane, ask, heard);
+  // A Start or Pause the Mac couldn't do says why, while it's the last one asked.
+  const refused = heard?.error && ask?.at === heard.at ? `Couldn't ${ask.want}: ${heard.error}` : null;
+  const line = lane && report ? laneLine(name, lane, report, trouble ?? refused) : { text: "" };
+  const source = name === "copy" ? report?.camera : report?.mac;
+  const unplugged = name === "copy" && report && !report.camera.mounted;
+  const space = source?.space ?? null;
+  let spaceSays = "—";
+  if (space) spaceSays = spaceText(space);
+  else if (unplugged) spaceSays = "Not plugged in";
+  // What's left for it: unknown while the card's unplugged.
+  let left = "—";
+  let leftBytes = "";
+  if (source && !unplugged) left = source.clips ? clips(source.clips) : "None";
+  if (source && !unplugged && source.clips) leftBytes = `${gb(source.bytes)} GB`;
   const measuring = lane?.state === "running" ? "Measuring…" : "—";
   return (
     <div className="publisher-mac-lane" role="group" aria-label={LANE_NAMES[name]} data-state={lane?.state}>
       <div className="publisher-mac-lane-head">
         <h3>{LANE_NAMES[name]}</h3>
-        <span>{lane ? STATES[lane.state] : "—"}</span>
+        <span>{control.state}</span>
+        <button type="button" disabled={!report || busy} onClick={() => onAsk(name, control.next)}>
+          {control.next === "start" ? "Start" : "Pause"}
+        </button>
+      </div>
+      <div className="publisher-mac-space">
+        <span>{FROM[name]}</span>
+        <span>{spaceSays}</span>
       </div>
       <div className="publisher-archive-bar" aria-hidden="true">
-        <span style={{ width: `${share}%` }} />
+        <span style={{ width: `${space ? share(space) : 0}%` }} />
       </div>
       <dl>
         <div>
-          <dt>Clips</dt>
-          <dd>{lane && total ? `${lane.done} / ${total}` : "—"}</dd>
-        </div>
-        <div>
-          <dt>Size</dt>
-          <dd>{lane && bytes ? `${gb(lane.sentBytes)} / ${gb(bytes)} GB` : "—"}</dd>
+          <dt>{name === "copy" ? "To copy" : "To send"}</dt>
+          <dd>
+            {left}
+            <small>{leftBytes}</small>
+          </dd>
         </div>
         <div>
           <dt>Speed</dt>
@@ -112,118 +176,93 @@ function Lane({ name, report }: { name: MacLaneName; report: MacReport | null })
           <dd>{lane && lane.left !== null ? formatDuration(lane.left) : measuring}</dd>
         </div>
       </dl>
-      <p className="publisher-mac-why" title={lane?.waiting?.why ?? lane?.error ?? undefined}>
-        {lane && report ? laneLine(name, lane, report) : ""}
+      <p className="publisher-mac-why" title={line.title ?? (line.text || undefined)}>
+        {line.text}
       </p>
     </div>
   );
 }
 
-/** What's going on with the offload, in a line: going, paused, over, unheard from, or not yet heard of. */
-function noticeFor(
-  reply: MacReply | null,
-  failed: boolean,
-  heardAgo: number | null,
-  paused: Paused | null,
-): { text: string; bad?: boolean } {
+/** How the Mac's word stands, beside the heading: how old it is, or that it isn't there. */
+function statusFor(reply: MacReply | null, failed: boolean, heardAgo: number | null): { text: string; bad?: boolean } {
   if (!reply) return { text: failed ? "Couldn't load. Retrying…" : "Reading…" };
-  const { report } = reply;
-  if (!report) return { text: "Nothing from the grade app yet: it reports here once it's running on the Mac, paired." };
-  if (report.running && heardAgo !== null && heardAgo > MAC_STALE)
-    return {
-      text: `Not heard from the Mac for ${howLong(heardAgo)}: it may be asleep or off.`,
-      bad: true,
-    };
-  if (paused) return { text: pausedText(paused) };
-  const started = report.startedAt ? formatWhen(Date.parse(report.startedAt)) : null;
-  if (report.running) return { text: started ? `Offloading since ${started}` : "Offloading" };
-  if (report.endedAt && started)
-    return { text: `Last offload ${started} to ${formatWhen(Date.parse(report.endedAt))}` };
-  return { text: "Not offloading" };
+  if (!reply.report) return { text: "No report from the Mac yet" };
+  if (reply.report.running && heardAgo !== null && heardAgo > MAC_STALE)
+    return { text: `Not heard from for ${howLong(heardAgo)}`, bad: true };
+  return { text: heardAgo !== null ? `Updated ${ago(heardAgo)}` : "" };
 }
 
-/** The figures under the switches, as they read with the report, or a dash each without one. */
+/** The switches and the figures under them, as they read with the report, or a dash each without one. */
 export function MacSection({
   reply,
   failed = false,
   now = Date.now(),
   heardAt = null,
-  paused = null,
-}: { reply: MacReply | null; failed?: boolean; now?: number; heardAt?: number | null; paused?: Paused | null }) {
+  busy = false,
+  trouble = {},
+  onAsk = () => {},
+}: {
+  reply: MacReply | null;
+  failed?: boolean;
+  now?: number;
+  heardAt?: number | null;
+  /** A Start or Pause on its way to the site. */
+  busy?: boolean;
+  /** Why asking for one failed, by switch. */
+  trouble?: Partial<Record<MacLaneName, string>>;
+  onAsk?: (lane: MacLaneName, want: LaneWant) => void;
+}) {
   const report = reply?.report ?? null;
   const heardAgo = report && heardAt !== null ? Math.max(0, now - heardAt) : null;
-  const notice = noticeFor(reply, failed, heardAgo, paused);
-  const stale = notice.bad === true;
-  const passed = report?.skipped ?? [];
-  const when = report ? runName(report) : "";
+  const status = statusFor(reply, failed, heardAgo);
   const kept = report?.kept;
+  let keptDays = "—";
+  if (kept) keptDays = kept.days.length ? `${kept.days.length} ${kept.days.length === 1 ? "day" : "days"}` : "None";
   const t = report?.transcripts;
+  // Beside the transcripts waiting: those made and not sent yet, and those that failed, with why.
+  const more: string[] = [];
+  if (t?.toSend) more.push(`${t.toSend} to send`);
+  if (t?.failed) more.push(t.error ? `${t.failed} failed: ${t.error}` : `${t.failed} failed`);
+  const transcriptsMore = more.join(" · ");
   return (
     <>
       <div className="publisher-mac-head">
         <h2 id="publisher-mac-title">This Mac</h2>
         {/* A line whatever it says, so the heading beside it stays put. */}
-        <p className="publisher-note">{heardAgo !== null ? `Updated ${ago(heardAgo)}` : " "}</p>
+        <p role="status" data-tone={status.bad ? "bad" : undefined} title={status.text || undefined}>
+          {status.text || "\u00a0"}
+        </p>
       </div>
-      <p className="publisher-mac-notice" role="status" data-tone={notice.bad ? "bad" : undefined} title={notice.text}>
-        {notice.text}
-      </p>
-      <div className="publisher-mac-body" data-stale={stale || undefined}>
+      <div className="publisher-mac-body" data-stale={status.bad || undefined}>
         <div className="publisher-mac-lanes">
           {MAC_LANES.map((name) => (
-            <Lane key={name} name={name} report={report} />
+            <Lane
+              key={name}
+              name={name}
+              report={report}
+              ask={reply?.lanes[name]}
+              trouble={trouble[name] ?? null}
+              busy={busy}
+              onAsk={onAsk}
+            />
           ))}
         </div>
         <dl className="publisher-mac-figures">
           <div>
-            <dt>Transcripts</dt>
-            <dd title={t?.error ?? undefined}>
-              {t ? `${t.made} made` : "—"}
-              <small>{t ? `${t.waiting} waiting · ${t.failed} failed` : ""}</small>
-            </dd>
-          </div>
-          <div>
-            <dt>Freed from the card</dt>
-            <dd>
-              {report ? `${gb(report.freed.camera)} GB` : "—"}
-              <small>{when}</small>
-            </dd>
-          </div>
-          <div>
-            <dt>Freed from the Mac</dt>
-            <dd>
-              {report ? `${gb(report.freed.mac)} GB` : "—"}
-              <small>{when}</small>
-            </dd>
-          </div>
-          <div>
-            <dt>Room on the Mac</dt>
-            <dd>
-              {report ? `${Math.round(report.room.free / 1e9)} GB` : "—"}
-              <small>{report ? `${Math.round(report.room.keepFree / 1e9)} GB kept free` : ""}</small>
-            </dd>
-          </div>
-          <div>
             <dt>Kept</dt>
             <dd title={kept?.days.join(", ") || undefined}>
-              {kept ? `${kept.days.length} ${kept.days.length === 1 ? "day" : "days"}` : "—"}
-              <small>{kept ? clips(kept.clips) : ""}</small>
+              {keptDays}
+              <small>{kept?.clips ? clips(kept.clips) : ""}</small>
+            </dd>
+          </div>
+          <div>
+            <dt>Transcripts</dt>
+            <dd title={transcriptsMore || undefined}>
+              {t ? `${t.waiting} waiting` : "—"}
+              <small>{transcriptsMore}</small>
             </dd>
           </div>
         </dl>
-        <div className="publisher-mac-skipped">
-          <h3>
-            Passed over<span>{report ? passed.length : ""}</span>
-          </h3>
-          <ul aria-label="Clips passed over">
-            {passed.map(({ lane, name, why }) => (
-              <li key={`${lane}/${name}`} title={`${LANE_NAMES[lane]} · ${name}: ${why}`}>
-                <b>{name}</b> {why}
-              </li>
-            ))}
-            {!passed.length && <li className="publisher-note">{report ? "None" : "—"}</li>}
-          </ul>
-        </div>
       </div>
     </>
   );
@@ -231,23 +270,36 @@ export function MacSection({
 
 /**
  * The Footage tab's This Mac: how the grade app's offload stands, as the Mac last said, read again every 15 seconds
- * while the tab is shown. The Mac says so when it changes, so how long ago that was tells a Mac that's asleep or off.
+ * while the tab is shown, and every 5 while a Start or Pause is on its way. The Mac says so when it changes, so how
+ * long ago that was tells a Mac that's asleep or off. Each switch's Start and Pause go to the site, which the Mac hears.
  */
-export default function PublisherMac({ request, shown, paused }: Props) {
+export default function PublisherMac({ request, shown }: Props) {
   const box = useRef<HTMLElement>(null);
   const [reply, setReply] = useState<MacReply | null>(null);
   const [heardAt, setHeardAt] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [trouble, setTrouble] = useState<Partial<Record<MacLaneName, string>>>({});
+  // Whether a Start or Pause is still on its way to the Mac: read more often meanwhile, for the 2 minutes it takes a Mac
+  // that's awake to take it.
+  const waiting = useRef(false);
+  waiting.current = MAC_LANES.some((name) => {
+    const ask = reply?.lanes[name];
+    const { asked } = laneControl(reply?.report?.lanes[name], ask, reply?.report?.heard?.[name]);
+    return asked !== null && ask !== undefined && Date.now() - ask.at < 120_000;
+  });
   useEffect(() => {
     let active = true;
+    let readAt = 0;
     const read = async () => {
       if (document.hidden) return;
+      readAt = Date.now();
       try {
         const next = (await request("footage/mac")) as MacReply;
         if (!active) return;
         const at = Date.now();
-        setReply(next);
+        setReply({ ...next, lanes: next.lanes ?? {} });
         setHeardAt(next.age === null ? null : at - next.age);
         setNow(at);
         setFailed(false);
@@ -256,7 +308,9 @@ export default function PublisherMac({ request, shown, paused }: Props) {
       }
     };
     void read();
-    const timer = window.setInterval(read, 15_000);
+    const timer = window.setInterval(() => {
+      if (waiting.current || Date.now() - readAt >= 15_000) void read();
+    }, 5_000);
     document.addEventListener("visibilitychange", read);
     return () => {
       active = false;
@@ -267,9 +321,21 @@ export default function PublisherMac({ request, shown, paused }: Props) {
   useEffect(() => {
     if (shown !== null || location.hash === "#this-mac") box.current?.scrollIntoView({ block: "start" });
   }, [shown]);
+  async function ask(lane: MacLaneName, want: LaneWant) {
+    setBusy(true);
+    try {
+      const { lanes } = (await request("footage/lanes", { lane, want })) as { lanes: LaneAsks };
+      setReply((was) => was && { ...was, lanes });
+      setTrouble((was) => ({ ...was, [lane]: undefined }));
+    } catch (error) {
+      setTrouble((was) => ({ ...was, [lane]: `Couldn't ask: ${(error as Error).message}` }));
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section ref={box} id="this-mac" className="publisher-mac" aria-labelledby="publisher-mac-title">
-      <MacSection reply={reply} failed={failed} now={now} heardAt={heardAt} paused={paused} />
+      <MacSection reply={reply} failed={failed} now={now} heardAt={heardAt} busy={busy} trouble={trouble} onAsk={ask} />
     </section>
   );
 }

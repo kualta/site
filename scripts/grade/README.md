@@ -61,6 +61,7 @@ Each day shows how many of its clips have an export, and the clip list can show 
   ledger.json                             the footage ledger (below), also kept in the site's archive
   offloaded.json                          what each offloaded clip was (below)
   keep.json, offload.json                 what's kept out of offload, and when the card's copies go (below)
+  asked.json                              the Footage tab's Start and Pause of each switch done here (below)
   backup.json                             which of the settings above the archive has
   transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each offloaded clip (below)
   transcripts.json                        which clips have one, and which of those are in the archive
@@ -139,18 +140,37 @@ Footage tab, at **This Mac**, where it's shown whole: framed, the app asks the c
 message to the composer's origin only, heard only from the app's own frame); in a tab of its own it opens
 post.kualta.dev/footage#this-mac in another. After a run, what went wrong stays in the line as before.
 
-What This Mac shows comes from `report.mjs`: what `GET /api/offload` knows (each switch's state, clips and bytes through
-of how many, speed, time left and what it waits for; the clips passed over and why; the transcripts made, waiting and
-failed; what the run freed from the card and the Mac; the days kept out; the room on the Mac, in whole GB; when the run
-started and ended), sent to `helper/footage/mac` on the helper's pairing. The site keeps it as one small object. It goes
-only when it changed: at most every 30 seconds while a run goes (`GRADE_REPORT_EVERY`), every 10 minutes otherwise, and
-while a run goes and nothing changes, again every 2 minutes, so the tab can tell a Mac that's asleep from one that's
-waiting. Camera → Mac's speed is measured between two looks. An idle Mac whose numbers stay put sends nothing.
+What This Mac shows comes from `report.mjs`: what `GET /api/offload` knows (each switch's state, speed, time left and
+what it waits for; the clips on the card to copy and in `Original/` to send; the clips passed over and why; the
+transcripts waiting, failed and to send; the days kept out), the space on the card while it's plugged in (used of its
+size, by `statfs` of `GRADE_CAMERA`, in tenths of a GB) and on the Mac's volume that holds `~/Movies` (in whole GB), and
+which of the tab's Start and Pause it has taken (below), sent to `helper/footage/mac` on the helper's pairing. Nothing in
+it counts from when a run started: the app runs on, so it says how things stand. The site keeps it as one small object.
+It goes only when it changed: at most every 30 seconds while a run goes (`GRADE_REPORT_EVERY`), every 10 minutes
+otherwise, and while a run goes and nothing changes, again every 2 minutes, so the tab can tell a Mac that's asleep from
+one that's waiting; a Start or Pause just taken goes at the next look (5 seconds). Camera → Mac's speed is measured
+between two looks. An idle Mac whose numbers stay put sends nothing.
+
+**Start and Pause.** Each switch in This Mac has its own **Start** and **Pause**, from any device (`asks.mjs`). The site
+keeps the last ask of each switch with when it was asked (`footage/lanes.json` in the media bucket, never D1); this app
+hears them with Pause all (below) and in the answers to its reports, and does each once, by when it was asked: so within
+30 seconds, and the tab says "Starting…" or "Pausing…" until the report says it's been taken (and why, if it couldn't
+be). What's been done is kept in `asked.json` beside `grades.json`, so a restart does none again, and one asked while
+the app wasn't running is done when it starts. The last ask wins, from wherever: the Export menu's switches work as
+before.
+
+- **Start** turns the switch on as the owner runs it: `{"unattended": true, "clearCardAfter": "sent", "youtube":
+  false}`, the kept days and clips kept out as ever. Asked of a switch still stopping, it starts once that one has.
+- **Pause** is the switch's **Stop**: what's in flight is finished (the clip being copied, the two being sent, with their
+  manifest saves and deletions) and nothing more begun. Asked again, it changes nothing: it never cuts what's in flight.
+- With **Pause all** on, a switch that's on holds ("Held by Pause all") and goes on when everything does. Start and
+  Pause still work meanwhile: a switch started then waits for **Resume all**, and one paused then stays off after it.
 
 **Pause all.** The Footage tab's **Pause all** holds every job here, and **Resume all** lets them go on (`pause.mjs`). The
-site keeps the flag; this app hears it in the answer to its report, and asks `helper/footage` for it at start (before
-Whisper picks up where it was) and every 30 seconds (`GRADE_PAUSE_EVERY`). `pause.held()` is the one check (passed on
-as `pausedAll`), and whatever starts work in the background should honour it too:
+site keeps the flag; this app hears it in the answer to its report, and asks `helper/footage/lanes` for it (with each
+switch's Start or Pause) at start (before Whisper picks up where it was) and every 30 seconds (`GRADE_PAUSE_EVERY`).
+`pause.held()` is the one check (passed on as `pausedAll`), and whatever starts work in the background should honour it
+too:
 
 - the offload: Mac → Cloudflare waits between 16 MiB parts, as it does while no page is open, and Camera → Mac between
   clips, each saying it waits for `owner`, "Paused from the Footage tab";

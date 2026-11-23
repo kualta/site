@@ -107,6 +107,16 @@ export function storage(clips: LedgerClip[]) {
   };
 }
 
+/**
+ * What R2 charges a month for each GB the archive keeps footage in: it's stored on Infrequent Access, the archive
+ * bucket's default class (wrangler.jsonc), which the Worker's puts and multipart uploads of footage don't override. R2's
+ * free 10 GB-month is Standard's only, so none of it is free. developers.cloudflare.com/r2/pricing, November 2026:
+ * Infrequent Access $0.01 a GB-month, Standard $0.015. Reads ($0.01 a GB) and requests aren't counted here.
+ */
+export const ARCHIVE_GB_MONTH = 0.01;
+/** What storing `bytes` in the archive costs a month, in dollars. */
+export const archiveCost = (bytes: number) => (bytes / 1e9) * ARCHIVE_GB_MONTH;
+
 /** The films each clip is in, by its key. */
 export function filmsByClip(ledger: Ledger | null) {
   const films = new Map<string, string[]>();

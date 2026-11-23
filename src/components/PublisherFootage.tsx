@@ -313,7 +313,7 @@ export default function PublisherFootage({
       <p className="publisher-note" data-unsaid={!status || fresh || undefined}>
         As of {status ? when(status.at) : "now"}
       </p>
-      <PublisherMac request={request} shown={showMac} paused={paused} />
+      <PublisherMac request={request} shown={showMac} />
       <PublisherLedger
         request={request}
         uploading={current ? { name: current.name, share } : null}

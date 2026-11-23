@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Content } from "@/lib/publisher/content";
 import {
+  archiveCost,
   atRisk,
   type FootageLink,
   filmsByClip,
@@ -229,9 +230,7 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
   if (!ledger)
     return (
       <section className="publisher-ledger" aria-label="Footage ledger">
-        <p className="publisher-note">
-          {error === "No ledger yet" ? "No ledger yet: the grade app sends it once it's running." : error ?? "Reading…"}
-        </p>
+        <p className="publisher-note">{error ?? "Reading…"}</p>
       </section>
     );
   const entries = Object.entries(ledger.clips);
@@ -260,12 +259,16 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
 
   const kept = storage(Object.values(ledger.clips));
   const weight = (bytes: number) => (bytes ? fileSize(bytes) : "0 GB");
+  // A line each whatever it says, so the figures above keep their places.
   function copies({ originals, graded }: { originals: number; graded: number }) {
     const parts: string[] = [];
     if (originals) parts.push(`${originals} ${originals === 1 ? "original" : "originals"}`);
     if (graded) parts.push(`${graded} graded`);
-    return parts.join(" · ") || "Nothing";
+    return parts.join(" · ") || "\u00a0";
   }
+  const cost = archiveCost(kept.cloudflare.bytes);
+  let monthly = "\u00a0";
+  if (kept.cloudflare.bytes) monthly = cost < 0.005 ? "Under $0.01 a month" : `$${cost.toFixed(2)} a month`;
 
   return (
     <section className="publisher-ledger" aria-label="Footage ledger">
@@ -292,23 +295,17 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
           <dd>
             {weight(kept.cloudflare.bytes)}
             <small>{copies(kept.cloudflare)}</small>
+            <small title="R2 Infrequent Access: $0.01 a GB-month, no free tier">{monthly}</small>
           </dd>
         </div>
         <div>
           <dt>YouTube</dt>
-          <dd>
-            {`${kept.youtube.videos} ${kept.youtube.videos === 1 ? "video" : "videos"}`}
-            <small>Re-encoded copies</small>
-          </dd>
+          <dd>{`${kept.youtube.videos} ${kept.youtube.videos === 1 ? "video" : "videos"}`}</dd>
         </div>
       </dl>
       <div className="publisher-ledger-head">
         <p className="publisher-note" title={error ?? undefined}>
-          {[
-            `${entries.length} clips`,
-            error ?? `updated ${when(ledger.updatedAt)}`,
-            ...(asOf ? [`${camera.name} as of ${when(camera.seenAt ?? ledger.updatedAt)}`] : []),
-          ].join(" · ")}
+          {error ?? `Updated ${when(ledger.updatedAt)}`}
         </p>
         <div className="publisher-ledger-filters" role="group" aria-label="Show">
           {(Object.keys(FILTERS) as Filter[]).map((key) => (

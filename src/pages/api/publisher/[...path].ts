@@ -109,7 +109,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       path.startsWith("footage/") ||
       path === "helper/footage" ||
       path === "helper/footage/watch" ||
-      path === "helper/footage/mac"
+      path === "helper/footage/mac" ||
+      path === "helper/footage/lanes"
     ) {
       const response = await footageResponse(path, request, { media, archive });
       if (response) {

@@ -1887,6 +1887,8 @@ try {
       ],
     );
     await page.locator(".publisher-ledger-storage").getByText("2 originals · 3 graded").waitFor();
+    // What keeping the footage in Cloudflare costs: R2 Infrequent Access, $0.01 a GB-month, none of it free.
+    await page.locator(".publisher-ledger-storage").getByText("$0.02 a month", { exact: true }).waitFor();
     assert.match(
       await row("0258").getByRole("link", { name: "013-maybe-later" }).getAttribute("href"),
       /\/analytics\?post=00000000-0000-4000-8000-000000000008$/,
@@ -1953,7 +1955,8 @@ try {
   // The Archive tab: shoot days, a clip's player, its transcript and looks (scripts/check-publisher-archive.mjs).
   await checkArchive(browser, { composer: "http://127.0.0.1:8797/publisher.html", dir: clips, shots });
   // This Mac, in the Footage tab: how the grade app's offload on the Mac stands, as it last said, its numbers in places
-  // that are the same whatever they say, and a Mac gone quiet in a run read as stale.
+  // that are the same whatever they say, and a Mac gone quiet in a run read as stale. Nothing in it counts from when a
+  // run started: the space on the card and the Mac, what's left for each switch, and each switch's Start and Pause.
   for (const [width, name] of [
     [1280, "desktop"],
     [390, "mobile"],
@@ -1964,58 +1967,69 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     const theme = width > 700 ? "dark" : "light";
     const mac = page.getByRole("region", { name: "This Mac" });
-    /** Each switch's state, figures and line, as the section shows them. */
+    /** Each switch's state, button, space, figures and line, as the section shows them. */
     const lanes = () =>
       mac.locator(".publisher-mac-lane").evaluateAll((all) =>
         all.map((lane) => [
           lane.getAttribute("aria-label"),
           lane.querySelector(".publisher-mac-lane-head > span").textContent,
+          lane.querySelector(".publisher-mac-lane-head > button").textContent,
+          lane.querySelector(".publisher-mac-space > span:last-child").textContent,
           ...[...lane.querySelectorAll("dd")].map((dd) => dd.textContent),
           lane.querySelector(".publisher-mac-why").textContent,
         ]),
       );
     const figures = () =>
       mac.locator(".publisher-mac-figures dd").evaluateAll((all) => all.map((dd) => dd.textContent));
-    /** Where every part of the section starts on the page, and how tall it is: a passed-over clip as its line. */
+    /** Where every part of the section starts on the page, and how tall it is. */
     const places = () =>
       mac.evaluate((section) =>
-        [section, ...section.querySelectorAll(":not(li *)")].map((el) => {
+        [section, ...section.querySelectorAll("*")].map((el) => {
           const { x, y, height } = el.getBoundingClientRect();
           return [el.tagName, Math.round(x), Math.round(y + scrollY), Math.round(height)].join(" ");
         }),
       );
+    const passed = "Passed over 0399: doesn't read back from Cloudflare as it was sent: it stays on this Mac";
     let first = null;
-    for (const [state, notice, expected] of [
+    for (const [state, status, expected] of [
       [
         "",
-        /^Offloading since \d/,
+        "Updated just now",
         {
           lanes: [
-            ["Camera → Mac", "Done", "167 / 167", "40.1 / 40.1 GB", "—", "—", "All copied: unplug the camera whenever"],
-            ["Mac → Cloudflare", "Running", "7 / 167", "1.4 / 40.1 GB", "7.1 Mbit/s", "12 h 7 min", "Sending, 160 to go"],
+            ["Camera → Mac", "Done", "Start", "2.1 of 112 GB · 2%", "None", "—", "—", ""],
+            ["Mac → Cloudflare", "Running", "Pause", "454 of 494 GB · 92%", "160 clips38.7 GB", "7.1 Mbit/s", "12 h 7 min", passed],
           ],
-          figures: ["12 made3 waiting · 1 failed", "40.1 GBthis run", "1.4 GBthis run", "123 GB5 GB kept free", "2 days45 clips"],
+          figures: ["2 days45 clips", "3 waiting4 to send · 1 failed: uvx isn't installed, so Whisper can't run"],
         },
       ],
-      ["waiting", /^Offloading since \d/, { send: /^Can't reach Cloudflare, tries again \d/, copy: /^Waiting for the camera, tries again \d/ }],
-      ["paused", /^Offloading since \d/, { send: "Paused while no Grade page is open" }],
-      ["stale", "Not heard from the Mac for 25 min: it may be asleep or off.", { updated: "Updated 25 min ago" }],
-      ["done", /^Last offload \d.* to \d/, { send: "Nothing to send", sendState: "Done" }],
-      ["failed", /^Last offload \d.* to \d/, { send: "Cloudflare refused the pairing (401): pair the crossposter helper again", sendState: "Failed" }],
-      ["none", "Nothing from the grade app yet: it reports here once it's running on the Mac, paired.", { empty: true }],
+      [
+        "waiting",
+        "Updated just now",
+        { send: /^Can't reach Cloudflare, tries again \d/, copy: /^Waiting for the camera, tries again \d/, copySpace: "Not plugged in" },
+      ],
+      ["paused", "Updated just now", { send: "Held until a Grade page is open", sendState: "Held" }],
+      ["stale", "Not heard from for 25 min", {}],
+      ["done", "Updated just now", { send: passed, sendState: "Done", sendLeft: "None", sendButton: "Start" }],
+      ["failed", "Updated just now", { send: "Cloudflare refused the pairing (401): pair the crossposter helper again", sendState: "Failed" }],
+      ["none", "No report from the Mac yet", { empty: true }],
     ]) {
       await page.goto(`http://127.0.0.1:8797/publisher.html/footage?mac=${state}&theme=${theme}#this-mac`);
-      await mac.getByRole("status").filter({ hasText: notice }).waitFor();
+      await mac.getByRole("status").filter({ hasText: status }).waitFor();
       const [copy, send] = await lanes();
       if (expected.lanes) assert.deepEqual([copy, send], expected.lanes);
       if (expected.figures) assert.deepEqual(await figures(), expected.figures);
       if (expected.copy) assert.match(copy.at(-1), expected.copy);
+      if (expected.copySpace) assert.equal(copy[3], expected.copySpace);
       if (typeof expected.send === "string") assert.equal(send.at(-1), expected.send);
       else if (expected.send) assert.match(send.at(-1), expected.send);
       if (expected.sendState) assert.equal(send[1], expected.sendState);
-      if (expected.updated) await mac.getByText(expected.updated, { exact: true }).waitFor();
-      if (expected.empty) assert.deepEqual(await figures(), ["—", "—", "—", "—", "—"]);
-      else await mac.getByRole("list", { name: "Clips passed over" }).getByText("DJI_20261120183012_0399_D.MP4").waitFor();
+      if (expected.sendButton) assert.equal(send[2], expected.sendButton);
+      if (expected.sendLeft) assert.equal(send[4], expected.sendLeft);
+      if (expected.empty) {
+        assert.deepEqual(await figures(), ["—", "—"]);
+        assert.equal(await mac.getByRole("button", { disabled: true }).count(), 2);
+      }
       // Brought into view by its address.
       const top = await page.evaluate(() => document.getElementById("this-mac").getBoundingClientRect().top);
       assert.ok(top >= 0 && top < 450, `This Mac starts ${top}px down the window`);
@@ -2027,37 +2041,77 @@ try {
       if (shots) await mac.screenshot({ path: path.join(shots, `footage-mac-${state || "running"}-${name}.png`) });
     }
 
+    // Each switch's Start and Pause: asked of the site at once, said as on its way until the Mac has taken it, and as
+    // the Mac says after. The button asks for the other of what was last asked, so one on its way can be taken back.
+    await page.goto(`http://127.0.0.1:8797/publisher.html/footage?theme=${theme}#this-mac`);
+    const readAgain = () => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    const asked = (want) =>
+      page.waitForFunction(
+        (w) => window.publisherRequests.some((r) => r.path === "footage/lanes" && r.body?.lane === "send" && r.body?.want === w),
+        want,
+      );
+    const sending = mac.getByRole("group", { name: "Mac → Cloudflare" });
+    const shows = (state, button) =>
+      Promise.all([
+        sending.locator(".publisher-mac-lane-head > span").filter({ hasText: new RegExp(`^${state}$`) }).waitFor(),
+        sending.getByRole("button", { name: button, exact: true }).waitFor(),
+      ]);
+    await shows("Running", "Pause");
+    const before = await places();
+    await sending.getByRole("button", { name: "Pause", exact: true }).click();
+    await asked("pause");
+    await shows("Pausing…", "Start");
+    await page.evaluate(() => window.publisherMac.take());
+    await readAgain();
+    await shows("Paused", "Start");
+    assert.deepEqual(await places(), before, "This Mac moved as a switch paused");
+    await sending.getByRole("button", { name: "Start", exact: true }).click();
+    await asked("start");
+    await shows("Starting…", "Pause");
+    if (shots) await mac.screenshot({ path: path.join(shots, `footage-mac-starting-${name}.png`) });
+    await page.evaluate(() => window.publisherMac.take());
+    await readAgain();
+    await shows("Running", "Pause");
+    // The camera's switch is asked by its own name.
+    await mac.getByRole("group", { name: "Camera → Mac" }).getByRole("button", { name: "Start", exact: true }).click();
+    await page.waitForFunction(() =>
+      window.publisherRequests.some((r) => r.path === "footage/lanes" && r.body?.lane === "copy" && r.body?.want === "start"),
+    );
+    await page.evaluate(() => {
+      window.publisherMac.asks = {};
+      window.publisherMac.taken = {};
+    });
+
     // Pause all: everything holds from here (the offload, transcripts, exports, the uploads to YouTube) until it goes on
     // again, and every part of the tab says so.
     await page.goto(`http://127.0.0.1:8797/publisher.html/footage?theme=${theme}`);
     const footage = page.getByRole("region", { name: "Footage", exact: true });
-    const asked = (method) =>
+    const pausing = (method) =>
       page.waitForFunction(
         (m) => window.publisherRequests.some((r) => r.path === "footage/pause" && r.method === m),
         method,
       );
-    const readAgain = () => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
     await page.waitForFunction(() => document.title === "40% · footage · kualta");
     await footage.getByRole("button", { name: "Pause all" }).click();
-    await asked("POST");
+    await pausing("POST");
     const resume = footage.getByRole("button", { name: "Resume all" });
     assert.equal(await resume.getAttribute("aria-pressed"), "true");
     const pausedLine = /^Paused by you · since \d/;
     await footage.locator(".publisher-archive-notice").filter({ hasText: pausedLine }).waitFor();
-    await mac.getByRole("status").filter({ hasText: pausedLine }).waitFor();
     // What's held keeps its numbers: the clip going up at its share, the offload where it stopped.
     assert.equal(await footage.locator(".publisher-archive-current-head > span").textContent(), "40%");
     await readAgain();
-    await mac.getByRole("group", { name: "Mac → Cloudflare" }).getByText("Paused by you", { exact: true }).waitFor();
-    assert.equal((await lanes())[1][2], "7 / 167");
+    await sending.getByText("Held by Pause all", { exact: true }).waitFor();
+    assert.deepEqual((await lanes())[1].slice(1, 5), ["Held", "Pause", "454 of 494 GB · 92%", "160 clips38.7 GB"]);
     // Nothing's going up, so the title doesn't lead with it.
     await page.waitForFunction(() => document.title === "footage · kualta");
     if (shots) await page.screenshot({ path: path.join(shots, `footage-paused-${name}.png`), fullPage: true });
     await resume.click();
-    await asked("DELETE");
+    await pausing("DELETE");
     await footage.getByRole("button", { name: "Pause all" }).waitFor();
     await page.waitForFunction(() => document.title === "40% · footage · kualta");
-    await mac.getByRole("status").filter({ hasText: /^Offloading since \d/ }).waitFor();
+    await readAgain();
+    await shows("Running", "Pause");
     // Paused and resumed from another device, the tab hears it at its next read.
     await page.evaluate(() => {
       window.publisherPause.since = Date.now();

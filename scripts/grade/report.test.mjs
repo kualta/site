@@ -21,8 +21,8 @@ const lane = (change = {}) => ({
 });
 /** `/api/offload` as the grade server answers it, with a run going: the card copied, the Mac's clips going up. */
 const summary = (run = {}, change = {}) => ({
-  camera: { mounted: true, clips: 0, bytes: 0 },
-  mac: { clips: 160, bytes: 38.7e9, sent: 0 },
+  camera: { mounted: true, clips: 0, bytes: 0, space: { used: 108.74e9, total: 111.86e9 } },
+  mac: { clips: 160, bytes: 38.7e9, sent: 0, space: { used: 454.04e9, total: 494.38e9 } },
   transcripts: { done: 12, total: 16, current: "DJI_1.MP4", waiting: 2, failed: 1, error: "no GPU", toSend: 4 },
   kept: { days: ["2026-11-08"], clips: ["DJI_9.MP4"], count: 228 },
   days: [],
@@ -53,37 +53,38 @@ const summary = (run = {}, change = {}) => ({
   ...change,
 });
 
-test("says each switch's numbers, the transcripts, what's kept and freed and the room, as the site reads them", () => {
+test("says each switch's state, what's left for it and the space it has, the transcripts and what's kept", () => {
   const now = Date.parse("2026-11-23T12:00:00Z");
-  const report = macReport(summary(), { now, startedAt: now - 3_600_000, endedAt: null });
+  const heard = { copy: { at: 7, error: null }, send: { at: 9, error: "x".repeat(700) } };
+  const report = macReport(summary(), { now, heard });
   expect(report.lanes.send).toEqual({
     state: "running",
-    done: 7,
-    total: 167,
-    sentBytes: 1.4e9,
-    totalBytes: 40.1e9,
     speed: 887_500,
     left: Math.round((40.1e9 - 1.4e9) / 887_500),
     waiting: null,
     error: null,
   });
-  expect(report.lanes.copy).toMatchObject({ state: "done", done: 167, total: 167, speed: null, left: null });
-  expect(report).toMatchObject({
+  expect(report.lanes.copy).toEqual({ state: "done", speed: null, left: null, waiting: null, error: null });
+  expect(report).toEqual({
     version: 1,
     at: "2026-11-23T12:00:00.000Z",
     running: true,
-    startedAt: "2026-11-23T11:00:00.000Z",
-    endedAt: null,
-    camera: { mounted: true, clips: 0, bytes: 0 },
-    mac: { clips: 160, bytes: 38.7e9 },
-    freed: { camera: 40.1e9, mac: 1.4e9 },
+    lanes: report.lanes,
+    // The card's space in tenths of a GB; the Mac's, which any app writes to, in whole GB.
+    camera: { mounted: true, clips: 0, bytes: 0, space: { used: 108.7e9, total: 111.86e9 } },
+    mac: { clips: 160, bytes: 38.7e9, space: { used: 454e9, total: 494.38e9 } },
+    skipped: [],
     // The one being transcribed waits with the rest.
-    transcripts: { made: 12, waiting: 3, failed: 1, toSend: 4, error: "no GPU" },
+    transcripts: { waiting: 3, failed: 1, toSend: 4, error: "no GPU" },
     kept: { days: ["2026-11-08"], clips: 228 },
-    // In whole GB, so the room changing a little isn't news.
-    room: { free: 123e9, keepFree: 5e9 },
+    heard: { copy: { at: 7, error: null }, send: { at: 9, error: `${"x".repeat(599)}…` } },
   });
   expect(readMacReport(report)).toEqual(report);
+  // The card unplugged has no space to say; nothing asked yet, nothing's been heard.
+  const away = macReport(summary(null, { camera: { mounted: false, clips: 0, bytes: 0, space: null } }), { now });
+  expect(away.camera.space).toBeNull();
+  expect(away.heard).toEqual({ copy: null, send: null });
+  expect(readMacReport(away)).toEqual(away);
 });
 
 test("says what a switch waits for, that it's paused, stopping or failed, and the clips passed over", () => {
@@ -118,8 +119,7 @@ test("says what a switch waits for, that it's paused, stopping or failed, and th
   // No run yet: every switch idle, with what waits for it.
   const idle = macReport(summary(null), { now: 0 });
   expect(idle.running).toBe(false);
-  expect(idle.lanes.copy).toMatchObject({ state: "idle", done: 0, total: 0, speed: null });
-  expect(idle.freed).toEqual({ camera: 0, mac: 0 });
+  expect(idle.lanes.copy).toEqual({ state: "idle", speed: null, left: null, waiting: null, error: null });
   expect(readMacReport(idle)).toEqual(idle);
 });
 
@@ -155,7 +155,7 @@ function harness() {
 }
 
 test("sends at once, then only what changed: every 30 seconds at most while a run goes", async () => {
-  const { world, sent, reporter, pass, clock } = harness();
+  const { world, sent, reporter, pass } = harness();
   await reporter.tick();
   expect(sent.length).toBe(1);
   expect(sent[0].report.running).toBe(false);
@@ -164,7 +164,7 @@ test("sends at once, then only what changed: every 30 seconds at most while a ru
   world.summary = summary();
   await pass(30_000);
   expect(sent.length).toBe(2);
-  expect(sent[1].report).toMatchObject({ running: true, startedAt: new Date(clock.now - 25_000).toISOString() });
+  expect(sent[1].report.running).toBe(true);
   for (let n = 1; n <= 6; n++) {
     world.summary = summary({ sentBytes: 1.4e9 + n * 2e8 });
     await pass(10_000);
@@ -175,7 +175,7 @@ test("sends at once, then only what changed: every 30 seconds at most while a ru
     .slice(1);
   expect(gaps.length).toBeGreaterThan(0);
   for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(REPORT_EVERY.running);
-  expect(sent.at(-1).report.lanes.send.sentBytes).toBe(1.4e9 + 6 * 2e8);
+  expect(sent.at(-1).report.lanes.send.left).toBe(Math.round((40.1e9 - 1.4e9 - 6 * 2e8) / 887_500));
 });
 
 test("how fast clips come off the card is measured between two looks", async () => {
@@ -189,7 +189,7 @@ test("how fast clips come off the card is measured between two looks", async () 
   // 3 GB in 30 seconds.
   world.summary = copying(4e9);
   await pass(30_000);
-  expect(sent[1].report.lanes.copy).toMatchObject({ sentBytes: 4e9, speed: 1e8, left: 361 });
+  expect(sent[1].report.lanes.copy).toMatchObject({ speed: 1e8, left: 361 });
 });
 
 test("a run that sits still is said again only every 2 minutes, so a Mac gone quiet shows", async () => {
@@ -213,22 +213,22 @@ test("idle and unchanged, nothing is sent, and the summary is looked at only eve
   await pass(60 * 60_000);
   expect(sent.length).toBe(1);
   expect(looks.count - looked).toBeLessThanOrEqual(6);
-  // A change shows at the next look, within 10 minutes, and the room moving within a GB isn't one.
-  world.summary = summary(null, { room: { free: 123.9e9, keepFree: 5e9 } });
+  // A change shows at the next look, within 10 minutes, and the Mac's space moving within a GB isn't one.
+  const { space } = world.summary.mac;
+  world.summary = summary(null, { mac: { clips: 160, bytes: 38.7e9, sent: 0, space: { ...space, used: 454.3e9 } } });
   await pass(10 * 60_000);
   expect(sent.length).toBe(1);
-  world.summary = summary(null, { mac: { clips: 4, bytes: 1.1e9, sent: 0 } });
+  world.summary = summary(null, { mac: { clips: 4, bytes: 1.1e9, sent: 0, space } });
   await pass(10 * 60_000);
   expect(sent.length).toBe(2);
-  expect(sent[1].report.mac).toEqual({ clips: 4, bytes: 1.1e9 });
+  expect(sent[1].report.mac).toEqual({ clips: 4, bytes: 1.1e9, space: { used: 454e9, total: 494.38e9 } });
 });
 
-test("the end of a run is said within 30 seconds, with when it started and ended", async () => {
-  const { world, sent, reporter, pass, clock } = harness();
+test("the end of a run is said within 30 seconds", async () => {
+  const { world, sent, reporter, pass } = harness();
   world.running = true;
   world.summary = summary();
   await reporter.tick();
-  const started = clock.now;
   await pass(60_000);
   world.running = false;
   world.summary = summary({
@@ -236,19 +236,41 @@ test("the end of a run is said within 30 seconds, with when it started and ended
     finished: "done",
     send: lane({ on: false, mode: "off", finished: "done", done: 167 }),
   });
-  const ended = clock.now + 5_000;
   await pass(30_000);
   const last = sent.at(-1).report;
-  expect(last).toMatchObject({
-    running: false,
-    startedAt: new Date(started).toISOString(),
-    endedAt: new Date(ended).toISOString(),
-  });
-  expect(last.lanes.send).toMatchObject({ state: "done", done: 167 });
+  expect(last.running).toBe(false);
+  expect(last.lanes.send.state).toBe("done");
   // Then it's idle: nothing more while nothing changes.
   const count = sent.length;
   await pass(30 * 60_000);
   expect(sent.length).toBe(count);
+});
+
+test("a Start or Pause just taken is said at the next look, whatever the pace, and only once", async () => {
+  const { world, sent } = harness();
+  const heard = {};
+  const quick = macReporter({
+    summary: async () => world.summary,
+    running: () => world.running,
+    heard: () => heard,
+    post: async (report) => sent.push({ report }),
+    clock: () => 0,
+    log: () => {},
+  });
+  await quick.tick();
+  expect(sent.length).toBe(1);
+  heard.send = { at: 42, error: null };
+  // Idle, the next look would be 10 minutes off.
+  await quick.tick();
+  expect(sent.length).toBe(1);
+  quick.soon();
+  await quick.tick();
+  expect(sent.length).toBe(2);
+  expect(sent[1].report.heard.send).toEqual({ at: 42, error: null });
+  // Hurried with nothing new, there's nothing to say.
+  quick.soon();
+  await quick.tick();
+  expect(sent.length).toBe(2);
 });
 
 test("a report that didn't get there is tried again when the next may go, and an unpaired Mac sends nothing", async () => {

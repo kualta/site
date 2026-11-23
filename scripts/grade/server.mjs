@@ -12,6 +12,7 @@ import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { laneAsks } from "./asks.mjs";
 import { archiveDays, bringer, clearParts, cloudId, dayClips, pickClips, summarise, withHere } from "./bring.mjs";
 import { composeLut, DEFAULT_LOOKS, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
 import { filmAssets } from "./film.mjs";
@@ -71,6 +72,8 @@ const OFFLOADED = join(DATA, "offloaded.json");
 /** What's kept out of offload (keep.mjs), and what's been chosen for it: when the card's copies go. */
 const KEEP = join(DATA, "keep.json");
 const OFFLOAD = join(DATA, "offload.json");
+/** The Footage tab's Start and Pause of each switch that have been done (asks.mjs), by when each was asked. */
+const ASKED = join(DATA, "asked.json");
 /** Uploads go on while a page has asked how things are going within this long. */
 const WATCHED_FOR = Number(process.env.GRADE_WATCHED_FOR || 60_000);
 /** A file changed within this long may still be being written. */
@@ -850,9 +853,23 @@ const keep = keepList(KEEP);
 const fileInDay = dayManifests();
 /** The site, on the crossposter helper's pairing. */
 const site = pairedSite(PUBLISHER);
+/**
+ * Start and Pause of each switch, from the composer's Footage tab (asks.mjs): heard with Pause all, and each taken is
+ * said in the next report at once.
+ */
+const asks = laneAsks({
+  store: { read: () => readJson(ASKED, {}), write: (done) => writeJson(ASKED, done) },
+  apply: askedOf,
+  changed: () => reporting.soon(),
+});
 /** Pause all, from the composer's Footage tab (pause.mjs): every job here holds while `pause.held()` says why. */
 const pause = pauseFlag({
-  ask: () => site("footage"),
+  // The same answer says each switch's Start or Pause.
+  ask: async () => {
+    const answer = await site("footage/lanes");
+    if (answer) asks.learn(answer.lanes);
+    return answer;
+  },
   every: Number(process.env.GRADE_PAUSE_EVERY || 30_000),
   changed: (held) => {
     offloading?.poke();
@@ -882,6 +899,13 @@ const sizeOfAll = (clips) => clips.reduce((sum, clip) => sum + clip.size, 0);
 async function roomOnMac() {
   const { bavail, bsize } = await statfs(MOVIES);
   return bavail * bsize;
+}
+/** A volume's bytes in use (all but what's free to use) and its size, by a path on it; null if it can't be read. */
+async function spaceOn(path) {
+  const volume = await statfs(path).catch(() => null);
+  if (!volume) return null;
+  const total = volume.blocks * volume.bsize;
+  return { used: total - volume.bavail * volume.bsize, total };
 }
 
 /** A file's size and time, and until when it may still be being written: by `changed`, when that's later. */
@@ -996,11 +1020,20 @@ async function offloadSummary() {
 /** Tells the composer's Footage tab how the offload stands, when it changes (report.mjs); the answer says if it's paused. */
 const REPORT_PACE = Number(process.env.GRADE_REPORT_EVERY || REPORT_EVERY.running);
 const reporting = macReporter({
-  summary: offloadSummary,
+  // With the space on the card while it's plugged in, and on the Mac's volume that holds Movies.
+  summary: async () => {
+    const summary = await offloadSummary();
+    const [card, mac] = await Promise.all([summary.camera.mounted ? spaceOn(CAMERA) : null, spaceOn(MOVIES)]);
+    return { ...summary, camera: { ...summary.camera, space: card }, mac: { ...summary.mac, space: mac } };
+  },
   running: () => Boolean(offloading?.state.running),
+  heard: () => asks.heard(),
   post: async (report) => {
     const answer = await site("footage/mac", report);
-    if (answer) pause.learn(answer.paused ?? null);
+    if (answer) {
+      pause.learn(answer.paused ?? null);
+      asks.learn(answer.lanes);
+    }
     return answer;
   },
   every: { ...REPORT_EVERY, running: REPORT_PACE, alive: 4 * REPORT_PACE },
@@ -1076,6 +1109,27 @@ async function startOffloading(asked) {
   } finally {
     starting = false;
   }
+}
+/**
+ * How a switch started from the Footage tab goes, as the owner runs it: on with no page open, the card's copies going
+ * once the archive has them, and nothing put up to YouTube meanwhile. What's kept stays out of it, as ever.
+ */
+const ASKED_RUN = { flags: { unattended: true, youtube: false }, after: "sent" };
+/**
+ * Does a Start or Pause asked of a switch from the Footage tab (asks.mjs), saying false when it has to wait: a Start
+ * while the switch is still stopping, or while another start is under way. A Pause stops a switch once what's in flight
+ * is done, and only one that isn't stopping already: told again, it would cut what's in flight.
+ */
+async function askedOf(lane, want) {
+  const state = offloading?.state[lane];
+  if (want === "pause") {
+    if (state?.on && state.mode === "on") offloading.stop([lane]);
+    return true;
+  }
+  if (state?.on) return state.mode === "on";
+  if (starting) return false;
+  await startOffloading({ lanes: [lane], ...ASKED_RUN });
+  return true;
 }
 async function beginOffload({ lanes, flags, after }) {
   const isOn = (lane) => Boolean(offloading?.state[lane].on);
@@ -1634,4 +1688,6 @@ server.listen(PORT, "127.0.0.1", () => {
   scheduleLedger(Math.min(2000, LEDGER_EVERY));
   pause.start();
   reporting.start();
+  // A Start or Pause asked while the app wasn't running is done now.
+  void asks.start();
 });
