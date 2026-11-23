@@ -1,4 +1,5 @@
 import PublisherAnalytics from "./PublisherAnalytics";
+import PublisherArchive from "./PublisherArchive";
 import PublisherFootage from "./PublisherFootage";
 import PublisherGrade from "./PublisherGrade";
 import PublisherCalendar from "./PublisherCalendar";
@@ -233,11 +234,6 @@ export default function Publisher({
     setFloor(held ? window.scrollY + window.innerHeight : 0);
     navigate(tabPath(base, next), tabSearch.current[next] ?? "");
   }
-  // The Footage tab's old address shows its new one.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate reads the address itself
-  useEffect(() => {
-    if (/\/archive\/?$/.test(location.pathname)) navigate(tabPath(base, "footage"), location.search, true);
-  }, []);
   // The clip the Footage tab last asked the Grade tab to open, and whether the grade app has been opened at all.
   const [gradeClip, setGradeClip] = useState<{ clip: string; n: number } | null>(null);
   const [gradeOpened, setGradeOpened] = useState(tab === "grade");
@@ -1202,6 +1198,9 @@ export default function Publisher({
             <button type="button" aria-pressed={tab === "footage"} onClick={() => openTab("footage")}>
               Footage
             </button>
+            <button type="button" aria-pressed={tab === "archive"} onClick={() => openTab("archive")}>
+              Archive
+            </button>
             <button type="button" aria-pressed={tab === "grade"} onClick={() => openTab("grade")}>
               Grade
             </button>
@@ -1260,6 +1259,17 @@ export default function Publisher({
               }}
               statsHref={(job) => `${tabPath(base, "analytics")}?post=${job}`}
               onProgress={setFootagePercent}
+            />
+          )}
+          {tab === "archive" && (
+            <PublisherArchive
+              request={api}
+              search={address.search}
+              onNavigate={(search, replace) => navigate(tabPath(base, "archive"), search, replace)}
+              onGrade={(clip) => {
+                setGradeClip({ clip, n: Date.now() });
+                openTab("grade");
+              }}
             />
           )}
           {/* Once opened, the grade app stays loaded while other tabs are shown, so coming back doesn't load it again. */}

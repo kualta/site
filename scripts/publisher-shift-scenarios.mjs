@@ -25,7 +25,7 @@ const preset = (active, change = {}) => ({
     })),
   }),
 });
-const tabs = ["compose", "pipeline", "history", "calendar", "analytics", "footage", "grade", "accounts"];
+const tabs = ["compose", "pipeline", "history", "calendar", "analytics", "footage", "archive", "grade", "accounts"];
 const tabNames = tabs.map((tab) => tab[0].toUpperCase() + tab.slice(1));
 /** Text of a length, in words. */
 const words = (length) => "long words ".repeat(400).slice(0, length);
@@ -63,7 +63,7 @@ export const scenarios = [
     name: "opens a draft that's gone",
     query: { draft: "00000000-0000-4000-8000-000000000bad" },
   },
-  ...["compose", "pipeline", "history", "calendar", "analytics", "footage", "accounts"].flatMap((tab) => [
+  ...["compose", "pipeline", "history", "calendar", "analytics", "footage", "archive", "accounts"].flatMap((tab) => [
     {
       tab,
       name: "loads with nothing in it",
@@ -75,6 +75,7 @@ export const scenarios = [
           calendar: { posts: [] },
           analytics: { posts: [], next: null },
           "footage/links": { links: {} },
+          "archive/days": { days: [] },
         };
         window.publisherFixture.change = (path, value) =>
           none[path] ?? (path === "footage/ledger" ? { ...value, clips: {}, projects: {} } : value);
@@ -679,6 +680,81 @@ export const scenarios = [
         }, turn);
         await sleep(2400);
       }
+    },
+  },
+
+  // Archive.
+  {
+    tab: "archive",
+    name: "pages through a day and changes days",
+    query: { day: "2026-11-08" },
+    run: async (page, { step }) => {
+      const head = page.locator(".publisher-archive-head");
+      for (const button of ["Next page", "Previous page"]) {
+        await step(button);
+        await head.getByRole("button", { name: button }).click();
+        await sleep(700);
+      }
+      for (const day of ["11 Nov", "21 Nov", "8 Nov"]) {
+        await step(`opens ${day}`);
+        await page
+          .getByRole("navigation", { name: "Shoot days" })
+          .getByRole("button", { name: new RegExp(day) })
+          .click();
+        await sleep(1000);
+      }
+    },
+  },
+  {
+    tab: "archive",
+    name: "opens a clip and picks its looks",
+    query: { day: "2026-11-08" },
+    run: async (page, { opens, still, step }) => {
+      await opens("opens the clip");
+      await page.getByRole("button", { name: "Clip 0086, recorded 12:22:04" }).click();
+      await sleep(1500);
+      await still("reads its transcript and grade");
+      await sleep(1500);
+      const player = page.getByRole("dialog");
+      await step("picks a line to start from");
+      await player.getByRole("button", { name: /market at noon/ }).click();
+      await sleep(500);
+      for (const look of ["Default look", "Its grade", "Log"]) {
+        await step(`picks ${look}`);
+        await player.getByRole("group", { name: "Look" }).getByRole("button", { name: look }).click();
+        await sleep(900);
+      }
+    },
+  },
+  {
+    tab: "archive",
+    name: "watches a clip in each look",
+    query: { day: "2026-11-08", clip: "DJI_20261108122204_0086_D" },
+    // A browser that plays HEVC, given a WebM in the original's place.
+    init: () => {
+      const can = HTMLMediaElement.prototype.canPlayType;
+      HTMLMediaElement.prototype.canPlayType = function (type) {
+        return /hvc1|hev1/.test(type) ? "probably" : can.call(this, type);
+      };
+    },
+    run: async (page, { still, step, media }) => {
+      await page.route(`**/api/publisher/archive/files/${"0".repeat(62)}56/**`, (route) =>
+        route.fulfill({ contentType: media.wide.mimeType, body: media.wide.buffer }).catch(() => {}),
+      );
+      const player = page.getByRole("dialog");
+      await step("starts watching");
+      await player.getByRole("button", { name: "Watch", exact: true }).click();
+      await sleep(600);
+      await still("plays, its lines said over it");
+      await sleep(2500);
+      for (const look of ["Default look", "Its grade", "Log"]) {
+        await step(`picks ${look}`);
+        await player.getByRole("group", { name: "Look" }).getByRole("button", { name: look }).click();
+        await sleep(900);
+      }
+      await step("seeks from the transcript");
+      await player.getByRole("button", { name: /Let's walk/ }).click();
+      await sleep(900);
     },
   },
 

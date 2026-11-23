@@ -1,5 +1,6 @@
 // The grade app's settings in the archive: every clip's grade and what each export was made with, as the `_settings`
-// project (`bun run publisher restore _settings <folder>` brings them back). Never the LUTs, which are big and others'.
+// project (`bun run publisher restore _settings <folder>` brings them back), with a small LUT of each look the grades
+// use (looks.mjs). Never the LUT folder itself, which is big and others'.
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
@@ -19,11 +20,15 @@ async function settingsFile(path) {
 }
 
 /**
- * Saves the files at `paths` in the archive, if they're not as they were when `last` (what this said) was. Says what they
- * are now. Nothing is asked of the archive when nothing has changed.
+ * Saves the files at `paths` in the archive, with the `made` ones (`{ path, body, mtime }`: the looks' LUTs), if they're
+ * not as they were when `last` (what this said) was. Says what they are now. Nothing is asked of the archive when nothing
+ * has changed, or when there are no settings to go with what's made.
  */
-export async function saveSettings(request, paths, last = null) {
+export async function saveSettings(request, paths, last = null, made = []) {
   const files = (await Promise.all(paths.map(settingsFile))).filter(Boolean);
+  if (files.length)
+    for (const { path, body, mtime } of made)
+      files.push({ path, body, sha256: createHash("sha256").update(body).digest("hex"), size: body.length, mtime });
   const now = files.map(({ path, sha256 }) => `${path} ${sha256}`).join("\n");
   if (!files.length || now === last) return last;
   const { missing } = await request("missing", { method: "POST", json: { blobs: files.map((file) => file.sha256) } });

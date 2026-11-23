@@ -10,8 +10,7 @@ test("the title names the open tab", () => {
     "calendar · kualta",
     "analytics · kualta",
     "footage · kualta",
-    // The Footage tab's old address.
-    "footage · kualta",
+    "archive · kualta",
     "grade · kualta",
     "accounts · kualta",
   ]);

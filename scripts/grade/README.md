@@ -108,6 +108,13 @@ ledger that's sent go `grades.json` and `exports.json`, as the archive's `_setti
 at most every 10 minutes (`bun run publisher restore _settings <folder>` brings them back). Without a paired helper all
 of it stays on this Mac.
 
+With them go the looks they use, small, for the composer's Archive tab to grade an offloaded original with
+(`looks.mjs`): each base look a grade names, and each profile's default (the first of `DEFAULT_LOOKS` it has), as
+`looks/<profile>/<look>.cube` at 33³ for every profile that has that look. Each is the app's own `.cube` resampled at a
+33³ grid the way `composeLut` samples it, about a megabyte, and made again only when its file changes. Never the LUT
+folder itself (777 MB, much of it others'). The archive bucket is private and only the owner's sign-in reads these:
+the Fujifilm-derived ones are for personal, noncommercial use, as the pack is.
+
 **Grade tab.** post.kualta.dev/grade shows this app in a frame, loaded from http://127.0.0.1:4777: it still reads
 the card and `~/Movies` itself, previews on the browser's GPU and exports with ffmpeg here. The frame is allowed local
 network access, and Chrome asks once whether post.kualta.dev may reach this device: allow it. Away from the Mac, or

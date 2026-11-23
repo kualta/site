@@ -915,7 +915,13 @@ test.if(usable)("backs up the settings with a ledger that's sent, when they've c
     expect(files.map((f) => f.sha256)).not.toEqual(site.settings[i - 1].files.map((f) => f.sha256));
   }
   const { files } = site.settings.at(-1);
-  expect(files.map((f) => f.path)).toEqual(["grades.json", "exports.json"]);
+  // With a small LUT of each look the grades use, and of the default, ACES here without OpenDRT's (looks.mjs).
+  expect(files.map((f) => f.path)).toEqual([
+    "grades.json",
+    "exports.json",
+    "looks/dlog2/aces.cube",
+    "looks/dlog2/agx-punchy.cube",
+  ]);
   expect(JSON.parse(site.blobs.get(files[1].sha256)).clips[name].key).toBe(records()[name].key);
   // Quiet: the server looks every 300 ms, and the site hears nothing of it.
   await until(async () => {
