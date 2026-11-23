@@ -87,32 +87,67 @@ function contentType(method, body) {
  */
 export function archiveClient({ origin, token, fetcher = fetch, log = () => {} }) {
   // `signal` stops a request for good, with no retry: the footage archive's uploads stopping when its tab closes.
-  // `timeout` is for a body that takes a while to read: it covers the answer's, not just the request.
+  // `timeout` is for a body that takes a while to read: it covers the answer's, not just the request. A download (`raw`)
+  // takes as long as its size and the network make it, so once it's answered it's given up only when nothing has come
+  // for `stall`: a 5 GB clip at 30 Mbit/s takes 23 minutes.
   return async function request(
     path,
-    { method = "GET", json, body, raw = false, signal = null, timeout = 10 * 60_000 } = {},
+    { method = "GET", json, body, raw = false, signal = null, timeout = 10 * 60_000, stall = 2 * 60_000 } = {},
   ) {
     const type = contentType(method, body);
     const route = path.split("?")[0];
     for (let attempt = 1; ; attempt++) {
       let response;
-      const expired = AbortSignal.timeout(timeout);
+      const gate = new AbortController();
+      let timer;
+      const giveUpIn = (ms) => {
+        clearTimeout(timer);
+        timer = setTimeout(
+          () => gate.abort(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
+          ms,
+        );
+        // Waiting to give up never keeps the helper or a test from exiting.
+        timer.unref?.();
+      };
+      giveUpIn(timeout);
       try {
         response = await fetcher(`${origin}/api/publisher/helper/archive/${path}`, {
           method,
           headers: { Authorization: `Bearer ${token}`, ...(type ? { "Content-Type": type } : {}) },
           body: json !== undefined ? JSON.stringify(json) : body,
-          signal: signal ? AbortSignal.any([signal, expired]) : expired,
+          signal: signal ? AbortSignal.any([signal, gate.signal]) : gate.signal,
         });
       } catch (error) {
+        clearTimeout(timer);
         if (attempt < 3 && !signal?.aborted) {
           log(`${method} ${route} failed (${error.message}); trying again`);
           continue;
         }
         throw error;
       }
-      if (response.ok) return raw ? response : response.json();
+      if (response.ok && !raw) {
+        try {
+          return await response.json();
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      if (response.ok) {
+        // A download: each chunk that comes puts off giving up.
+        giveUpIn(stall);
+        const watched = response.body?.pipeThrough(
+          new TransformStream({
+            transform(chunk, out) {
+              giveUpIn(stall);
+              out.enqueue(chunk);
+            },
+            flush: () => clearTimeout(timer),
+          }),
+        );
+        return new Response(watched ?? null, { status: response.status, headers: response.headers });
+      }
       const data = await response.json().catch(() => ({}));
+      clearTimeout(timer);
       if (response.status >= 500 && attempt < 3) {
         log(`${method} ${route} answered ${response.status}; trying again`);
         continue;
