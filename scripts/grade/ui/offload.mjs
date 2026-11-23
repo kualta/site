@@ -97,6 +97,7 @@ export function offloadMenu({ api, fileSize, showError, poll }) {
       const { bytes, sent } = sending(o);
       parts.push(`${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`, timeLeft((bytes - sent) / o.speed));
     }
+    if (o.keepingAwake) parts.push("keeping this Mac awake");
     if (over) parts.push(over);
     return parts.join(" · ");
   }

@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { archiveDays, bringer, clearParts, cloudId, dayClips, pickClips, summarise, withHere } from "./bring.mjs";
 import { composeLut, DEFAULT_LOOKS, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
 import { filmAssets } from "./film.mjs";
-import { dayManifests, LANES, startOffload } from "./offload.mjs";
+import { dayManifests, LANES, startOffload, wakeLock } from "./offload.mjs";
 import { keepList } from "./keep.mjs";
 import { RETRY } from "./lane.mjs";
 import {
@@ -817,8 +817,13 @@ function scheduleLedger(ms = LEDGER_EVERY) {
 let offloading = null;
 /** Set while a run is being started: the clips' profiles are read first. */
 let starting = false;
-/** How the run was asked to go: on with no page open, and with graded clips going up to YouTube meanwhile. */
-let runOptions = { unattended: false, youtube: true };
+/**
+ * How the run was asked to go: on with no page open, with graded clips going up to YouTube meanwhile, and keeping this
+ * Mac awake while it works.
+ */
+let runOptions = { unattended: false, youtube: true, keepAwake: true };
+/** Keeps this Mac from sleeping when idle while the offload works, if it's to. */
+const awake = wakeLock({ log: (line) => console.error(`grade: offload: ${line}`) });
 /** When a clip goes from the card, "copied" to this Mac or "sent" to the archive: as last chosen, from run to run. */
 let clearCardAfter = "copied";
 /** When a page last asked how things are going. */
@@ -896,6 +901,7 @@ function offloadState() {
     ...state,
     ...runOptions,
     clearCardAfter,
+    keepingAwake: awake.held,
     copy: { ...state.copy, ended: !state.copy.on },
     sentBytes: state.send.doneBytes + state.send.current.reduce((sum, clip) => sum + clip.sent, 0),
     speed,
@@ -953,6 +959,7 @@ async function offloadSummary() {
     days: shootDays(here, kept),
     room: { free: await roomOnMac(), keepFree: KEEP_FREE },
     clearCardAfter,
+    keepingAwake: awake.held,
     run: offloadState(),
   };
 }
@@ -1006,10 +1013,10 @@ const recordsIn = (path, added) => ({
 });
 
 /** What a request to offload asks for. */
-function offloadAsked({ lanes, unattended, youtube, clearCardAfter: after }) {
+function offloadAsked({ lanes, unattended, youtube, keepAwake, clearCardAfter: after }) {
   const some = Array.isArray(lanes) && lanes.every((lane) => LANES.includes(lane));
   if (lanes !== undefined && !some) throw httpError(400, `lanes must be some of ${LANES.join(", ")}`);
-  const flags = Object.entries({ unattended, youtube }).filter(([, value]) => value !== undefined);
+  const flags = Object.entries({ unattended, youtube, keepAwake }).filter(([, value]) => value !== undefined);
   for (const [name, value] of flags) if (typeof value !== "boolean") throw httpError(400, `${name} must be true or false`);
   if (after !== undefined && !["copied", "sent"].includes(after)) throw httpError(400, "clearCardAfter must be copied or sent");
   return { lanes: lanes && [...new Set(lanes)], flags: Object.fromEntries(flags), after };
@@ -1054,7 +1061,7 @@ async function beginOffload({ lanes, flags, after }) {
   else runOffload(wanted, cloud, flags);
 }
 function runOffload(lanes, cloud, flags) {
-  runOptions = { unattended: false, youtube: true, ...flags };
+  runOptions = { unattended: false, youtube: true, keepAwake: true, ...flags };
   let added = 0;
   const landed = () => {
     added++;
@@ -1089,6 +1096,8 @@ function runOffload(lanes, cloud, flags) {
     },
     retry: { ...RETRY, first: RETRY_FIRST },
     log: (line) => console.error(`grade: offload: ${line}`),
+    stayAwake: () => runOptions.keepAwake,
+    awake: (on) => awake.hold(on),
   });
   offloading = run;
 
