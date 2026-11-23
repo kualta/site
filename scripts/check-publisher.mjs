@@ -6,6 +6,7 @@ import path from "node:path";
 import ffmpeg from "ffmpeg-static";
 import { createServer } from "vite";
 import { chromium } from "playwright";
+import { checkArchive } from "./check-publisher-archive.mjs";
 import { findShifts } from "./publisher-shifts.mjs";
 
 // Drives the publisher's composer with a mocked API: what each mix of text and media can reach, and what it queues.
@@ -1707,11 +1708,13 @@ try {
       await page.goto(`${composer}/${tab}`);
       await titled(`${tab} · kualta`);
     }
+    // The Footage tab's old address is the Archive tab's now.
     await page.goto(`${composer}/archive?archive=done`);
-    await titled("footage · kualta");
+    await titled("archive · kualta");
     await page.goto(`${composer}?archive=done`);
     await titled("compose · kualta");
-    for (const name of ["Pipeline", "History", "Calendar", "Analytics", "Footage", "Grade", "Accounts", "Compose"]) {
+    const names = ["Pipeline", "History", "Calendar", "Analytics", "Footage", "Archive", "Grade", "Accounts", "Compose"];
+    for (const name of names) {
       await open(name);
       await titled(`${name.toLowerCase()} · kualta`);
     }
@@ -1803,10 +1806,10 @@ try {
     await context.close();
   }
 
-  // The Footage tab (its old address, /archive, still opens it): the ledger of every clip, its grade and where its
-  // copies are, under the graded footage going up to YouTube, which runs only while the tab is open, so it says so on
-  // opening and again on leaving. A clip's Grade opens it in the Grade tab: the grade app on the Mac, in a frame allowed
-  // local network access, saying so when it can't be reached.
+  // The Footage tab: the ledger of every clip, its grade and where its copies are, under the graded footage going up to
+  // YouTube, which runs only while the tab is open, so it says so on opening and again on leaving. A clip's Grade opens
+  // it in the Grade tab: the grade app on the Mac, in a frame allowed local network access, saying so when it can't be
+  // reached.
   for (const [width, name] of [
     [1280, "desktop"],
     [390, "mobile"],
@@ -1827,8 +1830,7 @@ try {
     const sent = (method) =>
       page.waitForFunction((m) => window.publisherRequests.some((r) => r.path === "footage/watch" && r.method === m), method);
     const theme = width > 700 ? "dark" : "light";
-    await page.goto(`http://127.0.0.1:8797/publisher.html/archive?theme=${theme}`);
-    await page.waitForURL(/\/publisher\.html\/footage\?/);
+    await page.goto(`http://127.0.0.1:8797/publisher.html/footage?theme=${theme}`);
     const footage = page.getByRole("region", { name: "Footage", exact: true });
     const bar = footage.getByRole("progressbar", { name: "Uploading 2026-11-21 10:15:00 · clip 0402" });
     await bar.waitFor();
@@ -1920,6 +1922,9 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
+
+  // The Archive tab: shoot days, a clip's player, its transcript and looks (scripts/check-publisher-archive.mjs).
+  await checkArchive(browser, { composer: "http://127.0.0.1:8797/publisher.html", dir: clips, shots });
 
   // Nothing on any tab moves by itself as it loads, polls or says something else; what the owner adds or chooses moves
   // the rest at once.

@@ -28,6 +28,7 @@ import {
   youtubeUploads,
 } from "./ledger.mjs";
 import { cameraDays, ENCODERS, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
+import { lookFiles } from "./looks.mjs";
 import { saveSettings } from "./settings.mjs";
 import { transcriber } from "./transcripts.mjs";
 
@@ -740,7 +741,10 @@ async function backUpSettings(cloud) {
   const backup = await readJson(BACKUP, null).catch(() => null) ?? { saved: null, at: 0 };
   if (Date.now() - backup.at < BACKUP_EVERY) return;
   try {
-    const saved = await saveSettings(cloud.request, [GRADES, EXPORTS], backup.saved);
+    // The looks the grades use go along, small, for the composer's Archive tab to grade with.
+    const read = async (file) => ({ lut: await loadCube(file), mtime: (await stat(join(LUTS, file))).mtimeMs });
+    const looks = await lookFiles({ grades: await readClips(GRADES), bases: await bases(), read });
+    const saved = await saveSettings(cloud.request, [GRADES, EXPORTS], backup.saved, looks);
     if (saved !== backup.saved) await writeJson(BACKUP, { saved, at: Date.now() });
   } catch (e) {
     ledger.error = `Couldn't save the settings to Cloudflare: ${e.message}`;

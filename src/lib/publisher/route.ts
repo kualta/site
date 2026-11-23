@@ -1,8 +1,17 @@
 import type { Metric } from "./metrics";
 import type { PostKind } from "./presets";
 
-export type Tab = "compose" | "pipeline" | "history" | "calendar" | "analytics" | "footage" | "grade" | "accounts";
-/** The tabs' paths. `archive` is the Footage tab's old name, still opening it. */
+export type Tab =
+  | "compose"
+  | "pipeline"
+  | "history"
+  | "calendar"
+  | "analytics"
+  | "footage"
+  | "archive"
+  | "grade"
+  | "accounts";
+/** The tabs' paths. `archive` was the Footage tab's, and is now the Archive tab's: an old link lands there. */
 export const TAB_PATHS = ["pipeline", "history", "calendar", "analytics", "footage", "archive", "grade", "accounts"];
 const TAB = /\/(pipeline|history|calendar|analytics|footage|archive|grade|accounts)\/?$/;
 /**
@@ -13,7 +22,7 @@ export function readPath(pathname: string): { base: string; tab: Tab } {
   const name = pathname.match(TAB)?.[1];
   return {
     base: pathname.replace(TAB, "").replace(/\/+$/, ""),
-    tab: name === "archive" ? "footage" : (name as Tab | undefined) ?? "compose",
+    tab: (name as Tab | undefined) ?? "compose",
   };
 }
 export function tabPath(base: string, tab: Tab) {

@@ -71,7 +71,7 @@ export async function serveShifts({ root = process.cwd(), port = 8798 } = {}) {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="${at("src/styles/globals.css")}"><link rel="stylesheet" href="${at(
                     "src/styles/publisher.css",
-                  )}">
+                  )}"><link rel="stylesheet" href="${at("src/styles/publisher-archive.css")}">
 <link rel="preload" href="${at(FREDOKA)}" as="font" type="font/woff2" crossorigin>
 <script>document.fonts.add(new FontFace("Fredoka Publisher", Uint8Array.from(atob("${font}"), (c) => c.charCodeAt(0))))</script>
 </head><body class="publisher-page bg-bg dark:bg-dark-bg text-text dark:text-dark-text min-h-screen relative">
@@ -256,7 +256,7 @@ async function measure(browser, base, scenario, { width, theme, media }) {
         if (!localStorage.length) for (const [key, value] of Object.entries(storage)) localStorage.setItem(key, value);
         // Each kind of request takes its own time, so they come back one after another.
         const order = ["status", "footage/watch", "footage", "history", "content", "drafts", "footage/links"];
-        order.push("footage/ledger", "calendar", "analytics", "analytics/overview");
+        order.push("footage/ledger", "calendar", "analytics", "analytics/overview", "archive/days", "archive/settings");
         window.publisherFixture.delay = (path) =>
           200 + 130 * Math.max(0, order.indexOf(path)) + (/^analytics\/[0-9a-f-]{36}/.test(path) ? 700 : 0);
       },

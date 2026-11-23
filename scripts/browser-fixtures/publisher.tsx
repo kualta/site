@@ -1,5 +1,6 @@
 import { createRoot, hydrateRoot } from "react-dom/client";
 import Publisher from "../../src/components/Publisher";
+import { archiveAnswer } from "./archive.mjs";
 import "../../src/styles/globals.css";
 
 // The composer against a signed-in owner and an online laptop; requests are recorded, never sent.
@@ -578,6 +579,8 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     return upload.unreadable ? json({ error: "Publisher unavailable" }, 503) : json(footage());
   }
   if (path === "footage/ledger") return json(ledger);
+  const archived = archiveAnswer(path);
+  if (archived) return archived;
   if (path === "footage/links") return json({ links });
   if (path.startsWith("footage/links/") && method === "PUT") {
     const id = path.slice("footage/links/".length);

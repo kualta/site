@@ -69,6 +69,7 @@ import {
   updateContent,
 } from "@/lib/publisher/content";
 import { footageResponse } from "@/lib/publisher/footage";
+import { archiveTabResponse, type ResponseCache } from "@/lib/publisher/archive-tab";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
 import { isTag } from "@/lib/publisher/variants";
 export const prerender = false;
@@ -112,6 +113,16 @@ export const ALL: APIRoute = async ({ request, params }) => {
       const response = await footageResponse(path, request, { media, archive });
       if (response) {
         // A session refreshed on the way in has to reach the browser, or its rotated sign-in is lost.
+        for (const cookie of headers.getSetCookie()) response.headers.append("Set-Cookie", cookie);
+        return response;
+      }
+    }
+    // The Archive tab: the offloaded footage by shoot day, and its files streamed from the archive with Range.
+    if (path.startsWith("archive/")) {
+      if (!archive) return json({ error: "The archive bucket isn't configured" }, 503);
+      const cache = (globalThis as { caches?: { default?: ResponseCache } }).caches?.default ?? null;
+      const response = await archiveTabResponse(path, request, { archive, cache });
+      if (response) {
         for (const cookie of headers.getSetCookie()) response.headers.append("Set-Cookie", cookie);
         return response;
       }
