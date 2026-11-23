@@ -34,6 +34,8 @@ import { transcriber } from "./transcripts.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const MOVIES = process.env.GRADE_ROOT || join(homedir(), "Movies");
 const ORIGINAL = join(MOVIES, "Original");
+/** Clips moved off the camera by hand, waiting to be offloaded like Original's: theirs go with their .LRF. */
+const PREEXP = process.env.GRADE_PREEXP || join(MOVIES, "Preexp");
 const EXPORTED = join(MOVIES, "Exported");
 const DATA = process.env.GRADE_DATA || join(homedir(), "Library/Application Support/Grade");
 const CACHE = process.env.GRADE_CACHE || join(homedir(), "Library/Caches/Grade");
@@ -182,16 +184,23 @@ const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 /** The recording date in a DJI name, or null. */
 const djiDay = (name) => /^DJI_(\d{4})(\d{2})(\d{2})\d{6}_/.exec(name)?.slice(1, 4).join("-") ?? null;
 
-/** The clips in Movies/Original by shoot day: the recording date in a DJI name, or else the file's own date. */
+/**
+ * The clips in Movies/Original and Movies/Preexp by shoot day: the recording date in a DJI name, or else the file's own
+ * date. A name in both is Original's.
+ */
 async function originalDays() {
   const days = new Map();
-  for (const name of (await readdir(ORIGINAL).catch(() => [])).filter(isVideo).sort()) {
-    const path = join(ORIGINAL, name);
-    const day = djiDay(name) ?? (await stat(path).then((s) => localDay(s.mtime), () => null));
-    if (!day) continue;
-    if (!days.has(day)) days.set(day, []);
-    days.get(day).push({ name, path });
-  }
+  const seen = new Set();
+  for (const dir of [ORIGINAL, PREEXP])
+    for (const name of (await readdir(dir).catch(() => [])).filter(isVideo).sort()) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const path = join(dir, name);
+      const day = djiDay(name) ?? (await stat(path).then((s) => localDay(s.mtime), () => null));
+      if (!day) continue;
+      if (!days.has(day)) days.set(day, []);
+      days.get(day).push({ name, path });
+    }
   return days;
 }
 
@@ -818,23 +827,29 @@ async function roomOnMac() {
   return bavail * bsize;
 }
 
-/** A file's size and time, and until when it may still be being written. */
-const fileFacts = ({ size, mtimeMs }) => ({
-  size,
-  mtime: Math.round(mtimeMs),
-  settles: mtimeMs <= Date.now() ? mtimeMs + SETTLE : 0,
-});
+/** A file's size and time, and until when it may still be being written: by `changed`, when that's later. */
+function fileFacts({ size, mtimeMs }, changed = 0) {
+  const written = Math.max(mtimeMs, changed);
+  return { size, mtime: Math.round(mtimeMs), settles: written <= Date.now() ? written + SETTLE : 0 };
+}
 /** A place's clips, oldest first, by shoot day as it's listed: each with its size, time and day. Gone ones are left out. */
-async function clipsOf(days) {
+async function clipsOf(days, { byChange = false } = {}) {
   const clips = [];
   for (const [day, list] of days)
     for (const clip of list) {
       const s = await stat(clip.path).catch(() => null);
-      if (s) clips.push({ name: clip.name, path: clip.path, ...fileFacts(s), day });
+      // A file moved in by hand keeps its old time: what changed it last says if it's still being written.
+      if (s) clips.push({ name: clip.name, path: clip.path, ...fileFacts(s, byChange ? s.ctimeMs : 0), day });
     }
   return clips.sort((a, b) => a.name.localeCompare(b.name));
 }
-const macClips = async () => clipsOf(await originalDays());
+async function macClips() {
+  const clips = await clipsOf(await originalDays(), { byChange: true });
+  // Preexp holds what the camera gave: its low-res copies go with the clips.
+  for (const clip of clips)
+    if (dirname(clip.path) === PREEXP) clip.sidecar = clip.path.replace(/\.mp4$/i, ".LRF");
+  return clips;
+}
 /** The card's clips; null while it's unplugged, or as it is: what it lists can't all be found. */
 async function cardClips({ fresh = false } = {}) {
   if (fresh) cardCache = null;

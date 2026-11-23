@@ -383,7 +383,8 @@ export function startOffload({
     if (where === "camera" && !(await unchanged(clip))) return;
     if (!safe() || !unchangedNow(clip)) return;
     unlinkSync(clip.path);
-    if (where === "camera") await rm(lrfOf(clip.path), { force: true });
+    const sidecar = where === "camera" ? lrfOf(clip.path) : clip.sidecar;
+    if (sidecar) await rm(sidecar, { force: true });
     state.freed[where] += clip.size;
     removed(clip, where);
     notify();

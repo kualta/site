@@ -37,7 +37,8 @@ GRADE_PORT=4778 GRADE_ROOT=/tmp/grade/movies GRADE_DATA=/tmp/grade/data GRADE_CA
   (below). Thumbnails come from the still each DJI file carries; a clip's preview is made from the card when you
   select it.
 - **On this Mac**: the video in `~/Movies/Original/`, for clips that aren't on the camera, by the date in a DJI name
-  or else the file's own date.
+  or else the file's own date; and in `~/Movies/Preexp/`, clips moved off the camera by hand, listed and offloaded
+  like Original's, each with its `.LRF`.
 
 **Cloudflare**, the last group, lists the days with clips that were offloaded and aren't on this Mac, to bring back
 (below).

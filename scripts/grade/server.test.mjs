@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -900,3 +900,59 @@ test.if(usable)("backs up the settings with a ledger that's sent, when they've c
     return site.asked === asked;
   });
 }, 60_000);
+
+test.if(usable)("offloads what's been moved into Movies/Preexp as Original's, its .LRF with it, and not what's kept", async () => {
+  const preexp = join(movies, "Preexp");
+  mkdirSync(preexp, { recursive: true });
+  const moved = "DJI_20260220100000_0009_D.MP4";
+  clip(join(preexp, moved), "D-Log2");
+  const lrf = moved.replace(".MP4", ".LRF");
+  writeFileSync(join(preexp, lrf), "low-res");
+  const preexpDay = "2026-02-20";
+  // It's a clip of its shoot day like any other.
+  const library = await until(async () => {
+    const found = (await json("/api/library")).folders.find((f) => f.label === preexpDay);
+    return found && found;
+  });
+  expect(library.clips).toBe(1);
+
+  // Kept, it's not touched.
+  await post("/api/offload/keep", { days: [preexpDay] });
+  expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
+  await ended();
+  expect(readdirSync(preexp).sort()).toEqual([lrf, moved].sort());
+
+  // Not kept, it goes up like Original's and takes its .LRF with it.
+  await post("/api/offload/keep", { days: [] });
+  const sent = site.manifests.has(`_originals-${preexpDay}`);
+  expect(sent).toBe(false);
+  expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
+  const after = await ended();
+  expect(after.run).toMatchObject({ finished: "done", error: null });
+  expect(readdirSync(preexp)).toEqual([]);
+  expect(site.manifests.get(`_originals-${preexpDay}`).files.map((f) => f.path)).toEqual([`assets/${moved}`]);
+}, 120_000);
+
+test.if(usable)("leaves a clip being copied into Preexp alone until it's been still for a while", async () => {
+  const preexp = join(movies, "Preexp");
+  const copying = "DJI_20260221100000_0010_D.MP4";
+  clip(join(preexp, copying), "D-Log2");
+  // Old by its own time, as a card's clip is: what changes it is what's looked at.
+  utimesSync(join(preexp, copying), new Date("2026-01-01"), new Date("2026-01-01"));
+  const summary = await json("/api/offload");
+  expect(summary.mac.clips).toBeGreaterThanOrEqual(1);
+  const started = Date.now();
+  // It counts as still being written until 300 ms after it was last changed.
+  const grow = setInterval(() => writeFileSync(join(preexp, copying), `${"x".repeat(50)}${Date.now()}`), 100);
+  try {
+    expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(readdirSync(preexp)).toContain(copying);
+  } finally {
+    clearInterval(grow);
+  }
+  expect(Date.now() - started).toBeGreaterThan(1000);
+  await post("/api/offload/stop", { now: true });
+  await ended();
+}, 120_000);
+
