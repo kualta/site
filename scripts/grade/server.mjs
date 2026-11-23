@@ -1225,7 +1225,8 @@ async function locate(asked) {
 async function elsewhere(name) {
   const stem = stemOf(name).toLowerCase();
   const held = await cloudClips().catch(() => null);
-  const hit = held?.clips.find((clip) => clip.what === "original" && stemOf(clip.name).toLowerCase() === stem);
+  // Only originals come back from Cloudflare (#352), so any clip there is one.
+  const hit = held?.clips.find((clip) => stemOf(clip.name).toLowerCase() === stem);
   if (hit) return `${name} isn't on this Mac: it's in Cloudflare (${hit.day}). Bring it back with Bring to Mac first`;
   if (!(await card())) return `${name} isn't on this Mac or in Cloudflare, and ${CAMERA_NAME} isn't connected`;
   return `${name} isn't on the camera, this Mac or in Cloudflare`;
