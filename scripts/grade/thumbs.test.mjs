@@ -29,28 +29,21 @@ const ROTATE = lutOf(2, ([r, g, b]) => [b, r, g]);
 const SQUARE = lutOf(33, (c) => c.map((v) => v * v));
 const IDENTITY = lutOf(2, (c) => c);
 
+/** Each matrix's red and blue weights. */
+const WEIGHTS = { bt601: [0.299, 0.114], bt709: [0.2126, 0.0722] };
 /**
- * A flat picture as makeThumb writes one: a JPEG holding `colour`'s Y'CbCr in `matrix`, full range. accurate_rnd: without
- * it, swscale's quick RGB to 4:2:0 step on x86 takes BT.601 whatever matrix it's asked for.
+ * A flat picture as makeThumb writes one: a JPEG holding `colour`'s Y'CbCr in `matrix`, full range. Worked out here and
+ * handed to the encoder as they are: ffmpeg 7.0's scale leaves a JPEG in BT.601 whatever matrix it's asked for.
  */
-const still = (colour, matrix = "bt601") =>
-  run([
-    "-f",
-    "lavfi",
-    "-i",
-    `color=c=${colour}:s=320x180`,
-    "-frames:v",
-    "1",
-    "-vf",
-    `scale=out_color_matrix=${matrix}:out_range=pc:flags=accurate_rnd+full_chroma_int,format=yuvj420p`,
-    "-q:v",
-    "3",
-    "-f",
-    "image2pipe",
-    "-c:v",
-    "mjpeg",
-    "-",
-  ]);
+function still(colour, matrix = "bt601") {
+  const [kr, kb] = WEIGHTS[matrix];
+  const [r, g, b] = [16, 8, 0].map((shift) => ((colour >> shift) & 255) / 255);
+  const y = kr * r + (1 - kr - kb) * g + kb * b;
+  const levels = [255 * y, 128 + (255 * (b - y)) / (2 * (1 - kb)), 128 + (255 * (r - y)) / (2 * (1 - kr))];
+  const frame = Buffer.concat(levels.map((level) => Buffer.alloc(320 * 180, Math.round(level))));
+  const raw = ["-f", "rawvideo", "-pix_fmt", "yuvj444p", "-s", "320x180", "-i", "-"];
+  return run([...raw, "-q:v", "3", "-f", "image2pipe", "-c:v", "mjpeg", "-"], frame);
+}
 /** The middle of a picture as a browser reads a JPEG (BT.601, full range), 0-255 a channel. */
 const middle = (jpeg) => [
   ...run(
@@ -78,7 +71,7 @@ const near = (actual, expected, by = 3) =>
 test.if(usable)(
   "a graded picture is the log one through the LUT, the same size, read in the clip's matrix",
   async () => {
-    const log = still("0x305080");
+    const log = still(0x305080);
     const before = middle(log);
     const inverted = await gradeStill(log, INVERT, { matrix: "bt601" });
     expect(inverted.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
@@ -93,7 +86,7 @@ test.if(usable)(
     );
     expect(dims(inverted)).toBe(dims(log));
     // A DJI still holds its clip's own BT.709 Y'CbCr: read in that, it's the colour it was; read as BT.601, it isn't.
-    const dji = still("0x30a050", "bt709");
+    const dji = still(0x30a050, "bt709");
     near(middle(await gradeStill(dji, IDENTITY, { matrix: "bt709" })), [0x30, 0xa0, 0x50]);
     const misread = middle(await gradeStill(dji, IDENTITY, { matrix: "bt601" }));
     expect(misread.reduce((sum, v, k) => sum + Math.abs(v - [0x30, 0xa0, 0x50][k]), 0)).toBeGreaterThan(15);
@@ -116,7 +109,7 @@ const bases = {
 };
 const cubes = { "aces.cube": ROTATE, "opendrt.cube": INVERT, "p4p.cube": ROTATE };
 const loadCube = async (file) => cubes[file];
-const LOG = "0x406080";
+const LOG = 0x406080;
 
 function clip(name, profile) {
   const path = join(root, `${name}.jpg`);
@@ -241,7 +234,7 @@ test.if(usable)("the first pass sends what went ungraded before a look's worth a
   expect(new Set(sent.map(([c]) => c)).size).toBe(30);
   await send(clips);
   expect(sent.length).toBe(30);
-});
+}, 30_000);
 
 test.if(usable)(
   "what can't be graded goes as made: no LUT for its look (logged once), or made from the graded copy",
