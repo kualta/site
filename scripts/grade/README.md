@@ -64,9 +64,12 @@ Each day shows how many of its clips have an export, and the clip list can show 
   backup.json                             which of the settings above the archive has
   transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each offloaded clip (below)
   transcripts.json                        which clips have one, and which of those are in the archive
+  previews.json, trims.json               what each of a film's preview copies and trims was made from (below)
   luts/                                   GRADE_LUTS: base looks (below)
 ~/Library/Caches/Grade/                   GRADE_CACHE: metadata, thumbnails, previews; safe to delete, but for
   audio/<day>/                              the sound of offloaded clips not transcribed yet
+  previews/<clip>.mp4                     a film's preview copies, and its trims (below): made again when asked
+  trims/<clip>-<start ms>-<end ms>-<grade hash>.mp4
 ```
 
 Clips are known by file name, so a clip graded off the card and the same clip copied into `Original/` share one grade
@@ -362,3 +365,64 @@ each was made with; a clip is current when its record's `key` matches `gradeKey(
 which the app shows as "graded" and otherwise as "changed since export". A clip graded in the app but never exported
 shows as "grade not exported"; one with no export and the starting grade shows as "not graded". Regrading and exporting
 again replaces the file under the same name, so trims and captions in a film stay valid.
+
+## For a film: preview copies while it's made, trims when it's rendered
+
+A whole clip's export at full quality is several times the original's size (H.264 at 100%: 277 Mbit/s on the CPU and
+418 on the GPU for 4K60, against the camera's 127). A film needs neither all of it nor all of that while it's being
+made, so it can ask for less. Both kinds live in the cache, never in `Movies/Exported/`, and are found by the clip's
+name (any case, with or without its extension) wherever the clip is: `Original/` or `Preexp/`, else the card. A clip
+on neither, only in Cloudflare, isn't fetched: it's `missing`, and its `error` says to bring it back with Bring to Mac.
+
+**Preview copies** are whole clips through their saved grade, deflicker and all, made small: 1920 on the long side
+(either way up, never larger than the clip), 8-bit H.264 BT.709 at 12 Mbit/s on the GPU, a key frame every half second,
+the sound copied as it was. The original's code values are made small first and then graded, where an export grades at
+full size: twice as fast on 4K60 (1.2 to 1.3 times real time here), and within 56.8 dB of grading first. 12 Mbit/s came from
+looking at 4K60 D-Log2 (stone under string lights: VMAF 95 against the graded frames, 92.5 at 8 Mbit/s) and 4K24
+foliage walked through (81, and 70 at 8, which smeared the leaves). They're for judging a cut and its grade, not for
+keeping: a 4K60 clip's is a tenth of its size, where its export at 100% on the GPU is three times it.
+
+```sh
+curl -X POST http://127.0.0.1:4777/api/previews -H 'X-Grade: 1' -H 'Content-Type: application/json' \
+  -d '{"names": ["DJI_20261111172302_0286_D.MP4"]}'
+curl 'http://127.0.0.1:4777/api/previews?names=DJI_20261111172302_0286_D.MP4,DJI_…'
+```
+
+Both answer for each name asked, under that name, `{ state, path, key, error }`: `state` is `ready`, `stale` (its clip
+has been graded since: `path` is the copy as it was, `key` the grade it was made from), `queued`, `making`, `missing`
+(none made: `error` says why when the clip isn't here, else it's null and a POST makes it) or `failed` (`error`).
+`key` is the grade key the file at `path` was made from, as `exports.json` keys exports. Asking again remakes a stale
+one, and leaves a ready one as it is. With **Remake a film's preview copies after a regrade** (in the Export menu,
+`POST /api/previews/options {"autoRemake": true}`, off to begin with) a clip graded again has its preview copy made again
+by itself once its grade has been still for five seconds.
+
+**Trims** are full-quality exports of part of a clip, for a render:
+
+```sh
+curl -X POST http://127.0.0.1:4777/api/trims -H 'X-Grade: 1' -H 'Content-Type: application/json' \
+  -d '{"trims": [{"name": "DJI_20261111172302_0286_D.MP4", "start": 12.4, "end": 15.1}]}'
+curl 'http://127.0.0.1:4777/api/trims?id=<id>'
+```
+
+`start` and `end` are seconds in the original. Both answer `{ id, trims }`, each trim as asked, in order: `{ name,
+start, end, state, path, actualStart, actualEnd, error }`, `state` one of `queued`, `making`, `ready`, `missing` (its clip
+isn't here: `error` says where it is) or `failed`. A trim holds the frame on screen at `start` to the last frame that
+starts before `end` (each to within half a millisecond, as times come rounded to it). `actualStart` and `actualEnd` are
+those two frames' times in the original: the trim's own time 0 is `actualStart`, so `#t=a,b` in the original is
+`#t=a−actualStart,b−actualStart` in the trim, and its picture lasts until a frame after `actualEnd`. Its video is
+encoded as an export is, on what **Encode on** says, at full quality unless the request says `"quality"` (10 to 100).
+Its sound is AAC at 320 kbit/s in the `.mp4`, encoded again from the same sample as the first frame to the end of the
+last, so an `<audio>` of the trim plays in step with its picture; a decoder that ignores the file's edit list plays up to
+1023 samples of silence after that. It's graded from a tenth of a second before `start` and, for deflicker, which evens each
+frame out with the ones after it, past `end`, and cut afterwards, so its frames are the whole export's. The file is
+`trims/<clip>-<start ms>-<end ms>-<hash of the grade key, and the quality below 100>.mp4`, and an identical request,
+with the clip graded the same, is answered with it as it is, even once the clip has gone from this Mac. The ids are
+forgotten when the server restarts; asking again finds the same files.
+
+One is made at a time, trims first. Neither starts while an export is going or waiting: an export asked for stops the
+one being made, which goes back to the head of its queue and starts over once the exports are done. Each is checked for
+room first, as Bring to Mac is (`GRADE_KEEP_FREE` stays free, with what exports, the card and Bring to Mac still have to
+write), and a clip being made into either isn't offloaded meanwhile. Before each, those nobody has asked for in 30 days
+go, as do files in their folders with no record that old. `/api/jobs` says how both queues stand (`previews` and
+`trims`: `current` with its `progress`, `queued`, `failed`, `waiting` for the exports, and `autoRemake`), and so does the
+status line.

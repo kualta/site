@@ -14,6 +14,7 @@ import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { archiveDays, bringer, clearParts, cloudId, dayClips, pickClips, summarise, withHere } from "./bring.mjs";
 import { composeLut, DEFAULT_LOOKS, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
+import { filmAssets } from "./film.mjs";
 import { dayManifests, LANES, startOffload } from "./offload.mjs";
 import { keepList } from "./keep.mjs";
 import { RETRY } from "./lane.mjs";
@@ -81,6 +82,11 @@ const TRANSCRIPTS = join(DATA, "transcripts.json");
 const DEFAULT_LOOK = process.env.GRADE_DEFAULT_LOOK || DEFAULT_LOOKS[0];
 /** Clips come off the card only while this much stays free on the Mac, for exports and the system. */
 const KEEP_FREE = Number(process.env.GRADE_KEEP_FREE || 5e9);
+/** What each preview copy and trim for a film was made from (film.mjs); the files themselves are in the cache. */
+const PREVIEWS = join(DATA, "previews.json");
+const TRIMS = join(DATA, "trims.json");
+/** How long a clip's grade stays still before its preview copy is made again by itself, when that's on. */
+const REMAKE_AFTER = Number(process.env.GRADE_REMAKE_AFTER || 5000);
 
 // ---- base looks: a .cube per profile that takes that profile's code values ------------------------------------
 
@@ -382,6 +388,8 @@ async function pumpExports() {
   }
   exportBusy = false;
   scheduleLedger(2000);
+  // A film's preview copies and trims waited for the exports.
+  film.pump();
 }
 
 /** Stop exporting: drop the queue and stop the clip in progress (its half-written file is removed). */
@@ -1086,7 +1094,7 @@ function runOffload(lanes, cloud, flags) {
     request: cloud.request,
     room: roomOnMac,
     keepFree: KEEP_FREE,
-    removable: async (clip) => !exporting(clip) && clip.name !== (await goingToYoutube(PUBLISHER)),
+    removable: async (clip) => !exporting(clip) && !film.reading(clip.name) && clip.name !== (await goingToYoutube(PUBLISHER)),
     keeping: keep.keeping,
     paused: uploadsPaused,
     clearCardAfter: () => clearCardAfter,
@@ -1159,6 +1167,8 @@ async function stillToWrite() {
   const copy = offloading?.state.copy;
   if (copy?.on)
     claims.push({ by: "the camera", bytes: copy.bytes - copy.doneBytes - (copy.current?.sent ?? 0) });
+  const asset = film.claim();
+  if (asset) claims.push(asset);
   return claims;
 }
 
@@ -1220,6 +1230,92 @@ async function cloudRoute(req, res, p, url) {
     if (!file) throw httpError(404, "not found");
     await serveFile(req, res, join(CACHE, "thumbs", file));
   } else return false;
+  return true;
+}
+
+// ---- a film's assets: preview copies while it's made, trims when it's rendered (film.mjs) -----------------------------
+
+/**
+ * A clip by its name (any case, with or without its extension) wherever it is: in Original or Preexp, quicker to read,
+ * else on the card. The very name before another with only its stem in common.
+ */
+async function locate(asked) {
+  const wanted = String(asked).toLowerCase();
+  let found = null;
+  for (const [kind, days] of [["mac", await originalDays()], ["camera", (await card()) ?? new Map()]])
+    for (const [day, list] of days)
+      for (const clip of list) {
+        const same = clip.name.toLowerCase() === wanted;
+        if (!same && (found || stemOf(clip.name).toLowerCase() !== stemOf(wanted))) continue;
+        const src = { id: `${kind}:${day}`, kind, label: day, paths: new Map([[clip.name, clip.path]]) };
+        found = { name: clip.name, path: clip.path, src };
+        if (same) return found;
+      }
+  return found;
+}
+
+/** Why a clip isn't on this Mac or the card, and where it is: Bring to Mac fetches it, nothing here does by itself. */
+async function elsewhere(name) {
+  const stem = stemOf(name).toLowerCase();
+  const held = await cloudClips().catch(() => null);
+  const hit = held?.clips.find((clip) => clip.what === "original" && stemOf(clip.name).toLowerCase() === stem);
+  if (hit) return `${name} isn't on this Mac: it's in Cloudflare (${hit.day}). Bring it back with Bring to Mac first`;
+  if (!(await card())) return `${name} isn't on this Mac or in Cloudflare, and ${CAMERA_NAME} isn't connected`;
+  return `${name} isn't on the camera, this Mac or in Cloudflare`;
+}
+
+/** A clip's grade key as things stand, by its name and profile: what decides whether a preview copy is current. */
+async function gradeKeys() {
+  const [grades, looks] = await Promise.all([readClips(GRADES), bases()]);
+  return (name, profile) => gradeKey(resolveGrade(grades[name], (looks[profile] ?? []).map((b) => b.id)));
+}
+
+const film = filmAssets({
+  cache: CACHE,
+  records: { previews: PREVIEWS, trims: TRIMS },
+  locate,
+  meta: async (clip) => (await metas(clip.src, [clip.name]))[clip.name],
+  elsewhere,
+  graded: async (clip, use) => {
+    const { meta, grade, cube } = await clipLut(clip.src, clip.name);
+    return withLutFile(clip.name, cube, (lut) => use({ lut, meta, grade, key: gradeKey(grade) }));
+  },
+  keys: gradeKeys,
+  exporting: () => Boolean(jobs.export.current || jobs.export.queue.length),
+  encoder: () => exportEncoder,
+  room: roomOnMac,
+  keepFree: KEEP_FREE,
+  // What exports, the card and Bring to Mac still have to write.
+  claims: async () => {
+    const bring = bringing.state();
+    const coming = bring.running ? [{ by: "Bring to Mac", bytes: bring.bytes - bring.gotBytes }] : [];
+    return [...(await stillToWrite()), ...coming];
+  },
+  remakeAfter: REMAKE_AFTER,
+  log: (line) => console.error(`grade: film: ${line}`),
+});
+
+/** A list of clip names a request gives, up to 500. */
+function clipNames(names) {
+  const ok = Array.isArray(names) && names.length <= 500 && names.every((n) => typeof n === "string" && /^[^/\\,]{1,255}$/.test(n));
+  if (!ok) throw httpError(400, "names must be a list of up to 500 clip names");
+  return names;
+}
+
+/** Answers the requests about a film's assets; says whether this was one. */
+async function filmRoute(req, res, p, url) {
+  if (p === "/api/previews" && req.method === "GET") {
+    const names = (url.searchParams.get("names") ?? "").split(",").filter(Boolean);
+    send(res, 200, await film.previewStates(clipNames(names)));
+  } else if (p === "/api/previews" && req.method === "POST")
+    send(res, 200, await film.askPreviews(clipNames((await body(req)).names)));
+  else if (p === "/api/previews/options" && req.method === "POST")
+    send(res, 200, { autoRemake: await film.autoRemake((await body(req)).autoRemake) });
+  else if (p === "/api/trims" && req.method === "POST") {
+    const { trims, quality } = await body(req);
+    send(res, 200, await film.askTrims(trims, { quality: quality === undefined ? 100 : exportQuality(quality) }));
+  } else if (p === "/api/trims" && req.method === "GET") send(res, 200, await film.trimStates(url.searchParams.get("id")));
+  else return false;
   return true;
 }
 
@@ -1365,6 +1461,7 @@ async function route(req, res) {
     const incoming = Object.entries((await body(req)).clips ?? {});
     for (const [name] of incoming) if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
     await updateClips(GRADES, (clips) => Object.assign(clips, Object.fromEntries(incoming)));
+    await film.regraded(incoming.map(([name]) => name));
     return send(res, 200, { ok: true });
   }
 
@@ -1417,6 +1514,8 @@ async function route(req, res) {
       else jobs.export.queue.push({ id: src.id, name, quality, encoder });
     }
     jobs.export.failed = jobs.export.failed.filter((f) => !(f.id === src.id && (names ?? []).includes(f.name)));
+    // An export never waits for a film's preview copy or trim: the one being made stops, and goes on afterwards.
+    if (jobs.export.queue.length) film.giveWay();
     pumpExports();
     return send(res, 200, { queued: jobs.export.queue.length });
   }
@@ -1448,11 +1547,14 @@ async function route(req, res) {
       offload: offloadState(),
       transcripts: transcripts.summary(),
       bring: bringing.state(),
+      ...film.state(),
     });
   }
 
   // Bringing clips back from the archive.
   if (await cloudRoute(req, res, p, url)) return;
+  // A film's preview copies and trims.
+  if (await filmRoute(req, res, p, url)) return;
 
   // Offloading: the card to this Mac, this Mac and its exports to the archive, each switched on and off by itself.
   if (p === "/api/offload" && req.method === "GET") return send(res, 200, await offloadSummary());
@@ -1494,6 +1596,7 @@ clearCardAfter = (await readJson(OFFLOAD, null).catch(() => null))?.clearCardAft
 const chosen = (await readJson(ENCODER, null).catch(() => null))?.exportEncoder;
 if (ENCODERS.includes(chosen)) exportEncoder = chosen;
 await transcripts.resume().catch((e) => console.error("grade: transcripts:", e.message));
+await film.start().catch((e) => console.error("grade: film:", e.message));
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;
   console.log(`grade: ${address}  (movies ${MOVIES}, camera ${CAMERA}, data ${DATA}, LUTs ${LUTS})`);
