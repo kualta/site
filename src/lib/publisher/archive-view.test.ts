@@ -16,13 +16,14 @@ import {
 } from "./archive-view";
 import type { LedgerClip } from "./ledger";
 
-test("the tab's address holds the day, the page and the clip open, and nothing it doesn't need", () => {
-  expect(readArchiveView("")).toEqual({ day: null, page: 1, clip: null });
-  const view = { day: "2026-11-08", page: 3, clip: "DJI_20261108122204_0086_D" };
-  expect(writeArchiveView(view)).toBe("?day=2026-11-08&page=3&clip=DJI_20261108122204_0086_D");
+test("the tab's address holds the day and the clip open, and nothing it doesn't need", () => {
+  expect(readArchiveView("")).toEqual({ day: null, clip: null });
+  const view = { day: "2026-11-08", clip: "DJI_20261108122204_0086_D" };
+  expect(writeArchiveView(view)).toBe("?day=2026-11-08&clip=DJI_20261108122204_0086_D");
   expect(readArchiveView(writeArchiveView(view))).toEqual(view);
-  expect(writeArchiveView({ day: null, page: 1, clip: null })).toBe("");
-  expect(readArchiveView("?day=yesterday&page=-2")).toEqual({ day: null, page: 1, clip: null });
+  expect(writeArchiveView({ day: null, clip: null })).toBe("");
+  // An old address's page is no longer read.
+  expect(readArchiveView("?day=yesterday&page=2")).toEqual({ day: null, clip: null });
 });
 
 test("what watching costs is said before it starts", () => {
@@ -56,7 +57,7 @@ const ledgerClip = (extra: Partial<LedgerClip> = {}): LedgerClip => ({
 
 test("where else a clip is, from the ledger", () => {
   expect(otherCopies(undefined)).toBe("Not in the ledger");
-  expect(otherCopies(ledgerClip())).toBe("Only here");
+  expect(otherCopies(ledgerClip())).toBe("");
   expect(otherCopies(ledgerClip({ original: { camera: true, mac: true, cloudflare: true } }))).toBe(
     "Also on camera, Mac",
   );

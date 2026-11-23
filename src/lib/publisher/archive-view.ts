@@ -3,32 +3,25 @@ import { lookPath } from "../../../scripts/grade/looks.mjs";
 import type { ArchivedClip, ArchivedSettings } from "./archive-tab";
 import type { LedgerClip } from "./ledger";
 
-/** What the Archive tab shows, kept in its address: the shoot day, the page of its clips and the clip open. */
+/** What the Archive tab shows, kept in its address: the shoot day and the clip open. */
 export interface ArchiveView {
   day: string | null;
-  page: number;
   clip: string | null;
 }
 export function readArchiveView(search: string): ArchiveView {
   const params = new URLSearchParams(search);
   const day = params.get("day");
-  const page = Number(params.get("page"));
   return {
     day: day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
-    page: Number.isInteger(page) && page > 1 ? page : 1,
     clip: params.get("clip") || null,
   };
 }
-export function writeArchiveView({ day, page, clip }: ArchiveView): string {
+export function writeArchiveView({ day, clip }: ArchiveView): string {
   const entries: string[] = [];
   if (day) entries.push(`day=${day}`);
-  if (page > 1) entries.push(`page=${page}`);
   if (clip) entries.push(`clip=${encodeURIComponent(clip)}`);
   return entries.length ? `?${entries.join("&")}` : "";
 }
-
-/** Clips a page shows: a shoot day runs to hundreds. */
-export const PAGE_SIZE = 24;
 
 /** A clip's name without its extension: how the ledger and the transcripts know it. */
 export const stemOf = (file: string) => file.replace(/\.[^.]+$/, "");
@@ -71,7 +64,7 @@ export function clock(seconds: number) {
 
 export const PROFILES: Record<string, string> = { dlog2: "D-Log2", dlog: "D-Log", hlg: "HLG", rec709: "Rec.709" };
 
-/** Where a clip's other copies are, from the ledger, in a line. */
+/** Where a clip's other copies are, from the ledger, in a line; nothing when Cloudflare's is the only one. */
 export function otherCopies(clip: LedgerClip | undefined) {
   if (!clip) return "Not in the ledger";
   const original = [clip.original.camera && "camera", clip.original.mac && "Mac"].filter(Boolean);
@@ -83,7 +76,7 @@ export function otherCopies(clip: LedgerClip | undefined) {
   const parts = [];
   if (original.length) parts.push(`Also on ${original.join(", ")}`);
   if (graded.length) parts.push(`graded on ${graded.join(", ")}`);
-  if (!parts.length) return "Only here";
+  if (!parts.length) return "";
   const line = parts.join(" · ");
   return line[0].toUpperCase() + line.slice(1);
 }

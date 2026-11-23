@@ -86,7 +86,6 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     const days = archive.getByRole("navigation", { name: "Shoot days" });
     const summary = archive.locator(".publisher-archive-head .publisher-note");
     const cards = archive.locator(".publisher-archive-clips > li:not(.publisher-archive-slot)");
-    const pager = archive.locator(".publisher-archive-head");
 
     // The newest day first, open; each clip with what the ledger and the archive know of it.
     await days.getByRole("button", { name: /21 Nov 2026/, pressed: true }).waitFor();
@@ -99,31 +98,21 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     assert.deepEqual(await first.locator(".line").allTextContents(), [
       "040210:15:00",
       "3.00 GB · D-Log2",
-      "Transcript",
       "Also on camera · graded on Mac",
     ]);
+    // A clip only in Cloudflare says nothing more: its copies line isn't there.
+    assert.equal(await archive.getByText(/^Only here$|^Transcript$|^No transcript$/).count(), 0);
     await first.locator(".publisher-archive-thumb img").waitFor();
 
-    // A long day, a page of clips at a time, the page in the address.
+    // A long day, all of it on one page.
     await days.getByRole("button", { name: /8 Nov 2026/ }).click();
     await page.waitForURL(/\?day=2026-11-08$/);
     const bytes = day.reduce((sum, clip) => sum + clip.size, 0);
     await summary
       .filter({ hasText: `30 clips · ${(bytes / 1e9).toFixed(2)} GB · ${day.filter((c) => c.vtt).length} transcribed` })
       .waitFor();
-    assert.equal(await cards.count(), 24);
-    await pager.getByText("1–24 of 30").waitFor();
-    assert.equal(await pager.getByRole("button", { name: "Previous page" }).isDisabled(), true);
-    await pager.getByRole("button", { name: "Next page" }).click();
-    await pager.getByText("25–30 of 30").waitFor();
-    await page.waitForURL(/page=2/);
-    assert.equal(await cards.count(), 6);
-    assert.equal(await pager.getByRole("button", { name: "Next page" }).isDisabled(), true);
-    // The foot of the page has its own, which goes back up to the top of the clips.
-    await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
-    await archive.locator(".publisher-archive-foot").getByRole("button", { name: "Previous page" }).click();
-    await pager.getByText("1–24 of 30").waitFor();
-    assert.ok((await archive.locator(".publisher-archive-clips").boundingBox()).y >= 0);
+    assert.equal(await cards.count(), 30);
+    assert.equal(await archive.getByRole("button", { name: /page/ }).count(), 0);
 
     // A clip opens in its player, which reads nothing until Watch and says first what watching costs.
     await archive.getByRole("button", { name: "Clip 0086, recorded 12:22:04" }).click();
@@ -142,9 +131,10 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     await transcript.getByRole("button", { name: /market at noon/ }).click();
     await player.getByRole("button", { name: "Try anyway from 0:01" }).waitFor();
     const looks = player.getByRole("group", { name: "Look" });
-    await looks.getByRole("button", { name: "Log", pressed: true }).waitFor();
-    await player.getByText("As shot, in D-Log2: flat until it's graded.").waitFor();
-    for (const look of ["Default look", "Its grade"])
+    // A clip opens graded: in its own grade where it has one.
+    await looks.getByRole("button", { name: "Its grade", pressed: true }).waitFor();
+    await player.getByText("Its grade: Velvia, +0.5 stops, 5000 K, saturation 1.30.").waitFor();
+    for (const look of ["Log", "Default look"])
       assert.equal(await looks.getByRole("button", { name: look }).isEnabled(), true);
     assert.deepEqual(reads, []);
     await page.keyboard.press("Escape");
@@ -174,6 +164,8 @@ export async function checkArchive(browser, { composer, dir, shots }) {
         draw.drawImage(gl, 0, 0);
         return [...draw.getImageData(gl.width >> 1, gl.height >> 1, 1, 1).data.slice(0, 3)];
       });
+    await looks.getByRole("button", { name: "Log" }).click();
+    await player.getByText("As shot, in D-Log2: flat until it's graded.").waitFor();
     const input = await pixel();
     near(input, [0x40, 0x60, 0x80], 8, "As shot");
 
