@@ -464,6 +464,13 @@ try {
   await said.waitFor({ state: "attached", timeout: 5_000 });
   work = { ...work, offload: offload() };
   await says("an offload too", 0.43, 0.07);
+  // The offload in the status line opens how it stands in the composer's Footage tab: the composer is asked to.
+  const offloadLink = composer.frameLocator("iframe").locator("#status a");
+  await offloadLink.filter({ hasText: /^Offloading 0 \/ 1$/ }).waitFor({ timeout: 5_000 });
+  // The frame is narrow enough that the bar's buttons sit over the line's end: the click goes to the link itself.
+  await offloadLink.dispatchEvent("click");
+  await composer.waitForFunction(() => window.heard.some((said) => said.type === "grade-footage"), null, { timeout: 5_000 });
+  assert.equal(composer.context().pages().length, 1, "nothing else opens");
   work = { offload: offload({ sentBytes: 1001 }) };
   await says("an offload that resent a part", 1, null);
   work = { offload: offload({ sentBytes: 0, send: { ...offload().send, total: 0, bytes: 0 } }) };
@@ -476,6 +483,13 @@ try {
   await says("an offload that failed", null, null);
   work = { offload: offload() };
   await says("an offload once more", 0.43, null);
+  // Paused from the Footage tab: the line says so first, the offload's held, and the title lets go of it.
+  const owner = { for: "owner", why: "Paused from the Footage tab" };
+  work = { offload: offload({ send: { ...offload().send, waiting: owner } }), paused: { since: Date.now() } };
+  await says("everything paused", null, null);
+  // The frame is too narrow to show the whole line; its tooltip has it.
+  const pausedLine = composer.frameLocator("iframe").locator(`#status[title="Paused from the Footage tab · Offloading 0 / 1 · paused"]`);
+  await pausedLine.waitFor({ state: "attached", timeout: 5_000 });
   work = null;
   await says("the app's server gone", null, null);
 
@@ -550,6 +564,11 @@ try {
     await menu.getByRole("button", { name: "Start Mac → Cloudflare" }).click();
     await saysNow("mac", "3 of 16 · 400 MB of 4.3 GB");
     assert.deepEqual(asked.splice(0), [["", { lanes: ["send"] }]]);
+    // The status line says it short, and links to how it stands in the composer's Footage tab, in a tab of its own.
+    const link = menu.locator("#status a");
+    await link.filter({ hasText: /^Offloading 3 \/ 16 · 4\.3 h left$/ }).waitFor({ timeout: 5_000 });
+    assert.equal(await link.getAttribute("href"), "https://post.kualta.dev/footage#this-mac");
+    assert.equal(await link.getAttribute("target"), "_blank");
     next = going({ unattended: false });
     await menu.getByRole("checkbox", { name: "Keep going when this tab is closed" }).uncheck();
     assert.deepEqual(asked.splice(0), [["", { lanes: [], unattended: false }]]);

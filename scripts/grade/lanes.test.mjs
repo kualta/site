@@ -606,6 +606,45 @@ test("a paused run starts no upload, no read back and no transcript", async () =
   expect(parted.asked.filter((asked) => asked.startsWith("GET blobs"))).toHaveLength(1);
 });
 
+test("paused from the Footage tab, uploads hold between parts and the card between clips, then go on where they were", async () => {
+  const at = await given([], [[one, LONG, day]]);
+  let held = null;
+  const request = site({
+    hold: (rest) => {
+      // Paused while the second part is on its way: that one lands, and no other goes.
+      if (rest === `uploads/${sha(LONG)}/2`) held = "Paused from the Footage tab";
+      return null;
+    },
+  });
+  const run = begin(at, { lanes: ["send"], request, part: 8, pausedAll: () => held });
+  await until(() => run.state.send.waiting?.for === "owner");
+  expect(run.state.paused).toEqual({ for: "owner", why: "Paused from the Footage tab" });
+  const before = [...request.asked];
+  expect(before.filter((asked) => asked.startsWith(`PUT uploads/${sha(LONG)}`))).toHaveLength(2);
+  await sleep(60);
+  expect(request.asked).toEqual(before);
+  held = null;
+  run.poke();
+  await run.done;
+  expect(run.state).toMatchObject({ finished: "done", paused: null, send: { done: 1 } });
+  const parts = request.asked.filter((asked) => asked.startsWith(`PUT uploads/${sha(LONG)}/`));
+  expect(parts).toEqual([...new Set(parts)]);
+  expect(parts).toHaveLength(6);
+
+  // Paused before the card is read: nothing comes off it until it goes on.
+  held = "Paused from the Footage tab";
+  const card = await given([[three, "on the card", day]]);
+  const copy = begin(card, { lanes: ["copy"], request: site(), pausedAll: () => held });
+  await until(() => copy.state.copy.waiting?.for === "owner");
+  await sleep(40);
+  expect(files(card.original)).toEqual([]);
+  expect(files(card.dcim)).toEqual(onCard(three));
+  held = null;
+  await copy.done;
+  expect(copy.state.copy).toMatchObject({ finished: "done", done: 1, waiting: null });
+  expect(files(card.original)).toEqual([three]);
+});
+
 // ---- what's kept -------------------------------------------------------------------------------------------------------
 
 test("kept days and clips are left alone by both switches, and out of the totals", async () => {

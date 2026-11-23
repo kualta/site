@@ -466,6 +466,37 @@ test("stopped just as a clip has landed, it keeps that one and starts no other",
     expect(files(dir)).toEqual([A]);
   }));
 
+test("paused from the Footage tab as a clip lands, the next waits, and comes once it goes on", () =>
+  movies(async (dir) => {
+    const at = site();
+    await at.file(`_originals-${day}`, [
+      [`assets/${A}`, "the first"],
+      [`assets/${B}`, "the second"],
+    ]);
+    let held = null;
+    const run = bringer({
+      dir,
+      room: plenty,
+      every: 50,
+      pausedAll: () => held,
+      landed: () => {
+        held = "Paused from the Footage tab";
+      },
+    });
+    await run.add(at.request, pickClips(await listed(at, dir), { day }));
+    const waiting = async () => {
+      for (let tries = 0; tries < 100 && !run.state().paused; tries++) await new Promise((r) => setTimeout(r, 10));
+      return run.state();
+    };
+    expect(await waiting()).toMatchObject({ running: true, landed: 1, paused: "Paused from the Footage tab" });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(files(dir)).toEqual([A]);
+    held = null;
+    await run.settled();
+    expect(run.state()).toMatchObject({ finished: "done", landed: 2, paused: null });
+    expect(files(dir)).toEqual([A, B]);
+  }));
+
 test("room is looked at again before each clip: one that no longer fits isn't asked for", () =>
   movies(async (dir) => {
     const at = site();
@@ -848,8 +879,10 @@ test.if(usable)("refuses what there's no room for, what isn't there, and other o
   expect(files(exported)).toEqual([gradedName]);
   expect((await fetch(url("/api/bring"), { method: "POST", body: "{}" })).status).toBe(403);
   expect(files(original)).toEqual([name]);
-  // Nothing was ever asked of the archive but to say what it has, bar the ledger the app keeps there.
-  expect(held.asked.filter((ask) => !ask.startsWith("GET ") && !ask.includes(" ledger"))).toEqual([]);
+  // Nothing was ever asked of the archive but to say what it has, bar the ledger the app keeps there, and nothing of
+  // the site but to show how the offload stands.
+  const kept = (ask) => ask.includes(" ledger") || ask.endsWith(" /api/publisher/helper/footage/mac");
+  expect(held.asked.filter((ask) => !ask.startsWith("GET ") && !kept(ask))).toEqual([]);
 });
 
 /** A file that says it's 10 TB and takes none of the disk. */

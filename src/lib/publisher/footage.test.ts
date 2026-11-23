@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { footageResponse, isWatched, MAX_STATUS, WATCH_TTL } from "./footage";
+import { MAX_MAC_REPORT } from "./mac";
 import { memoryArchive, memoryMedia } from "./memory-archive";
 import type { MediaBucket } from "./server";
 
@@ -21,17 +22,17 @@ test("the Archive tab counts as open while it keeps saying so, and closes when i
   const { bucket } = memoryMedia();
   const now = Date.parse("2026-11-21T12:00:00Z");
   const ask = async (at: number) => (await answer(bucket, "helper/footage", "GET", undefined, at)).json();
-  expect(await ask(now)).toEqual({ watching: false });
+  expect(await ask(now)).toEqual({ watching: false, paused: null });
   await answer(bucket, "footage/watch", "POST", {}, now);
-  expect(await ask(now + 60_000)).toEqual({ watching: true });
+  expect(await ask(now + 60_000)).toEqual({ watching: true, paused: null });
   // A tab that stops saying so (closed without a word, the laptop asleep) lapses on its own.
   expect(await isWatched(bucket, now + WATCH_TTL + 1)).toBe(false);
   await answer(bucket, "footage/watch", "POST", {}, now);
   await answer(bucket, "footage/watch", "DELETE", undefined, now);
-  expect(await ask(now)).toEqual({ watching: false });
+  expect(await ask(now)).toEqual({ watching: false, paused: null });
   // The grade app, on the helper's pairing, keeps it fresh while an offload goes; it lapses the same way after.
   await answer(bucket, "helper/footage/watch", "POST", undefined, now);
-  expect(await ask(now + 60_000)).toEqual({ watching: true });
+  expect(await ask(now + 60_000)).toEqual({ watching: true, paused: null });
   expect(await isWatched(bucket, now + WATCH_TTL + 1)).toBe(false);
   expect(
     await footageResponse("helper/footage/watch", call("helper/footage/watch", "DELETE"), { media: bucket }),
@@ -41,7 +42,10 @@ test("the Archive tab counts as open while it keeps saying so, and closes when i
 test("the laptop's status reaches the tab as sent, with how long ago it came", async () => {
   const { bucket } = memoryMedia();
   const status = { at: 1, state: "uploading", current: { name: "DJI_x.mp4", sent: 5, size: 10 }, speed: 2_500_000 };
-  expect(await (await answer(bucket, "helper/footage", "POST", status)).json()).toEqual({ watching: false });
+  expect(await (await answer(bucket, "helper/footage", "POST", status)).json()).toEqual({
+    watching: false,
+    paused: null,
+  });
   await answer(bucket, "footage/watch", "POST", {});
   const body = (await (await answer(bucket, "footage", "GET", undefined, Date.now() + 2_000)).json()) as {
     watching: boolean;
@@ -61,7 +65,12 @@ test("the laptop's status reaches the tab as sent, with how long ago it came", a
 
 test("before the laptop has said anything the tab reads no status", async () => {
   const { bucket } = memoryMedia();
-  expect(await (await answer(bucket, "footage")).json()).toEqual({ watching: false, age: null, status: null });
+  expect(await (await answer(bucket, "footage")).json()).toEqual({
+    watching: false,
+    age: null,
+    paused: null,
+    status: null,
+  });
 });
 
 test("a status that isn't an object, or is too big, is refused and the last one kept", async () => {
@@ -127,4 +136,133 @@ test("a Pipeline piece names its film, or a shoot day before there's one, and ca
   for (const body of [{ project: "../x" }, { day: "15 Nov" }, { project: "a", day: "2026-11-15" }])
     expect((await send(`footage/links/${piece}`, "PUT", body)).status).toBe(400);
   expect((await send("footage/links/not-a-piece", "PUT", { day: "2026-11-15" })).status).toBe(400);
+});
+
+/** How the grade app's offload stands, as it sends it. */
+const macReport = () => ({
+  version: 1,
+  at: "2026-11-23T12:00:00.000Z",
+  running: true,
+  startedAt: "2026-11-23T11:00:00.000Z",
+  endedAt: null,
+  lanes: {
+    copy: {
+      state: "waiting",
+      done: 120,
+      total: 167,
+      sentBytes: 28.8e9,
+      totalBytes: 40.1e9,
+      speed: null,
+      left: null,
+      waiting: { for: "camera", why: "The camera isn't plugged in", until: "2026-11-23T12:05:00.000Z" },
+      error: null,
+    },
+    send: {
+      state: "running",
+      done: 7,
+      total: 167,
+      sentBytes: 1.4e9,
+      totalBytes: 40.1e9,
+      speed: 887_500,
+      left: 43_606,
+      waiting: null,
+      error: null,
+    },
+  },
+  camera: { mounted: false, clips: 0, bytes: 0 },
+  mac: { clips: 160, bytes: 38.7e9 },
+  freed: { camera: 28.8e9, mac: 1.4e9 },
+  skipped: [{ lane: "send", name: "DJI_1.MP4", why: "doesn't read back" }],
+  transcripts: { made: 12, waiting: 3, failed: 1, toSend: 4, error: "no GPU" },
+  kept: { days: ["2026-11-08"], clips: 45 },
+  room: { free: 123e9, keepFree: 5e9 },
+});
+
+test("the grade app's offload reaches the tab as checked, with how long ago it came", async () => {
+  const { bucket } = memoryMedia();
+  const read = async (at = Date.now()) => (await answer(bucket, "footage/mac", "GET", undefined, at)).json();
+  expect(await read()).toEqual({ age: null, report: null });
+  const sent = await answer(bucket, "helper/footage/mac", "POST", { ...macReport(), extra: "x".repeat(100) });
+  expect(sent.status).toBe(200);
+  expect(await sent.json()).toEqual({ ok: true, paused: null });
+  const { age, report } = (await read(Date.now() + 3_000)) as { age: number; report: unknown };
+  // Only what the tab reads is kept.
+  expect(report).toEqual(macReport());
+  expect(age).toBeGreaterThanOrEqual(2_900);
+  expect(age).toBeLessThan(6_000);
+  // Each report takes the last one's place.
+  await answer(bucket, "helper/footage/mac", "POST", {
+    ...macReport(),
+    running: false,
+    endedAt: "2026-11-23T13:00:00Z",
+  });
+  expect(((await read()) as { report: { running: boolean } }).report.running).toBe(false);
+});
+
+test("an offload report that's malformed or too big is refused, and the last one kept", async () => {
+  const { bucket } = memoryMedia();
+  await answer(bucket, "helper/footage/mac", "POST", macReport());
+  const report = macReport();
+  const wrong: unknown[] = [
+    "[1,2]",
+    "not json",
+    "null",
+    { ...report, version: 2 },
+    { ...report, running: "yes" },
+    { ...report, at: "yesterday" },
+    { ...report, lanes: { copy: report.lanes.copy } },
+    { ...report, lanes: { ...report.lanes, send: { ...report.lanes.send, state: "flying" } } },
+    { ...report, lanes: { ...report.lanes, send: { ...report.lanes.send, done: -1 } } },
+    { ...report, lanes: { ...report.lanes, send: { ...report.lanes.send, total: 1.5 } } },
+    { ...report, lanes: { ...report.lanes, send: { ...report.lanes.send, speed: "fast" } } },
+    { ...report, lanes: { ...report.lanes, copy: { ...report.lanes.copy, waiting: { for: "camera", why: 3 } } } },
+    { ...report, skipped: [{ lane: "exports", name: "DJI_1.MP4", why: "x" }] },
+    { ...report, skipped: Array.from({ length: 101 }, () => report.skipped[0]) },
+    { ...report, kept: { days: ["x".repeat(21)], clips: 0 } },
+    { ...report, transcripts: { ...report.transcripts, error: "x".repeat(601) } },
+    { ...report, room: undefined },
+  ];
+  for (const body of wrong) {
+    const response = await answer(bucket, "helper/footage/mac", "POST", body);
+    expect(response.status).toBe(400);
+  }
+  // Over the cap, by what it says it is or by what it is.
+  const big = JSON.stringify({ ...report, pad: "x".repeat(MAX_MAC_REPORT) });
+  expect((await answer(bucket, "helper/footage/mac", "POST", big)).status).toBe(413);
+  const declared = new Request(`${url}helper/footage/mac`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Content-Length": String(MAX_MAC_REPORT + 1) },
+    body: JSON.stringify(report),
+  });
+  expect((await footageResponse("helper/footage/mac", declared, { media: bucket }))?.status).toBe(413);
+  expect(((await (await answer(bucket, "footage/mac")).json()) as { report: unknown }).report).toEqual(report);
+  // Only the laptop sends it, and only the tab reads it.
+  expect(await footageResponse("helper/footage/mac", call("helper/footage/mac"), { media: bucket })).toBeNull();
+  expect(await footageResponse("footage/mac", call("footage/mac", "POST", report), { media: bucket })).toBeNull();
+});
+
+test("pausing everything is the tab's to set, and every answer the laptops and the tab get says so", async () => {
+  const { bucket } = memoryMedia();
+  const now = Date.parse("2026-11-23T10:42:00Z");
+  const body = async (path: string, method = "GET", sent?: unknown, at = now) =>
+    (await (await answer(bucket, path, method, sent, at)).json()) as Record<string, unknown>;
+  expect(await body("footage/pause")).toEqual({ paused: null });
+  expect(await body("footage/pause", "POST", {})).toEqual({ paused: { since: now } });
+  // Paused again later, it's paused since the first time.
+  expect(await body("footage/pause", "POST", {}, now + 60_000)).toEqual({ paused: { since: now } });
+  const paused = { since: now };
+  // The helper asking and sending its status, the grade app sending its report, and the tab reading and saying it's open.
+  expect(await body("helper/footage")).toEqual({ watching: false, paused });
+  expect(await body("helper/footage", "POST", { state: "held" })).toEqual({ watching: false, paused });
+  expect(await body("helper/footage/mac", "POST", macReport())).toEqual({ ok: true, paused });
+  expect((await body("footage")).paused).toEqual(paused);
+  expect((await body("footage/watch", "POST", {})).paused).toEqual(paused);
+  expect(await body("footage/pause", "DELETE")).toEqual({ paused: null });
+  expect(await body("helper/footage")).toEqual({ watching: true, paused: null });
+  expect((await body("footage")).paused).toBeNull();
+  // The laptops can't set it: there's no such route on the pairing.
+  const asLaptop = (method: string) =>
+    footageResponse("helper/footage/pause", call("helper/footage/pause", method, {}), { media: bucket });
+  expect(await asLaptop("POST")).toBeNull();
+  expect(await asLaptop("DELETE")).toBeNull();
 });

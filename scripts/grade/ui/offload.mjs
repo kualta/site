@@ -22,6 +22,7 @@ function waitingText(waiting) {
   if (waiting.for === "network") return `can't reach Cloudflare${again(waiting)}`;
   if (waiting.for === "cloudflare") return "keeping clips on the camera until Cloudflare has them";
   if (waiting.for === "page") return "paused while no Grade page was open";
+  if (waiting.for === "owner") return "paused from the Footage tab";
   return `${waiting.why}${again(waiting)}`;
 }
 /** What a stopping lane is doing about what's in flight. */
@@ -56,6 +57,41 @@ export function offloadShare(o) {
   return bytes > 0 ? Math.min(1, sent / bytes) : null;
 }
 
+/** Why the offload isn't moving, in a word or two. */
+function heldText({ mode, waiting }) {
+  if (mode !== "on") return "stopping";
+  if (waiting.for === "page" || waiting.for === "owner") return "paused";
+  if (waiting.for === "camera") return "waiting for the camera";
+  if (waiting.for === "network") return "can't reach Cloudflare";
+  if (waiting.for === "room") return "waiting for room";
+  if (waiting.for === "cloudflare") return "waiting for Cloudflare";
+  return "waiting";
+}
+
+/**
+ * The offload in the status line, short: how many clips are through of how many, and how long is left or what holds it
+ * (the Footage tab has the rest). Mac → Cloudflare's clips while it's on, else the card's. After a run, what went wrong.
+ */
+export function offloadLine(o) {
+  if (!o) return "";
+  if (!o.running) {
+    const passed = passedOver(o);
+    if (o.error) return `Offload stopped: ${o.error}`;
+    if (passed.length) return `Offload: ${clips(passed.length)} passed over, ${passed[0].name}: ${passed[0].why}`;
+    return o.transcripts?.error ? `Transcripts not sent: ${o.transcripts.error}` : "";
+  }
+  const lane = o.send?.on ? o.send : o.copy;
+  let after = "";
+  if (lane.mode !== "on" || lane.waiting) after = ` · ${heldText(lane)}`;
+  else if (lane === o.send && o.speed) {
+    const { bytes, sent } = sending(o);
+    after = ` · ${timeLeft((bytes - sent) / o.speed)}`;
+  }
+  // Kept awake while it works (#357): said, so a Mac that won't sleep isn't a mystery.
+  const awake = o.keepingAwake ? " · keeping this Mac awake" : "";
+  return `Offloading ${lane.done} / ${lane.total}${after}${awake}`;
+}
+
 /**
  * Sets up the menu's part and the bar's Stop. `api` asks the server, `fileSize` writes bytes, `showError` says what went
  * wrong and `poll` reads the jobs again.
@@ -76,30 +112,6 @@ export function offloadMenu({ api, fileSize, showError, poll }) {
     if (mode !== "on") parts.unshift(stoppingText(lane, o[lane]));
     else if (waiting) parts.unshift(waitingText(waiting));
     return parts;
-  }
-
-  /** The status line while an offload goes, or after one that ran into something. */
-  function text(o) {
-    if (!o) return "";
-    const passed = passedOver(o);
-    const over = passed.length ? `${clips(passed.length)} passed over, ${passed[0].name}: ${passed[0].why}` : "";
-    if (!o.running) {
-      if (o.error) return `Offload stopped: ${o.error}`;
-      if (over) return `Offload: ${over}`;
-      return o.transcripts?.error ? `Transcripts not sent: ${o.transcripts.error}` : "";
-    }
-    const parts = [];
-    for (const lane of LANES) if (o[lane]?.on) parts.push(`${NAMES[lane]} ${progress(lane, o).join(" · ")}`);
-    if (!o.copy.on && o.copy.onCamera) parts.push(stayText(o.copy.onCamera));
-    else if (!o.copy.on && o.copy.total) parts.push("camera done: unplug it whenever");
-    if (o.speed && !o.paused) {
-      const mbit = (o.speed * 8) / 1e6;
-      const { bytes, sent } = sending(o);
-      parts.push(`${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`, timeLeft((bytes - sent) / o.speed));
-    }
-    if (o.keepingAwake) parts.push("keeping this Mac awake");
-    if (over) parts.push(over);
-    return parts.join(" · ");
   }
 
   /** What an idle lane has to do, or how it left things. */
@@ -240,5 +252,5 @@ export function offloadMenu({ api, fileSize, showError, poll }) {
     });
   });
 
-  return { text, load, render, renderStop };
+  return { load, render, renderStop };
 }

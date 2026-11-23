@@ -254,7 +254,8 @@ export async function clearParts(dirs) {
  * Brings clips back into `dir`, one at a time, in the order they're added. `room()` says how many bytes are free there,
  * of which `keepFree` stay so; `claims()` says what else is being written there and how much of it is still to come,
  * `[{ by, bytes }]`: a clip comes only while there's room for both, looked at again every `every` ms.
- * `landed(clip)` hears each one, and `placing(clip)` each before it takes its name (bringClip).
+ * `landed(clip)` hears each one, and `placing(clip)` each before it takes its name (bringClip). `pausedAll()` says why
+ * the next clip waits, if it does (paused from the Footage tab), which `state().paused` says too.
  *
  * Says `{ add, stop, state, settled }`: `add(request, clips)` refuses, by throwing, what there's no room for, `stop()` ends
  * the run and keeps what's landed, `state()` says how far it is, `settled()` when it has ended.
@@ -266,8 +267,11 @@ export function bringer({
   claims = async () => [],
   placing = async () => {},
   landed = () => {},
+  pausedAll = () => null,
   every = 5000,
 }) {
+  /** Why the next clip waits, while it does: everything paused from the Footage tab (pause.mjs). */
+  let holding = null;
   const blank = () => ({
     total: 0,
     bytes: 0,
@@ -367,8 +371,21 @@ export function bringer({
     }
   }
 
+  /** Paused from the Footage tab, the clip coming is finished and the next waits, till it goes on or the run stops. */
+  async function whileHeld() {
+    for (;;) {
+      holding = stopped ? null : pausedAll();
+      if (!holding) return;
+      await new Promise((resolve) => setTimeout(resolve, every / 5));
+    }
+  }
+
   async function runAll() {
-    while (queue.length) await bringNext(queue.shift());
+    while (queue.length) {
+      await whileHeld();
+      if (!queue.length) break;
+      await bringNext(queue.shift());
+    }
     if (!run.error) run.finished = stopped ? "stopped" : "done";
     running = null;
   }
@@ -422,6 +439,7 @@ export function bringer({
         queued: queue.map(({ clip }) => about(clip)),
         gotBytes: run.doneBytes + (current?.got ?? 0),
         speed: speed(),
+        paused: holding,
       };
     },
   };
