@@ -70,7 +70,7 @@ const blankGraded = () => ({ look: null, at: null, size: null, mac: false, cloud
  *   grades    the names of clips with a saved grade
  *   youtube   footage.json's uploads, by graded file name → versions; null when it can't be read
  *   archive   [{ name, size, sha256, project }]: the video files the archive's projects hold; null when not asked
- *   landed    [{ name, size }]: the originals and graded copies offloaded to the archive since it was last asked
+ *   landed    [{ name, size }]: the originals offloaded to the archive since it was last asked
  *   projects  [{ name, files }]: the OpenFilm projects on this Mac, each with the video files in its assets
  *   transcripts  the names of clips whose transcripts are in the archive, beside their originals
  *
@@ -179,9 +179,7 @@ export function mergeLedger(previous, seen) {
 
   for (const { name, size } of seen.landed ?? []) {
     const entry = lookup(keyOf(name));
-    if (!entry) continue;
-    if (size === entry.size) entry.original.cloudflare = true;
-    else if (entry.graded && size === entry.graded.size) entry.graded.cloudflare = "current";
+    if (entry && size === entry.size) entry.original.cloudflare = true;
   }
 
   for (const name of seen.transcripts ?? []) {
@@ -206,7 +204,7 @@ export function mergeLedger(previous, seen) {
   }
   if (seen.archive)
     for (const file of seen.archive) {
-      // A day's offloaded originals and graded copies (`_originals-<day>`, `_graded-<day>`) aren't a film.
+      // A day's offloaded originals (`_originals-<day>`) aren't a film.
       if (file.project.startsWith("_")) continue;
       film(file.project).archived = true;
       holds(file.project, file.name);

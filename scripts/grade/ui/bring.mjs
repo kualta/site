@@ -1,8 +1,7 @@
 // Bring to Mac: the picker's Cloudflare days, the ones with clips the archive has and this Mac doesn't. An open day lists
-// those clips with a Bring button for each original and graded copy, and one for all of each; a clip brought back is in
-// its day under "On this Mac" again (an original) or among the exports (a graded copy).
+// those clips, originals all, with a Bring button for each and one for all of them; a clip brought back is in its day
+// under "On this Mac" again.
 const $ = (id) => document.getElementById(id);
-const KINDS = { original: "Original", graded: "Graded" };
 const PREFIX = "cloud:";
 /** How often the list is looked at again: this Mac's files change under it. The server keeps what the archive said. */
 const EVERY = 60_000;
@@ -11,7 +10,7 @@ export const isCloud = (id) => Boolean(id?.startsWith(PREFIX));
 
 const plural = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 const stemOf = (name) => name.replace(/\.[^.]+$/, "");
-const keyOf = ({ what, day, name }) => `${what}/${day}/${name}`;
+const keyOf = ({ day, name }) => `${day}/${name}`;
 
 function timeLeft(seconds) {
   if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} min left`;
@@ -42,8 +41,8 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
 
   /** The picker's group, if there's anything to list: the open day stays listed once all of it is here. */
   function groups() {
-    const days = (list?.days ?? []).filter((d) => d.away || d.day === open);
-    const options = days.map((d) => new Option(`${d.day} · ${plural(d.away, "clip")}`, d.id));
+    const days = (list?.days ?? []).filter((d) => d.missing.clips || d.day === open);
+    const options = days.map((d) => new Option(`${d.day} · ${plural(d.missing.clips, "clip")}`, d.id));
     if (open && !days.some((d) => d.day === open)) options.push(new Option(open, PREFIX + open));
     if (!options.length && list?.error) {
       options.push(new Option("Can't be read", ""));
@@ -102,7 +101,7 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
 
   // ---- the open day ----------------------------------------------------------------------------------------------
 
-  function makeRow({ stem, transcript, thumb, ...copies }) {
+  function makeRow({ stem, name, size, transcript, thumb }) {
     const { title, time } = label({ stem });
     const li = document.createElement("li");
     li.className = "cloud-clip";
@@ -116,54 +115,44 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     }
     li.querySelector("b").textContent = title;
     li.querySelector(".when").textContent = [time, transcript && "transcript"].filter(Boolean).join(" · ");
-    for (const [what, kind] of Object.entries(KINDS)) {
-      if (!copies[what]) continue;
-      const line = document.createElement("span");
-      line.className = "cloud-file";
-      line.dataset.what = what;
-      line.innerHTML = '<span></span><span class="size"></span><button type="button" class="btn small"></button>';
-      line.firstChild.textContent = kind;
-      line.title = copies[what].name;
-      line.querySelector(".size").textContent = fileSize(copies[what].size);
-      li.querySelector(".info").append(line);
-    }
+    const line = document.createElement("span");
+    line.className = "cloud-file";
+    line.innerHTML = '<span>Original</span><span class="size"></span><button type="button" class="btn small"></button>';
+    line.title = name;
+    line.querySelector(".size").textContent = fileSize(size);
+    li.querySelector(".info").append(line);
     return li;
   }
 
-  /** How much of a copy has come, a share of 1; null when it isn't the one coming. */
+  /** How much of a clip has come, a share of 1; null when it isn't the one coming. */
   function shareOf(key) {
     const { current } = run ?? {};
     return current && keyOf(current) === key ? current.got / current.size : null;
   }
 
-  /** What a copy's button says and does: `[text, action, title]`, with no action when there's nothing to do. */
-  function buttonOf(what, copy, key, busy) {
+  /** What a clip's button says and does: `[text, action, title]`, with no action when there's nothing to do. */
+  function buttonOf(clip, key, busy) {
     const share = shareOf(key);
     if (share !== null) return [`${Math.floor(share * 100)}%`, null, "On its way to this Mac"];
     if (busy.has(key)) return ["Queued", null, "Waiting for the clips before it"];
-    if (copy.here === "yes" && what === "original") return ["Grade", "grade", "On this Mac: open it in its day"];
-    if (copy.here === "yes") return ["Here", null, "On this Mac, in Exported"];
-    if (copy.here === "different") return ["Differs", null, "Another file of this name is on this Mac"];
+    if (clip.here === "yes") return ["Grade", "grade", "On this Mac: open it in its day"];
+    if (clip.here === "different") return ["Differs", null, "Another file of this name is on this Mac"];
     const failed = run?.failed.find((one) => keyOf(one) === key);
-    return failed ? ["Retry", "bring", failed.why] : ["Bring", "bring", `Bring ${copy.name} to this Mac`];
+    return failed ? ["Retry", "bring", failed.why] : ["Bring", "bring", `Bring ${clip.name} to this Mac`];
   }
 
   function renderRow(clip, li, busy) {
     li.setAttribute("aria-current", String(clip.stem === selected));
     const { title } = label(clip);
-    let coming = null;
-    for (const line of li.querySelectorAll(".cloud-file")) {
-      const { what } = line.dataset;
-      const key = keyOf({ what, day: open, name: clip[what].name });
-      const [text, action, about] = buttonOf(what, clip[what], key, busy);
-      const button = line.querySelector("button");
-      button.textContent = text;
-      button.title = about;
-      button.disabled = !action;
-      button.dataset.action = action ?? "";
-      button.setAttribute("aria-label", `${text} · ${KINDS[what]} of ${title}`);
-      coming ??= shareOf(key);
-    }
+    const key = keyOf({ day: open, name: clip.name });
+    const [text, action, about] = buttonOf(clip, key, busy);
+    const button = li.querySelector(".cloud-file button");
+    button.textContent = text;
+    button.title = about;
+    button.disabled = !action;
+    button.dataset.action = action ?? "";
+    button.setAttribute("aria-label", `${text} · Original of ${title}`);
+    const coming = shareOf(key);
     const bar = li.querySelector(".progress");
     bar.hidden = coming === null;
     bar.firstElementChild.style.width = `${(coming ?? 0) * 100}%`;
@@ -171,17 +160,14 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
 
   function renderHead(busy) {
     const of = list?.days.find((d) => d.day === open);
-    $("cloud-count").textContent = of ? `${of.away} not here` : "";
-    for (const what of Object.keys(KINDS)) {
-      const part = of?.[what];
-      const missing = part?.missing.clips ?? 0;
-      let text = "None";
-      if (missing) text = `${missing} · ${fileSize(part.missing.bytes)}`;
-      else if (part?.clips) text = "All here";
-      $(`cloud-${what}`).textContent = text;
-      const waiting = [...busy].filter((key) => key.startsWith(`${what}/${open}/`)).length;
-      $(`bring-${what}`).disabled = waiting >= missing;
-    }
+    const missing = of?.missing.clips ?? 0;
+    $("cloud-count").textContent = of ? `${missing} not here` : "";
+    let text = "None";
+    if (missing) text = `${missing} · ${fileSize(of.missing.bytes)}`;
+    else if (of?.clips) text = "All here";
+    $("cloud-original").textContent = text;
+    const waiting = [...busy].filter((key) => key.startsWith(`${open}/`)).length;
+    $("bring-original").disabled = waiting >= missing;
     const spare = list ? Math.max(0, list.room.free - list.room.keepFree) : 0;
     $("cloud-room").textContent = list ? fileSize(spare) : "";
     const note = refused || run?.error || list?.error || "";
@@ -193,10 +179,8 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     $("stop-bring").hidden = !run?.running;
     if (!open) return;
     const busy = new Set([...(run?.queued ?? []), run?.current].filter(Boolean).map(keyOf));
-    for (const [stem, clip] of clips) {
-      const missing = Object.keys(KINDS).some((what) => clip[what]?.here === "no");
-      if (!rows.has(stem) && (missing || stem === selected)) rows.set(stem, makeRow(clip));
-    }
+    for (const [stem, clip] of clips)
+      if (!rows.has(stem) && (clip.here === "no" || stem === selected)) rows.set(stem, makeRow(clip));
     const order = [...rows].sort(([a], [b]) => a.localeCompare(b)).map(([, li]) => li);
     if (order.some((li, i) => $("cloud-list").children[i] !== li)) $("cloud-list").replaceChildren(...order);
     for (const [stem, li] of rows) if (clips.has(stem)) renderRow(clips.get(stem), li, busy);
@@ -220,11 +204,10 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     const button = event.target.closest("button");
     const clip = clips.get(button?.closest(".cloud-clip").dataset.stem);
     if (!clip) return;
-    const { what } = button.closest(".cloud-file").dataset;
-    if (button.dataset.action === "grade") openClip(clip[what].name);
-    else if (button.dataset.action === "bring") bring({ what, names: [clip[what].name] });
+    if (button.dataset.action === "grade") openClip(clip.name);
+    else if (button.dataset.action === "bring") bring({ names: [clip.name] });
   });
-  for (const what of Object.keys(KINDS)) $(`bring-${what}`).addEventListener("click", () => bring({ what }));
+  $("bring-original").addEventListener("click", () => bring({}));
   $("cloud-refresh").addEventListener("click", () => load({ refresh: true }));
   $("stop-bring").addEventListener("click", async () => {
     await api("/api/bring/stop", { method: "POST" }).catch((error) => say(error.message));

@@ -142,17 +142,9 @@ test("an offloaded original counts as the original in Cloudflare, and its day is
   expect(ledger.projects).toEqual({});
 });
 
-test("an offloaded export counts as the graded copy in Cloudflare, and its day isn't a film", async () => {
-  const record = { profile: "dlog2", base: { name: "Umbra" }, exportedAt: "2026-11-12T17:03:56.093Z" };
-  const exports = { [`${A}.MP4`]: record };
-  const exported = [{ name: `${A}.mp4`, size: 300, mtime: Date.parse("2026-11-12T17:03:56Z") }];
+test("the settings kept in the archive are no footage", async () => {
   const card = { name: "Pocket 4P", mounted: true, clips: [{ name: `${A}.MP4`, size: 1000 }] };
-  let ledger = mergeLedger(null, seen("2026-11-21T10:00:00Z", { camera: card, exports, exported }));
-  expect(ledger.clips[A].graded).toMatchObject({ mac: true, cloudflare: false });
-
-  // The archive as it lists what's been offloaded, the settings not among it.
   const manifests = {
-    "_graded-2026-11-11": [{ path: `assets/${A}.mp4`, size: 300, sha256: "cd" }],
     "_originals-2026-11-11": [{ path: `assets/${A}.MP4`, size: 1000, sha256: "ab" }],
     _settings: [{ path: "assets/grades.mp4", size: 5, sha256: "ef" }],
   };
@@ -163,37 +155,28 @@ test("an offloaded export counts as the graded copy in Cloudflare, and its day i
       return { projects: Object.keys(manifests).map((name) => ({ name, archivedAt: "2026-11-21T09:00:00.000Z" })) };
     return { files: manifests[path.split("/")[1].split("?")[0]] };
   });
-  expect(asked).not.toContain("projects/_settings");
-  ledger = mergeLedger(ledger, seen("2026-11-21T10:01:00Z", { camera: card, exports, archive }));
-  expect(ledger.clips[A].graded).toMatchObject({ size: 300, mac: false, cloudflare: "current" });
-  expect(ledger.clips[A].original).toMatchObject({ camera: true, cloudflare: true });
+  expect(asked).toEqual(["projects", "projects/_originals-2026-11-11"]);
+  const ledger = mergeLedger(null, seen("2026-11-21T10:01:00Z", { camera: card, archive }));
+  expect(ledger.clips[A].original).toEqual({ camera: true, mac: false, cloudflare: true });
   expect(Object.keys(ledger.clips)).toEqual([A]);
   expect(ledger.projects).toEqual({});
 });
 
 test("what's offloaded shows as in Cloudflare before the archive is asked again", () => {
   const card = { name: "Pocket 4P", mounted: true, clips: [{ name: `${A}.MP4`, size: 1000 }] };
-  const exports = {
-    [`${A}.MP4`]: { profile: "dlog2", base: { name: "Umbra" }, exportedAt: "2026-11-12T17:03:56.093Z" },
-  };
-  const exported = [{ name: `${A}.mp4`, size: 300, mtime: Date.parse("2026-11-12T17:03:56Z") }];
-  const before = mergeLedger(null, seen("2026-11-21T10:00:00Z", { camera: card, exports, exported, archive: [] }));
+  const before = mergeLedger(null, seen("2026-11-21T10:00:00Z", { camera: card, archive: [] }));
   const landed = [
     { name: `${A}.MP4`, size: 1000 },
-    { name: `${A}.mp4`, size: 300 },
-    // One the ledger never saw, and an earlier export.
+    // One the ledger never saw.
     { name: `${B}.MP4`, size: 7 },
   ];
   const gone = { name: "Pocket 4P", mounted: true, clips: [] };
-  const after = mergeLedger(before, seen("2026-11-21T10:00:30Z", { camera: gone, exports, landed }));
+  const after = mergeLedger(before, seen("2026-11-21T10:00:30Z", { camera: gone, landed }));
   expect(after.clips[A].original).toEqual({ camera: false, mac: false, cloudflare: true });
-  expect(after.clips[A].graded).toMatchObject({ mac: false, cloudflare: "current" });
   expect(Object.keys(after.clips)).toEqual([A]);
-  const earlier = mergeLedger(
-    before,
-    seen("2026-11-21T10:00:30Z", { exports, landed: [{ name: `${A}.mp4`, size: 299 }] }),
-  );
-  expect(earlier.clips[A].graded.cloudflare).toBe(false);
+  // A file of another size isn't the original.
+  const other = mergeLedger(before, seen("2026-11-21T10:00:30Z", { landed: [{ name: `${A}.MP4`, size: 999 }] }));
+  expect(other.clips[A].original.cloudflare).toBe(false);
 });
 
 test("a transcript in a day's originals is no footage: it only marks its clip", async () => {
