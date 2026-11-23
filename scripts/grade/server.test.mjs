@@ -969,17 +969,25 @@ test.if(usable)("leaves a clip being copied into Preexp alone until it's been st
   clip(join(preexp, copying), "D-Log2");
   // Old by its own time, as a card's clip is: what changes it is what's looked at.
   utimesSync(join(preexp, copying), new Date("2026-01-01"), new Date("2026-01-01"));
-  const summary = await json("/api/offload");
-  expect(summary.mac.clips).toBeGreaterThanOrEqual(1);
+  // It counts as still being written until 300 ms after it was last changed. The writer puts the old time back after each
+  // write, as a copy that keeps the file's dates does, so only the change time says it's being written. It's a process
+  // of its own, every 50 ms: a timer here would wait on this test's awaits, and a slow runner could leave 300 ms between.
+  const grow = spawn("sh", ["-c", 'while :; do printf x >> "$CLIP"; touch -m -t 202601010000 "$CLIP"; sleep 0.05; done'], {
+    env: { ...process.env, CLIP: join(preexp, copying) },
+    stdio: "ignore",
+  });
   const started = Date.now();
-  // It counts as still being written until 300 ms after it was last changed.
-  const grow = setInterval(() => writeFileSync(join(preexp, copying), `${"x".repeat(50)}${Date.now()}`), 100);
   try {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const summary = await json("/api/offload");
+    expect(summary.mac.clips).toBeGreaterThanOrEqual(1);
     expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
     await new Promise((resolve) => setTimeout(resolve, 1500));
     expect(readdirSync(preexp)).toContain(copying);
+    // Nor did any of it go up: a half-copied clip in Cloudflare would pass for the clip.
+    expect(site.manifests.has("_originals-2026-02-21")).toBe(false);
   } finally {
-    clearInterval(grow);
+    grow.kill();
   }
   expect(Date.now() - started).toBeGreaterThan(1000);
   await post("/api/offload/stop", { now: true });
