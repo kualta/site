@@ -371,7 +371,9 @@ again as a new video. Each goes in 16 MiB parts through YouTube's resumable uplo
 YouTube says it stopped when a part fails, the helper restarts or the tab closes, titled by the
 camera's clock (`2026-11-15 22:46:28 · clip 0313`) and described by its source and grade. A failure
 stops the run and waits half an hour, then twice as long each time up to a day, which also waits out
-YouTube's daily limit. What went up is in `.publisher/footage.json`; `bun run publisher footage`
+YouTube's daily limit. The tab says so in plain words: "Upload of 2026-11-21 10:15:00 · clip 0402 cut off at 12:12: the
+connection dropped; trying again at 12:42" for a connection cut mid-upload (undici's "terminated", a reset, a timeout,
+"fetch failed", "socket hang up"), and any other failure as it was given. What went up is in `.publisher/footage.json`; `bun run publisher footage`
 sums it up, and `footage --now` runs a batch at once from the terminal, whether the tab is open or
 not.
 

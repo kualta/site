@@ -1932,8 +1932,11 @@ try {
     await page.getByRole("status").filter({ hasText: "The grade app runs on the Mac" }).waitFor({ timeout: 15_000 });
     if (shots) await page.screenshot({ path: path.join(shots, `grade-away-${name}.png`) });
 
+    // A failure waited out says which clip, when, why in plain words (the connection cut, as such), and the next try.
+    const clip0402 = "2026-11-21 10:15:00 · clip 0402";
     for (const [state, line] of [
-      ["paused", /^Paused until .+: YouTube refused part of the upload \(503\)$/],
+      ["paused", new RegExp(`^Upload of ${clip0402} failed at .+: YouTube refused part of the upload \\(503\\); trying again at .+$`)],
+      ["dropped", new RegExp(`^Upload of ${clip0402} cut off at .+: the connection dropped; trying again at .+$`)],
       ["limit", "Daily limit reached. More tomorrow."],
       ["done", "All clips are up."],
       ["stale", "Waiting for the laptop…"],

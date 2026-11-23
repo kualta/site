@@ -434,6 +434,7 @@ function footage() {
     ["DJI_20261108122204_0086_D.mp4", "2026-11-08 12:22:04 · clip 0086", 2_780_000_000, "archive", "due", null],
   ].map(([name, title, size, from, state, video]) => ({ name, title, size, from, state, video, uploadedAt: null }));
   const uploading = !archiveState || archiveState === "stale";
+  const failed = archiveState === "paused" || archiveState === "dropped";
   const sent = uploading ? upload.sent : 0;
   return {
     watching: true,
@@ -445,12 +446,16 @@ function footage() {
       daily: 10,
       today: archiveState === "limit" ? 10 : 3,
       // Paused from the tab, the clip in flight is held after its part.
-      state: pause.since !== null ? "held" : uploading ? "uploading" : archiveState,
-      pausedUntil: archiveState === "paused" ? Date.now() + 30 * 60_000 : null,
-      lastError:
-        archiveState === "paused"
-          ? { clip: clips[0].name, message: "YouTube refused part of the upload (503)", at: new Date().toISOString() }
-          : null,
+      state: pause.since !== null ? "held" : uploading ? "uploading" : failed ? "paused" : archiveState,
+      pausedUntil: failed ? Date.now() + 30 * 60_000 : null,
+      lastError: failed
+        ? {
+            clip: clips[0].name,
+            // ?archive=dropped: the connection was cut mid-upload, as undici says it.
+            message: archiveState === "dropped" ? "terminated" : "YouTube refused part of the upload (503)",
+            at: new Date().toISOString(),
+          }
+        : null,
       current: uploading ? { name: clips[0].name, title: clips[0].title, size: clips[0].size, sent, from: "exported" } : null,
       speed: 2_500_000,
       totals: {

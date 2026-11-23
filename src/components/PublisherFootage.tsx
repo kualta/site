@@ -66,6 +66,27 @@ const size = (bytes: number) =>
   bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${Math.max(0, Math.round(bytes / 1e6))} MB`;
 const clipsOf = (count: number, bytes: number) => `${count} ${count === 1 ? "clip" : "clips"} · ${size(bytes)}`;
 
+/** What the network says when a connection is cut: undici's "terminated", a reset, a timeout, a socket hung up. */
+const DROPPED = /\b(terminated|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up)\b/i;
+
+/**
+ * Why the uploads wait after one failed, and until when, in plain words: the clip (by its title when the status lists
+ * it), when it failed and why, the connection dropping said as such, and when the next try is.
+ */
+export function failedText({
+  lastError,
+  pausedUntil,
+  clips,
+}: Pick<FootageStatus, "lastError" | "pausedUntil" | "clips">) {
+  const again = `trying again at ${when(pausedUntil ?? Date.now())}`;
+  if (!lastError) return `Paused: ${again}`;
+  const clip = clips.find((one) => one.name === lastError.clip)?.title ?? lastError.clip;
+  const at = Date.parse(lastError.at);
+  const time = Number.isFinite(at) ? ` at ${when(at)}` : "";
+  if (DROPPED.test(lastError.message)) return `Upload of ${clip} cut off${time}: the connection dropped; ${again}`;
+  return `Upload of ${clip} failed${time}: ${lastError.message.replace(/\.$/, "")}; ${again}`;
+}
+
 /** What's holding the uploads, or what they're doing, in a line; null while a clip goes up and the bar says it. */
 function noticeFor(
   { connected, online, reply, failed }: { connected: boolean; online: boolean; reply: Reply | null; failed: boolean },
@@ -78,10 +99,8 @@ function noticeFor(
   const status = reply.status;
   if (!status || !fresh) return { text: "Waiting for the laptop…" };
   switch (status.state) {
-    case "paused": {
-      const until = `Paused until ${when(status.pausedUntil ?? Date.now())}`;
-      return { text: status.lastError ? `${until}: ${status.lastError.message}` : until, tone: "bad" };
-    }
+    case "paused":
+      return { text: failedText(status), tone: "bad" };
     case "limit":
       return { text: "Daily limit reached. More tomorrow." };
     case "busy":
