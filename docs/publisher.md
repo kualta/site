@@ -365,7 +365,7 @@ it lapses on its own once the offload pauses or ends.
 It puts up 10 clips a day by default (`bun run publisher footage --daily <clips>` changes it):
 first the grade app's exports in `~/Movies/Exported` (only files `exports.json` records, unchanged
 for two minutes), then graded clips the laptop has let go of, fetched from the archive's projects
-(the films and the grade app's offloaded exports, `_graded-<day>`, but not the originals, listed once
+(the films, but not the grade app's offloaded originals, listed once
 each time the tab opens) and checked against their hash. A clip graded again goes up
 again as a new video. Each goes in 16 MiB parts through YouTube's resumable upload, from where
 YouTube says it stopped when a part fails, the helper restarts or the tab closes, titled by the

@@ -64,8 +64,6 @@ const BACKUP_EVERY = Number(process.env.GRADE_BACKUP_EVERY || 10 * 60_000);
 const FRAMED_BY = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
 /** What each clip offloaded to the archive was, by file name: its SHA-256, size and shoot day. */
 const OFFLOADED = join(DATA, "offloaded.json");
-/** The same of each graded copy sent there from Movies/Exported. */
-const GRADED = join(DATA, "graded.json");
 /** What's kept out of offload (keep.mjs), and what's been chosen for it: when the card's copies go. */
 const KEEP = join(DATA, "keep.json");
 const OFFLOAD = join(DATA, "offload.json");
@@ -237,15 +235,10 @@ const proxyFile = (name) => join(CACHE, "proxies", `${stemOf(name)}.mp4`);
 const thumbFile = (name) => join(CACHE, "thumbs", `${stemOf(name)}.jpg`);
 const exportedFile = (name) => join(EXPORTED, `${stemOf(name)}.mp4`);
 
-/**
- * Clip names (without extension) that have an export: in Movies/Exported, made here or put there by hand, or made here and
- * since offloaded to the archive.
- */
+/** Clip names (without extension) that have an export in Movies/Exported, made here or put there by hand. */
 async function exportedStems() {
   const files = await readdir(EXPORTED).catch(() => []);
-  const made = new Set(Object.keys(await readClips(EXPORTS)).map(stemOf));
-  const offloaded = Object.keys(await readClips(GRADED)).filter((f) => made.has(stemOf(f)));
-  return new Set([...files.filter((f) => f.endsWith(".mp4") && !f.startsWith(".")), ...offloaded].map(stemOf));
+  return new Set(files.filter((f) => f.endsWith(".mp4") && !f.startsWith(".")).map(stemOf));
 }
 
 /** Everything the picker lists: the camera's days, then the days in Movies/Original, each with how many are graded. */
@@ -730,8 +723,7 @@ async function observe(cloud) {
  * again.
  */
 async function offloadedSince(ms) {
-  const records = await Promise.all([OFFLOADED, GRADED].map(readClips));
-  const all = records.flatMap((clips) => Object.entries(clips));
+  const all = Object.entries(await readClips(OFFLOADED));
   return all.filter(([, { at }]) => Date.parse(at) > ms).map(([name, { size }]) => ({ name, size }));
 }
 
@@ -807,7 +799,7 @@ function scheduleLedger(ms = LEDGER_EVERY) {
   }, ms);
 }
 
-// ---- offloading: the camera to this Mac, this Mac and its exports to the archive (offload.mjs) -----------------------
+// ---- offloading: the camera to this Mac, this Mac to the archive (offload.mjs) ---------------------------------------
 
 /** The run going, or the last one: offload.mjs's `{ state, start, stop, poke, done }`. */
 let offloading = null;
@@ -879,39 +871,21 @@ async function cardClips({ fresh = false } = {}) {
 }
 
 const sameClip = (a, b) => stemOf(a).toLowerCase() === stemOf(b).toLowerCase();
-/** A clip an export is making, or is queued to make: it stays where it is, and so does the export being made. */
+/** A clip an export is making, or is queued to make: it stays where it is. */
 const exporting = ({ name }) =>
   [jobs.export.current, ...jobs.export.queue].some((job) => job && sameClip(job.name, name));
-
-/** The graded copies made here, each with its clip's shoot day: as its name says, or the ledger, or else the file's date. */
-async function gradedCopies() {
-  const made = new Set(Object.keys(await readClips(EXPORTS)).map((name) => stemOf(name).toLowerCase()));
-  const files = (await readdir(EXPORTED).catch(() => [])).filter((f) => f.endsWith(".mp4") && !f.startsWith("."));
-  const clips = [];
-  for (const name of files.sort()) {
-    if (!made.has(stemOf(name).toLowerCase()) || exporting({ name })) continue;
-    const path = join(EXPORTED, name);
-    const s = await stat(path).catch(() => null);
-    if (!s?.isFile()) continue;
-    const recorded = ledger.current?.clips[stemOf(name)]?.recorded;
-    clips.push({ name, path, ...fileFacts(s), day: djiDay(name) ?? recorded?.slice(0, 10) ?? localDay(s.mtime) });
-  }
-  return clips;
-}
 
 function offloadState() {
   if (!offloading) return null;
   const { samples, ...state } = offloading.state;
   const [first, last] = [samples[0], samples.at(-1)];
   const speed = first && last && last[0] > first[0] ? ((last[1] - first[1]) / (last[0] - first[0])) * 1000 : null;
-  const sentOf = (lane) => lane.doneBytes + lane.current.reduce((sum, clip) => sum + clip.sent, 0);
   return {
     ...state,
     ...runOptions,
     clearCardAfter,
     copy: { ...state.copy, ended: !state.copy.on },
-    exports: { ...state.exports, sentBytes: sentOf(state.exports) },
-    sentBytes: sentOf(state.send),
+    sentBytes: state.send.doneBytes + state.send.current.reduce((sum, clip) => sum + clip.sent, 0),
     speed,
   };
 }
@@ -944,15 +918,15 @@ function shootDays(clips, kept) {
 }
 
 /**
- * What an offload would take: the card's clips, the Mac's and the exports not in the archive yet, the transcripts made
- * since; what's kept out of it; the room on the Mac; and the run.
+ * What an offload would take: the card's clips, the Mac's not in the archive yet, the transcripts made since; what's kept
+ * out of it; the room on the Mac; and the run.
  */
 async function offloadSummary() {
-  const [record, sentGraded, kept, keeps] = await Promise.all([readClips(OFFLOADED), readClips(GRADED), keep.read(), keep.keeping()]);
+  const [record, kept, keeps] = await Promise.all([readClips(OFFLOADED), keep.read(), keep.keeping()]);
   const mounted = Boolean(await card());
-  const [onCard, onMac, made] = await Promise.all([cardClips(), macClips(), gradedCopies()]);
+  const [onCard, onMac] = await Promise.all([cardClips(), macClips()]);
   const here = [...(onCard ?? []), ...onMac];
-  const counted = new Set([...here, ...made].filter(keeps).map((clip) => stemOf(clip.name).toLowerCase()));
+  const counted = new Set(here.filter(keeps).map((clip) => stemOf(clip.name).toLowerCase()));
   const camera = (onCard ?? []).filter((clip) => !keeps(clip));
   /** The clips of a place to send, and how many are only there still to be deleted. */
   const toSend = (clips, sent) => {
@@ -962,7 +936,6 @@ async function offloadSummary() {
   return {
     camera: { mounted, clips: camera.length, bytes: sizeOfAll(camera) },
     mac: toSend(onMac.filter((clip) => !keeps(clip)), record),
-    exports: toSend(made.filter((clip) => !keeps(clip)), sentGraded),
     transcripts: { ...transcripts.summary(), toSend: (await transcriptsToSend()).length },
     kept: { ...kept, count: counted.size },
     days: shootDays(here, kept),
@@ -1079,9 +1052,7 @@ function runOffload(lanes, cloud, flags) {
     lanes,
     camera: cardClips,
     mac: macClips,
-    exports: gradedCopies,
     records: recordsIn(OFFLOADED, landed),
-    graded: recordsIn(GRADED, landed),
     dir: ORIGINAL,
     request: cloud.request,
     room: roomOnMac,
@@ -1113,8 +1084,7 @@ function runOffload(lanes, cloud, flags) {
   // meanwhile (the helper's job).
   let watchFailed = null;
   async function watch() {
-    const sending = run.state.send.on || run.state.exports.on;
-    if (!runOptions.youtube || !sending || uploadsPaused()) return;
+    if (!runOptions.youtube || !run.state.send.on || uploadsPaused()) return;
     const failed = await cloud.watchFootage().then(() => null, (e) => e.message);
     if (failed && failed !== watchFailed) console.error("grade: footage uploads:", failed);
     watchFailed = failed;
@@ -1132,11 +1102,9 @@ function runOffload(lanes, cloud, flags) {
 
 // ---- bringing clips back from the archive (bring.mjs) -----------------------------------------------------------------
 
-/** Where each kind of clip goes. */
-const BRING_TO = { original: ORIGINAL, graded: EXPORTED };
 const cloudDays = archiveDays({ every: 60 * 60_000 });
 const bringing = bringer({
-  folders: BRING_TO,
+  dir: ORIGINAL,
   room: roomOnMac,
   keepFree: KEEP_FREE,
   claims: stillToWrite,
@@ -1171,7 +1139,7 @@ async function cloudClips({ refresh = false } = {}) {
   const ended = offloading && !offloading.state.running ? offloading : null;
   const held = await cloudDays.read(cloud.request, { refresh: refresh || ended !== filedBy });
   filedBy = ended;
-  return { ...held, request: cloud.request, clips: await withHere(held.clips, BRING_TO) };
+  return { ...held, request: cloud.request, clips: await withHere(held.clips, ORIGINAL) };
 }
 
 /** The archive's shoot days, each with how much of it isn't on this Mac; with `day`, that day's clips too. */
@@ -1195,11 +1163,10 @@ async function startBringing(asked) {
   return bringing.add(held.request, pickClips(held.clips, asked));
 }
 
-/** Where a clip that's on neither the card nor this Mac is in the archive: its original's day, else its graded copy's. */
+/** Where a clip that's on neither the card nor this Mac is in the archive: its day there. */
 async function findInCloud(stem) {
   const held = await cloudClips();
-  const named = (held?.clips ?? []).filter((clip) => stemOf(clip.name).toLowerCase() === stem);
-  const hit = named.find((clip) => clip.what === "original") ?? named[0];
+  const hit = (held?.clips ?? []).find((clip) => stemOf(clip.name).toLowerCase() === stem);
   if (hit) return { source: cloudId(hit.day), name: hit.name };
   if (held?.error) throw httpError(404, `That clip isn't on the camera or this Mac. ${held.error}`);
   throw httpError(404, "That clip isn't on the camera, this Mac or in Cloudflare");
@@ -1454,7 +1421,7 @@ async function route(req, res) {
   // Bringing clips back from the archive.
   if (await cloudRoute(req, res, p, url)) return;
 
-  // Offloading: the card to this Mac, this Mac and its exports to the archive, each switched on and off by itself.
+  // Offloading: the card to this Mac, this Mac to the archive, each switched on and off by itself.
   if (p === "/api/offload" && req.method === "GET") return send(res, 200, await offloadSummary());
   if (p === "/api/offload" && req.method === "POST") {
     await startOffloading(offloadAsked(await body(req)));
@@ -1489,7 +1456,7 @@ const server = createServer(async (req, res) => {
 });
 
 for (const dir of [ORIGINAL, EXPORTED, DATA, CACHE]) await mkdir(dir, { recursive: true });
-await clearParts(Object.values(BRING_TO));
+await clearParts([ORIGINAL]);
 clearCardAfter = (await readJson(OFFLOAD, null).catch(() => null))?.clearCardAfter === "sent" ? "sent" : "copied";
 const chosen = (await readJson(ENCODER, null).catch(() => null))?.exportEncoder;
 if (ENCODERS.includes(chosen)) exportEncoder = chosen;
