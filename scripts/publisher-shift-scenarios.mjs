@@ -76,6 +76,7 @@ export const scenarios = [
           analytics: { posts: [], next: null },
           "footage/links": { links: {} },
           "archive/days": { days: [] },
+          "footage/mac": { age: null, report: null },
         };
         window.publisherFixture.change = (path, value) =>
           none[path] ?? (path === "footage/ledger" ? { ...value, clips: {}, projects: {} } : value);
@@ -679,6 +680,61 @@ export const scenarios = [
           };
         }, turn);
         await sleep(2400);
+      }
+    },
+  },
+  {
+    tab: "footage",
+    name: "follows the Mac",
+    run: async (page, { still }) => {
+      await still("the offload goes, waits, pauses, goes quiet, ends, fails and can't be read");
+      await page.evaluate(() => {
+        const { change } = window.publisherFixture;
+        window.publisherFixture.change = (path, value, ...rest) =>
+          path === "footage/mac" && window.publisherMac.state === "unreadable"
+            ? { error: "The publisher is unavailable right now" }
+            : change(path, value, ...rest);
+      });
+      for (const state of ["waiting", "paused", "", "stale", "done", "failed", "none", "unreadable", ""]) {
+        await page.evaluate((state) => {
+          window.publisherMac.state = state;
+        }, state);
+        await sleep(1300);
+      }
+    },
+  },
+  {
+    tab: "footage",
+    name: "pauses everything",
+    run: async (page, { still, step }) => {
+      await step("pauses all");
+      await page.getByRole("button", { name: "Pause all" }).click();
+      await sleep(1500);
+      await still("stays paused as it reads again");
+      await sleep(2000);
+      await step("goes on");
+      await page.getByRole("button", { name: "Resume all" }).click();
+      await sleep(1500);
+      await still("paused and resumed from another device");
+      for (const since of [Date.now(), null, Date.now()]) {
+        await page.evaluate((since) => {
+          window.publisherPause.since = since;
+        }, since);
+        await sleep(1300);
+      }
+    },
+  },
+  {
+    tab: "footage",
+    name: "loads paused, then follows the Mac",
+    query: { paused: "" },
+    run: async (page, { still }) => {
+      await still("the Mac hears it, and is heard from");
+      for (const state of ["", "stale", "done", ""]) {
+        await page.evaluate((state) => {
+          window.publisherMac.state = state;
+        }, state);
+        await sleep(1300);
       }
     },
   },

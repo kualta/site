@@ -36,7 +36,7 @@ let server;
 // The site's archive as the ledger meets it: a film holding a clip no longer anywhere else, and the ledger it's sent.
 const publisher = join(root, "publisher");
 const token = "a".repeat(64);
-const site = { ledger: null, sends: 0, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0, listings: 0, asked: 0, settings: [], slow: 0 };
+const site = { ledger: null, sends: 0, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0, listings: 0, asked: 0, settings: [], slow: 0, reports: [], paused: null };
 const bytesOf = async (req) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -44,18 +44,27 @@ const bytesOf = async (req) => {
 };
 const siteServer = createServer(async (req, res) => {
   site.auth.add(req.headers.authorization);
-  site.asked++;
-  const path = req.url.replace("/api/publisher/helper/archive/", "");
   const reply = (status, body) => {
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(typeof body === "string" ? body : JSON.stringify(body));
   };
+  // Whether all's paused, asked every 300 ms here (every 30 seconds for real), and not counted among what's asked.
+  if (req.url === "/api/publisher/helper/footage" && req.method === "GET")
+    return reply(200, { watching: false, paused: site.paused });
+  site.asked++;
+  const path = req.url.replace("/api/publisher/helper/archive/", "");
   // The offload keeps the composer counted as watching the footage uploads.
   if (req.url === "/api/publisher/helper/footage/watch" && req.method === "POST") {
     // As Astro does: a POST that says no type is a cross-site form submission.
     if (!req.headers["content-type"]) return reply(403, { error: "Cross-site POST form submissions are forbidden" });
     site.watched++;
     return reply(200, { watching: true });
+  }
+  // How the offload stands, for the Footage tab; the answer, as the site's other one to the laptops, says if all's paused.
+  if (req.url === "/api/publisher/helper/footage/mac" && req.method === "POST") {
+    if (!req.headers["content-type"]) return reply(403, { error: "Cross-site POST form submissions are forbidden" });
+    site.reports.push({ at: Date.now(), report: JSON.parse(await bytesOf(req)) });
+    return reply(200, { ok: true, paused: site.paused });
   }
   // What's offloaded: files by hash (whole, or in parts), and a manifest per shoot day; and the settings.
   if (path === "missing" && req.method === "POST") {
@@ -207,6 +216,8 @@ async function startServer() {
       GRADE_SETTLE: "300",
       GRADE_WATCHED_FOR: "700",
       GRADE_BACKUP_EVERY: "3000",
+      GRADE_REPORT_EVERY: "300",
+      GRADE_PAUSE_EVERY: "300",
       GRADE_UVX: uvx,
     },
     stdio: ["ignore", "pipe", "inherit"],
@@ -986,3 +997,55 @@ test.if(usable)("leaves a clip being copied into Preexp alone until it's been st
   await ended();
 }, 120_000);
 
+
+test.if(usable)("holds everything while it's paused from the Footage tab, and goes on where it was", async () => {
+  const day = "2026-02-25";
+  const held = "DJI_20260225100000_0011_D.MP4";
+  clip(join(original, held), "D-Log2");
+  site.paused = { since: Date.now() };
+  await until(async () => (await json("/api/jobs")).paused?.since === site.paused.since);
+  // An export asked for meanwhile waits its turn.
+  expect((await post("/api/export", { source: `mac:${day}`, names: [held] })).status).toBe(200);
+  // An offload started meanwhile holds before anything goes up, and says so.
+  expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
+  const run = await until(async () => {
+    const { run } = await json("/api/offload");
+    return run.send.waiting?.for === "owner" && run;
+  });
+  expect(run.send.waiting.why).toBe("Paused from the Footage tab");
+  await until(() => site.reports.at(-1)?.report.lanes.send.state === "paused");
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const jobs = await json("/api/jobs");
+  expect(jobs.export.current).toBeNull();
+  expect(jobs.export.queue.map((job) => job.name)).toEqual([held]);
+  expect(site.manifests.has(`_originals-${day}`)).toBe(false);
+  expect(exportedFiles()).not.toContain(held.replace(".MP4", ".mp4"));
+  // Going on, both carry on from there.
+  site.paused = null;
+  const after = await ended();
+  // With whatever an earlier test left in Preexp.
+  expect(after.run.send).toMatchObject({ error: null, skipped: [], done: after.run.send.total });
+  expect(site.manifests.get(`_originals-${day}`).files.map((f) => f.path)).toEqual([`assets/${held}`]);
+  await until(() => records()[held]?.key, 120_000);
+  expect((await json("/api/jobs")).paused).toBeNull();
+}, 120_000);
+
+test.if(usable)("tells the site how the offload stands as it changes, in reports the Footage tab reads", async () => {
+  const { readMacReport } = await import("../../src/lib/publisher/mac.ts");
+  // The last run's end is said within its pace.
+  await until(() => site.reports.at(-1)?.report.running === false);
+  // Over all the tests: one as the server started, then as runs went and ended.
+  expect(site.reports.length).toBeGreaterThan(2);
+  for (const { report } of site.reports) expect(readMacReport(report)).toEqual(report);
+  const going = site.reports.filter(({ report }) => report.running);
+  expect(going.some(({ report }) => report.startedAt && report.lanes.send.total > 0)).toBe(true);
+  const ended = site.reports.filter(({ report }) => !report.running && report.endedAt);
+  expect(ended.some(({ report }) => report.lanes.send.state === "done" && report.lanes.send.done === report.lanes.send.total)).toBe(true);
+  // An idle Mac sends only what changed.
+  const said = site.reports.map(({ report }) => JSON.stringify({ ...report, at: null }));
+  for (let i = 1; i < said.length; i++) if (!site.reports[i].report.running) expect(said[i]).not.toBe(said[i - 1]);
+  // And then nothing, while nothing changes.
+  const count = site.reports.length;
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  expect(site.reports.length).toBe(count);
+});

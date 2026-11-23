@@ -420,6 +420,11 @@ let pieces: Piece[] = [
 // ?archive=paused, limit, done or stale shows the uploads held up instead, and the check moves them along itself.
 const upload = { state: new URLSearchParams(location.search).get("archive"), sent: 736_000_000, unreadable: false };
 Object.assign(window, { publisherUpload: upload });
+// Everything paused from the Footage tab since 10:42 with ?paused, else once Pause all is clicked; window.publisherPause
+// changes it as another device would.
+const pause = { since: new URLSearchParams(location.search).has("paused") ? new Date().setHours(10, 42, 0, 0) : null };
+Object.assign(window, { publisherPause: pause });
+const pausedNow = () => (pause.since === null ? null : { since: pause.since });
 function footage() {
   const archiveState = upload.state;
   const clips = [
@@ -433,12 +438,14 @@ function footage() {
   return {
     watching: true,
     age: archiveState === "stale" ? 3_600_000 : 2_000,
+    paused: pausedNow(),
     status: {
       at: Date.now() - (archiveState === "stale" ? 3_600_000 : 2_000),
       channel: "@kualta-footage",
       daily: 10,
       today: archiveState === "limit" ? 10 : 3,
-      state: uploading ? "uploading" : archiveState,
+      // Paused from the tab, the clip in flight is held after its part.
+      state: pause.since !== null ? "held" : uploading ? "uploading" : archiveState,
       pausedUntil: archiveState === "paused" ? Date.now() + 30 * 60_000 : null,
       lastError:
         archiveState === "paused"
@@ -455,6 +462,82 @@ function footage() {
         todayBytes: archiveState === "limit" ? 0 : 1_840_000_000 + 912_000_000 + 2_780_000_000 - sent,
       },
       clips: archiveState === "done" ? clips.map((clip) => ({ ...clip, state: "up", video: "doneDEF1234" })) : clips,
+    },
+  };
+}
+// This Mac: the grade app's offload, the card copied and Mac → Cloudflare 7 of 167 at 7.1 Mbit/s; ?mac=waiting, paused,
+// stale, done, failed or none shows it otherwise, and so does window.publisherMac.state.
+const macState = { state: new URLSearchParams(location.search).get("mac") };
+Object.assign(window, { publisherMac: macState });
+function macReply() {
+  const { state } = macState;
+  if (state === "none") return { age: null, report: null };
+  const lane = (extra: Record<string, unknown>) => ({
+    state: "running",
+    done: 0,
+    total: 0,
+    sentBytes: 0,
+    totalBytes: 0,
+    speed: null,
+    left: null,
+    waiting: null,
+    error: null,
+    ...extra,
+  });
+  const ended = state === "done" || state === "failed";
+  const until = new Date(Date.now() + 4 * 60_000).toISOString();
+  const sending = { done: 7, total: 167, sentBytes: 1.4e9, totalBytes: 40.1e9 };
+  // Paused from the Footage tab, a run going holds after the part in flight.
+  const held = pause.since !== null && !ended ? "held" : null;
+  const send =
+    {
+      held: lane({ ...sending, state: "paused", waiting: { for: "owner", why: "Paused from the Footage tab", until: null } }),
+      paused: lane({ ...sending, state: "paused", waiting: { for: "page", why: "No Grade page is open", until: null } }),
+      waiting: lane({ ...sending, state: "waiting", waiting: { for: "network", why: "fetch failed", until } }),
+      done: lane({ state: "done", done: 167, total: 167, sentBytes: 40.1e9, totalBytes: 40.1e9 }),
+      failed: lane({
+        state: "failed",
+        done: 90,
+        total: 167,
+        sentBytes: 21.6e9,
+        totalBytes: 40.1e9,
+        error: "Cloudflare refused the pairing (401): pair the crossposter helper again",
+      }),
+    }[held ?? state ?? ""] ?? lane({ ...sending, speed: 887_500, left: 43_600 });
+  const copy =
+    state === "waiting"
+      ? lane({
+          state: "waiting",
+          done: 120,
+          total: 167,
+          sentBytes: 28.8e9,
+          totalBytes: 40.1e9,
+          waiting: { for: "camera", why: "The camera isn't plugged in", until },
+        })
+      : lane({ state: "done", done: 167, total: 167, sentBytes: 40.1e9, totalBytes: 40.1e9 });
+  const started = Date.now() - 50 * 60_000;
+  return {
+    age: state === "stale" ? 25 * 60_000 : 20_000,
+    report: {
+      version: 1,
+      at: new Date(Date.now() - 20_000).toISOString(),
+      running: !ended,
+      startedAt: new Date(started).toISOString(),
+      endedAt: ended ? new Date(Date.now() - 5 * 60_000).toISOString() : null,
+      lanes: { copy, send },
+      camera: { mounted: state !== "waiting", clips: 0, bytes: 0 },
+      mac: { clips: state === "done" ? 0 : 160, bytes: state === "done" ? 0 : 38.7e9 },
+      freed: { camera: 40.1e9, mac: state === "done" ? 40.1e9 : 1.4e9 },
+      skipped: [
+        {
+          lane: "send",
+          name: "DJI_20261120183012_0399_D.MP4",
+          why: "doesn't read back from Cloudflare as it was sent: it stays on this Mac",
+        },
+      ],
+      transcripts: { made: 12, waiting: 3, failed: 1, toSend: 4, error: "uvx isn't installed, so Whisper can't run" },
+      kept: { days: ["2026-11-08", "2026-11-15"], clips: 45 },
+      room: { free: 123e9, keepFree: 5e9 },
     },
   };
 }
@@ -581,6 +664,12 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "footage/ledger") return json(ledger);
   const archived = archiveAnswer(path);
   if (archived) return archived;
+  if (path === "footage/mac") return json(macReply());
+  if (path === "footage/pause") {
+    if (method === "POST") pause.since ??= Date.now();
+    if (method === "DELETE") pause.since = null;
+    return json({ paused: pausedNow() });
+  }
   if (path === "footage/links") return json({ links });
   if (path.startsWith("footage/links/") && method === "PUT") {
     const id = path.slice("footage/links/".length);

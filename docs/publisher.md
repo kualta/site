@@ -393,13 +393,45 @@ going up to YouTube with its share, and filters for clips at risk (no copy off t
 card), not graded, not on YouTube and not in Cloudflare. A clip's **Grade** opens it in the Grade
 tab.
 
+**This Mac.** Under the uploads, the Footage tab shows how the grade app's offload stands, as numbers that keep their
+places whatever they say: for **Camera → Mac** and **Mac → Cloudflare** each, its state (running, paused and why,
+waiting for the camera, the network, room or Cloudflare, stopping, done, stopped, failed, idle), clips and GB through of
+how many, speed and time left, and a line on what holds it or what's left for it; then the transcripts made, waiting and
+failed, what the run freed from the card and from the Mac, the room left on the Mac, the days kept out of offload, and
+the clips passed over with why (three lines, more scroll). It says when the run started, or when the last one ran, and
+"Updated 3 min ago": a run the Mac has said nothing of for 4 minutes reads as stale ("Not heard from the Mac for 25 min:
+it may be asleep or off"), its numbers greyed. `#this-mac` opens the tab there.
+
+The grade app sends it (`scripts/grade/report.mjs`) to `POST helper/footage/mac` on the helper's pairing, and the tab
+reads it with `GET footage/mac` every 15 seconds while it's shown. The site checks every field (`src/lib/publisher/mac.ts`)
+and keeps what it reads as one small object in the media bucket (`footage/mac.json`, at most 64 KB), never D1. The Mac
+sends it only when it changed, at most every 30 seconds while a run goes and every 10 minutes otherwise; while a run goes
+and nothing changes it's sent again every 2 minutes, which is what lets the tab call a quiet Mac stale. An idle Mac whose
+numbers stay put sends nothing.
+
+**Pause all.** The button beside the Footage heading pauses every background job, and **Resume all** lets them all go on:
+the grade app's offload (Camera → Mac and Mac → Cloudflare), Whisper, the transcripts it sends, exports, films' preview
+copies and trims, clips brought back from Cloudflare, and the helper's uploads to YouTube. Paused, nothing new starts: an
+upload finishes the 16 MiB part in flight and waits there, a copy, an export, a preview copy or trim or a clip brought
+back finishes its file, and Whisper the clip it's on. Each
+goes on from where it waited, no part sent twice. It's separate from the offload's own pause while no Grade page is open,
+and from stopping a switch. The flag is one small object in the media bucket (`footage/paused.json`, `{ since }`), set
+with `POST footage/pause` and cleared with `DELETE footage/pause` by the owner only, so it works from a phone and holds
+through restarts of the grade app and the helper; like the rest there it lapses after the bucket's 31 days. The laptops
+hear it in answers they already get: the helper in `helper/footage` (asked every 10 seconds, and in the answer to its
+status), the grade app in the answer to its report and by asking `helper/footage` at start and every 30 seconds. Both
+keep reporting while paused, so the tab says "Paused by you · since 10:42" over the uploads and This Mac, with what each
+holds: the clip going up at its share, each switch at its numbers ("Paused by you"). The title doesn't lead with the
+percentage of an upload that's held.
+
 **Grade tab.** post.kualta.dev/grade frames the grade app on the Mac (http://127.0.0.1:4777), so
 grading stays local: it reads the card and `~/Movies`, previews on the browser's GPU and exports with
 ffmpeg. The frame is allowed local network access (Chrome asks once to let post.kualta.dev reach
 this device); away from the Mac, or until that's allowed, the tab says so. The app fills the window
 below the tabs, edge to edge, and the page doesn't scroll. Once opened it stays loaded while other
-tabs are shown, takes the composer's light or dark, and opens the clips Grade asks for. See
-`scripts/grade/README.md`.
+tabs are shown, takes the composer's light or dark, and opens the clips Grade asks for. Its status line says the offload
+short ("Offloading 7 / 167 · 12.1 h left"), as a link: the app asks the composer (`grade-footage`, by the same messages
+and origin checks as the rest) to open the Footage tab at This Mac. See `scripts/grade/README.md`.
 
 **Archive tab.** post.kualta.dev/archive (once the Footage tab's address; an old link lands here) shows the originals the
 grade app offloaded to Cloudflare, its `_originals-<day>` projects, a shoot day at a time, newest first, and 24 clips a
@@ -452,7 +484,7 @@ before the look sees it. The choice is remembered in the browser.
 **The page's title** names the open tab (`footage · kualta`). While that tab shows something going up,
 its percentage leads (`43% · footage · kualta`): on Footage the clip going up to YouTube, on Grade the
 app's offload, else its export, as the app tells the tab. The plain name returns once that ends, stops,
-fails or can't be read. Nothing is polled for it (`src/lib/publisher/title.ts`).
+fails, is paused from the Footage tab or can't be read. Nothing is polled for it (`src/lib/publisher/title.ts`).
 
 ## Instagram stories
 

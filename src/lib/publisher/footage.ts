@@ -1,5 +1,6 @@
 import { type ArchiveBucket, isClipName, isProjectName, LEDGER, ledgerThumbKey } from "./archive";
 import type { FootageLink } from "./ledger";
+import { MAX_MAC_REPORT, type Paused, readMacReport } from "./mac";
 import { type MediaBucket, validId } from "./server";
 
 /*
@@ -14,6 +15,21 @@ import { type MediaBucket, validId } from "./server";
  */
 const WATCHING = "footage/watching";
 const STATUS = "footage/status.json";
+/** How the grade app's offload on the Mac stands (mac.ts), sent when it changes. */
+const MAC = "footage/mac.json";
+/**
+ * Everything paused from the Footage tab, and since when: the grade app's offload, transcripts and exports, and the
+ * helper's uploads to YouTube. Both laptops hear it in the answers they already get, so it holds from a phone and through
+ * their restarts. Like the rest here it's under the bucket's 31-day expiry: a pause left that long lapses.
+ */
+const PAUSED = "footage/paused.json";
+
+export async function readPaused(media: MediaBucket): Promise<Paused | null> {
+  const object = await media.get(PAUSED);
+  if (!object) return null;
+  const since = Number((JSON.parse(await new Response(object.body).text()) as Partial<Paused>).since);
+  return Number.isFinite(since) ? { since } : null;
+}
 /**
  * How long the tab counts as open after it last said so. It says so every 30 seconds, but a background tab's timers
  * can slow to once a minute; closing the tab deletes the marker at once.
@@ -28,18 +44,40 @@ export async function isWatched(media: MediaBucket, now = Date.now()) {
   return Number(await new Response(marker.body).text()) > now;
 }
 
-/** The status as the laptop last sent it, and how long ago that was. */
-async function readStatus(media: MediaBucket, now: number) {
-  const object = await media.get(STATUS);
+/** What the laptop last sent to `key`, as JSON text, and how long ago that was. */
+async function readObject(media: MediaBucket, key: string, now: number) {
+  const object = await media.get(key);
   if (!object) return { text: "null", age: null };
   const text = await new Response(object.body).text();
   return { text, age: object.uploaded ? Math.max(0, now - object.uploaded.getTime()) : null };
 }
+const readStatus = (media: MediaBucket, now: number) => readObject(media, STATUS, now);
 /** What the tab hears. The status went in checked, so it goes out as it is, without parsing it again. */
-function tabReply(watching: boolean, { text, age }: Awaited<ReturnType<typeof readStatus>>): Response {
-  return new Response(`{"watching":${watching},"age":${age},"status":${text}}`, {
+function tabReply(
+  watching: boolean,
+  { text, age }: Awaited<ReturnType<typeof readObject>>,
+  paused: Paused | null,
+): Response {
+  return new Response(`{"watching":${watching},"age":${age},"paused":${JSON.stringify(paused)},"status":${text}}`, {
     headers: { "Cache-Control": "no-store", "Content-Type": "application/json" },
   });
+}
+/** The JSON object the laptop sent, as sent and parsed, or why it can't be taken: too big, or not an object. */
+async function sentObject(
+  request: Request,
+  most: number,
+  what: string,
+): Promise<{ text: string; sent: object } | { error: string; status: number }> {
+  const tooBig = { error: `The ${what} is too big`, status: 413 };
+  if (Number(request.headers.get("Content-Length")) > most) return tooBig;
+  const text = await request.text();
+  if (text.length > most) return tooBig;
+  let sent: unknown = null;
+  try {
+    sent = JSON.parse(text);
+  } catch {}
+  if (sent && typeof sent === "object" && !Array.isArray(sent)) return { text, sent };
+  return { error: `Send the ${what} as an object`, status: 400 };
 }
 
 /**
@@ -60,7 +98,9 @@ async function readLinks(archive: Pick<ArchiveBucket, "get">): Promise<Record<st
  * `footage/thumbs/<clip>.jpg` (the ledger and its pictures, from the archive), `footage/links` (each Pipeline piece's
  * footage; PUT `footage/links/<piece>` sets one), and `helper/footage` (the laptop asks whether the tab is open, and
  * with a POST sends its status; `helper/footage/watch` POST counts the tab as open while an offload the grade app runs
- * goes). Anything else is null.
+ * goes), `helper/footage/mac` (POST: how the grade app's offload stands, which `footage/mac` reads), and
+ * `footage/pause` (POST pauses everything, DELETE goes on; the tab's and the laptops' answers say `paused`). Anything
+ * else is null.
  */
 export async function footageResponse(
   path: string,
@@ -104,39 +144,68 @@ export async function footageResponse(
     });
   }
   if (path === "footage" && request.method === "GET") {
-    const [watching, status] = await Promise.all([isWatched(media, now), readStatus(media, now)]);
-    return tabReply(watching, status);
+    const [watching, status, paused] = await Promise.all([
+      isWatched(media, now),
+      readStatus(media, now),
+      readPaused(media),
+    ]);
+    return tabReply(watching, status, paused);
   }
   // The tab keeps the marker fresh while it's open, and hears how the uploads are going: a hidden one asks nothing else.
   // The grade app keeps it fresh while an offload the owner started goes.
   if ((path === "footage/watch" || path === "helper/footage/watch") && request.method === "POST") {
     await media.put(WATCHING, String(now + WATCH_TTL), { httpMetadata: { contentType: "text/plain" } });
     if (path === "helper/footage/watch") return json({ watching: true });
-    return tabReply(true, await readStatus(media, now));
+    const [status, paused] = await Promise.all([readStatus(media, now), readPaused(media)]);
+    return tabReply(true, status, paused);
   }
   if (path === "footage/watch" && request.method === "DELETE") {
     await media.delete(WATCHING);
     return json({ watching: false });
   }
-  if (path === "helper/footage" && request.method === "GET") return json({ watching: await isWatched(media, now) });
+  // Pausing everything, and going on: only the owner, from the tab; the laptops hear it in the answers below.
+  if (path === "footage/pause" && request.method === "GET") return json({ paused: await readPaused(media) });
+  if (path === "footage/pause" && request.method === "POST") {
+    // Paused again, it's still paused since it first was.
+    const paused = (await readPaused(media)) ?? { since: now };
+    await media.put(PAUSED, JSON.stringify(paused), { httpMetadata: { contentType: "application/json" } });
+    return json({ paused });
+  }
+  if (path === "footage/pause" && request.method === "DELETE") {
+    await media.delete(PAUSED);
+    return json({ paused: null });
+  }
+  if (path === "helper/footage" && request.method === "GET") {
+    const [watching, paused] = await Promise.all([isWatched(media, now), readPaused(media)]);
+    return json({ watching, paused });
+  }
   if (path === "helper/footage" && request.method === "POST") {
-    const declared = Number(request.headers.get("Content-Length"));
-    if (declared > MAX_STATUS) return json({ error: "The footage status is too big" }, 413);
-    const text = await request.text();
-    if (text.length > MAX_STATUS) return json({ error: "The footage status is too big" }, 413);
-    let status: unknown;
-    try {
-      status = JSON.parse(text);
-    } catch {
-      status = null;
-    }
-    if (!status || typeof status !== "object" || Array.isArray(status))
-      return json({ error: "Send the footage status as an object" }, 400);
-    const [watching] = await Promise.all([
+    const status = await sentObject(request, MAX_STATUS, "footage status");
+    if ("error" in status) return json({ error: status.error }, status.status);
+    const [watching, paused] = await Promise.all([
       isWatched(media, now),
-      media.put(STATUS, text, { httpMetadata: { contentType: "application/json" } }),
+      readPaused(media),
+      media.put(STATUS, status.text, { httpMetadata: { contentType: "application/json" } }),
     ]);
-    return json({ watching });
+    return json({ watching, paused });
+  }
+  // How the offload on the Mac stands: kept as checked, and read back with how long ago it came.
+  if (path === "helper/footage/mac" && request.method === "POST") {
+    const sent = await sentObject(request, MAX_MAC_REPORT, "offload report");
+    if ("error" in sent) return json({ error: sent.error }, sent.status);
+    const report = readMacReport(sent.sent);
+    if (!report) return json({ error: "The offload report isn't one the Footage tab can read" }, 400);
+    const [paused] = await Promise.all([
+      readPaused(media),
+      media.put(MAC, JSON.stringify(report), { httpMetadata: { contentType: "application/json" } }),
+    ]);
+    return json({ ok: true, paused });
+  }
+  if (path === "footage/mac" && request.method === "GET") {
+    const { text, age } = await readObject(media, MAC, now);
+    return new Response(`{"age":${age},"report":${text}}`, {
+      headers: { ...headers, "Content-Type": "application/json" },
+    });
   }
   return null;
 }

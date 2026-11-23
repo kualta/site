@@ -161,6 +161,9 @@ kbd {
 /* What Whisper is doing. Its room is kept when it says nothing, so nothing in the bar moves when it does. */
 .transcribing { flex: none; width: 132px; color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status { margin: 0 0 0 auto; color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The offload, which opens how it stands in the composer's Footage tab. */
+.status a { color: inherit; text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; }
+.status a:hover { color: var(--ink); text-decoration-color: currentColor; }
 
 /* ---- layout ---------------------------------------------------------------------------------------------- */
 .work { display: grid; grid-template-columns: 292px minmax(0, 1fr) 320px; gap: var(--gap); min-height: 0; }

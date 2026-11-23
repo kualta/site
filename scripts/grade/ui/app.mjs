@@ -1,6 +1,6 @@
 import { blockMeans, composeLut, gradeKey, inputCurves, resolveGrade, sampleTetra } from "/color.mjs";
 import { bringView, isCloud } from "/ui/bring.mjs";
-import { offloadMenu, offloadMoves, offloadShare } from "/ui/offload.mjs";
+import { offloadLine, offloadMenu, offloadMoves, offloadShare } from "/ui/offload.mjs";
 import { Viewer } from "/ui/viewer.mjs";
 
 const $ = (id) => document.getElementById(id);
@@ -1214,8 +1214,16 @@ function renderStatus() {
   const parts = [];
   $("stop-export").hidden = !(j?.export.current || j?.export.queue.length);
   offload.renderStop(j?.offload);
-  const offloadLine = offload.text(j?.offload);
-  if (offloadLine) parts.push(offloadLine);
+  // Paused from the composer's Footage tab: nothing new starts here until it goes on there.
+  if (j?.paused) {
+    const waiting = j.export.queue.length;
+    parts.push(`Paused from the Footage tab${waiting ? ` · ${waiting} export${waiting === 1 ? "" : "s"} waiting` : ""}`);
+  }
+  const offloading = offloadLine(j?.offload);
+  if (offloading) {
+    offloadLink.textContent = offloading;
+    parts.push(offloadLink);
+  }
   const bringLine = bring.text();
   if (bringLine) parts.push(bringLine);
   if (state.source?.startsWith("camera:") && state.library && !state.library.camera.mounted)
@@ -1234,7 +1242,7 @@ function renderStatus() {
     if (line) parts.push(line);
   if (state.error) parts.push(state.error);
   if (statusNote && (statusFirst || !parts.length)) parts.unshift(statusNote);
-  $("status").textContent = parts.join(" · ");
+  $("status").replaceChildren(...parts.flatMap((part, i) => (i ? [" · ", part] : [part])));
   $("status").title = $("status").textContent;
   $("transcribing").textContent = transcribingText(j?.transcripts);
   $("transcribing").title = j?.transcripts?.error ?? "";
@@ -1263,6 +1271,21 @@ function transcribingText(t) {
 // ---- offload (offload.mjs) --------------------------------------------------------------------------------------------
 
 const offload = offloadMenu({ api, fileSize, showError, poll });
+/**
+ * The offload in the status line links to how it stands in the composer's Footage tab, under This Mac: framed by the
+ * composer, the composer opens it; in a tab of its own, it opens in another.
+ */
+const offloadLink = Object.assign(document.createElement("a"), {
+  href: "https://post.kualta.dev/footage#this-mac",
+  target: "_blank",
+  rel: "noreferrer",
+  title: "How the offload stands, in the composer's Footage tab",
+});
+offloadLink.addEventListener("click", (event) => {
+  if (!composer()) return;
+  event.preventDefault();
+  tellComposer({ type: "grade-footage" });
+});
 
 // ---- ledger and the composer ------------------------------------------------------------------------------------------
 // The ledger (every clip, its grade, where its copies are) is shown in the composer's Footage tab, post.kualta.dev/footage;
@@ -1348,7 +1371,8 @@ function tellComposer(message) {
 function sayProgress(jobs) {
   tellComposer({
     type: "grade-progress",
-    offload: offloadShare(jobs?.offload),
+    // Paused from the Footage tab, the offload isn't going up, so the title lets go of it.
+    offload: jobs?.paused ? null : offloadShare(jobs?.offload),
     export: jobs?.export.current?.progress ?? null,
   });
 }

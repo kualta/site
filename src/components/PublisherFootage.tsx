@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
+import {
+  formatDuration as duration,
+  formatRate as rate,
+  formatWhen as when,
+  type Paused,
+  pausedText,
+} from "@/lib/publisher/mac";
 import PublisherLedger from "./PublisherLedger";
+import PublisherMac from "./PublisherMac";
 
 /** A graded clip as the laptop reports it: up on the footage channel, waiting, or going up now. */
 export interface FootageClip {
@@ -17,7 +25,8 @@ export interface FootageStatus {
   channel: string | null;
   daily: number;
   today: number;
-  state: "uploading" | "waiting" | "done" | "limit" | "paused" | "busy";
+  /** `held`: paused from this tab, with the clip in flight, if any, held after its part. */
+  state: "uploading" | "waiting" | "done" | "limit" | "paused" | "busy" | "held";
   pausedUntil: number | null;
   lastError: { clip: string; message: string; at: string } | null;
   current: { name: string; title: string; size: number; sent: number; from: string } | null;
@@ -30,6 +39,8 @@ interface Reply {
   watching: boolean;
   /** How long ago the laptop sent the status. */
   age: number | null;
+  /** Everything paused from here, and since when. */
+  paused: Paused | null;
   status: FootageStatus | null;
 }
 interface Props {
@@ -44,6 +55,8 @@ interface Props {
   statsHref: (job: string) => string;
   /** How far the clip going up is, in percent, for the page's title; null with none. */
   onProgress: (percent: number | null) => void;
+  /** When the Grade tab asked for This Mac, which is then brought into view. */
+  showMac: number | null;
 }
 
 /** The laptop reports every 5 seconds during an upload and every 10 otherwise; older than this, it hasn't started. */
@@ -52,25 +65,6 @@ const FRESH = 30_000;
 const size = (bytes: number) =>
   bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${Math.max(0, Math.round(bytes / 1e6))} MB`;
 const clipsOf = (count: number, bytes: number) => `${count} ${count === 1 ? "clip" : "clips"} · ${size(bytes)}`;
-/** Network speed in the unit an internet plan states it in. */
-function rate(bytesPerSecond: number) {
-  const mbit = (bytesPerSecond * 8) / 1e6;
-  return `${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`;
-}
-function duration(seconds: number) {
-  if (seconds < 60) return "under a minute";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`;
-}
-function when(ms: number) {
-  const date = new Date(ms);
-  const sameDay = date.toDateString() === new Date().toDateString();
-  return sameDay
-    ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
 
 /** What's holding the uploads, or what they're doing, in a line; null while a clip goes up and the bar says it. */
 function noticeFor(
@@ -78,6 +72,7 @@ function noticeFor(
   fresh: boolean,
 ): { text: string; tone?: "ok" | "bad"; accounts?: boolean } | null {
   if (!connected) return { text: "Not connected.", accounts: true };
+  if (reply?.paused) return { text: pausedText(reply.paused) };
   if (!online) return { text: "Laptop offline." };
   if (!reply) return failed ? { text: "Couldn't load. Retrying…" } : { text: "Reading…" };
   const status = reply.status;
@@ -101,9 +96,10 @@ function noticeFor(
 }
 
 /**
- * The composer's Footage tab: the footage ledger (every clip, its grade, where its copies are) under the graded
- * footage going up to the footage archive's YouTube channel. The laptop uploads only while this tab is open, so it
- * says so on opening and every 30 seconds, and says it closed on leaving.
+ * The composer's Footage tab: the graded footage going up to the footage archive's YouTube channel, then how the grade
+ * app's offload on the Mac stands (This Mac), then the footage ledger (every clip, its grade, where its copies are). The
+ * laptop uploads only while this tab is open, so it says so on opening and every 30 seconds, and says it closed on
+ * leaving.
  */
 export default function PublisherFootage({
   request,
@@ -113,6 +109,7 @@ export default function PublisherFootage({
   onGrade,
   statsHref,
   onProgress,
+  showMac,
 }: Props) {
   const [reply, setReply] = useState<Reply | null>(null);
   const [failed, setFailed] = useState(false);
@@ -161,6 +158,25 @@ export default function PublisherFootage({
     };
   }, [request]);
 
+  // Pausing everything, or going on, from here: the answer says how it is now.
+  const [pausing, setPausing] = useState(false);
+  const [pauseError, setPauseError] = useState<string | null>(null);
+  const paused = reply?.paused ?? null;
+  async function togglePause() {
+    setPausing(true);
+    try {
+      const answer = (await (paused
+        ? request("footage/pause", undefined, "DELETE")
+        : request("footage/pause", {}))) as { paused: Paused | null };
+      setReply((was) => was && { ...was, paused: answer.paused });
+      setPauseError(null);
+    } catch (error) {
+      setPauseError((error as Error).message);
+    } finally {
+      setPausing(false);
+    }
+  }
+
   const status = reply?.status ?? null;
   const fresh = status !== null && typeof reply?.age === "number" && reply.age < FRESH;
   const notice = noticeFor({ connected, online, reply, failed }, fresh);
@@ -169,8 +185,8 @@ export default function PublisherFootage({
   const share = current?.size ? Math.min(100, Math.floor((current.sent / current.size) * 100)) : 0;
   const clipLeft = current && speed ? (current.size - current.sent) / speed : null;
   const todayLeft = current && speed && status && status.totals.today > 1 ? status.totals.todayBytes / speed : null;
-  // Unheard from, the upload may be over, so the title lets go of it.
-  const percent = current && !failed ? share : null;
+  // Unheard from, the upload may be over, so the title lets go of it; paused, it isn't going up.
+  const percent = current && !failed && !paused ? share : null;
   useEffect(() => {
     onProgress(percent);
     return () => onProgress(null);
@@ -188,6 +204,19 @@ export default function PublisherFootage({
     <section className="publisher-archive" aria-label="Footage">
       <div className="publisher-heading">
         <h1>Footage</h1>
+        {/* Everything: the offload, transcripts and exports on the Mac, and the uploads to YouTube. */}
+        <button
+          type="button"
+          className="publisher-pause"
+          aria-pressed={Boolean(paused)}
+          disabled={!reply || pausing}
+          title={
+            pauseError ?? (paused ? "Go on with everything" : "Pause the offload, transcripts, exports and uploads")
+          }
+          onClick={togglePause}
+        >
+          {paused ? "Resume all" : "Pause all"}
+        </button>
         {status?.channel && (
           <a
             className="publisher-archive-channel"
@@ -265,6 +294,7 @@ export default function PublisherFootage({
       <p className="publisher-note" data-unsaid={!status || fresh || undefined}>
         As of {status ? when(status.at) : "now"}
       </p>
+      <PublisherMac request={request} shown={showMac} paused={paused} />
       <PublisherLedger
         request={request}
         uploading={current ? { name: current.name, share } : null}

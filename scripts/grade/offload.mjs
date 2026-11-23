@@ -268,9 +268,11 @@ function inTurn(work) {
  * Nothing is deleted that's kept or in use: `keeping()` says which clips are kept out of all this (`(clip) => boolean`),
  * asked again at each deletion, and one `removable(clip)` says no to (being exported, say) stays where it is.
  *
- * `paused()` says why uploads wait, if they do: they wait between parts. `clearCardAfter()` says when a clip goes from the
- * card, "copied" to the Mac or "sent" to the archive. `copied(clip)` hears each clip on the Mac, `removed(clip, where)`
- * each one deleted. `fileInDay` is the days' manifests: the one `dayManifests()` for every run.
+ * `paused()` says why uploads wait, if they do: they wait between parts. `pausedAll()` says why everything waits, if it
+ * does (paused from the Footage tab, pause.mjs): uploads between parts and the card between clips, waiting for "owner".
+ * `clearCardAfter()` says when a clip goes from the card, "copied" to the Mac or "sent" to the archive. `copied(clip)`
+ * hears each clip on the Mac, `removed(clip, where)` each one deleted. `fileInDay` is the days' manifests: the one
+ * `dayManifests()` for every run.
  *
  * `transcripts` is what the transcriber does: `take(clip, signal)` takes a clip's sound from its Mac copy, which waits for
  * it; `ready()` says the transcripts to send, each `{ key, name, day, files: [{ path, abs, mtime }] }`; `sent(keys)` hears
@@ -292,6 +294,7 @@ export function startOffload({
   removable = () => true,
   keeping = async () => () => false,
   paused = () => null,
+  pausedAll = () => null,
   clearCardAfter = () => "copied",
   part = OFFLOAD_PART,
   together = 2,
@@ -327,9 +330,9 @@ export function startOffload({
     get waiting() {
       return copy.state.waiting?.for === "room" ? "room" : null;
     },
-    /** Why uploads wait, while they do. */
+    /** Why uploads wait, while they do: no page open, or everything paused from the Footage tab. */
     get paused() {
-      return send.state.waiting?.for === "page" ? send.state.waiting : null;
+      return ["page", "owner"].includes(send.state.waiting?.for) ? send.state.waiting : null;
     },
     /** Bytes sent to the archive: [time, total] over the last minute or so, for the speed. */
     sent: 0,
@@ -606,6 +609,12 @@ export function startOffload({
     cardLeft = [];
     let fresh = false;
     while (!copy.ending()) {
+      // Paused from the Footage tab, the clip being copied is finished and no other begun.
+      const owner = pausedAll();
+      if (owner) {
+        await copy.hold({ for: "owner", why: owner }, change(gateLook));
+        continue;
+      }
       try {
         const card = await camera({ fresh });
         if (!card) {
@@ -640,13 +649,20 @@ export function startOffload({
   // ---- Mac → Cloudflare ------------------------------------------------------------------------------------------------
 
   const gateLook = Math.min(look, 1000);
+  /** What holds the uploads, if anything: everything paused from the Footage tab, or uploads paused. */
+  function holding() {
+    const owner = pausedAll();
+    if (owner) return { for: "owner", why: owner };
+    const why = paused();
+    return why ? { for: "page", why } : null;
+  }
   /** Waits while uploads are paused. Throws once the lane is told to stop now. */
   async function open(lane) {
     for (;;) {
       lane.signal.throwIfAborted();
-      const why = paused();
-      if (!why) return;
-      await lane.hold({ for: "page", why }, change(gateLook));
+      const hold = holding();
+      if (!hold) return;
+      await lane.hold(hold, change(gateLook));
     }
   }
 
@@ -815,9 +831,9 @@ export function startOffload({
     while (!lane.ending()) {
       try {
         await lane.recovered();
-        const why = paused();
-        if (why) {
-          await lane.hold({ for: "page", why }, change(gateLook));
+        const hold = holding();
+        if (hold) {
+          await lane.hold(hold, change(gateLook));
           continue;
         }
         // Asked before looking: what's brought as the copying ends is there by the look after.

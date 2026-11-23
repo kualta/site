@@ -18,6 +18,8 @@ import { filmAssets } from "./film.mjs";
 import { dayManifests, LANES, startOffload } from "./offload.mjs";
 import { keepList } from "./keep.mjs";
 import { RETRY } from "./lane.mjs";
+import { pauseFlag } from "./pause.mjs";
+import { macReporter, pairedSite, REPORT_EVERY } from "./report.mjs";
 import {
   archivedFootage,
   comparable,
@@ -355,7 +357,8 @@ let exportAbort = null;
 async function pumpExports() {
   if (exportBusy) return;
   exportBusy = true;
-  while (jobs.export.queue.length) {
+  // Paused from the Footage tab, the export being made is finished and the rest wait, to go once it's resumed.
+  while (jobs.export.queue.length && !pause.held()) {
     const job = jobs.export.queue.shift();
     // Its own record: ffmpeg can still report progress after the export has ended, when there's no current one.
     const current = { ...job, progress: 0 };
@@ -827,14 +830,27 @@ let polledAt = 0;
 const keep = keepList(KEEP);
 /** The shoot days' manifests: every run's saves go through the one. */
 const fileInDay = dayManifests();
-/** Makes the transcripts. An export has the GPU first. */
+/** The site, on the crossposter helper's pairing. */
+const site = pairedSite(PUBLISHER);
+/** Pause all, from the composer's Footage tab (pause.mjs): every job here holds while `pause.held()` says why. */
+const pause = pauseFlag({
+  ask: () => site("footage"),
+  every: Number(process.env.GRADE_PAUSE_EVERY || 30_000),
+  changed: (held) => {
+    offloading?.poke();
+    if (held) return;
+    void pumpExports();
+    film.pump();
+  },
+});
+/** Makes the transcripts. An export has the GPU first, and nothing starts while everything's paused. */
 const transcripts = transcriber({
   audio: join(CACHE, "audio"),
   dir: join(DATA, "transcripts"),
   scratch: join(CACHE, "transcribing"),
   records: { read: () => readClips(TRANSCRIPTS), update: (change) => updateClips(TRANSCRIPTS, change) },
   uvx: process.env.GRADE_UVX,
-  busy: () => Boolean(jobs.export.current || jobs.export.queue.length),
+  busy: () => Boolean(jobs.export.current || jobs.export.queue.length || pause.held()),
   skip: async (clip) => (await keep.keeping())(clip),
   made: () => offloading?.poke(),
 });
@@ -957,6 +973,19 @@ async function offloadSummary() {
   };
 }
 
+/** Tells the composer's Footage tab how the offload stands, when it changes (report.mjs); the answer says if it's paused. */
+const REPORT_PACE = Number(process.env.GRADE_REPORT_EVERY || REPORT_EVERY.running);
+const reporting = macReporter({
+  summary: offloadSummary,
+  running: () => Boolean(offloading?.state.running),
+  post: async (report) => {
+    const answer = await site("footage/mac", report);
+    if (answer) pause.learn(answer.paused ?? null);
+    return answer;
+  },
+  every: { ...REPORT_EVERY, running: REPORT_PACE, alive: 4 * REPORT_PACE },
+});
+
 /**
  * Gives ungraded log clips the default look, as settings: they can be changed before any export. A clip nobody has
  * opened yet is probed for its profile, eight at a time.
@@ -1072,6 +1101,7 @@ function runOffload(lanes, cloud, flags) {
     removable: async (clip) => !exporting(clip) && !film.reading(clip.name) && clip.name !== (await goingToYoutube(PUBLISHER)),
     keeping: keep.keeping,
     paused: uploadsPaused,
+    pausedAll: pause.held,
     clearCardAfter: () => clearCardAfter,
     // A clip that turned up on the card since the run started has no look yet.
     copied: (clip) => void withDefaultLook([clip]),
@@ -1123,6 +1153,7 @@ const bringing = bringer({
   // Kept out of offload, or the next one would find it in the archive and take it off again.
   placing: (clip) => keep.add(clip.name),
   landed: () => scheduleLedger(2000),
+  pausedAll: pause.held,
 });
 
 /** What's still to come onto this Mac from the exports, going by their originals' sizes, and from the card. */
@@ -1253,7 +1284,8 @@ const film = filmAssets({
     return withLutFile(clip.name, cube, (lut) => use({ lut, meta, grade, key: gradeKey(grade) }));
   },
   keys: gradeKeys,
-  exporting: () => Boolean(jobs.export.current || jobs.export.queue.length),
+  // None is begun while an export goes, or while everything's paused from the Footage tab: the one being made finishes.
+  exporting: () => Boolean(jobs.export.current || jobs.export.queue.length || pause.held()),
   encoder: () => exportEncoder,
   room: roomOnMac,
   keepFree: KEEP_FREE,
@@ -1520,6 +1552,8 @@ async function route(req, res) {
       transcripts: transcripts.summary(),
       bring: bringing.state(),
       ...film.state(),
+      // Everything paused from the composer's Footage tab, since when; null while it isn't.
+      paused: pause.since === null ? null : { since: pause.since },
     });
   }
 
@@ -1567,6 +1601,8 @@ await clearParts([ORIGINAL]);
 clearCardAfter = (await readJson(OFFLOAD, null).catch(() => null))?.clearCardAfter === "sent" ? "sent" : "copied";
 const chosen = (await readJson(ENCODER, null).catch(() => null))?.exportEncoder;
 if (ENCODERS.includes(chosen)) exportEncoder = chosen;
+// Paused before a restart, it's still paused: asked before Whisper picks up where it was, unless the site is slow to say.
+await Promise.race([pause.check(), new Promise((resolve) => setTimeout(resolve, 5000))]);
 await transcripts.resume().catch((e) => console.error("grade: transcripts:", e.message));
 await film.start().catch((e) => console.error("grade: film:", e.message));
 server.listen(PORT, "127.0.0.1", () => {
@@ -1574,4 +1610,6 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`grade: ${address}  (movies ${MOVIES}, camera ${CAMERA}, data ${DATA}, LUTs ${LUTS})`);
   if (process.argv.includes("--open")) execFile("open", [address], () => {});
   scheduleLedger(Math.min(2000, LEDGER_EVERY));
+  pause.start();
+  reporting.start();
 });

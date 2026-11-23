@@ -1787,6 +1787,30 @@ try {
       .evaluate(() => parent.postMessage({ type: "grade-progress", offload: 0.9, export: null }, "*"));
     await page.waitForTimeout(200);
     assert.equal(await page.title(), "grade · kualta");
+
+    // The app's status line links its offload to This Mac in the Footage tab, which opens there: asked by the app's own
+    // frame, never by another page.
+    await page.evaluate(() => window.postMessage({ type: "grade-footage" }, "*"));
+    await page.frame("other").evaluate(() => parent.postMessage({ type: "grade-footage" }, "*"));
+    await page.waitForTimeout(300);
+    assert.match(page.url(), /\/publisher\.html\/grade$/);
+    await say({ type: "grade-footage" });
+    await page.waitForURL(/\/publisher\.html\/footage$/);
+    await titled("43% · footage · kualta");
+    const mac = page.getByRole("region", { name: "This Mac" });
+    await mac.getByText("Mac → Cloudflare", { exact: true }).waitFor();
+    // Scrolled to, as far as the page goes before the ledger under it has loaded.
+    await page.waitForFunction(() => {
+      const { top, bottom } = document.getElementById("this-mac").getBoundingClientRect();
+      return scrollY > 0 && top >= 0 && bottom <= innerHeight;
+    });
+    // Opened again from its tab, the Footage tab starts at its top.
+    await open("History");
+    await page.evaluate(() => scrollTo(0, 0));
+    await open("Footage");
+    await mac.getByText("Mac → Cloudflare", { exact: true }).waitFor();
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => scrollY), 0);
     assert.deepEqual(errors, []);
     await context.close();
   }
@@ -1925,6 +1949,126 @@ try {
 
   // The Archive tab: shoot days, a clip's player, its transcript and looks (scripts/check-publisher-archive.mjs).
   await checkArchive(browser, { composer: "http://127.0.0.1:8797/publisher.html", dir: clips, shots });
+  // This Mac, in the Footage tab: how the grade app's offload on the Mac stands, as it last said, its numbers in places
+  // that are the same whatever they say, and a Mac gone quiet in a run read as stale.
+  for (const [width, name] of [
+    [1280, "desktop"],
+    [390, "mobile"],
+  ]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const theme = width > 700 ? "dark" : "light";
+    const mac = page.getByRole("region", { name: "This Mac" });
+    /** Each switch's state, figures and line, as the section shows them. */
+    const lanes = () =>
+      mac.locator(".publisher-mac-lane").evaluateAll((all) =>
+        all.map((lane) => [
+          lane.getAttribute("aria-label"),
+          lane.querySelector(".publisher-mac-lane-head > span").textContent,
+          ...[...lane.querySelectorAll("dd")].map((dd) => dd.textContent),
+          lane.querySelector(".publisher-mac-why").textContent,
+        ]),
+      );
+    const figures = () =>
+      mac.locator(".publisher-mac-figures dd").evaluateAll((all) => all.map((dd) => dd.textContent));
+    /** Where every part of the section starts on the page, and how tall it is: a passed-over clip as its line. */
+    const places = () =>
+      mac.evaluate((section) =>
+        [section, ...section.querySelectorAll(":not(li *)")].map((el) => {
+          const { x, y, height } = el.getBoundingClientRect();
+          return [el.tagName, Math.round(x), Math.round(y + scrollY), Math.round(height)].join(" ");
+        }),
+      );
+    let first = null;
+    for (const [state, notice, expected] of [
+      [
+        "",
+        /^Offloading since \d/,
+        {
+          lanes: [
+            ["Camera → Mac", "Done", "167 / 167", "40.1 / 40.1 GB", "—", "—", "All copied: unplug the camera whenever"],
+            ["Mac → Cloudflare", "Running", "7 / 167", "1.4 / 40.1 GB", "7.1 Mbit/s", "12 h 7 min", "Sending, 160 to go"],
+          ],
+          figures: ["12 made3 waiting · 1 failed", "40.1 GBthis run", "1.4 GBthis run", "123 GB5 GB kept free", "2 days45 clips"],
+        },
+      ],
+      ["waiting", /^Offloading since \d/, { send: /^Can't reach Cloudflare, tries again \d/, copy: /^Waiting for the camera, tries again \d/ }],
+      ["paused", /^Offloading since \d/, { send: "Paused while no Grade page is open" }],
+      ["stale", "Not heard from the Mac for 25 min: it may be asleep or off.", { updated: "Updated 25 min ago" }],
+      ["done", /^Last offload \d.* to \d/, { send: "Nothing to send", sendState: "Done" }],
+      ["failed", /^Last offload \d.* to \d/, { send: "Cloudflare refused the pairing (401): pair the crossposter helper again", sendState: "Failed" }],
+      ["none", "Nothing from the grade app yet: it reports here once it's running on the Mac, paired.", { empty: true }],
+    ]) {
+      await page.goto(`http://127.0.0.1:8797/publisher.html/footage?mac=${state}&theme=${theme}#this-mac`);
+      await mac.getByRole("status").filter({ hasText: notice }).waitFor();
+      const [copy, send] = await lanes();
+      if (expected.lanes) assert.deepEqual([copy, send], expected.lanes);
+      if (expected.figures) assert.deepEqual(await figures(), expected.figures);
+      if (expected.copy) assert.match(copy.at(-1), expected.copy);
+      if (typeof expected.send === "string") assert.equal(send.at(-1), expected.send);
+      else if (expected.send) assert.match(send.at(-1), expected.send);
+      if (expected.sendState) assert.equal(send[1], expected.sendState);
+      if (expected.updated) await mac.getByText(expected.updated, { exact: true }).waitFor();
+      if (expected.empty) assert.deepEqual(await figures(), ["—", "—", "—", "—", "—"]);
+      else await mac.getByRole("list", { name: "Clips passed over" }).getByText("DJI_20261120183012_0399_D.MP4").waitFor();
+      // Brought into view by its address.
+      const top = await page.evaluate(() => document.getElementById("this-mac").getBoundingClientRect().top);
+      assert.ok(top >= 0 && top < 450, `This Mac starts ${top}px down the window`);
+      // Every part keeps its place, whatever it says.
+      const now = await places();
+      if (first) assert.deepEqual(now, first, `This Mac moved in the ${state} state`);
+      first ??= now;
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      if (shots) await mac.screenshot({ path: path.join(shots, `footage-mac-${state || "running"}-${name}.png`) });
+    }
+
+    // Pause all: everything holds from here (the offload, transcripts, exports, the uploads to YouTube) until it goes on
+    // again, and every part of the tab says so.
+    await page.goto(`http://127.0.0.1:8797/publisher.html/footage?theme=${theme}`);
+    const footage = page.getByRole("region", { name: "Footage", exact: true });
+    const asked = (method) =>
+      page.waitForFunction(
+        (m) => window.publisherRequests.some((r) => r.path === "footage/pause" && r.method === m),
+        method,
+      );
+    const readAgain = () => page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForFunction(() => document.title === "40% · footage · kualta");
+    await footage.getByRole("button", { name: "Pause all" }).click();
+    await asked("POST");
+    const resume = footage.getByRole("button", { name: "Resume all" });
+    assert.equal(await resume.getAttribute("aria-pressed"), "true");
+    const pausedLine = /^Paused by you · since \d/;
+    await footage.locator(".publisher-archive-notice").filter({ hasText: pausedLine }).waitFor();
+    await mac.getByRole("status").filter({ hasText: pausedLine }).waitFor();
+    // What's held keeps its numbers: the clip going up at its share, the offload where it stopped.
+    assert.equal(await footage.locator(".publisher-archive-current-head > span").textContent(), "40%");
+    await readAgain();
+    await mac.getByRole("group", { name: "Mac → Cloudflare" }).getByText("Paused by you", { exact: true }).waitFor();
+    assert.equal((await lanes())[1][2], "7 / 167");
+    // Nothing's going up, so the title doesn't lead with it.
+    await page.waitForFunction(() => document.title === "footage · kualta");
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-paused-${name}.png`), fullPage: true });
+    await resume.click();
+    await asked("DELETE");
+    await footage.getByRole("button", { name: "Pause all" }).waitFor();
+    await page.waitForFunction(() => document.title === "40% · footage · kualta");
+    await mac.getByRole("status").filter({ hasText: /^Offloading since \d/ }).waitFor();
+    // Paused and resumed from another device, the tab hears it at its next read.
+    await page.evaluate(() => {
+      window.publisherPause.since = Date.now();
+    });
+    await readAgain();
+    await resume.waitFor();
+    await page.evaluate(() => {
+      window.publisherPause.since = null;
+    });
+    await readAgain();
+    await footage.getByRole("button", { name: "Pause all" }).waitFor();
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
 
   // Nothing on any tab moves by itself as it loads, polls or says something else; what the owner adds or chooses moves
   // the rest at once.

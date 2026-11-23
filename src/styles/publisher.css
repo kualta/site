@@ -318,6 +318,10 @@
 .publisher .publisher-connection { margin-top:56px; margin-bottom:0; padding-bottom:0; }
 
 /* --- archive: graded footage going up to the footage channel while the tab is open --- */
+/* Pause all beside the heading, its word starting in the same place whatever it says; the channel at the far end. */
+.publisher .publisher-pause { align-self:center; margin-right:auto; padding:5px 12px; border-radius:999px; font-size:13px; }
+.publisher .publisher-pause[aria-pressed="true"] { border-color:var(--publisher-ink); background:var(--publisher-ink); color:var(--publisher-on-ink); }
+.publisher .publisher-pause[aria-pressed="true"]:hover:not(:disabled) { background:var(--publisher-ink); opacity:.85; }
 .publisher .publisher-archive-channel { font-size:13px; color:var(--publisher-muted); }
 .publisher .publisher-archive-channel:hover { color:var(--publisher-ink); }
 .publisher-archive-notice { max-height:100%; margin:0; overflow-y:auto; font-size:15px; line-height:1.4; overflow-wrap:anywhere; }
@@ -334,6 +338,43 @@
 .publisher-archive-totals { grid-template-columns:repeat(3, minmax(0,1fr)); margin:0 0 8px; }
 .publisher-archive-figures dt, .publisher-archive-totals dt { font-size:13px; color:var(--publisher-muted); }
 .publisher-archive-figures dd, .publisher-archive-totals dd { margin:2px 0 0; overflow:hidden; font-size:15px; font-variant-numeric:tabular-nums; text-overflow:ellipsis; white-space:nowrap; }
+
+/* --- This Mac: the grade app's offload, its numbers each in a place of its own, a line each whatever they say --- */
+.publisher-mac { margin-top:40px; scroll-margin-top:24px; }
+/* What changes starts after what doesn't, so a new word moves nothing: when it was said after the heading, as each
+   switch's state after its name. */
+.publisher-mac-head { display:flex; align-items:baseline; gap:16px; }
+.publisher .publisher-mac-head h2 { margin:0; }
+.publisher .publisher-mac-head p { min-width:0; margin:0; overflow:hidden; font-size:13px; font-variant-numeric:tabular-nums; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-mac-notice { height:22px; margin:4px 0 16px; overflow:hidden; font-size:15px; line-height:22px; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-mac-notice[data-tone="bad"] { color:var(--publisher-danger); }
+.publisher-mac-lanes { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; }
+.publisher-mac-lane { min-width:0; padding:16px 20px; border:1px solid var(--publisher-line); border-radius:16px; }
+.publisher-mac-lane-head { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; line-height:22px; }
+/* The name takes the same room in any face, so its state starts in the same place while the fonts load. */
+.publisher .publisher-mac-lane-head > h3 { flex:none; width:10em; }
+.publisher-mac-lane-head > span { color:var(--publisher-muted); font-size:13px; }
+.publisher-mac-lane dl { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px 16px; margin:14px 0 0; }
+.publisher-mac dt { color:var(--publisher-muted); font-size:13px; }
+.publisher-mac dd { margin:2px 0 0; overflow:hidden; font-size:15px; font-variant-numeric:tabular-nums; text-overflow:ellipsis; white-space:nowrap; }
+.publisher .publisher-mac dd small { display:block; overflow:hidden; font-size:12px; line-height:18px; height:18px; text-overflow:ellipsis; }
+.publisher-mac-why { height:20px; margin:12px 0 0; overflow:hidden; color:var(--publisher-muted); font-size:13px; line-height:20px; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-mac-figures { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:16px 24px; margin:20px 0 0; padding:16px 0; border-bottom:1px solid var(--publisher-line); }
+.publisher-mac-skipped { margin-top:16px; }
+.publisher .publisher-mac-skipped h3 { color:var(--publisher-muted); font-size:13px; }
+.publisher-mac-skipped h3 span { margin-left:6px; font-variant-numeric:tabular-nums; }
+/* Three lines tall whatever it holds; more scroll in it. */
+.publisher-mac-skipped ul { height:60px; margin:4px 0 0; padding:0; overflow-y:auto; list-style:none; font-size:13px; line-height:20px; }
+.publisher-mac-skipped li { overflow:hidden; color:var(--publisher-muted); text-overflow:ellipsis; white-space:nowrap; }
+.publisher-mac-skipped li b { color:var(--publisher-ink); font-weight:400; }
+/* What a Mac that's stopped saying anything last said. */
+.publisher-mac-body[data-stale] :is(dd, .publisher-mac-lane-head > span) { color:var(--publisher-muted); }
+.publisher-mac-body[data-stale] .publisher-archive-bar > span { background:var(--publisher-muted); }
+@media(max-width:700px) {
+  .publisher-mac-lanes { grid-template-columns:minmax(0,1fr); }
+  .publisher-mac-lane { padding:16px; }
+  .publisher-mac-lane dl, .publisher-mac-figures { grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
+}
 
 /* --- footage ledger: every clip, its grade, and where its original and graded copies are --- */
 .publisher-ledger { margin-top:32px; }
