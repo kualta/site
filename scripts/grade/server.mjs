@@ -1116,10 +1116,11 @@ async function startOffloading(asked) {
   }
 }
 /**
- * How a switch started from the Footage tab goes, as the owner runs it: on with no page open, the card's copies going
- * once the archive has them, and nothing put up to YouTube meanwhile. What's kept stays out of it, as ever.
+ * How a switch started from the Footage tab goes, as the owner runs it: on with no page open, and nothing put up to
+ * YouTube meanwhile. The card's copies go when last chosen (each once it's on this Mac, by default), and what's kept
+ * stays out of it, as ever.
  */
-const ASKED_RUN = { flags: { unattended: true, youtube: false }, after: "sent" };
+const ASKED_RUN = { flags: { unattended: true, youtube: false } };
 /**
  * Does a Start or Pause asked of a switch from the Footage tab (asks.mjs), saying false when it has to wait: a Start
  * while the switch is still stopping, or while another start is under way. A Pause stops a switch once what's in flight
