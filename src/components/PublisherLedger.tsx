@@ -9,6 +9,7 @@ import {
   lost,
   needsGrade,
   storage,
+  thumbUrl,
 } from "@/lib/publisher/ledger";
 
 interface Props {
@@ -118,7 +119,7 @@ function Thumb({ clip, record }: { clip: string; record: LedgerClip }) {
   const [failed, setFailed] = useState(false);
   const video = record.graded?.youtube?.video;
   let src: string | null = null;
-  if (record.thumb) src = `/api/publisher/footage/thumbs/${encodeURIComponent(clip)}.jpg`;
+  if (record.thumb) src = thumbUrl(clip, record.thumb);
   else if (video) src = `https://i.ytimg.com/vi/${encodeURIComponent(video)}/default.jpg`;
   if (!src || failed) return <span className="publisher-ledger-thumb" />;
   return (

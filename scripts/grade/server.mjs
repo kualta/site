@@ -26,13 +26,13 @@ import {
   goingToYoutube,
   ledgerCloud,
   mergeLedger,
-  pictureName,
   unionLedgers,
   youtubeUploads,
 } from "./ledger.mjs";
 import { cameraDays, ENCODERS, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
 import { lookFiles } from "./looks.mjs";
 import { saveSettings } from "./settings.mjs";
+import { thumbSender } from "./thumbs.mjs";
 import { transcriber } from "./transcripts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -311,6 +311,7 @@ function pumpThumbs() {
     const job = jobs.thumb.queue.shift();
     jobs.thumb.busy++;
     makeThumb(job.path, thumbFile(job.name), { still: job.meta.still, at: Math.min(1, job.meta.duration / 2) })
+      .then(() => madeFrom(job.name, Boolean(job.meta.copy)))
       .catch((e) => {
         jobs.thumb.failed[job.k] = String(e.message || e);
       })
@@ -621,25 +622,37 @@ async function thumbFiles() {
   return new Map(files.filter((f) => f.endsWith(".jpg")).map((f) => [stemOf(f).toLowerCase(), f]));
 }
 
+/** The clips (lowercase) whose picture in the cache was made from the graded copy, not the log original. */
+const COPIES = join(CACHE, "thumb-copies.json");
+/** Notes what a clip's picture was just made from: the ledger sends one made from the graded copy as it is. */
+async function madeFrom(name, copy) {
+  const clip = stemOf(name).toLowerCase();
+  if (copy === Boolean((await readClips(COPIES))[clip])) return;
+  await updateClips(COPIES, (clips) => {
+    if (copy) clips[clip] = true;
+    else delete clips[clip];
+  });
+}
+
+const thumbs = thumbSender({ lutSize: EXPORT_LUT_SIZE });
 /**
- * Sends the archive a few clips' pictures it hasn't got (for the composer's Footage tab), marking each clip's record
- * `thumb` once it's there; says whether more are waiting.
+ * Sends the archive a few clips' pictures as they now are, graded as each would export (thumbs.mjs), for the composer's
+ * Footage and Archive tabs; says whether more are waiting.
  */
-async function sendThumbs(cloud, at = 24) {
+async function sendThumbs(cloud) {
   const files = await thumbFiles();
-  const waiting = Object.entries(ledger.current.clips).filter(
-    ([key, clip]) => !clip.thumb && pictureName(key) && files.has(key.toLowerCase()),
-  );
-  for (const [key, clip] of waiting.slice(0, at)) {
-    try {
-      await cloud.putThumb(key, await readFile(join(CACHE, "thumbs", files.get(key.toLowerCase()))));
-      clip.thumb = true;
-    } catch (e) {
-      ledger.error = `Couldn't send a picture to Cloudflare: ${e.message}`;
-      return false;
-    }
-  }
-  return waiting.length > at;
+  const { more, error } = await thumbs.send({
+    clips: ledger.current.clips,
+    files: new Map([...files].map(([clip, file]) => [clip, join(CACHE, "thumbs", file)])),
+    copies: new Set(Object.keys(await readClips(COPIES))),
+    probed: await readClips(join(CACHE, "meta.json")),
+    grades: await readClips(GRADES),
+    bases: await bases(),
+    loadCube,
+    put: cloud.putThumb,
+  });
+  if (error) ledger.error = `Couldn't send a picture to Cloudflare: ${error}`;
+  return more;
 }
 
 /** A file's size and modification time, or null once it's gone. */
@@ -688,7 +701,7 @@ async function observe(cloud) {
   for (const c of [...cameraClips, ...macClips, ...exported]) {
     const lower = stemOf(c.name).toLowerCase();
     if (pictured.has(lower)) continue;
-    const meta = known[c.path]?.meta ?? (c.path.startsWith(EXPORTED) ? { still: null, duration: 1 } : null);
+    const meta = known[c.path]?.meta ?? (c.path.startsWith(EXPORTED) ? { still: null, duration: 1, copy: true } : null);
     if (!meta) continue;
     // One picture a clip: from the first copy that can make it.
     pictured.add(lower);

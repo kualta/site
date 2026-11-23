@@ -27,7 +27,7 @@ import {
   stemOf,
   watchCost,
 } from "@/lib/publisher/archive-view";
-import type { LedgerClip } from "@/lib/publisher/ledger";
+import { type LedgerClip, thumbUrl } from "@/lib/publisher/ledger";
 
 interface Props {
   clip: ArchivedClip;
@@ -360,9 +360,7 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
         <div className="publisher-archive-watch">
           <div ref={screen} className="publisher-archive-screen">
             <div className="publisher-archive-stage">
-              {record?.thumb && !framed && (
-                <img src={`/api/publisher/footage/thumbs/${encodeURIComponent(stemOf(clip.file))}.jpg`} alt="" />
-              )}
+              {record?.thumb && !framed && <img src={thumbUrl(stemOf(clip.file), record.thumb)} alt="" />}
               <canvas ref={canvas} hidden={!webgl} aria-label="Picture" />
               {/* biome-ignore lint/a11y/useMediaCaption: its transcript is its captions track, when one is filed */}
               <video

@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import ffmpegStatic from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
-import { CALIBRATION, blockMeans, deflickerFrames, profileOf } from "./color.mjs";
+import { CALIBRATION, blockMeans, deflickerFrames, profileOf, sampleTetra } from "./color.mjs";
 
 const exec = promisify(execFile);
 export const FFMPEG = process.env.FFMPEG_PATH || ffmpegStatic;
@@ -155,6 +155,50 @@ export async function makeThumb(src, dst, { still = null, at = 1 } = {}) {
   const scale = "scale='if(gt(iw,ih),320,-2)':'if(gt(iw,ih),-2,320)'";
   const input = still === null ? ["-ss", String(at), "-i", src, "-map", "0:v:0"] : ["-i", src, "-map", `0:${still}`];
   await writeAtomically(dst, (tmp) => run([...input, "-frames:v", "1", "-vf", scale, "-q:v", "3", tmp]));
+}
+
+/** Run ffmpeg on `input` (bytes, on its stdin) and say what it writes to its stdout. */
+function pipe(args, input) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(FFMPEG, ["-hide_banner", "-loglevel", "error", ...args]);
+    const out = [];
+    let err = "";
+    child.stdout.on("data", (c) => out.push(c));
+    child.stderr.on("data", (c) => {
+      err = (err + c).slice(-4000);
+    });
+    child.on("error", reject);
+    child.on("close", (code) =>
+      code === 0 ? resolve(Buffer.concat(out)) : reject(new Error(err.trim() || `ffmpeg exited ${code}`)),
+    );
+    // ffmpeg that gives up early closes its stdin: its own error says why.
+    child.stdin.on("error", () => {});
+    child.stdin.end(input);
+  });
+}
+
+/**
+ * A thumbnail (JPEG bytes, as makeThumb makes it) through a clip's grade LUT, as a JPEG of its size and quality. It holds
+ * the clip's own Y'CbCr, stretched to full range (a DJI still is its first frame so, within a level), so it's read as an
+ * export reads the original but for the range: the clip's `matrix`, at 16 bits. Each pixel goes through `lut` (a parsed
+ * LUT: sampleTetra's) tetrahedrally, as lut3d does in an export, and out as a JPEG is read (BT.601, full range).
+ */
+export async function gradeStill(jpeg, lut, { matrix = "bt709" } = {}) {
+  const read = `scale=in_color_matrix=${matrix}:in_range=pc:flags=accurate_rnd+full_chroma_int,format=rgb48be`;
+  const ppm = await pipe(["-f", "image2pipe", "-i", "-", "-vf", read, "-c:v", "ppm", "-f", "image2pipe", "-"], jpeg);
+  const head = /^P6\s+(\d+)\s+(\d+)\s+65535\s/.exec(ppm.subarray(0, 32).toString("latin1"));
+  if (!head) throw new Error("not a picture ffmpeg can read");
+  const [, width, height] = head.map(Number);
+  const pixels = ppm.subarray(head[0].length);
+  const graded = Buffer.alloc(width * height * 6);
+  for (let i = 0; i < graded.length; i += 6) {
+    const [r, g, b] = [0, 2, 4].map((k) => pixels.readUInt16BE(i + k) / 65535);
+    const out = sampleTetra(lut, r, g, b);
+    for (let k = 0; k < 3; k++) graded.writeUInt16LE(Math.round(Math.min(1, Math.max(0, out[k])) * 65535), i + 2 * k);
+  }
+  const write = "scale=out_color_matrix=bt601:out_range=pc:flags=accurate_rnd+full_chroma_int,format=yuvj420p";
+  const raw = ["-f", "rawvideo", "-pix_fmt", "rgb48le", "-s", `${width}x${height}`, "-i", "-"];
+  return pipe([...raw, "-vf", write, "-q:v", "3", "-f", "image2pipe", "-c:v", "mjpeg", "-"], graded);
 }
 
 /**

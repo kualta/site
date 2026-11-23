@@ -17,8 +17,8 @@ export interface LedgerClip {
     youtube: null | { video: string; at: string; current: boolean };
   };
   gradePending: boolean;
-  /** Its small picture is in the archive. */
-  thumb?: boolean;
+  /** Its small picture is in the archive: graded through the grade this keys, or (true) as it was made. */
+  thumb?: boolean | string;
   /** Its transcript is in the archive, beside its original. */
   transcript?: boolean;
 }
@@ -50,6 +50,10 @@ export const atRisk = (c: LedgerClip) => !keptAway(c);
 export const lost = (c: LedgerClip) => !c.original.camera && !c.original.mac && !c.graded?.mac && !keptAway(c);
 /** Log footage waiting for its grade (Rec.709 is as shot). */
 export const needsGrade = (c: LedgerClip) => c.profile !== "rec709" && !c.graded;
+
+/** A clip's small picture, asked for by the grade it went through, so a regraded one isn't the browser's earlier copy. */
+export const thumbUrl = (clip: string, thumb: LedgerClip["thumb"]) =>
+  `/api/publisher/footage/thumbs/${encodeURIComponent(clip)}.jpg${typeof thumb === "string" ? `?v=${thumb}` : ""}`;
 
 /** The day a clip was recorded, YYYY-MM-DD, or "" when unknown. */
 export const dayOf = (c: LedgerClip) => c.recorded?.slice(0, 10) ?? "";
