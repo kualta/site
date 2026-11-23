@@ -405,8 +405,8 @@ export const TRIM_AUDIO = ["-c:a", "aac", "-b:a", "320k"];
  * The frames a trim of [start, end) seconds holds: from the one on screen at `start` to the last that starts before
  * `end`. Times come rounded to the millisecond, so a frame starting within half of one after `start` counts as at it,
  * and one starting within half of one before `end` as at it too. Says the first frame's time and the last's, when the
- * last leaves the screen (`until`), and half the shortest time a frame is on screen (`slack`). Read off the file's own
- * packets around both ends, so a clip is cut on its own frames, at whatever rate, steady or not.
+ * last leaves the screen (`until`), half the shortest time a frame is on screen (`slack`), and the stream's time base.
+ * Read off the file's own packets around both ends, so a clip is cut on its own frames, at whatever rate, steady or not.
  */
 export async function trimFrames(src, start, end) {
   const around = (t) => `${Math.max(0, t - 2).toFixed(6)}%${(t + 1).toFixed(6)}`;
@@ -426,7 +426,8 @@ export async function trimFrames(src, start, end) {
   const last = all.findLast((pts) => us(time(pts)) < us(end) - 500);
   if (first === undefined || last === undefined || last < first) throw new Error(`no frames from ${start} s to ${end} s`);
   const until = all.find((pts) => pts > last) ?? last + (lengths.get(last) || shortest);
-  return { first: time(first), last: time(last), until: time(until), slack: time(shortest) / 2 };
+  const timeBase = `${num}/${den}`;
+  return { first: time(first), last: time(last), until: time(until), slack: time(shortest) / 2, timeBase };
 }
 
 /** When a clip's sound starts, and its sample rate; null when it has none. */
@@ -450,17 +451,19 @@ export async function exportTrim({
 }) {
   const stop = Math.min(end, duration || end);
   if (start >= stop) throw new Error(`no frames from ${start} s to ${end} s: the clip ends at ${duration} s`);
-  const { first, last, until, slack } = await trimFrames(src, start, stop);
+  const { first, last, until, slack, timeBase } = await trimFrames(src, start, stop);
   const sound = await soundOf(src);
   // Only the frames from `from` on are graded: those before it are decoded and dropped.
   const from = Math.max(0, first - 0.1);
   const ahead = (deflickerFrames(deflicker) + 2) / (fps || 24) + 0.1;
   const s = (t) => Math.max(0, t).toFixed(6);
-  const picture = `[0:v:0]${exportFilter({ matrix, cube, deflicker })},trim=start=${s(first - slack)}:end=${s(last + slack)},setpts=PTS-STARTPTS[v]`;
-  // A clip whose sound starts after its picture has silence put before it.
-  const late = sound ? Math.round((sound.start - first) * sound.rate) : 0;
-  const delay = late > 0 ? `,adelay=delays=${late}S:all=1` : "";
-  const audio = sound && `;[0:a:0]atrim=start=${s(first)}:end=${s(until)},asetpts=PTS-STARTPTS${delay},apad=whole_dur=${s(until - first)}[a]`;
+  // The frames keep their times in the original through the graph (-copyts), and the file's times start at the first
+  // frame's (-output_ts_offset). Not setpts: after it ffmpeg 7 knows no frame rate, and makes the picture 25 fps,
+  // dropping frames, or leaves the last frame no time on screen.
+  const picture = `[0:v:0]${exportFilter({ matrix, cube, deflicker })},trim=start=${s(first - slack)}:end=${s(last + slack)}[v]`;
+  // A clip whose sound starts after its first frame has it start that much later in the file.
+  const heard = sound && Math.max(first, sound.start);
+  const audio = sound && `;[0:a:0]atrim=start=${s(first)}:end=${s(until)},apad=whole_dur=${s(until - heard)}[a]`;
   const encode = (on) =>
     writeAtomically(dst, (tmp) =>
       run(
@@ -468,9 +471,14 @@ export async function exportTrim({
           "-ss", s(from), "-t", s(until + ahead - from), "-copyts", "-i", src,
           "-filter_complex", picture + (audio || ""),
           "-map", "[v]", ...(audio ? ["-map", "[a]"] : []), "-map_metadata", "0",
-          ...exportVideo(on, { quality, videoBitrate, width, height, fps }), "-force_key_frames", "expr:gte(t,n_forced*0.25)",
+          // Every frame as it comes, at its own time: no frames made or dropped to a rate, none rounded to another.
+          "-fps_mode:v", "passthrough", "-enc_time_base:v", timeBase,
+          ...exportVideo(on, { quality, videoBitrate, width, height, fps }),
+          // A key frame every quarter second from the first, which is at its time in the original here.
+          "-force_key_frames", "expr:if(isnan(prev_forced_t),1,gte(t,prev_forced_t+0.25))",
           // Its length counted in samples, where by default it's in milliseconds.
-          ...(audio ? [...TRIM_AUDIO, "-movie_timescale", String(sound.rate)] : []), "-movflags", "+faststart", tmp,
+          ...(audio ? [...TRIM_AUDIO, "-movie_timescale", String(sound.rate)] : []),
+          "-output_ts_offset", `-${s(first)}`, "-movflags", "+faststart", tmp,
         ],
         { onProgress, duration: until - first, signal },
       ),

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +7,15 @@ import sharp from "sharp";
 import { processMedia } from "./process.mjs";
 // Native tooling is a laptop setup requirement, not a Worker dependency.
 const native = Bun.which("exiftool");
+// The ffmpeg these tests pick is put back afterwards: bun runs every test file in one process, so the files after this
+// one would otherwise run on it.
+const ffmpegPaths = { FFMPEG_PATH: process.env.FFMPEG_PATH, FFPROBE_PATH: process.env.FFPROBE_PATH };
+afterAll(() => {
+  for (const [name, value] of Object.entries(ffmpegPaths)) {
+    if (value === undefined) Reflect.deleteProperty(process.env, name);
+    else process.env[name] = value;
+  }
+});
 test.skipIf(!native)("fresh images remove GPS and comments while retaining only allowed camera tags", async () => {
   const dir = await mkdtemp(join(tmpdir(), "publisher-test-"));
   try {
