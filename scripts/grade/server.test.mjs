@@ -1011,7 +1011,8 @@ test.if(usable)("offloads what's been moved into Movies/Preexp as Original's, it
 // isn't fine enough for a 300 ms window, and the clip looked still while being written. The app's own window is 2 minutes.
 test.if(usable && process.platform === "darwin")("leaves a clip being copied into Preexp alone until it's been still for a while", async () => {
   const preexp = join(movies, "Preexp");
-  const copying = "DJI_20260224100000_0010_D.MP4";
+  // A day of its own: what other tests file under theirs says nothing about this clip.
+  const copying = "DJI_20260223100000_0010_D.MP4";
   clip(join(preexp, copying), "D-Log2");
   // Old by its own time, as a card's clip is: what changes it is what's looked at.
   utimesSync(join(preexp, copying), new Date("2026-01-01"), new Date("2026-01-01"));
@@ -1034,13 +1035,14 @@ test.if(usable && process.platform === "darwin")("leaves a clip being copied int
     await new Promise((resolve) => setTimeout(resolve, 1500));
     expect(readdirSync(preexp)).toContain(copying);
     // Nor did any of it go up: a half-copied clip in Cloudflare would pass for the clip.
-    expect(site.manifests.has("_originals-2026-02-24")).toBe(false);
+    expect(site.manifests.has("_originals-2026-02-23")).toBe(false);
+    expect(Date.now() - started).toBeGreaterThan(1000);
   } finally {
     grow.kill();
+    // Stopped either way, so a failure here doesn't leave a run going into the tests after it.
+    await post("/api/offload/stop", { now: true });
+    await ended();
   }
-  expect(Date.now() - started).toBeGreaterThan(1000);
-  await post("/api/offload/stop", { now: true });
-  await ended();
 }, 120_000);
 
 

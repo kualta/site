@@ -326,7 +326,7 @@ try {
     const lorax = history.locator(".publisher-history-item", { hasText: "Lorax wisdom, part 7" });
     await lorax.getByRole("button", { name: "Manage" }).click();
     const reupload = lorax.getByRole("group", { name: "Upload again" });
-    await reupload.getByText("Uploads expire after 31 days.", { exact: false }).waitFor();
+    await reupload.getByText("The video expired.").waitFor();
     assert.equal(await reupload.getByRole("button", { name: "Chinese video" }).count(), 1);
     const sendReupload = reupload.getByRole("button", { name: "Upload", exact: true });
     assert.equal(await sendReupload.isDisabled(), true);
@@ -1293,7 +1293,7 @@ try {
     await open("Edit ready", "Square windows");
     await page.getByRole("dialog", { name: "Square windows" }).getByRole("button", { name: "Compose" }).click();
     const link = page.getByRole("combobox", { name: /^Pipeline/ });
-    await page.getByText("Moves to Posted once the post is queued.").waitFor();
+    await link.locator(`option[value="${squareWindows}"]:checked`).waitFor({ state: "attached" });
     assert.equal(new URL(page.url()).search, `?content=${squareWindows}`);
     assert.equal(await link.inputValue(), squareWindows);
     assert.deepEqual(await link.locator("option").allTextContents(), [
@@ -1306,7 +1306,7 @@ try {
     ]);
     // A reload keeps the link.
     await page.reload();
-    await page.getByText("Moves to Posted once the post is queued.").waitFor();
+    await link.locator(`option[value="${squareWindows}"]:checked`).waitFor({ state: "attached" });
     await page
       .getByRole("navigation", { name: "Presets" })
       .getByRole("button", { name: "Text post", exact: true })

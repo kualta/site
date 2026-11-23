@@ -186,7 +186,7 @@ export function offloadMenu({ api, fileSize, showError, poll }) {
       room.keepFree,
     )} kept free)`;
     $("offload-transcripts").textContent = transcripts.toSend ? `${transcripts.toSend} to send` : "Nothing to send";
-    $("offload-kept").textContent = kept.count ? clips(kept.count) : "None";
+    $("offload-kept").textContent = kept.count ? clips(kept.count) : "";
     $("offload-unattended").checked = unattended;
     const after = run?.running ? run.clearCardAfter : info.clearCardAfter;
     for (const button of document.querySelectorAll("[data-clear-after]"))
