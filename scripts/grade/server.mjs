@@ -357,16 +357,18 @@ async function pumpExports() {
   exportBusy = true;
   while (jobs.export.queue.length) {
     const job = jobs.export.queue.shift();
-    jobs.export.current = { ...job, progress: 0 };
+    // Its own record: ffmpeg can still report progress after the export has ended, when there's no current one.
+    const current = { ...job, progress: 0 };
+    jobs.export.current = current;
     exportAbort = new AbortController();
     try {
       const made = await exportOne(job, {
         onProgress: (p) => {
-          jobs.export.current.progress = p;
+          current.progress = p;
         },
         onFallback: (why) => {
           console.error(`grade: ${job.name}: encoding on the CPU, the GPU couldn't: ${why}`);
-          Object.assign(jobs.export.current, { encoder: "cpu", fallback: why, progress: 0 });
+          Object.assign(current, { encoder: "cpu", fallback: why, progress: 0 });
         },
         signal: exportAbort.signal,
       });

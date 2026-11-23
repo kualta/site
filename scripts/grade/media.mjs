@@ -56,10 +56,13 @@ function run(args, { onProgress, duration, signal } = {}) {
     const child = spawn(FFMPEG, ["-hide_banner", "-loglevel", "error", "-y", ...args, ...(onProgress ? ["-progress", "pipe:1", "-nostats"] : [])], { signal });
     let err = "";
     let buf = "";
+    // Nothing is said of a run once it's over: output can still be on its way when an abort or a failure ends it.
+    let over = false;
     child.stderr.on("data", (c) => {
       err = (err + c).slice(-4000);
     });
     child.stdout.on("data", (c) => {
+      if (over) return;
       buf += c;
       for (let i = buf.indexOf("\n"); i >= 0; i = buf.indexOf("\n")) {
         const line = buf.slice(0, i);
@@ -68,8 +71,15 @@ function run(args, { onProgress, duration, signal } = {}) {
         if (m && duration && onProgress) onProgress(Math.min(1, Number(m[1]) / 1e6 / duration));
       }
     });
-    child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(err.trim() || `ffmpeg exited ${code}`))));
+    child.on("error", (error) => {
+      over = true;
+      reject(error);
+    });
+    child.on("close", (code) => {
+      over = true;
+      if (code === 0) resolve();
+      else reject(new Error(err.trim() || `ffmpeg exited ${code}`));
+    });
   });
 }
 
