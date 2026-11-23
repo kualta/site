@@ -59,7 +59,9 @@ test("the card goes to the Mac and the Mac to the archive, each deleted once the
     expect(files(at.original)).toEqual([]);
 
     const day = await request(`projects/${originalsName("2026-11-18")}`);
-    expect(day.files.map((f) => [f.path, f.size, f.mtime])).toEqual([
+    // Two go up at once, so they're filed in whichever order they land.
+    const byPath = (a, b) => a[0].localeCompare(b[0]);
+    expect(day.files.map((f) => [f.path, f.size, f.mtime]).sort(byPath)).toEqual([
       ["assets/DJI_20261118203054_0316_D.MP4", 33, Date.parse("2026-11-18T12:00:00Z")],
       ["assets/DJI_20261118203937_0317_D.MP4", 5, Date.parse("2026-11-18T12:00:00Z")],
     ]);

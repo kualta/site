@@ -990,23 +990,36 @@ test.if(usable)("offloads what's been moved into Movies/Preexp as Original's, it
   expect(site.manifests.get(`_originals-${preexpDay}`).files.map((f) => f.path)).toEqual([`assets/${moved}`]);
 }, 120_000);
 
-test.if(usable)("leaves a clip being copied into Preexp alone until it's been still for a while", async () => {
+// macOS only, where the grade app runs: there a file's change time is exact to the millisecond. On CI's Linux runner it
+// isn't fine enough for a 300 ms window, and the clip looked still while being written. The app's own window is 2 minutes.
+test.if(usable && process.platform === "darwin")("leaves a clip being copied into Preexp alone until it's been still for a while", async () => {
   const preexp = join(movies, "Preexp");
   const copying = "DJI_20260221100000_0010_D.MP4";
   clip(join(preexp, copying), "D-Log2");
   // Old by its own time, as a card's clip is: what changes it is what's looked at.
   utimesSync(join(preexp, copying), new Date("2026-01-01"), new Date("2026-01-01"));
-  const summary = await json("/api/offload");
-  expect(summary.mac.clips).toBeGreaterThanOrEqual(1);
+  // It counts as still being written until 300 ms after it was last changed. The writer puts the old time back after each
+  // write, as a copy that keeps the file's dates does, so only the change time says it's being written. It's one process
+  // of its own writing every 20 ms, starting nothing per write: a timer here would wait on this test's awaits, and a
+  // process started per write could leave 300 ms between writes on a busy runner.
+  const writer =
+    'while (1) { open(my $f, ">>", $ENV{CLIP}) or die; print $f "x"; close $f; utime(1767225600, 1767225600, $ENV{CLIP}); select(undef, undef, undef, 0.02) }';
+  const grow = spawn("perl", ["-e", writer], {
+    env: { ...process.env, CLIP: join(preexp, copying) },
+    stdio: "ignore",
+  });
   const started = Date.now();
-  // It counts as still being written until 300 ms after it was last changed.
-  const grow = setInterval(() => writeFileSync(join(preexp, copying), `${"x".repeat(50)}${Date.now()}`), 100);
   try {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const summary = await json("/api/offload");
+    expect(summary.mac.clips).toBeGreaterThanOrEqual(1);
     expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
     await new Promise((resolve) => setTimeout(resolve, 1500));
     expect(readdirSync(preexp)).toContain(copying);
+    // Nor did any of it go up: a half-copied clip in Cloudflare would pass for the clip.
+    expect(site.manifests.has("_originals-2026-02-21")).toBe(false);
   } finally {
-    clearInterval(grow);
+    grow.kill();
   }
   expect(Date.now() - started).toBeGreaterThan(1000);
   await post("/api/offload/stop", { now: true });
