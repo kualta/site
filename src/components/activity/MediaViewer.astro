@@ -1,5 +1,5 @@
 ---
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlayIcon, VolumeMuteIcon } from "@/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlayIcon, VolumeIcon, VolumeMuteIcon } from "@/components/icons";
 import VideoControls from "@/components/VideoControls.astro";
 import "@/styles/video-player.css";
 ---
@@ -13,7 +13,7 @@ import "@/styles/video-player.css";
 
 <template id="activity-preview-play"><PlayIcon size={16} aria-hidden="true" /></template>
 
-<template id="activity-preview-muted"><span class="preview-muted" aria-hidden="true"><VolumeMuteIcon size={14} /></span></template>
+<template id="activity-preview-sound"><span class="preview-sound" aria-hidden="true"><span data-preview-muted-icon><VolumeMuteIcon size={14} /></span><span data-preview-sound-icon><VolumeIcon size={14} /></span></span></template>
 
 <template id="activity-video-player">
   <div class="activity-video-player" data-paused="true">
@@ -28,6 +28,8 @@ import "@/styles/video-player.css";
     background: transparent; cursor: zoom-in;
   }
   .site-bluesky-card button[data-media-open].media-container { cursor: pointer; }
+  /* With its sound on, a feed video's next click opens the full player. */
+  .site-bluesky-card button[data-media-open].media-container[data-preview-sound] { cursor: zoom-in; }
   .site-bluesky-card button[data-media-open]:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
   /* A lone portrait image leaves most of its button empty, so the ring traces the image instead. */
   .site-bluesky-card .image-grid--1 button[data-media-open]:focus-visible { outline: none; }
@@ -49,14 +51,17 @@ import "@/styles/video-player.css";
   .site-bluesky-card .bluesky-post-container .play-button { transition: opacity 200ms ease; }
   /* Once it runs, the sound is what the button offers, so the play mark steps aside for it. */
   [data-preview-playing] .play-button { opacity: 0; }
-  .preview-muted {
+  .preview-sound {
     position: absolute; z-index: 1; inset: auto 0.5rem 0.5rem auto;
     display: grid; place-items: center; width: 1.875rem; height: 1.875rem;
     border: 1px solid rgb(255 255 255 / 25%); border-radius: 50%;
     background: rgb(28 28 28 / 60%); color: #f4f1ed;
     opacity: 0; backdrop-filter: blur(8px); transition: opacity 200ms ease;
   }
-  [data-preview-playing] .preview-muted { opacity: 1; }
+  [data-preview-playing] .preview-sound { opacity: 1; }
+  .preview-sound > span { display: contents; }
+  .preview-sound [data-preview-sound-icon], [data-preview-sound] .preview-sound [data-preview-muted-icon] { display: none; }
+  [data-preview-sound] .preview-sound [data-preview-sound-icon] { display: contents; }
   .activity-media-viewer {
     position: fixed; inset: 0; margin: 0; padding: 0;
     width: 100vw; height: 100dvh; max-width: none; max-height: none;
@@ -95,7 +100,7 @@ import "@/styles/video-player.css";
   [data-media-error] { position: absolute; inset: auto 0 5rem; padding: 0.75rem; background: rgb(0 0 0 / 75%); font-size: 0.875rem; text-align: center; }
   @media (prefers-reduced-motion: reduce) {
     .viewer-round { transition: none; }
-    .activity-video-preview, .preview-muted, .site-bluesky-card .bluesky-post-container .play-button { transition: none; }
+    .activity-video-preview, .preview-sound, .site-bluesky-card .bluesky-post-container .play-button { transition: none; }
   }
 </style>
 
@@ -106,6 +111,7 @@ import "@/styles/video-player.css";
   import { createVideoStream } from "@/scripts/activity-video-stream";
   import {
     getPreviewTime,
+    hearVideoPreview,
     registerVideoPreview,
     releaseVideoPreviews,
     reobserveVideoPreviews,
@@ -328,7 +334,8 @@ import "@/styles/video-player.css";
           for (const attribute of target.attributes) {
             if (attribute.name.startsWith("data-astro-cid-")) button.setAttribute(attribute.name, attribute.value);
           }
-          button.setAttribute("aria-label", `${item.kind === "video" ? "Play video" : "Open image"}${item.alt ? `: ${item.alt}` : ""}`);
+          // A video's label follows its sound, so the preview keeps it.
+          if (item.kind === "image") button.setAttribute("aria-label", `Open image${item.alt ? `: ${item.alt}` : ""}`);
           button.append(...target.childNodes);
           const thumbnail = button.querySelector("img");
           if (item.kind === "image" && thumbnail) {
@@ -339,10 +346,14 @@ import "@/styles/video-player.css";
           const previewIcon = document.querySelector<HTMLTemplateElement>("#activity-preview-play");
           if (previewPlay && previewIcon) previewPlay.replaceChildren(previewIcon.content.cloneNode(true));
           if (item.kind === "video") {
-            const muted = document.querySelector<HTMLTemplateElement>("#activity-preview-muted");
-            if (muted) button.append(muted.content.cloneNode(true));
+            const sound = document.querySelector<HTMLTemplateElement>("#activity-preview-sound");
+            if (sound) button.append(sound.content.cloneNode(true));
           }
-          button.onclick = () => openViewer(items, items.indexOf(item), button);
+          // A feed video's first click turns its sound on where it is; the next opens the full player.
+          button.onclick = () => {
+            if (item.kind === "video" && hearVideoPreview(button)) return;
+            openViewer(items, items.indexOf(item), button);
+          };
           button.onpointerenter = () => preloadImage(item);
           button.onfocus = () => preloadImage(item);
           target.replaceWith(button);
