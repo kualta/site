@@ -54,7 +54,6 @@ export default function PublisherChinese({
           maxLength={100}
           disabled={disabled}
           onChange={(e) => set({ title: e.target.value })}
-          placeholder="标题"
         />
         <small className="publisher-count" data-over={titleLength > 20}>
           <PublisherSteady among={["00 / 20"]}>{`${titleLength} / 20`}</PublisherSteady>
@@ -69,7 +68,6 @@ export default function PublisherChinese({
           rows={5}
           disabled={disabled}
           onChange={(e) => set({ text: e.target.value })}
-          placeholder="正文"
         />
         <small className="publisher-count" data-over={text.used > text.limit}>
           <PublisherSteady among={[`0000 / ${text.limit}`]}>{`${text.used} / ${text.limit}`}</PublisherSteady>

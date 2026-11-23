@@ -133,12 +133,12 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
   /** What a clip's button says and does: `[text, action, title]`, with no action when there's nothing to do. */
   function buttonOf(clip, key, busy) {
     const share = shareOf(key);
-    if (share !== null) return [`${Math.floor(share * 100)}%`, null, "On its way to this Mac"];
-    if (busy.has(key)) return ["Queued", null, "Waiting for the clips before it"];
-    if (clip.here === "yes") return ["Grade", "grade", "On this Mac: open it in its day"];
+    if (share !== null) return [`${Math.floor(share * 100)}%`, null, ""];
+    if (busy.has(key)) return ["Queued", null, ""];
+    if (clip.here === "yes") return ["Grade", "grade", ""];
     if (clip.here === "different") return ["Differs", null, "Another file of this name is on this Mac"];
     const failed = run?.failed.find((one) => keyOf(one) === key);
-    return failed ? ["Retry", "bring", failed.why] : ["Bring", "bring", `Bring ${clip.name} to this Mac`];
+    return failed ? ["Retry", "bring", failed.why] : ["Bring", "bring", ""];
   }
 
   function renderRow(clip, li, busy) {
@@ -162,7 +162,7 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     const of = list?.days.find((d) => d.day === open);
     const missing = of?.missing.clips ?? 0;
     $("cloud-count").textContent = of ? `${missing} not here` : "";
-    let text = "None";
+    let text = "";
     if (missing) text = `${missing} · ${fileSize(of.missing.bytes)}`;
     else if (of?.clips) text = "All here";
     $("cloud-original").textContent = text;

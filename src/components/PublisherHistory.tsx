@@ -11,7 +11,7 @@ import {
   type PostKind,
 } from "@/lib/publisher/presets";
 import { publicationLink } from "@/lib/publisher/links";
-import { localInput, UPLOAD_LIFETIME } from "@/lib/publisher/schedule";
+import { localInput } from "@/lib/publisher/schedule";
 import { coverPlatforms, STOPPED_BEFORE } from "@/lib/publisher/server";
 import { parseTags } from "@/lib/publisher/variants";
 import type { DraftSummary } from "@/lib/publisher/drafts";
@@ -354,20 +354,16 @@ function Reupload({ post, request, onDone, onError }: PostActionProps) {
       setBusy(false);
     }
   }
-  const size = (file: File) => `${file.name} · ${(file.size / 1e6).toFixed(1)} MB`;
   return (
     <fieldset className="publisher-crosspost publisher-reupload">
       <legend>Upload again</legend>
-      <p className="publisher-note">
-        Uploads expire after {UPLOAD_LIFETIME / 86_400_000} days. Choose the {expired.video ? "video" : "Chinese video"}{" "}
-        again to retry or crosspost this post.
-      </p>
+      <p className="publisher-note">The {expired.video ? "video" : "Chinese video"} expired.</p>
       {expired.video && (
         <div className="publisher-reupload-file">
           <MediaButton
             accept="video/*"
             label={video ? "Choose another video" : "Video"}
-            hint="The post's video, up to 90 MB"
+            hint="Up to 90 MB"
             Icon={VideoIcon}
             disabled={busy}
             onFiles={([file]) =>
@@ -377,7 +373,7 @@ function Reupload({ post, request, onDone, onError }: PostActionProps) {
               })
             }
           />
-          {video && <span className="publisher-note">{size(video)}</span>}
+          {video && <span className="publisher-note">{video.name}</span>}
         </div>
       )}
       {expired.zh && (
@@ -385,12 +381,12 @@ function Reupload({ post, request, onDone, onError }: PostActionProps) {
           <MediaButton
             accept="video/*"
             label={zhVideo ? "Choose another Chinese video" : "Chinese video"}
-            hint="The video made for Chinese audiences, for Xiaohongshu, up to 90 MB"
+            hint="Up to 90 MB"
             Icon={VideoIcon}
             disabled={busy}
             onFiles={([file]) => choose(file, setZhVideo)}
           />
-          {zhVideo && <span className="publisher-note">{size(zhVideo)}</span>}
+          {zhVideo && <span className="publisher-note">{zhVideo.name}</span>}
         </div>
       )}
       {video && (

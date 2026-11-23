@@ -122,8 +122,7 @@ function origin(target: Target) {
 function targetStatus(target: Target) {
   if (target.deletion_state === "deleted") return "Deleted";
   if (target.state !== "succeeded") return target.state;
-  const reading = target.analytics_error || (target.observed_at ? "" : "No data yet");
-  return [origin(target), reading].filter(Boolean).join(" · ");
+  return [origin(target), target.analytics_error].filter(Boolean).join(" · ");
 }
 const live = (target: Target) => target.state === "succeeded" && target.deletion_state !== "deleted";
 /** Where the post is, once each, in the order it went out. */

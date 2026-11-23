@@ -202,10 +202,7 @@ async function calibrate() {
     const measured = blockMeans(px, 4);
     // Only correct a decoder that is measurably off; a good one is left untouched rather than fitted to noise.
     const off = Math.max(...measured.slice(8, 248).flatMap((m, i) => m.map((x, k) => Math.abs(x - cal.expected[i + 8][k]) * 255)));
-    if (off > 1.5) {
-      state.input = inputCurves(measured, cal.expected);
-      setStatus(`Preview corrected for this browser's video decoder (it was up to ${off.toFixed(1)} levels off)`);
-    }
+    if (off > 1.5) state.input = inputCurves(measured, cal.expected);
   } catch (e) {
     state.input = null;
     console.warn("decoder calibration skipped:", e);
@@ -843,7 +840,7 @@ function updatePanel() {
   $("paste").disabled = disabled || !state.clipboard;
   renderKept();
   if (!clip) {
-    $("editing").textContent = "Nothing selected";
+    $("editing").textContent = "\u00a0";
     $("clip-title").textContent = "—";
     $("clip-meta").replaceChildren();
     return;
@@ -1227,7 +1224,7 @@ function renderStatus() {
   const bringLine = bring.text();
   if (bringLine) parts.push(bringLine);
   if (state.source?.startsWith("camera:") && state.library && !state.library.camera.mounted)
-    parts.push(`${state.library.camera.name} disconnected: plug it in to preview and export; graded copies stay on the Mac`);
+    parts.push(`${state.library.camera.name} disconnected: plug it in to preview and export`);
   if (j?.export.current) {
     const c = state.byName.get(j.export.current.name);
     const who = c && j.export.current.id === state.source ? label(c).title : j.export.current.name;
@@ -1279,7 +1276,6 @@ const offloadLink = Object.assign(document.createElement("a"), {
   href: "https://post.kualta.dev/footage#this-mac",
   target: "_blank",
   rel: "noreferrer",
-  title: "How the offload stands, in the composer's Footage tab",
 });
 offloadLink.addEventListener("click", (event) => {
   if (!composer()) return;

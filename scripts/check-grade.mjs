@@ -259,7 +259,7 @@ try {
   assert.equal(await page.locator("#offload-mac").textContent(), "Nothing to send");
   assert.deepEqual(JSON.parse(readFileSync(path.join(data, "keep.json"), "utf8")).days, ["2026-01-01"]);
   await days.getByRole("checkbox", { name: /2026-01-01/ }).uncheck();
-  await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "None", null, { timeout: 5_000 });
+  await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "", null, { timeout: 5_000 });
   // When the camera's copies go is remembered.
   await page.getByRole("button", { name: "Once in Cloudflare" }).click();
   await page.waitForFunction(() => document.querySelector('[data-clear-after="sent"]').getAttribute("aria-pressed") === "true");

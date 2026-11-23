@@ -167,8 +167,6 @@ function PostEditor({
     (target) => movable(target) && times[target.id] !== undefined && times[target.id] !== startingTime(target),
   );
   const sorted = [...post.targets].sort((a, b) => a.at - b.at);
-  // Some destination is out or publishing, so it keeps the words it got.
-  const settled = post.targets.some((target) => target.state !== "queued" && target.state !== "failed");
 
   async function save() {
     setBusy(true);
@@ -352,10 +350,7 @@ function PostEditor({
         {(open.length > 0 || post.targets.some(movable)) && (
           <div className="publisher-calendar-editor-foot">
             <p className="publisher-note" data-problem={problems.length > 0 || undefined}>
-              {problems.join(" ") ||
-                (open.length > 0 && settled
-                  ? "Edits reach the destinations still to publish; the rest keep what they got."
-                  : "")}
+              {problems.join(" ")}
             </p>
             <button
               type="submit"
@@ -373,8 +368,7 @@ function PostEditor({
 
 type Drag = { post: CalendarPost; day: string; targets: CalendarTarget[] };
 
-const LEGEND =
-  "Filled: published. Outlined: scheduled. Struck through: failed or deleted. Times are yours. Drag a post to another day to move what's still to go out, or click it to edit.";
+const LEGEND = "Filled: published. Outlined: scheduled. Struck through: failed or deleted.";
 
 /** A month's room, with no month in it yet. */
 function MonthFrame() {
@@ -633,7 +627,6 @@ function Month({ request, onError, search, onNavigate, postsVersion }: Props) {
           );
         })}
       </div>
-      {!loading && !posts.length && <p className="publisher-note">Nothing published or scheduled this month.</p>}
       {editingPost && (
         <PostEditor
           key={editingPost.id}
