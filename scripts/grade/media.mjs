@@ -176,20 +176,43 @@ export async function extractAudio(src, dst, { signal } = {}) {
  * tetrahedral lut3d, out as 8-bit H.264 BT.709 with a key frame every quarter second, sound copied: near lossless at
  * full `quality`, or a known share of the original's `videoBitrate` below it (exportRate). `deflicker`, the grade's
  * level, evens out each frame's brightness with the frames after it (exportFilter).
+ *
+ * `encoder` is what's to encode it, the GPU only from GPU_FROM up; decoding and the filters are the CPU's either way.
+ * A clip the GPU can't encode (no VideoToolbox in this ffmpeg, a size it doesn't take, an error midway) is encoded on the
+ * CPU from the start, and `onFallback` hears why. Says what encoded it, and that reason as `fallback`.
  */
-export async function exportClip({ src, dst, cube, matrix = "bt709", deflicker = null, duration, quality = 100, videoBitrate = 0, onProgress, signal }) {
-  await writeAtomically(dst, (tmp) =>
-    run(
-      [
-        "-i", src,
-        "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0",
-        "-vf", exportFilter({ matrix, cube, deflicker }),
-        "-c:v", "libx264", "-preset", "medium", ...exportRate(quality, videoBitrate), "-force_key_frames", "expr:gte(t,n_forced*0.25)",
-        "-c:a", "copy", "-movflags", "+faststart", tmp,
-      ],
-      { onProgress, duration, signal },
-    ),
-  );
+export async function exportClip({
+  src, dst, cube, matrix = "bt709", deflicker = null, duration, width, height, fps, quality = 100, videoBitrate = 0,
+  encoder = "gpu", onProgress, onFallback, signal,
+}) {
+  const encode = (on) =>
+    writeAtomically(dst, (tmp) =>
+      run(
+        [
+          "-i", src,
+          "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0",
+          "-vf", exportFilter({ matrix, cube, deflicker }),
+          ...exportVideo(on, { quality, videoBitrate, width, height, fps }), "-force_key_frames", "expr:gte(t,n_forced*0.25)",
+          "-c:a", "copy", "-movflags", "+faststart", tmp,
+        ],
+        { onProgress, duration, signal },
+      ),
+    );
+  if (encoder === "cpu" || quality < GPU_FROM) {
+    await encode("cpu");
+    return { encoder: "cpu" };
+  }
+  try {
+    await encode("gpu");
+    return { encoder: "gpu" };
+  } catch (e) {
+    // Stopped, or no room to write it: nothing the CPU would do better.
+    if (signal?.aborted || /No space left/.test(e.message)) throw e;
+    const [why] = e.message.replace(/ @ 0x[0-9a-f]+/g, "").split("\n");
+    onFallback?.(why);
+    await encode("cpu");
+    return { encoder: "cpu", fallback: why };
+  }
 }
 
 /** The original's code values, read as limited range at 16 bits, through a clip's grade LUT. */
@@ -234,14 +257,44 @@ export function frameFilter({ matrix = "bt709", cube, deflicker = null }) {
   return `${grade},${deflickerFilter(frames, "yuv444p16le")},format=rgb24`;
 }
 
+/** What an export can be encoded on: the Mac's GPU (its media engine, through VideoToolbox), or the CPU (x264). */
+export const ENCODERS = ["gpu", "cpu"];
+/** The quality the GPU encodes from: at a set size below it x264 keeps visibly more of a grainy picture (README). */
+export const GPU_FROM = 50;
+
 /**
- * x264's rate for an export. Full quality (100) is near lossless, CRF 12, whatever size that takes; below it the video
- * gets that share of the original's bitrate, so the file's size is known before it's made (50 ≈ half the original).
+ * An export's bitrate below full quality: that share of the original's, so the file's size is known before it's made
+ * (50 ≈ half the original). Null at full quality (100), near lossless whatever size that takes.
  */
-export function exportRate(quality, videoBitrate) {
-  if (quality >= 100 || !videoBitrate) return ["-crf", "12"];
-  const rate = Math.round((videoBitrate * quality) / 100);
-  return ["-b:v", String(rate), "-maxrate", String(Math.round(rate * 1.5)), "-bufsize", String(rate * 2)];
+export const exportRate = (quality, videoBitrate) =>
+  quality >= 100 || !videoBitrate ? null : Math.round((videoBitrate * quality) / 100);
+
+/**
+ * The encoder and its rate, as ffmpeg's arguments. `-g 250` leaves the GPU's key frames to -force_key_frames, as x264's
+ * are: by default it adds one every 12 frames. It's given no ceiling over its bitrate: it keeps to that as closely
+ * without, and with one a clip's first frames come out worse.
+ */
+export function exportVideo(encoder, { quality = 100, videoBitrate = 0, width = 0, height = 0, fps = 0 } = {}) {
+  const rate = exportRate(quality, videoBitrate);
+  if (encoder === "gpu") {
+    const how = rate ? ["-b:v", String(rate)] : ["-q:v", String(gpuQuality({ width, height, fps }))];
+    // It names the level by the frame's size alone: above 4K30's pixels a second that's one too low.
+    const level = width * height * fps > 3840 * 2176 * 30 ? ["-level", "5.2"] : [];
+    return ["-c:v", "h264_videotoolbox", "-profile:v", "high", ...level, "-g", "250", ...how];
+  }
+  const how = rate ? ["-b:v", String(rate), "-maxrate", String(Math.round(rate * 1.5)), "-bufsize", String(rate * 2)] : ["-crf", "12"];
+  return ["-c:v", "libx264", "-preset", "medium", ...how];
+}
+
+/**
+ * The GPU's constant quality (0-100) for a full quality export: the least that came out at least as close to the graded
+ * frames as x264's CRF 12 on every clip measured (README, How exports are encoded). A clip above 1080p has more grain in
+ * each pixel, which CRF spends less on. And x264's QP rises by 2.4 for each doubling of the frame rate, each frame being
+ * on screen for less; that's about 4 of these.
+ */
+export function gpuQuality({ width = 0, height = 0, fps = 0 } = {}) {
+  const full = width * height > 1920 * 1088 ? 88 : 90;
+  return Math.max(78, Math.round(full - 4 * Math.log2(Math.max(25, fps || 0) / 25)));
 }
 
 /**

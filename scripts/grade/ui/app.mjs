@@ -487,6 +487,8 @@ function clipRow(clip) {
   return li;
 }
 
+/** That an export was, or is being, encoded on the CPU because the GPU couldn't, and why. */
+const onCpu = ({ fallback }) => (fallback ? ` on the CPU, the GPU couldn't: ${fallback}` : "");
 function updateRows() {
   for (const b of document.querySelectorAll(".clip")) {
     const clip = state.byName.get(b.dataset.name);
@@ -504,7 +506,7 @@ function updateRows() {
     else if (stale(clip)) [text, kind] = ["Changed since export", "changed"];
     // Just the dot; the words stay for screen readers and as its tooltip.
     chip.className = `state ${kind}`;
-    chip.title = text;
+    chip.title = kind === "ok" ? `${text}${onCpu(clip.exported)}` : text;
     const words = document.createElement("span");
     words.className = "sr-only";
     words.textContent = text;
@@ -1065,9 +1067,13 @@ async function exportFrame() {
   }
 }
 
+const encoderButtons = document.querySelectorAll("[data-encoder]");
 /** What exporting the selection at the menu's quality comes to: its size below 100%, and a badge on Export. */
 function renderQuality() {
   const q = state.quality;
+  // What encodes exports is the server's to remember.
+  for (const b of encoderButtons)
+    b.setAttribute("aria-pressed", String(b.dataset.encoder === (state.jobs?.export.encoder ?? "gpu")));
   $("quality-out").textContent = `${q}%`;
   $("quality-rail").style.setProperty("--b", `${((q - 10) / 90) * 100}%`);
   $("export-quality").hidden = q === 100;
@@ -1111,6 +1117,15 @@ $("quality").addEventListener("input", (e) => {
   state.quality = Number(e.target.value);
   renderQuality();
 });
+for (const b of encoderButtons)
+  b.addEventListener("click", async () => {
+    try {
+      await api("/api/export/encoder", { method: "POST", json: { encoder: b.dataset.encoder } });
+    } catch (e) {
+      return showError(e);
+    }
+    poll();
+  });
 $("stop-export").addEventListener("click", async () => {
   try {
     const { stopped } = await (await api("/api/export/stop", { method: "POST" })).json();
@@ -1198,7 +1213,7 @@ function renderStatus() {
   if (j?.export.current) {
     const c = state.byName.get(j.export.current.name);
     const who = c && j.export.current.id === state.source ? label(c).title : j.export.current.name;
-    parts.push(`Exporting ${who} · ${Math.round((j.export.current.progress ?? 0) * 100)}%${j.export.queue.length ? ` · ${j.export.queue.length} queued` : ""}`);
+    parts.push(`Exporting ${who}${onCpu(j.export.current)} · ${Math.round((j.export.current.progress ?? 0) * 100)}%${j.export.queue.length ? ` · ${j.export.queue.length} queued` : ""}`);
   }
   const preparing = state.clips.filter((c) => c.proxy === "queued" || c.proxy === "working").length;
   if (preparing) parts.push(`Making preview${preparing === 1 ? "" : "s"} · ${preparing} left`);

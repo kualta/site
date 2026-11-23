@@ -27,7 +27,7 @@ import {
   unionLedgers,
   youtubeUploads,
 } from "./ledger.mjs";
-import { cameraDays, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
+import { cameraDays, ENCODERS, exportClip, exportFrame, makeCalibration, makeProxy, makeThumb, probe, VIDEO } from "./media.mjs";
 import { saveSettings } from "./settings.mjs";
 import { transcriber } from "./transcripts.mjs";
 
@@ -42,6 +42,8 @@ const CACHE = process.env.GRADE_CACHE || join(homedir(), "Library/Caches/Grade")
 const LUTS = process.env.GRADE_LUTS || join(DATA, "luts");
 const GRADES = join(DATA, "grades.json");
 const EXPORTS = join(DATA, "exports.json");
+/** What has been chosen to encode exports on. */
+const ENCODER = join(DATA, "encoder.json");
 const CAMERA = process.env.GRADE_CAMERA || "/Volumes/Pocket4P/DCIM";
 const CAMERA_NAME = process.env.GRADE_CAMERA_NAME || "Pocket 4P";
 const PORT = Number(process.env.GRADE_PORT || 4777);
@@ -346,6 +348,8 @@ async function pumpProxies() {
   proxyBusy = false;
 }
 
+/** What encodes exports, as last chosen in the Export menu. */
+let exportEncoder = "gpu";
 let exportBusy = false;
 let exportAbort = null;
 async function pumpExports() {
@@ -358,16 +362,17 @@ async function pumpExports() {
     jobs.export.current = current;
     exportAbort = new AbortController();
     try {
-      await exportOne(
-        job.id,
-        job.name,
-        job.quality,
-        (p) => {
+      const made = await exportOne(job, {
+        onProgress: (p) => {
           current.progress = p;
         },
-        exportAbort.signal,
-      );
-      jobs.export.done.unshift({ ...job, at: new Date().toISOString() });
+        onFallback: (why) => {
+          console.error(`grade: ${job.name}: encoding on the CPU, the GPU couldn't: ${why}`);
+          Object.assign(current, { encoder: "cpu", fallback: why, progress: 0 });
+        },
+        signal: exportAbort.signal,
+      });
+      jobs.export.done.unshift({ ...job, ...made, at: new Date().toISOString() });
       jobs.export.done.length = Math.min(jobs.export.done.length, 100);
     } catch (e) {
       if (!exportAbort.signal.aborted) jobs.export.failed.unshift({ ...job, error: String(e.message || e) });
@@ -468,6 +473,11 @@ async function clipLut(src, name) {
 
 /** Export quality, a whole percent from 10 to 100 (full, near lossless). */
 const exportQuality = (q) => Math.min(100, Math.max(10, Math.round(Number(q) || 100)));
+/** What to encode exports on, as asked for. */
+function encoderAsked(encoder) {
+  if (!ENCODERS.includes(encoder)) throw httpError(400, `encoder must be ${ENCODERS.join(" or ")}`);
+  return encoder;
+}
 
 /** Run `use` with a clip's LUT written to a file of its own in the cache, gone again afterwards. */
 async function withLutFile(name, cube, use) {
@@ -486,12 +496,12 @@ async function withLutFile(name, cube, use) {
  * made with in exports.json. The file is written under a temporary name and moved into place only once the export
  * has worked, so a failed or stopped re-export leaves the previous export and its record as they were.
  */
-async function exportOne(id, name, quality, onProgress, signal) {
+async function exportOne({ id, name, quality, encoder }, { onProgress, onFallback, signal }) {
   const src = await source(id);
   if (!src.paths.has(name)) throw new Error(`${name} isn't in ${src.label} anymore`);
   const { meta, grade, base, cube } = await clipLut(src, name);
   const path = src.paths.get(name);
-  await withLutFile(name, cube, (lut) =>
+  const made = await withLutFile(name, cube, (lut) =>
     exportClip({
       src: path,
       dst: exportedFile(name),
@@ -499,9 +509,14 @@ async function exportOne(id, name, quality, onProgress, signal) {
       matrix: meta.matrix,
       deflicker: grade.deflicker,
       duration: meta.duration,
+      width: meta.width,
+      height: meta.height,
+      fps: meta.fps,
       quality,
       videoBitrate: meta.videoBitrate,
+      encoder,
       onProgress,
+      onFallback,
       signal,
     }),
   );
@@ -515,10 +530,12 @@ async function exportOne(id, name, quality, onProgress, signal) {
       grade,
       key: gradeKey(grade),
       quality,
+      ...made,
       exportedAt: new Date().toISOString(),
       tool: "scripts/grade",
     };
   });
+  return made;
 }
 
 /**
@@ -1275,7 +1292,7 @@ async function sourcePayload(id) {
       // An export without the app's record (put there by hand) counts as graded; its grade just isn't known.
       const r = records[name];
       const file = r ? null : await stat(exportedFile(name)).catch(() => null);
-      if (r) exported = { key: r.key, at: r.exportedAt };
+      if (r) exported = { key: r.key, at: r.exportedAt, fallback: r.fallback };
       else if (file) exported = { key: null, at: file.mtime.toISOString() };
     }
     clips.push({
@@ -1388,15 +1405,16 @@ async function route(req, res) {
   }
 
   if (p === "/api/export" && req.method === "POST") {
-    const { source: id, names, quality: q } = await body(req);
+    const { source: id, names, quality: q, encoder: on = exportEncoder } = await body(req);
     const src = await source(String(id));
     const quality = exportQuality(q);
+    const encoder = encoderAsked(on);
     for (const name of names ?? []) {
       if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
       if (jobs.export.current?.id === src.id && jobs.export.current?.name === name) continue;
       const queued = jobs.export.queue.find((j) => j.id === src.id && j.name === name);
-      if (queued) queued.quality = quality;
-      else jobs.export.queue.push({ id: src.id, name, quality });
+      if (queued) Object.assign(queued, { quality, encoder });
+      else jobs.export.queue.push({ id: src.id, name, quality, encoder });
     }
     jobs.export.failed = jobs.export.failed.filter((f) => !(f.id === src.id && (names ?? []).includes(f.name)));
     pumpExports();
@@ -1404,6 +1422,13 @@ async function route(req, res) {
   }
 
   if (p === "/api/export/stop" && req.method === "POST") return send(res, 200, { stopped: stopExports() });
+
+  // What encodes exports from now on, remembered.
+  if (p === "/api/export/encoder" && req.method === "POST") {
+    exportEncoder = encoderAsked((await body(req)).encoder);
+    await writeJson(ENCODER, { exportEncoder });
+    return send(res, 200, { exportEncoder });
+  }
 
   if (p === "/api/export-frame" && req.method === "POST") {
     const { source: id, name, frame } = await body(req);
@@ -1419,7 +1444,7 @@ async function route(req, res) {
     return send(res, 200, {
       thumbs: jobs.thumb.queue.length + jobs.thumb.busy,
       proxy: { queued: jobs.proxy.queue.length, current: jobs.proxy.current && { id: jobs.proxy.current.id, name: jobs.proxy.current.name } },
-      export: jobs.export,
+      export: { ...jobs.export, encoder: exportEncoder },
       offload: offloadState(),
       transcripts: transcripts.summary(),
       bring: bringing.state(),
@@ -1466,6 +1491,8 @@ const server = createServer(async (req, res) => {
 for (const dir of [ORIGINAL, EXPORTED, DATA, CACHE]) await mkdir(dir, { recursive: true });
 await clearParts(Object.values(BRING_TO));
 clearCardAfter = (await readJson(OFFLOAD, null).catch(() => null))?.clearCardAfter === "sent" ? "sent" : "copied";
+const chosen = (await readJson(ENCODER, null).catch(() => null))?.exportEncoder;
+if (ENCODERS.includes(chosen)) exportEncoder = chosen;
 await transcripts.resume().catch((e) => console.error("grade: transcripts:", e.message));
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;

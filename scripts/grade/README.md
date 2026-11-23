@@ -55,7 +55,9 @@ Each day shows how many of its clips have an export, and the clip list can show 
     DJI_…_0234_D_f0102.png                  Export frame: frame 102, graded, full size
 ~/Library/Application Support/Grade/      GRADE_DATA
   grades.json                             every clip's grade, by file name, saved as you work
-  exports.json                            what each export was made with: source, base look, grade, key, quality
+  exports.json                            what each export was made with: source, base look, grade, key, quality,
+                                          and what encoded it
+  encoder.json                            what exports are encoded on, as chosen (below)
   ledger.json                             the footage ledger (below), also kept in the site's archive
   offloaded.json, graded.json             what each offloaded clip and export was (below)
   keep.json, offload.json                 what's kept out of offload, and when the card's copies go (below)
@@ -269,14 +271,49 @@ name, so one that's on doesn't take it off again: it stays until its day is let 
   full-size PNG in `Exported/`), **Re-export N changed** (every graded clip whose grade moved since its export)
   and **Quality**: 100% (each time the app opens) is near lossless, whatever size that takes; below it the video gets
   that share of the original's bitrate, so the menu can say the size first (50% ≈ half the original file), and
-  Export shows the percentage. Exports come from the 10-bit originals (off the card, for a camera day) at 16-bit
-  precision, not from the preview. A camera day can't export while the camera is unplugged. Exporting more than ten
-  clips at once asks for a second click; **Stop exporting** (top bar, while anything exports) drops the queue and
+  Export shows the percentage. **Encode on** (GPU or CPU, remembered) says what encodes them (below). Exports come
+  from the 10-bit originals (off the card, for a camera day) at 16-bit precision, not from the preview. A camera day
+  can't export while the camera is unplugged. Exporting more than ten clips at once asks for a second click; **Stop exporting** (top bar, while anything exports) drops the queue and
   stops the clip in progress, which leaves its previous export and record as they were.
 - **⌘⌫** moves the selected clips to the Trash, each with the files beside it under the same name (the camera's
   `.LRF` proxy), as Finder would: a camera day's go to the card's own Trash, so Finder can put them back, and the
   space comes back when the Trash is emptied. Their grades and graded copies stay. More than ten at once asks for a
   second press; a clip that is exporting can't be trashed.
+
+## How exports are encoded
+
+Decoding, the LUT and the rest of the graph run on the CPU. The graded frames then go to the GPU's media engine
+(`h264_videotoolbox`) or, when **Encode on** says CPU, to x264 (`-preset medium`), which encoded every export before
+there was a choice. Both write the same file: 8-bit H.264 High tagged BT.709, every frame at the original's time, a key
+frame every quarter second, the sound copied, `+faststart`.
+
+| Quality | GPU | CPU |
+| --- | --- | --- |
+| 100% | constant quality: `-q:v` (`gpuQuality`) | `-crf 12` |
+| 50-95% | `-b:v` that share of the original's video bitrate | `-b:v` the same, `-maxrate` half as much again |
+| below 50% | the CPU's | `-b:v` the same, `-maxrate` half as much again |
+
+`gpuQuality` is 90 up to 1080p and 88 above it, less 4 for each doubling of the frame rate past 25 fps (83 for 4K60),
+and never below 78. Each value is the lowest that came out at least as close to the graded frames as CRF 12, by SSIM and
+by PSNR, on all 16 Pocket 4P clips measured (1080p25, and 3K and 4K at 24 and 60 fps). The bitrate mode can't do
+that, since CRF 12 comes to 25 Mbit/s on one clip and 350 on another. At 100% the GPU's file is 1.0 to 1.4 times the
+size of the CPU's.
+
+Below 100% both encoders come to that share of the original's bitrate. A GPU file can come out smaller when the picture
+needs fewer bits than that. From 50% up the GPU's picture is within 2 VMAF of the CPU's at the same size, and its worst
+frames are as good. Below 50% x264 keeps visibly more of a grainy picture (at 30%, 2 to 4 VMAF more on 3K and 4K), so
+the CPU encodes those exports even when GPU is chosen, and the menu says so.
+
+A clip the GPU can't encode (no VideoToolbox in this ffmpeg, a size it doesn't take, an error midway) is encoded again on
+the CPU from the start. The status line says so and why, as do the clip's tooltip, the server's log and the export's
+record (`fallback`). A stopped export, or a full disk, isn't retried.
+
+The GPU only encodes. Hardware decoding gave the same pixels on 10-bit HEVC, but it was no faster above 1080p, it decodes
+ProRes differently, and on a damaged clip it silently drops the frames software conceals.
+
+`exports.json` says what encoded each export: `encoder` is `gpu` or `cpu`, and exports made before there was a choice
+have none (the CPU made them). This is only a record. It isn't part of the grade or its key, so switching encoders
+leaves every export current, and only **Export** or **Re-export** makes one again.
 
 ## Base looks (`luts/`)
 
