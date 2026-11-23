@@ -15,6 +15,9 @@ interface Preview {
 /** Below this the video is mostly off screen, and whatever sits above it deserves the playback. */
 const VISIBLE_ENOUGH = 0.55;
 
+/** A video the reader turned the sound on for keeps it until it is scrolled this far away. */
+const STILL_HEARD = 0.25;
+
 /**
  * How much of the video the reader has, measured against the screen once the
  * video is taller than it — a portrait clip on a phone never fills a ratio.
@@ -28,6 +31,8 @@ function coverage(entry: IntersectionObserverEntry): number {
 const previews = new Map<HTMLElement, Preview>();
 let observer: IntersectionObserver | undefined;
 let active: Preview | undefined;
+/** The one video playing with sound, because the reader clicked it. */
+let heard: Preview | undefined;
 let suspended = false;
 
 /** Autoplay is motion nobody asked for, and a metered connection pays for it by the megabyte. */
@@ -54,9 +59,23 @@ function createPreviewVideo(item: BlueskyMedia, button: HTMLElement): HTMLVideoE
   return video;
 }
 
+function label(preview: Preview): void {
+  const alt = preview.item.alt ? `: ${preview.item.alt}` : "";
+  preview.button.setAttribute("aria-label", preview === heard ? `Open video${alt}` : `Play video with sound${alt}`);
+}
+
+/** Sound belongs to the click that asked for it, so a video that loses its turn goes quiet again. */
+function hush(preview: Preview): void {
+  if (heard === preview) heard = undefined;
+  preview.button.removeAttribute("data-preview-sound");
+  if (preview.video) preview.video.muted = true;
+  label(preview);
+}
+
 function stop(preview: Preview): void {
   preview.generation++;
   preview.button.removeAttribute("data-preview-playing");
+  hush(preview);
   preview.video?.pause();
 }
 
@@ -96,14 +115,21 @@ async function play(preview: Preview): Promise<void> {
       return;
     }
   }
-  // Low Power Mode and friends refuse even muted autoplay; the thumbnail stays.
-  await video.play().catch(() => {});
+  video.muted = preview !== heard;
+  await video.play().catch(() => {
+    // A browser that withholds sound still gets the silent preview; another click asks again.
+    if (video.muted || preview.generation !== generation) return;
+    hush(preview);
+    // Low Power Mode and friends refuse even muted autoplay; the thumbnail stays.
+    return video.play().catch(() => {});
+  });
 }
 
-/** One video plays at a time: the one the reader has most of on screen. */
+/** One video plays at a time: the one with sound, else the one the reader has most of on screen. */
 function refresh(): void {
-  let best: Preview | undefined;
-  if (!suspended && autoplayWanted()) {
+  if (heard && (suspended || heard.ratio < STILL_HEARD)) hush(heard);
+  let best = heard;
+  if (!best && !suspended && autoplayWanted()) {
     for (const preview of previews.values()) {
       if (preview.ratio >= VISIBLE_ENOUGH && (!best || preview.ratio > best.ratio)) best = preview;
     }
@@ -141,7 +167,24 @@ export function registerVideoPreview(button: HTMLElement, item: BlueskyMedia): v
   }
   const preview: Preview = { button, item, generation: 0, ratio: 0 };
   previews.set(button, preview);
+  label(preview);
   observe(preview);
+}
+
+/**
+ * A click on a feed video plays it right there with sound, whether or not it
+ * was already running silent. False once it has sound, when the click asks for
+ * the full player instead, and for a video too far off screen to hear.
+ */
+export function hearVideoPreview(button: HTMLElement): boolean {
+  const preview = previews.get(button);
+  if (!preview || preview === heard || preview.ratio < STILL_HEARD) return false;
+  heard = preview;
+  preview.button.dataset.previewSound = "true";
+  label(preview);
+  if (preview === active) void play(preview);
+  else refresh();
+  return true;
 }
 
 /** Picks previews back up when their row returns to the document. */
