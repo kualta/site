@@ -8,7 +8,8 @@ import ffmpegStatic from "ffmpeg-static";
 import { linkPlaylist, makeHls, posterFrame } from "./hls.mjs";
 
 const exec = promisify(execFile);
-const ffmpeg = process.env.FFMPEG_PATH || ffmpegStatic;
+const fromEnv = process.env.FFMPEG_PATH;
+const ffmpeg = fromEnv || ffmpegStatic;
 const usable = spawnSync(ffmpeg, ["-version"]).status === 0;
 let dir;
 let video;
@@ -41,6 +42,9 @@ beforeAll(async () => {
   ]);
 });
 afterAll(async () => {
+  // As it was for the test files after this one: bun runs them all in one process.
+  if (fromEnv === undefined) Reflect.deleteProperty(process.env, "FFMPEG_PATH");
+  else process.env.FFMPEG_PATH = fromEnv;
   await rm(dir, { recursive: true, force: true });
 });
 
