@@ -240,7 +240,8 @@ name, so one that's on doesn't take it off again: it stays until its day is let 
 - **Look**: the base look for the clip's camera profile, read from its own metadata tag. D-Log2, D-Log and HLG get
   the ACES conversions (from DJI's curve math, out through ACES 2.0 or 1.0), ARRI, AgX, OpenDRT, Fujifilm film
   simulations and Sony looks; D-Log2 and D-Log also get DJI's own Rec.709 LUTs, and D-Log2 the twelve P4P looks.
-  Rec.709 clips are graded as shot. A new clip starts on ACES 2.0.
+  Rec.709 clips are graded as shot. A clip that hasn't been graded starts on OpenDRT Colorful, or on ACES 2.0 where
+  its LUT isn't there (`DEFAULT_LOOKS` in color.mjs).
 - **Exposure** in stops, **Temperature** in Kelvin (as if the camera had been set to it; it starts at the camera's
   own), **Tint** (+ magenta, − green), **Contrast** around 18% grey, **Saturation**. All of it happens in scene
   linear light before the look.

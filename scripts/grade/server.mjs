@@ -13,7 +13,7 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { archiveDays, bringer, clearParts, cloudId, dayClips, pickClips, summarise, withHere } from "./bring.mjs";
-import { composeLut, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
+import { composeLut, DEFAULT_LOOKS, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
 import { dayManifests, LANES, startOffload } from "./offload.mjs";
 import { keepList } from "./keep.mjs";
 import { RETRY } from "./lane.mjs";
@@ -76,7 +76,7 @@ const RETRY_FIRST = Number(process.env.GRADE_RETRY_FIRST || 30_000);
 /** What's known of each offloaded clip's transcript (transcripts.mjs); the transcripts themselves are in transcripts/. */
 const TRANSCRIPTS = join(DATA, "transcripts.json");
 /** The look an offloaded log clip without a grade gets, as settings, until it's graded by hand. */
-const DEFAULT_LOOK = process.env.GRADE_DEFAULT_LOOK || "opendrt-colorful";
+const DEFAULT_LOOK = process.env.GRADE_DEFAULT_LOOK || DEFAULT_LOOKS[0];
 /** Clips come off the card only while this much stays free on the Mac, for exports and the system. */
 const KEEP_FREE = Number(process.env.GRADE_KEEP_FREE || 5e9);
 
