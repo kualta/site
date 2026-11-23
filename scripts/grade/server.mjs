@@ -998,7 +998,12 @@ async function offloadSummary() {
   const [onCard, onMac] = await Promise.all([cardClips(), macClips()]);
   const here = [...(onCard ?? []), ...onMac];
   const counted = new Set(here.filter(keeps).map((clip) => stemOf(clip.name).toLowerCase()));
-  const camera = (onCard ?? []).filter((clip) => !keeps(clip));
+  // What's left to copy: a card clip this Mac already has whole, or that's filed in Cloudflare, stays on the card only
+  // until it can be cleared.
+  const macHas = new Map(onMac.map((clip) => [clip.name, clip.size]));
+  const camera = (onCard ?? []).filter(
+    (clip) => !keeps(clip) && macHas.get(clip.name) !== clip.size && record[clip.name]?.size !== clip.size,
+  );
   /** The clips of a place to send, and how many are only there still to be deleted. */
   const toSend = (clips, sent) => {
     const left = clips.filter((clip) => sent[clip.name]?.size !== clip.size);

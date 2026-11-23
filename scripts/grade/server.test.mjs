@@ -908,7 +908,8 @@ test.if(usable)("takes the card's clips alone, remembers to leave them there til
   server.kill("SIGKILL");
   await exited;
   await startServer();
-  expect(await json("/api/offload")).toMatchObject({ clearCardAfter: "sent", run: null, camera: { clips: 1 }, mac: { clips: 1 } });
+  // The clip still on the card is copied: nothing is left to copy, and one to send.
+  expect(await json("/api/offload")).toMatchObject({ clearCardAfter: "sent", run: null, camera: { clips: 0 }, mac: { clips: 1 } });
   expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
   const sent = await ended();
   expect(sent.run).toMatchObject({ finished: "done", send: { done: 1 }, copy: { on: false } });
