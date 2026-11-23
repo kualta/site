@@ -970,9 +970,12 @@ test.if(usable)("leaves a clip being copied into Preexp alone until it's been st
   // Old by its own time, as a card's clip is: what changes it is what's looked at.
   utimesSync(join(preexp, copying), new Date("2026-01-01"), new Date("2026-01-01"));
   // It counts as still being written until 300 ms after it was last changed. The writer puts the old time back after each
-  // write, as a copy that keeps the file's dates does, so only the change time says it's being written. It's a process
-  // of its own, every 50 ms: a timer here would wait on this test's awaits, and a slow runner could leave 300 ms between.
-  const grow = spawn("sh", ["-c", 'while :; do printf x >> "$CLIP"; touch -m -t 202601010000 "$CLIP"; sleep 0.05; done'], {
+  // write, as a copy that keeps the file's dates does, so only the change time says it's being written. It's one process
+  // of its own writing every 20 ms, starting nothing per write: a timer here would wait on this test's awaits, and a
+  // process started per write could leave 300 ms between writes on a busy runner.
+  const writer =
+    'while (1) { open(my $f, ">>", $ENV{CLIP}) or die; print $f "x"; close $f; utime(1767225600, 1767225600, $ENV{CLIP}); select(undef, undef, undef, 0.02) }';
+  const grow = spawn("perl", ["-e", writer], {
     env: { ...process.env, CLIP: join(preexp, copying) },
     stdio: "ignore",
   });
