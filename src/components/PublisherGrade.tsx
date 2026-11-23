@@ -16,6 +16,8 @@ interface Props {
   active: boolean;
   /** How far the app's offload or export is, in percent, for the page's title; null with neither. */
   onProgress: (percent: number | null) => void;
+  /** Opens the Footage tab at This Mac, which the app's status line links to for how its offload stands. */
+  onFootage: () => void;
 }
 
 const theme = () => (document.documentElement.classList.contains("dark") ? "dark" : "light");
@@ -24,7 +26,7 @@ const theme = () => (document.documentElement.classList.contains("dark") ? "dark
  * The composer's Grade tab: the grade app on the Mac, in a frame. Chrome asks once to let post.kualta.dev reach this
  * device (the frame is allowed local network access). Away from the Mac, or until that's allowed, it says so.
  */
-export default function PublisherGrade({ open, active, onProgress }: Props) {
+export default function PublisherGrade({ open, active, onProgress, onFootage }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const box = useRef<HTMLElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "away">("loading");
@@ -38,6 +40,9 @@ export default function PublisherGrade({ open, active, onProgress }: Props) {
     setSrc(`${GRADE_APP}/?theme=${theme()}${open ? `#clip=${encodeURIComponent(open.clip)}` : ""}`);
   }, []);
   const post = (message: unknown) => frame.current?.contentWindow?.postMessage(message, GRADE_APP);
+  // The latest, for the listener set up once an attempt.
+  const footage = useRef(onFootage);
+  footage.current = onFootage;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new attempt is the trigger to wait again
   useEffect(() => {
@@ -47,6 +52,7 @@ export default function PublisherGrade({ open, active, onProgress }: Props) {
       const { type, offload, export: exported } = event.data ?? {};
       // The offload first, as in the app's own status line.
       if (type === "grade-progress") onProgress(wholePercent(offload) ?? wholePercent(exported));
+      if (type === "grade-footage") footage.current();
       if (type !== "grade-ready") return;
       setState("ready");
       post({ type: "theme", theme: theme() });

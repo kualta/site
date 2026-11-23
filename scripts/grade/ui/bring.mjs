@@ -226,7 +226,8 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     const parts = [`Bringing ${at} of ${run.total}`];
     if (run.current) parts.push(label({ stem: stemOf(run.current.name) }).title);
     parts.push(`${run.gotBytes ? fileSize(run.gotBytes) : "0 GB"} of ${fileSize(run.bytes)}`);
-    if (run.speed) {
+    if (run.paused) parts.push("paused");
+    else if (run.speed) {
       const mbit = (run.speed * 8) / 1e6;
       parts.push(`${mbit.toFixed(mbit < 10 ? 1 : 0)} Mbit/s`, timeLeft((run.bytes - run.gotBytes) / run.speed));
     }

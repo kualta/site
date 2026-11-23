@@ -99,7 +99,7 @@ async function wholeExport() {
 test("a trim holds the frame on screen at its start to the last that starts before its end", async () => {
   if (!usable) return;
   // 1.2 s is in frame 71; 2.5 s in frame 149, which starts before it.
-  expect(await trimFrames(source, 1.2, 2.5)).toEqual({ first: at(71), last: at(149), until: at(150), slack: at(1) / 2 });
+  expect(await trimFrames(source, 1.2, 2.5)).toEqual({ first: at(71), last: at(149), until: at(150), slack: at(1) / 2, timeBase: "1/60000" });
   // A time rounded to the millisecond lands on the frame it was: frame 30 starts at 0.5005 s.
   expect((await trimFrames(source, 0.5, 1.001)).first).toBe(at(30));
   expect((await trimFrames(source, 0.501, 1.001)).first).toBe(at(30));

@@ -237,8 +237,11 @@ export default function Publisher({
   // The clip the Footage tab last asked the Grade tab to open, and whether the grade app has been opened at all.
   const [gradeClip, setGradeClip] = useState<{ clip: string; n: number } | null>(null);
   const [gradeOpened, setGradeOpened] = useState(tab === "grade");
+  // When the grade app asked for its offload in the Footage tab, which then opens at This Mac; forgotten on leaving it.
+  const [macAsked, setMacAsked] = useState<number | null>(null);
   useEffect(() => {
     if (tab === "grade") setGradeOpened(true);
+    if (tab !== "footage") setMacAsked(null);
   }, [tab]);
   const [access, setAccess] = useState<Access>(initialAccess);
   // On a narrow phone the tabs scroll sideways; the open one is kept in view.
@@ -1259,6 +1262,7 @@ export default function Publisher({
               }}
               statsHref={(job) => `${tabPath(base, "analytics")}?post=${job}`}
               onProgress={setFootagePercent}
+              showMac={macAsked}
             />
           )}
           {tab === "archive" && (
@@ -1275,7 +1279,15 @@ export default function Publisher({
           {/* Once opened, the grade app stays loaded while other tabs are shown, so coming back doesn't load it again. */}
           {gradeOpened && (
             <div className="publisher-grade-tab" hidden={tab !== "grade"}>
-              <PublisherGrade open={gradeClip} active={tab === "grade"} onProgress={setGradePercent} />
+              <PublisherGrade
+                open={gradeClip}
+                active={tab === "grade"}
+                onProgress={setGradePercent}
+                onFootage={() => {
+                  setMacAsked(Date.now());
+                  openTab("footage");
+                }}
+              />
             </div>
           )}
           {tab === "accounts" && (

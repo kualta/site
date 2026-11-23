@@ -123,6 +123,35 @@ site run locally on port 4321). In the frame the app says it's there, opens the 
 asks for (`#clip=<file>` in its address, or a message; `/api/find` says which day holds it), takes the composer's light
 or dark, and says how far its offload and export are, each time it reads `/api/jobs`, for the composer's title.
 
+**The offload in the Footage tab.** The status line says the offload short, "Offloading 7 / 167 · 12.1 h left" (the
+clips sent of those to send, or with only Camera → Mac on, copied of those to copy; then the time left, or what holds
+it: paused, waiting for the camera, can't reach Cloudflare, waiting for room, stopping). It's a link to the composer's
+Footage tab, at **This Mac**, where it's shown whole: framed, the app asks the composer to open it (a `grade-footage`
+message to the composer's origin only, heard only from the app's own frame); in a tab of its own it opens
+post.kualta.dev/footage#this-mac in another. After a run, what went wrong stays in the line as before.
+
+What This Mac shows comes from `report.mjs`: what `GET /api/offload` knows (each switch's state, clips and bytes through
+of how many, speed, time left and what it waits for; the clips passed over and why; the transcripts made, waiting and
+failed; what the run freed from the card and the Mac; the days kept out; the room on the Mac, in whole GB; when the run
+started and ended), sent to `helper/footage/mac` on the helper's pairing. The site keeps it as one small object. It goes
+only when it changed: at most every 30 seconds while a run goes (`GRADE_REPORT_EVERY`), every 10 minutes otherwise, and
+while a run goes and nothing changes, again every 2 minutes, so the tab can tell a Mac that's asleep from one that's
+waiting. Camera → Mac's speed is measured between two looks. An idle Mac whose numbers stay put sends nothing.
+
+**Pause all.** The Footage tab's **Pause all** holds every job here, and **Resume all** lets them go on (`pause.mjs`). The
+site keeps the flag; this app hears it in the answer to its report, and asks `helper/footage` for it at start (before
+Whisper picks up where it was) and every 30 seconds (`GRADE_PAUSE_EVERY`). `pause.held()` is the one check (passed on
+as `pausedAll`), and whatever starts work in the background should honour it too:
+
+- the offload: Mac → Cloudflare waits between 16 MiB parts, as it does while no page is open, and Camera → Mac between
+  clips, each saying it waits for `owner`, "Paused from the Footage tab";
+- Whisper finishes the clip it's on and starts no other; the transcripts going up wait between files;
+- exports, and a film's preview copies and trims (film.mjs): the one being made is finished and the rest wait;
+- clips brought back from Cloudflare: the one coming lands and the next waits.
+
+Each goes on where it waited, no part sent twice. The status line says "Paused from the Footage tab", with the exports
+waiting, and the menu's switches "paused from the Footage tab". It's apart from the offload's own pause and from **Stop**.
+
 ## Offload: the card to this Mac, this Mac to Cloudflare
 
 The foot of the Export button's menu has two switches, each started and stopped by itself while the other is on or
@@ -168,9 +197,22 @@ then twice as long each time up to 10 minutes. The clip in flight starts over. W
 waits for some. A clip that fails five times while the rest works (or never reads back as it was sent) is passed over
 until the switch is next started, which the menu, the status line and the log say, with why.
 
+**Asleep.** A try this Mac slept through, a request cut short by it, isn't one of a clip's five and makes the waits no
+longer: once it wakes, the network has 10 seconds to come back and the clip goes again. The log says so once a wake
+("the Mac slept 14 min; not counted"). With its lid closed on battery it wakes for a moment every quarter of an hour,
+and a request longer than that would otherwise fail at each. Node's own clocks and timers go on through a sleep on
+macOS as the wall clock does, so a sleep is told by the server not having run for over 30 seconds.
+
+**Kept awake.** While a switch is at work (copying, hashing, sending, reading back or filing), this Mac is kept from
+sleeping when idle, by one `caffeinate -i -w <the server's pid>`, which goes with the server however it ends. It's let
+go once none has been at work for 10 seconds: all off, paused, or waiting for the camera, room or the network. The
+display may sleep, a closed lid sleeps the Mac all the same, and no power setting is touched. The status line says
+"keeping this Mac awake", and `GET /api/offload` `keepingAwake`; `"keepAwake": false` in a request keeps it off for the
+run.
+
 **The pause.** Uploads pause between parts, keeping the parts sent, while no Grade page has asked how things are going
 for a minute, and go on when one does; the switch says so. **Keep going when this tab is closed** (off for each run)
-lets a run go on without. Camera → Mac never pauses.
+lets a run go on without. Camera → Mac doesn't pause for this; only for **Pause all** (above).
 
 **Kept.** Shoot days ticked in the menu, and clips named in `keep.json` (those brought back, above all; by name without
 extension), stay on the card and on this Mac: they're never copied, sent or deleted, aren't counted, and get no

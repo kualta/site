@@ -465,6 +465,89 @@ test("the helper uploads while the tab is open, reporting each part's progress a
   }
 });
 
+test("paused from the Footage tab, the part in flight lands, the next waits, and the upload goes on from there", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    const yt = youtube();
+    const send = yt.client.send;
+    let paused = null;
+    let told = false;
+    let resumed = false;
+    yt.client.send = async (url, init) => {
+      // The pause is heard while the second part is on its way.
+      if (yt.parts.length === 1 && !resumed) {
+        paused = { since: 1 };
+        while (!told) await tick();
+      }
+      return send(url, init);
+    };
+    const statuses = [];
+    const ask = async (status) => {
+      statuses.push({ state: status.state, sent: status.current?.sent ?? null, parts: yt.parts.length });
+      if (paused) told = true;
+      if (statuses.filter((s) => s.state === "held").length >= 3) {
+        paused = null;
+        resumed = true;
+      }
+      return { watching: status.state !== "done", paused };
+    };
+    await watchedFootage({
+      stateDir,
+      config: {},
+      ask,
+      connect: async () => yt.client,
+      exported,
+      exportsFile,
+      chunk: 4,
+      wait: tick,
+    });
+    const held = statuses.filter((s) => s.state === "held");
+    expect(held.length).toBeGreaterThanOrEqual(3);
+    // Held with the clip at its second part, and not a part more until it went on.
+    for (const status of held) expect(status).toEqual({ state: "held", sent: 8, parts: 2 });
+    expect(yt.parts.slice(0, 3)).toEqual([
+      ["upload", 4],
+      ["upload", 4],
+      ["upload, finalize", 2],
+    ]);
+    expect(yt.calls.filter(([call]) => call === "start")).toHaveLength(2);
+    expect(Object.keys((await readState(stateDir)).clips)).toEqual([first, second]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("paused with nothing in flight, nothing is looked at or started, and the status says it's held", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    let connected = 0;
+    const statuses = [];
+    const ask = async (status) => {
+      statuses.push(status.state);
+      return { watching: statuses.length < 6, paused: { since: 1 } };
+    };
+    await watchedFootage({
+      stateDir,
+      config: {},
+      ask,
+      connect: async () => {
+        connected++;
+        throw new Error("nothing should go up");
+      },
+      exported,
+      exportsFile,
+      wait: tick,
+    });
+    expect(connected).toBe(0);
+    expect(statuses.slice(1)).toEqual(Array(statuses.length - 1).fill("held"));
+    expect((await readState(stateDir)).clips).toEqual({});
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("uploads stop when the site stops answering, since there's no telling whether the tab is open", async () => {
   const root = await mkdtemp(join(tmpdir(), "footage-"));
   try {

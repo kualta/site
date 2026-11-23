@@ -258,7 +258,8 @@ async function received(client, session) {
  * Puts a file up as an unlisted video and says its id. The file goes in parts, each resent from where YouTube says it
  * stopped when one fails; `session` resumes an upload a restart cut short, and `save` keeps the one it starts.
  * `progress` hears how many bytes YouTube holds, at the start and after each part. Aborting `signal` stops the part in
- * flight and throws `Stopped`, the session kept to resume from.
+ * flight and throws `Stopped`, the session kept to resume from. `ready()` is waited for before each part: paused from
+ * the Footage tab, the part in flight lands and the next waits there.
  */
 export async function uploadVideo(
   client,
@@ -269,6 +270,7 @@ export async function uploadVideo(
     save = async () => {},
     log = () => {},
     progress = () => {},
+    ready = async () => {},
     signal = null,
     chunk = CHUNK,
     wait = (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -301,6 +303,7 @@ export async function uploadVideo(
   progress(offset);
   while (!result) {
     if (signal?.aborted) throw new Stopped();
+    await ready();
     const length = Math.min(step, file.size - offset);
     const last = offset + length >= file.size;
     try {
@@ -377,7 +380,8 @@ async function download(request, clip, dir, signal) {
  * archive's client) clips only the archive still holds, from `archived` when they've been asked for already. A failure
  * stops the run and waits longer each time before the next: half an hour, then an hour, and so on up to a day, which is
  * also how YouTube's daily limit is waited out. Aborting `signal` stops the run where it is with nothing to wait out,
- * and the upload in flight resumes from there next time; `progress` hears each clip's bytes as they go up.
+ * and the upload in flight resumes from there next time; `progress` hears each clip's bytes as they go up. `ready()` is
+ * waited for before each clip and each part (uploadVideo).
  */
 export async function uploadFootage({
   stateDir,
@@ -389,6 +393,7 @@ export async function uploadFootage({
   exportsFile = EXPORTS,
   log = () => {},
   progress = () => {},
+  ready = async () => {},
   signal = null,
   now = () => Date.now(),
   daily = config.footage?.daily ?? DAILY,
@@ -415,6 +420,7 @@ export async function uploadFootage({
       const version = clip.sha256 ?? `${clip.size}:${clip.mtime}`;
       let temp = null;
       try {
+        await ready();
         progress({ name: clip.name, size: clip.size, sent: 0, from: clip.from });
         const abs = clip.abs ?? (temp = await download(request, clip, join(stateDir, "footage-download"), signal));
         log(`Footage: putting up ${clip.name} (${gb(clip.size)})`);
@@ -431,6 +437,7 @@ export async function uploadFootage({
             },
             log: (share) => log(`Footage: ${clip.name} ${share}`),
             progress: (sent) => progress({ name: clip.name, size: clip.size, sent, from: clip.from }),
+            ready,
             signal,
             chunk,
             wait,
@@ -521,6 +528,7 @@ export async function footageStatus({
   progress = null,
   speed = null,
   busy = false,
+  held = false,
   now = Date.now(),
 }) {
   const state = await readState(stateDir);
@@ -563,6 +571,8 @@ export async function footageStatus({
   const pausedUntil = (state.pausedUntil ?? 0) > now ? state.pausedUntil : null;
   let phase = "limit";
   if (busy) phase = "busy";
+  // Paused from the Footage tab: the clip in flight, if any, is held after its part.
+  else if (held) phase = "held";
   else if (progress) phase = "uploading";
   else if (pausedUntil) phase = "paused";
   else if (!due.length) phase = "done";
@@ -605,8 +615,9 @@ const pause = (ms, signal) =>
 /**
  * One stretch of the Archive tab being open: the helper reports what's up (every `every` while a clip goes up, every
  * `poll` otherwise) and puts clips up until the tab closes. `ask(status)` sends the site the status and answers whether
- * the tab is still open. When it isn't, or the site doesn't answer three times running (so there's no telling), the
- * upload stops mid-part, kept to resume where YouTube says it stopped.
+ * the tab is still open, and whether everything's paused from it. When it isn't open, or the site doesn't answer three
+ * times running (so there's no telling), the upload stops mid-part, kept to resume where YouTube says it stopped. Paused,
+ * the part in flight lands and the upload waits there, saying it's held, to go on with the next part once it's resumed.
  */
 export async function watchedFootage({
   stateDir,
@@ -630,6 +641,8 @@ export async function watchedFootage({
   const meter = progressMeter(now);
   let busy = false;
   let missed = 0;
+  /** Paused from the Footage tab, as the site's last answer says. */
+  let held = false;
   let archived = [];
   if (request)
     archived = await archiveFootage(request, await exportRecords(exportsFile)).catch((error) => {
@@ -647,10 +660,12 @@ export async function watchedFootage({
         progress: meter.current,
         speed: meter.speed,
         busy,
+        held,
         now: now(),
       });
-      const { watching } = await ask(status);
+      const { watching, paused } = await ask(status);
       missed = 0;
+      held = Boolean(paused);
       if (!watching) stop.abort();
     } catch (error) {
       if (++missed >= 3) {
@@ -658,6 +673,11 @@ export async function watchedFootage({
         stop.abort();
       }
     }
+  };
+  /** Paused, the part in flight lands and the next waits, till it goes on or the tab closes. */
+  const ready = async () => {
+    while (held && !stop.signal.aborted) await wait(every, stop.signal);
+    if (stop.signal.aborted) throw new Stopped();
   };
   await report();
   const reporting = (async () => {
@@ -668,6 +688,11 @@ export async function watchedFootage({
   })();
   try {
     while (!stop.signal.aborted) {
+      // Paused with nothing in flight, nothing's even looked at; the status says it's held.
+      if (held) {
+        await wait(poll, stop.signal);
+        continue;
+      }
       let done;
       try {
         done = await uploadFootage({
@@ -683,6 +708,7 @@ export async function watchedFootage({
           chunk,
           signal: stop.signal,
           progress: (upload) => meter.update(upload),
+          ready,
         });
       } catch (error) {
         log(`Footage archive: ${error.message}`);
