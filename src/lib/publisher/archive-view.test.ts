@@ -11,7 +11,6 @@ import {
   ownGrade,
   parseVtt,
   readArchiveView,
-  watchCost,
   writeArchiveView,
 } from "./archive-view";
 import type { LedgerClip } from "./ledger";
@@ -24,12 +23,6 @@ test("the tab's address holds the day and the clip open, and nothing it doesn't 
   expect(writeArchiveView({ day: null, clip: null })).toBe("");
   // An old address's page is no longer read.
   expect(readArchiveView("?day=yesterday&page=2")).toEqual({ day: null, clip: null });
-});
-
-test("what watching costs is said before it starts", () => {
-  expect(watchCost(2_780_000_000)).toBe("2.78 GB, about $0.03");
-  expect(watchCost(127_000_000)).toBe("127 MB, under a cent");
-  expect(watchCost(9_600_000_000)).toBe("9.60 GB, about $0.10");
 });
 
 test("a clip's number, time and file address come from its name", () => {

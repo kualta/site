@@ -16,7 +16,7 @@ const near = (got, want, by, what) =>
 
 /**
  * The Archive tab against the mocked API (scripts/browser-fixtures/archive.mjs): its shoot days and a page of clips at a
- * time; a clip's player, which reads nothing before Watch and says what watching costs; its transcript, beside it and
+ * time; a clip's player, which plays as it opens where the browser plays HEVC; its transcript, beside it and
  * as captions; the looks, checked on the WebGL canvas against stand-in LUTs whose colours are known; and Bring to Mac.
  * Playwright's Chromium has no HEVC, so it first says so, and then, told it has, plays a WebM in the original's place.
  */
@@ -71,7 +71,7 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     await page.route("**/api/publisher/footage/thumbs/**", (route) =>
       route.fulfill({ contentType: "image/svg+xml", body: svg(64, 36) }),
     );
-    // The original, read only once Watch is pressed.
+    // The original, read only where the browser can play it.
     const reads = [];
     await page.route(`**/api/publisher/archive/files/${opened.sha256}/**`, (route) => {
       reads.push(route.request().headers().range ?? "whole");
@@ -114,12 +114,12 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     assert.equal(await cards.count(), 30);
     assert.equal(await archive.getByRole("button", { name: /page/ }).count(), 0);
 
-    // A clip opens in its player, which reads nothing until Watch and says first what watching costs.
+    // A clip opens in its player. This browser can't play HEVC: it says so, offers to try, and reads nothing.
     await archive.getByRole("button", { name: "Clip 0086, recorded 12:22:04" }).click();
     await page.waitForURL(/clip=DJI_20261108122204_0086_D/);
     const player = page.getByRole("dialog", { name: /^Clip 0086/ });
     await player.getByText("This browser can't play HEVC, which the camera records.", { exact: false }).waitFor();
-    await player.getByText(`Reads up to ${(opened.size / 1e9).toFixed(2)} GB, about $0.03, from Cloudflare`).waitFor();
+    assert.equal(await player.getByText(/Reads up to|from Cloudflare/).count(), 0);
     await player.getByRole("button", { name: "Try anyway" }).waitFor();
     const transcript = player.getByRole("complementary", { name: "Transcript" });
     assert.deepEqual(await transcript.getByRole("button").allTextContents(), [
@@ -140,7 +140,7 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     await page.keyboard.press("Escape");
     await page.waitForURL(/\?day=2026-11-08$/);
 
-    // Where HEVC plays: opened from its address, watched, and graded on the GPU.
+    // Where HEVC plays: opened from its address, it plays with nothing to press, graded on the GPU.
     await page.addInitScript(() => {
       const can = HTMLMediaElement.prototype.canPlayType;
       HTMLMediaElement.prototype.canPlayType = function (type) {
@@ -148,7 +148,6 @@ export async function checkArchive(browser, { composer, dir, shots }) {
       };
     });
     await page.goto(`${composer}/archive?day=2026-11-08&clip=DJI_20261108122204_0086_D&theme=${theme}`);
-    await player.getByRole("button", { name: "Watch", exact: true }).click();
     const pause = player.getByRole("button", { name: "Pause" });
     await pause.waitFor();
     await page.waitForFunction(() => document.querySelector(".publisher-archive-stage video").currentTime > 0.3);
