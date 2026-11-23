@@ -40,6 +40,12 @@ interface Props {
 }
 
 type LookChoice = "log" | "default" | "grade";
+/** What each look gives way to, in order, when a clip can't have it. */
+const FALLBACK: Record<LookChoice, LookChoice[]> = {
+  log: ["log"],
+  default: ["default", "log"],
+  grade: ["grade", "default", "log"],
+};
 const LOOK_KEY = "publisher.archiveLook";
 const LOOKS: { id: LookChoice; name: string }[] = [
   { id: "log", name: "Log" },
@@ -131,9 +137,9 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
   const [look, setLook] = useState<LookChoice>(() => {
     try {
       const saved = localStorage.getItem(LOOK_KEY);
-      return LOOKS.some((option) => option.id === saved) ? (saved as LookChoice) : "log";
+      return LOOKS.some((option) => option.id === saved) ? (saved as LookChoice) : "grade";
     } catch {
-      return "log";
+      return "grade";
     }
   });
   const [lookNote, setLookNote] = useState<{ text: string; problem?: boolean }>({ text: "" });
@@ -217,10 +223,12 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
     default: webgl ? defaultLook(profile, settings) : noWebgl,
     grade: webgl ? ownGrade(clip, profile, settings, grades, exportsRead) : noWebgl,
   };
-  const chosen = available[look];
-  const shown: LookChoice = chosen.ok ? look : "log";
-  // A look picked before that can't be shown for this clip says why, and the clip is shown as shot.
-  const why = chosen.ok ? null : chosen.why;
+  // A look that can't be shown for this clip gives way to the next: its grade to the default look, that to the clip as
+  // shot. It says why.
+  const shown = FALLBACK[look].find((id) => available[id].ok) ?? "log";
+  const chosen = available[shown];
+  const wanted = available[look];
+  const why = wanted.ok ? null : wanted.why;
   const lutKey = chosen.ok ? `${chosen.path}\n${JSON.stringify(chosen.grade)}\n${chosen.shotK}` : "";
   // The look, as a LUT on the GPU: the default look's as backed up, or its grade composed over its look's.
   // biome-ignore lint/correctness/useExhaustiveDependencies: lutKey stands for what the look is made of
@@ -243,7 +251,9 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
       const name = base?.title?.split(" · ")[0] || (chosen.name === "none" ? "As shot" : chosen.name);
       if (shown === "default" && base) {
         gpu.setLut(base.size, base.data);
-        setLookNote({ text: `${profileName} through ${name}, live on this browser's GPU.` });
+        // Shown in place of its grade, it says why.
+        const instead = why ? `${why}, so the default look: ` : "";
+        setLookNote({ text: `${instead}${profileName} through ${name}, live on this browser's GPU.` });
       } else {
         const size = 33;
         gpu.setLut(size, composeLut({ profile, grade: chosen.grade, shotK: chosen.shotK, base, size }));

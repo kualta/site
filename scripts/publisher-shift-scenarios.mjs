@@ -742,15 +742,9 @@ export const scenarios = [
   // Archive.
   {
     tab: "archive",
-    name: "pages through a day and changes days",
+    name: "changes days",
     query: { day: "2026-11-08" },
     run: async (page, { step }) => {
-      const head = page.locator(".publisher-archive-head");
-      for (const button of ["Next page", "Previous page"]) {
-        await step(button);
-        await head.getByRole("button", { name: button }).click();
-        await sleep(700);
-      }
       for (const day of ["11 Nov", "21 Nov", "8 Nov"]) {
         await step(`opens ${day}`);
         await page

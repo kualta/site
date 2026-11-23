@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import PublisherArchivePlayer from "./PublisherArchivePlayer";
 import type { ArchivedClip, ArchivedDay } from "@/lib/publisher/archive-tab";
 import {
@@ -9,7 +8,6 @@ import {
   fileSize,
   nameTime,
   otherCopies,
-  PAGE_SIZE,
   PROFILES,
   readArchiveView,
   stemOf,
@@ -20,7 +18,7 @@ import "@/styles/publisher-archive.css";
 
 interface Props {
   request: (path: string) => Promise<any>;
-  /** The tab's address query, which holds the day, page and clip open. */
+  /** The tab's address query, which holds the day and clip open. */
   search: string;
   onNavigate: (search: string, replace?: boolean) => void;
   /** Opens a clip in the Grade tab, whose Cloudflare list brings it to the Mac. */
@@ -54,26 +52,6 @@ function Thumb({ stem, record }: { stem: string; record: LedgerClip | undefined 
   );
 }
 
-/** Which clips of the day are shown: "25–48 of 230", between Previous and Next. */
-function Pager({
-  page,
-  pages,
-  count,
-  onPage,
-}: { page: number; pages: number; count: number; onPage: (page: number) => void }) {
-  return (
-    <div className="publisher-archive-pager" role="group" aria-label="Pages">
-      <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPage(page - 1)}>
-        <ChevronLeftIcon size={16} />
-      </button>
-      <span>{count ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, count)} of ${count}` : ""}</span>
-      <button type="button" aria-label="Next page" disabled={page >= pages} onClick={() => onPage(page + 1)}>
-        <ChevronRightIcon size={16} />
-      </button>
-    </div>
-  );
-}
-
 function ClipCard({
   clip,
   record,
@@ -81,6 +59,7 @@ function ClipCard({
 }: { clip: ArchivedClip; record: LedgerClip | undefined; onOpen: () => void }) {
   const time = record?.recorded?.slice(11, 19) ?? nameTime(clip.file) ?? "";
   const profile = record?.profile ? PROFILES[record.profile] ?? record.profile : "Profile unknown";
+  const copies = otherCopies(record);
   return (
     <li>
       <button
@@ -98,20 +77,20 @@ function ClipCard({
         <span className="line">
           {fileSize(clip.size)} · {profile}
         </span>
-        <span className="line" data-dim={!clip.vtt || undefined}>
-          {clip.vtt ? "Transcript" : "No transcript"}
-        </span>
-        <span className="line" data-dim>
-          {otherCopies(record)}
-        </span>
+        {copies && (
+          <span className="line" data-dim>
+            {copies}
+          </span>
+        )}
       </button>
     </li>
   );
 }
 
 /**
- * The composer's Archive tab: the originals the grade app offloaded to the archive, a shoot day at a time and a page of
- * clips at a time, each with what the ledger knows of it. A clip opens in a player that streams it from the archive.
+ * The composer's Archive tab: the originals the grade app offloaded to the archive, a shoot day at a time, all its clips
+ * on one page (their pictures load as they come into view), each with what the ledger knows of it. A clip opens in a
+ * player that streams it from the archive.
  */
 export default function PublisherArchive({ request, search, onNavigate, onGrade }: Props) {
   const view = readArchiveView(search);
@@ -171,17 +150,13 @@ export default function PublisherArchive({ request, search, onNavigate, onGrade 
 
   const shown = listing?.day === day ? listing : null;
   const clips = shown?.clips ?? [];
-  const pages = Math.max(1, Math.ceil(clips.length / PAGE_SIZE));
-  const page = Math.min(view.page, pages);
-  const onPage = clips.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const records = ledger?.clips ?? {};
   const open = view.clip ? clips.find((clip) => stemOf(clip.file) === view.clip) : undefined;
   const bytes = clips.reduce((sum, clip) => sum + clip.size, 0);
   const transcribed = clips.filter((clip) => clip.vtt).length;
-  // While a day is read, a place for each clip the ledger knows it to have in the archive, up to a page.
+  // While a day is read, a place for each clip the ledger knows it to have in the archive.
   const known = Object.values(records).filter((c) => c.original.cloudflare && dayOf(c) === day).length;
-  const waiting = Math.min(PAGE_SIZE, known || PAGE_SIZE);
-  const grid = useRef<HTMLUListElement>(null);
+  const waiting = known || 24;
   // On a phone the days run sideways; the open one is kept in view.
   const daysBar = useRef<HTMLElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the day open and the days listed are what move it
@@ -209,12 +184,7 @@ export default function PublisherArchive({ request, search, onNavigate, onGrade 
       <div className="publisher-archive-body">
         <nav ref={daysBar} className="publisher-archive-days" aria-label="Shoot days">
           {days?.map((name) => (
-            <button
-              key={name}
-              type="button"
-              aria-pressed={name === day}
-              onClick={() => go({ day: name, page: 1, clip: null })}
-            >
+            <button key={name} type="button" aria-pressed={name === day} onClick={() => go({ day: name, clip: null })}>
               {dayName(name, true)}
             </button>
           ))}
@@ -232,11 +202,10 @@ export default function PublisherArchive({ request, search, onNavigate, onGrade 
                 <p className="publisher-note" title={listingError ?? undefined}>
                   {summary}
                 </p>
-                <Pager page={page} pages={pages} count={clips.length} onPage={(next) => go({ page: next })} />
               </div>
-              <ul ref={grid} className="publisher-archive-clips" aria-busy={!shown}>
+              <ul className="publisher-archive-clips" aria-busy={!shown}>
                 {shown
-                  ? onPage.map((clip) => (
+                  ? clips.map((clip) => (
                       <ClipCard
                         key={clip.file}
                         clip={clip}
@@ -251,27 +220,10 @@ export default function PublisherArchive({ request, search, onNavigate, onGrade 
                           <span className="publisher-archive-thumb" />
                           <span className="line" />
                           <span className="line" />
-                          <span className="line" />
-                          <span className="line" />
                         </span>
                       </li>
                     ))}
               </ul>
-              {/* At the foot of a long page too, going back up to its top. */}
-              {shown && pages > 1 && (
-                <div className="publisher-archive-foot">
-                  <Pager
-                    page={page}
-                    pages={pages}
-                    count={clips.length}
-                    onPage={(next) => {
-                      go({ page: next });
-                      const top = grid.current?.getBoundingClientRect().top ?? 0;
-                      if (top < 0) window.scrollBy(0, top - 80);
-                    }}
-                  />
-                </div>
-              )}
             </>
           )}
         </div>
