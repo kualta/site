@@ -165,3 +165,13 @@ test(".cube files round-trip", () => {
   for (let i = 0; i < base.data.length; i++) close(parsed.data[i], base.data[i], 1e-6);
   expect(() => parseCube("LUT_1D_SIZE 4\n0 0 0\n")).toThrow();
 });
+
+test("an ungraded clip starts on OpenDRT Colorful, on ACES where that isn't there, and on nothing without either", () => {
+  expect(resolveGrade(undefined, ["none", "aces", "opendrt-colorful"]).base).toBe("opendrt-colorful");
+  expect(resolveGrade({ exposure: 1 }, ["opendrt-colorful", "aces"])).toMatchObject({ base: "opendrt-colorful", exposure: 1 });
+  expect(resolveGrade(undefined, ["none", "aces"]).base).toBe("aces");
+  expect(resolveGrade(undefined, ["none"]).base).toBe("none");
+  // A grade's own look stays, unless its profile doesn't have it.
+  expect(resolveGrade({ base: "aces" }, ["aces", "opendrt-colorful"]).base).toBe("aces");
+  expect(resolveGrade({ base: "gone" }, ["aces", "opendrt-colorful"]).base).toBe("opendrt-colorful");
+});

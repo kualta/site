@@ -194,6 +194,9 @@ export const DEFLICKER = Object.freeze({ light: 6, strong: 12 });
 export const deflickerFrames = (level) =>
   typeof level === "string" && Object.hasOwn(DEFLICKER, level) ? DEFLICKER[level] : 0;
 
+/** The looks a clip has before it's graded, best first: the first of them its profile has. */
+export const DEFAULT_LOOKS = Object.freeze(["opendrt-colorful", "aces"]);
+
 /** A grade with every field present and in range; `base` is kept as given, `deflicker` only when it's on. */
 export function normalizeGrade(g = {}) {
   const out = { base: g.base ?? null };
@@ -215,11 +218,11 @@ export function gradeKey(g) {
 
 /**
  * A clip's grade as it will actually be applied: every field in range and a base that exists for its profile
- * (`baseIds`). An unknown or missing base falls back to the ACES conversion, or to none where there is no ACES base.
+ * (`baseIds`). An unknown or missing base falls back to the first of `DEFAULT_LOOKS` the profile has, or to none.
  */
 export function resolveGrade(grade, baseIds) {
   const g = normalizeGrade(grade);
-  if (!g.base || !baseIds.includes(g.base)) g.base = baseIds.includes("aces") ? "aces" : "none";
+  if (!g.base || !baseIds.includes(g.base)) g.base = DEFAULT_LOOKS.find((id) => baseIds.includes(id)) ?? "none";
   return g;
 }
 
