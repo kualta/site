@@ -787,13 +787,17 @@ export const scenarios = [
         return /hvc1|hev1/.test(type) ? "probably" : can.call(this, type);
       };
     },
-    run: async (page, { still, step, media }) => {
-      await page.route(`**/api/publisher/archive/files/${"0".repeat(62)}56/**`, (route) =>
+    // The original, read as the player opens.
+    routes: (page, { media }) =>
+      page.route(`**/api/publisher/archive/files/${"0".repeat(62)}56/**`, (route) =>
         route.fulfill({ contentType: media.wide.mimeType, body: media.wide.buffer }).catch(() => {}),
-      );
+      ),
+    run: async (page, { still, step }) => {
       const player = page.getByRole("dialog");
-      await step("starts watching");
-      await player.getByRole("button", { name: "Watch", exact: true }).click();
+      // It played as it opened, with nothing pressed: the page's load, measured as still, saw it start.
+      await page.waitForFunction(() => document.querySelector(".publisher-archive-stage video")?.currentTime > 0);
+      await step("plays again");
+      await player.getByRole("button", { name: "Play" }).click();
       await sleep(600);
       await still("plays, its lines said over it");
       await sleep(2500);

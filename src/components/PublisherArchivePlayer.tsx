@@ -25,7 +25,6 @@ import {
   parseVtt,
   PROFILES,
   stemOf,
-  watchCost,
 } from "@/lib/publisher/archive-view";
 import { type LedgerClip, thumbUrl } from "@/lib/publisher/ledger";
 
@@ -104,7 +103,7 @@ function gradeWords(name: string, grade: Record<string, any>) {
 }
 
 /**
- * A clip of the archive, in a player that streams the original from Cloudflare (nothing is read until Watch), with its
+ * A clip of the archive, in a player that streams the original from Cloudflare and plays as it opens, with its
  * transcript beside it and as captions, and a Look: as shot, the default look, or its own grade, applied live on this
  * browser's GPU from the small LUTs the grade app backs up, the way its own preview does.
  */
@@ -148,7 +147,8 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
 
   useEffect(() => {
     dialog.current?.showModal();
-    setHevc(playsHevc(clip.file));
+    const plays = playsHevc(clip.file);
+    setHevc(plays);
     const element = video.current;
     try {
       viewer.current = new Viewer(canvas.current);
@@ -159,6 +159,8 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
     }
     const fullscreen = () => setFull(document.fullscreenElement === screen.current);
     document.addEventListener("fullscreenchange", fullscreen);
+    // It plays as it opens, as a preview does. A browser that can't play HEVC says so instead, and reads nothing.
+    if (plays) watch();
     return () => {
       document.removeEventListener("fullscreenchange", fullscreen);
       // Stop reading the clip at once: every byte read from the archive is paid for.
@@ -281,7 +283,12 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
     setState("loading");
     setFailure("");
     element.src = `${fileUrl(clip.sha256, clip.file)}${startAt ? `#t=${startAt}` : ""}`;
-    element.play().catch(() => {});
+    // A browser that won't start it with sound starts it muted, and Unmute gives the sound back.
+    element.play().catch((error: Error) => {
+      if (error.name !== "NotAllowedError") return;
+      element.muted = true;
+      element.play().catch(() => {});
+    });
   }
   function failed() {
     const code = video.current?.error?.code;
@@ -294,7 +301,7 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
   /** Goes to `at`, playing from there when asked; before watching, it's where watching starts. */
   function seek(at: number, play = false) {
     const element = video.current;
-    if (state === "ready" && element) {
+    if ((state === "ready" || state === "loading") && element) {
       element.currentTime = at;
       if (play) void element.play().catch(() => {});
     } else setStartAt(at);
@@ -315,9 +322,13 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
   const recorded = record?.recorded ? record.recorded.slice(11, 19) : nameTime(clip.file);
   const here = Boolean(record?.original.mac || record?.original.camera);
   const ready = state === "ready";
-  let watchLabel = "Watch";
-  if (state === "failed") watchLabel = "Try again";
-  else if (!hevc) watchLabel = "Try anyway";
+  // What keeps it from playing, when something does: it failed, or this browser can't play HEVC.
+  let held: string | null = null;
+  if (state === "failed") held = failure;
+  else if (state === "idle" && !hevc)
+    held =
+      "This browser can't play HEVC, which the camera records. Safari, or Chrome or Edge on a Mac, plays it; or bring it to the Mac.";
+  let watchLabel = state === "failed" ? "Try again" : "Try anyway";
   if (startAt) watchLabel += ` from ${clock(startAt)}`;
   let transcriptNote = "Reading…";
   if (!clip.vtt) transcriptNote = "No transcript is filed for it.";
@@ -391,22 +402,15 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
               )}
               {!ready && (
                 <div className="publisher-archive-overlay">
-                  {state === "loading" ? (
+                  {held === null ? (
                     <p>Loading…</p>
                   ) : (
                     <>
-                      {state === "failed" && <p>{failure}</p>}
-                      {state === "idle" && !hevc && (
-                        <p>
-                          This browser can't play HEVC, which the camera records. Safari, or Chrome or Edge on a Mac,
-                          plays it; or bring it to the Mac.
-                        </p>
-                      )}
+                      <p>{held}</p>
                       <button type="button" onClick={watch}>
                         <PlayIcon size={16} />
                         {watchLabel}
                       </button>
-                      <small>Reads up to {watchCost(clip.size)}, from Cloudflare</small>
                     </>
                   )}
                 </div>

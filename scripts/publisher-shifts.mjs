@@ -290,6 +290,8 @@ async function measure(browser, base, scenario, { width, theme, media }) {
       await sleep(400);
       await route.continue().catch(() => {});
     });
+    // What the page reads as it opens, such as a clip that plays at once, answered from the start.
+    if (scenario.routes) await scenario.routes(page, { media });
     const query = new URLSearchParams({ ...scenario.query, theme });
     if (scenario.props) query.set("props", JSON.stringify(scenario.props));
     await page.goto(`${base}${scenario.tab === "compose" ? "" : `/${scenario.tab}`}?${query}`);

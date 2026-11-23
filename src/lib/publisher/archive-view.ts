@@ -44,14 +44,6 @@ export function fileSize(bytes: number) {
   if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }
-/** R2's Infrequent Access charges this for each GB read, on top of its requests. */
-export const READ_PRICE_PER_GB = 0.01;
-/** What watching a clip through reads, and about what that costs: "2.78 GB, about $0.03". */
-export function watchCost(bytes: number) {
-  const dollars = (bytes / 1e9) * READ_PRICE_PER_GB;
-  const cost = dollars < 0.005 ? "under a cent" : `about $${dollars.toFixed(2)}`;
-  return `${fileSize(bytes)}, ${cost}`;
-}
 
 /** A duration as a player shows it: 0:42, 12:05, 1:02:09. */
 export function clock(seconds: number) {
