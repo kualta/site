@@ -606,7 +606,7 @@ test.if(usable)("keeps days and clips out of offload: counted apart, and nothing
 });
 
 test.if(usable)("won't start on what it doesn't understand, nor on a list of kept clips it can't read", async () => {
-  for (const bad of [{ lanes: ["everything"] }, { lanes: "copy" }, { unattended: "yes" }, { youtube: 0 }, { clearCardAfter: "never" }])
+  for (const bad of [{ lanes: ["everything"] }, { lanes: "copy" }, { unattended: "yes" }, { youtube: 0 }, { keepAwake: "no" }, { clearCardAfter: "never" }])
     expect((await post("/api/offload", bad)).status).toBe(400);
   // The exports don't go any more: asking for them is refused, saying what may be asked for.
   for (const path of ["/api/offload", "/api/offload/stop"]) {
@@ -642,10 +642,18 @@ test.if(usable)("offloads the card through this Mac to the archive by day, delet
   const listings = site.listings;
   site.slow = 700;
   expect((await post("/api/offload", { unattended: true })).status).toBe(200);
-  await until(async () => (await json("/api/offload")).run.send.done === 4);
+  let keptAwake = false;
+  await until(async () => {
+    const { run } = await json("/api/offload");
+    keptAwake ||= run.keepingAwake;
+    return run.send.done === 4;
+  });
   expect(site.listings).toBe(listings);
   const after = await ended();
   site.slow = 0;
+  // This Mac was kept awake while it worked, where there's caffeinate to, and let go of once it was done.
+  expect(keptAwake).toBe(process.platform === "darwin");
+  expect(after).toMatchObject({ keepingAwake: false, run: { keepAwake: true, keepingAwake: false } });
   expect(after.run).toMatchObject({ finished: "done", error: null, waiting: null });
   expect(after.run.copy).toMatchObject({ total: 1, done: 1, ended: true, error: null });
   expect(after.run.send).toMatchObject({ total: 4, done: 4, current: [] });
@@ -820,6 +828,8 @@ test.if(usable)("pauses what it sends while no page is open, and goes on once on
     return run.paused && run;
   });
   expect(paused).toMatchObject({ running: true, unattended: false, paused: { for: "page", why: "No Grade page is open" } });
+  // Paused, it lets this Mac sleep.
+  expect(paused.keepingAwake).toBe(false);
   const filed = daysFiled();
   await new Promise((resolve) => setTimeout(resolve, 1500));
   expect(daysFiled()).toEqual(filed);
@@ -839,8 +849,14 @@ test.if(usable)("pauses what it sends while no page is open, and goes on once on
   expect((await post("/api/offload", { lanes: ["send"] })).status).toBe(200);
   await until(async () => (await json("/api/offload")).run.paused);
   expect((await post("/api/offload", { lanes: ["send"] })).status).toBe(409);
-  expect((await post("/api/offload", { lanes: [], unattended: true })).status).toBe(200);
-  expect((await ended()).run).toMatchObject({ finished: "done", unattended: true, send: { done: 1 } });
+  expect((await post("/api/offload", { lanes: [], unattended: true, keepAwake: false })).status).toBe(200);
+  expect((await ended()).run).toMatchObject({
+    finished: "done",
+    unattended: true,
+    keepAwake: false,
+    keepingAwake: false,
+    send: { done: 1 },
+  });
 }, 120_000);
 
 test.if(usable)("takes the card's clips alone, remembers to leave them there till they're sent, and then clears them", async () => {
