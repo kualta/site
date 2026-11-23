@@ -224,6 +224,10 @@ beforeAll(async () => {
   writeFileSync(join(film, "assets/DJI_20260203101500_0007_D.mp4"), "graded copy");
   writeFileSync(join(film, "assets/song.mp3"), "not footage");
   mkdirSync(join(data, "luts/agx"), { recursive: true });
+  // Left by the offload of graded copies, which is gone: nothing reads them, and nothing minds them.
+  const leftover = { sha256: "ab".repeat(32), size: 11, day: "2026-02-03", at: "2026-02-04T00:00:00.000Z" };
+  writeFileSync(join(data, "graded.json"), JSON.stringify({ version: 1, clips: { "DJI_20260203101500_0007_D.mp4": leftover } }));
+  writeFileSync(join(data, "offload.json"), JSON.stringify({ clearCardAfter: "copied", lanes: ["exports"] }));
   mkdirSync(join(camera, "DJI_001"), { recursive: true });
   clip(join(original, name), "D-Log2");
   clip(join(camera, "DJI_001", withStill), "Rec.709", { still: true });
@@ -604,6 +608,12 @@ test.if(usable)("keeps days and clips out of offload: counted apart, and nothing
 test.if(usable)("won't start on what it doesn't understand, nor on a list of kept clips it can't read", async () => {
   for (const bad of [{ lanes: ["everything"] }, { lanes: "copy" }, { unattended: "yes" }, { youtube: 0 }, { clearCardAfter: "never" }])
     expect((await post("/api/offload", bad)).status).toBe(400);
+  // The exports don't go any more: asking for them is refused, saying what may be asked for.
+  for (const path of ["/api/offload", "/api/offload/stop"]) {
+    const exports = await post(path, { lanes: ["send", "exports"] });
+    expect(exports.status).toBe(400);
+    expect((await exports.json()).error).toBe("lanes must be some of copy, send");
+  }
   writeFileSync(join(data, "keep.json"), "{ half written");
   const refused = await post("/api/offload", { unattended: true });
   expect(refused.status).toBe(500);
@@ -771,60 +781,7 @@ test.if(usable)("exports with deflicker on: its record and key say so, and the e
   expect(meanDiff(png, exportedFrame)).toBeLessThan(2);
 }, 120_000);
 
-// The flickering clip is the one original left, its export and the earlier ones beside it.
-test.if(usable)("sends the exports alone, when that's asked for, and they count as exported and as in Cloudflare", async () => {
-  const stem = "DJI_20260217100000_0001_D";
-  const before = await until(async () => {
-    const summary = await json("/api/offload");
-    return summary.exports.clips === 4 && summary;
-  });
-  expect(before.run.exports).toMatchObject({ on: false, total: 0 });
-  // The first one's clip is kept, and the footage uploads have begun putting up another.
-  await post("/api/offload/keep", { days: ["2026-02-03"] });
-  const uploads = JSON.parse(readFileSync(join(publisher, "footage.json"), "utf8"));
-  const goingUp = movingClip.replace(".MP4", ".mp4");
-  writeFileSync(join(publisher, "footage.json"), JSON.stringify({ ...uploads, current: { name: goingUp } }));
-  const watched = site.watched;
-  expect((await post("/api/offload", { lanes: ["exports"], unattended: true, youtube: false })).status).toBe(200);
-  const after = await ended();
-  expect(after.run).toMatchObject({ finished: "done", youtube: false, exports: { done: 3, total: 3, skipped: [] }, send: { on: false, total: 0 }, copy: { total: 0 } });
-  // One put there by hand has no record of how it was made; a frame is no export.
-  const left = exportedFiles();
-  expect(left.filter((f) => f.endsWith(".mp4"))).toEqual(["DJI_20260203101500_0007_D.mp4", "DJI_20260205090100_0002_D.mp4", goingUp]);
-  expect(left.filter((f) => f.endsWith(".png")).length).toBeGreaterThan(0);
-  expect(readdirSync(original)).toEqual([`${stem}.MP4`]);
-  expect(daysFiled().filter((project) => project.startsWith("_graded"))).toEqual([
-    "_graded-2026-02-05",
-    "_graded-2026-02-13",
-    "_graded-2026-02-17",
-  ]);
-  expect(paths(site.manifests.get("_graded-2026-02-17"))).toEqual([`assets/${stem}.mp4`]);
-  const sent = JSON.parse(readFileSync(join(data, "graded.json"), "utf8")).clips;
-  expect(Object.keys(sent)).toContain(`${stem}.mp4`);
-  expect(Object.keys(JSON.parse(readFileSync(join(data, "offloaded.json"), "utf8")).clips)).not.toContain(`${stem}.mp4`);
-  // The YouTube uploads weren't told anyone's watching.
-  expect(site.watched).toBe(watched);
-  // The clip still counts as exported, with that grade.
-  const [c] = (await json("/api/sources/mac:2026-02-17")).clips;
-  expect(c.exported.key).toBe(records()[`${stem}.MP4`].key);
-  const ledger = await until(async () => {
-    const body = await json("/api/ledger");
-    const { graded } = body.ledger.clips[stem] ?? {};
-    return graded?.cloudflare === "current" && !graded.mac && body.ledger;
-  });
-  expect(ledger.clips[stem].original).toEqual({ camera: false, mac: true, cloudflare: false });
-  expect(Object.keys(ledger.projects).some((film) => film.startsWith("_"))).toBe(false);
-
-  // Put up, the other goes too: it's in the archive already.
-  writeFileSync(join(publisher, "footage.json"), JSON.stringify(uploads));
-  expect((await post("/api/offload", { lanes: ["exports"], unattended: true, youtube: false })).status).toBe(200);
-  expect((await ended()).run.exports).toMatchObject({ total: 0, done: 0 });
-  expect(exportedFiles()).not.toContain(goingUp);
-  await post("/api/offload/keep", { days: [] });
-}, 120_000);
-
 test.if(usable)("what's brought back is kept: the next offload leaves it, whichever switches are on, till it's let go", async () => {
-  const gradedName = withStill.replace(".MP4", ".mp4");
   const bring = async (asked) => {
     expect((await post("/api/bring", asked)).status).toBe(200);
     return until(async () => {
@@ -832,28 +789,25 @@ test.if(usable)("what's brought back is kept: the next offload leaves it, whiche
       return !run.running && run;
     });
   };
-  // The one original left is none of this, nor the export kept before.
-  await post("/api/offload/keep", { days: ["2026-02-03", "2026-02-17"] });
-  expect(await bring({ what: "original", names: [withStill] })).toMatchObject({ landed: 1, failed: [] });
-  expect(await bring({ what: "graded", names: [gradedName] })).toMatchObject({ landed: 1, failed: [] });
-  expect(await json("/api/offload/keep")).toEqual({ days: ["2026-02-03", "2026-02-17"], clips: [withStill, gradedName] });
+  // The one original left is none of this.
+  await post("/api/offload/keep", { days: ["2026-02-17"] });
+  expect(await bring({ names: [withStill] })).toMatchObject({ landed: 1, failed: [] });
+  expect(await json("/api/offload/keep")).toEqual({ days: ["2026-02-17"], clips: [withStill] });
   const here = await json("/api/offload");
-  expect(here.kept.count).toBe(3);
-  expect(here.days.find((d) => d.day === day)).toMatchObject({ clips: 1, kept: false, keptClips: [withStill, gradedName] });
+  expect(here.kept.count).toBe(2);
+  expect(here.days.find((d) => d.day === day)).toMatchObject({ clips: 1, kept: false, keptClips: [withStill] });
   const offload = async () => {
-    const options = { lanes: ["copy", "send", "exports"], unattended: true, youtube: false };
+    const options = { lanes: ["copy", "send"], unattended: true, youtube: false };
     expect((await post("/api/offload", options)).status).toBe(200);
     return (await ended()).run;
   };
-  expect(await offload()).toMatchObject({ send: { total: 0 }, exports: { total: 0 } });
+  expect(await offload()).toMatchObject({ send: { total: 0 } });
   expect(readdirSync(original)).toContain(withStill);
-  expect(exportedFiles()).toContain(gradedName);
 
-  // Let go, they're in the archive already and only deleted.
+  // Let go, it's in the archive already and only deleted.
   await post("/api/offload/keep", { clips: [] });
-  expect(await offload()).toMatchObject({ send: { total: 0 }, exports: { total: 0 } });
+  expect(await offload()).toMatchObject({ send: { total: 0 } });
   expect(readdirSync(original)).not.toContain(withStill);
-  expect(exportedFiles()).not.toContain(gradedName);
   await post("/api/offload/keep", { days: [] });
 }, 120_000);
 

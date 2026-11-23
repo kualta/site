@@ -1,11 +1,9 @@
-// Offloading in the app: the foot of the Export menu, with a switch each for Camera → Mac, Mac → Cloudflare and
-// Exports → Cloudflare, what's kept out of it, and how it goes; the status line while it does; and Stop in the bar.
+// Offloading in the app: the foot of the Export menu, with a switch each for Camera → Mac and Mac → Cloudflare, what's
+// kept out of it, and how it goes; the status line while it does; and Stop in the bar.
 
 const $ = (id) => document.getElementById(id);
-const LANES = ["copy", "send", "exports"];
-/** The lanes that send anything. */
-const SENDS = ["send", "exports"];
-const NAMES = { copy: "Camera → Mac", send: "Mac → Cloudflare", exports: "Exports → Cloudflare" };
+const LANES = ["copy", "send"];
+const NAMES = { copy: "Camera → Mac", send: "Mac → Cloudflare" };
 
 const clips = (count) => `${count} clip${count === 1 ? "" : "s"}`;
 function timeLeft(seconds) {
@@ -44,14 +42,11 @@ export function offloadMoves(o) {
 
 /** How much of a lane's is done, with what's in flight. */
 function bytesDone(o, lane) {
-  if (lane === "copy") return o.copy.doneBytes + (o.copy.current?.sent ?? 0);
-  return lane === "send" ? o.sentBytes : o.exports.sentBytes;
+  return lane === "copy" ? o.copy.doneBytes + (o.copy.current?.sent ?? 0) : o.sentBytes;
 }
-/** What the lanes that are on have to send, and how much of it is sent. */
+/** What Mac → Cloudflare has to send while it's on, and how much of it is sent. */
 function sending(o) {
-  const on = SENDS.filter((lane) => o[lane]?.on);
-  const total = (of) => on.reduce((sum, lane) => sum + of(lane), 0);
-  return { bytes: total((lane) => o[lane].bytes), sent: total((lane) => bytesDone(o, lane)) };
+  return o.send?.on ? { bytes: o.send.bytes, sent: o.sentBytes } : { bytes: 0, sent: 0 };
 }
 
 /** How much of what the offload sends is sent, a share of 1; null with nothing to send. */
@@ -108,7 +103,7 @@ export function offloadMenu({ api, fileSize, showError, poll }) {
 
   /** What an idle lane has to do, or how it left things. */
   function idle(lane) {
-    const { camera, mac, exports: made } = info;
+    const { camera, mac } = info;
     const passed = run?.[lane]?.skipped ?? [];
     if (passed.length) return `${clips(passed.length)} passed over: ${passed[0].why}`;
     if (lane === "copy") {
@@ -116,14 +111,12 @@ export function offloadMenu({ api, fileSize, showError, poll }) {
       if (run?.copy.onCamera) return stayText(run.copy.onCamera);
       return camera.clips ? clipsAndSize(camera.clips, camera.bytes) : "Nothing to copy";
     }
-    const { clips: count, bytes, sent } = lane === "send" ? mac : made;
-    if (count) return `${clipsAndSize(count, bytes)} to send`;
-    return sent ? `${clips(sent)} sent, still here` : "Nothing to send";
+    if (mac.clips) return `${clipsAndSize(mac.clips, mac.bytes)} to send`;
+    return mac.sent ? `${clips(mac.sent)} sent, still here` : "Nothing to send";
   }
   function hasWork(lane) {
-    const { camera, mac, exports: made, transcripts } = info;
+    const { camera, mac, transcripts } = info;
     if (lane === "copy") return camera.mounted && camera.clips > 0;
-    if (lane === "exports") return made.clips + made.sent > 0;
     return mac.clips + mac.sent + transcripts.toSend > 0 || Boolean(run?.running && run.copy.on);
   }
   const LABELS = { off: "Start", on: "Stop", finishing: "Stop now", stopping: "Stopping" };

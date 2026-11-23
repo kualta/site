@@ -99,9 +99,9 @@ export async function exportedClips({ exported = EXPORTED, exportsFile = EXPORTS
 export async function archiveFootage(request, records = new Map()) {
   const clips = new Map();
   for (const { name: project } of (await request("projects")).projects) {
-    // Of what the grade app keeps here only a day's graded copies (`_graded-<day>`) are footage: its offloaded originals
-    // (`_originals-<day>`) are ungraded, and never go to YouTube.
-    if (project.startsWith("_") && !project.startsWith("_graded-")) continue;
+    // What the grade app keeps here (a shoot day's offloaded originals, `_originals-<day>`, and its settings) isn't
+    // graded footage: it never goes to YouTube.
+    if (project.startsWith("_")) continue;
     for (const file of (await request(`projects/${project}`)).files) {
       const name = file.path.split("/").pop();
       if (!/^(zh\/)?assets\//.test(file.path) || !CLIP.test(name) || clips.has(name)) continue;

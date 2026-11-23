@@ -60,7 +60,7 @@ const go = path.join(root, "go");
 writeFileSync(uvx, `#!/bin/sh\nwhile [ ! -e "${go}" ]; do [ -e "${uvx}" ] || exit 1; sleep 0.1; done\necho "error: no GPU" >&2\nexit 1\n`, { mode: 0o755 });
 
 // A stand-in for the site's archive, holding a shoot day of 227 clips offloaded before: two are real ones, the first
-// graded before it went, with its graded copy; one's bytes stop partway.
+// graded before it went; one's bytes stop partway. Its graded copy, offloaded before only originals were, stays there.
 const cloud = { blobs: new Map(), manifests: {}, held: null, down: false };
 const cloudDay = "2025-12-30";
 const cloudClip = (n) => `DJI_20251230${String(100000 + n)}_${String(n).padStart(4, "0")}_D`;
@@ -250,7 +250,7 @@ try {
   assert.equal(await page.locator("#offload-transcripts").textContent(), "Nothing to send");
   assert.equal(await page.locator("#offload-camera").textContent(), "Not plugged in");
   assert.match(await page.locator("#offload-mac").textContent(), /^2 clips · .* to send$/);
-  assert.match(await page.locator("#offload-exports").textContent(), /^1 clip · .* to send$/);
+  assert.equal(await page.locator(".lane").count(), 2, "only originals are offloaded");
   assert.ok(await page.getByRole("button", { name: "Start Camera → Mac" }).isDisabled(), "nothing to take off no camera");
   // A shoot day is kept, and let go again.
   const days = page.getByRole("group", { name: "Days kept on the camera and this Mac" });
@@ -322,11 +322,12 @@ try {
   assert.equal(await option.evaluate((el) => el.parentElement.label), "Cloudflare");
   await picker.selectOption(`cloud:${cloudDay}`);
   const cloudRow = (file) => page.locator(`.cloud-clip[data-stem="${file.replace(/\.MP4$/, "")}"]`);
-  const copy = (file, what) => cloudRow(file).locator(`[data-what="${what}"] button`);
-  await copy(gone, "original").waitFor({ timeout: 10_000 });
+  const copy = (file) => cloudRow(file).locator(".cloud-file button");
+  await copy(gone).waitFor({ timeout: 10_000 });
   assert.equal(await page.locator(".cloud-clip").count(), 227);
   assert.equal(await page.locator("#cloud-count").textContent(), "227 not here");
-  assert.equal(await page.locator("#cloud-graded").textContent(), "1 · 1 KB");
+  assert.match(await page.locator("#cloud-original").textContent(), /^227 · /);
+  assert.equal(await page.locator(".cloud-file").count(), 227, "a row has its original, and nothing else");
   assert.ok(await page.locator("#clip-list").isHidden(), "the clip list makes way");
   assert.ok(await page.locator("#export").isDisabled(), "nothing here to export");
   assert.equal(await cloudRow(gone).locator(".when").textContent(), "10:01 · transcript");
@@ -362,34 +363,30 @@ try {
   if (shots) await page.screenshot({ path: path.join(shots, "grade-6-cloud.png") });
 
   // One that stalls, and one waiting behind it: the share, then stopped, and nothing of either kept.
-  await copy(partial, "original").click();
-  await copy(partial, "original").getByText("42%").waitFor({ timeout: 10_000 });
-  await copy(missing, "original").click();
-  await copy(missing, "original").getByText("Queued").waitFor({ timeout: 5_000 });
+  await copy(partial).click();
+  await copy(partial).getByText("42%").waitFor({ timeout: 10_000 });
+  await copy(missing).click();
+  await copy(missing).getByText("Queued").waitFor({ timeout: 5_000 });
   await page.getByText(/^Bringing 1 of 2 · 0102 · 420 KB of 1\.0 MB/).waitFor({ timeout: 5_000 });
   await unmoved("a clip coming");
   if (shots) await page.screenshot({ path: path.join(shots, "grade-7-bringing.png") });
   await page.getByRole("button", { name: "Stop bringing" }).click();
-  await copy(partial, "original").getByText("Bring", { exact: true }).waitFor({ timeout: 5_000 });
-  await copy(missing, "original").getByText("Bring", { exact: true }).waitFor({ timeout: 5_000 });
+  await copy(partial).getByText("Bring", { exact: true }).waitFor({ timeout: 5_000 });
+  await copy(missing).getByText("Bring", { exact: true }).waitFor({ timeout: 5_000 });
   assert.ok(await page.getByRole("button", { name: "Stop bringing" }).isHidden());
   await unmoved("stopping");
   assert.deepEqual(readdirSync(original).sort(), [other, name].sort(), "a stopped clip leaves nothing");
 
   // One that comes: it's the clip it was, in its own day, and its grade still applies.
-  await copy(gone, "original").click();
-  await copy(gone, "original").getByText("Grade", { exact: true }).waitFor({ timeout: 10_000 });
+  await copy(gone).click();
+  await copy(gone).getByText("Grade", { exact: true }).waitFor({ timeout: 10_000 });
   assert.deepEqual(readFileSync(path.join(original, gone)), readFileSync(path.join(original, name)));
-  assert.equal(await page.locator("#cloud-count").textContent(), "227 not here", "its graded copy isn't here yet");
-  await page.locator("#bring-graded").click();
-  await copy(gone, "graded").getByText("Here", { exact: true }).waitFor({ timeout: 10_000 });
   assert.equal(await page.locator("#cloud-count").textContent(), "226 not here");
-  assert.equal(await page.locator("#cloud-graded").textContent(), "All here");
-  assert.equal(readFileSync(path.join(exported, gone.replace(".MP4", ".mp4")), "utf8"), "a graded copy");
+  assert.ok(!existsSync(path.join(exported, gone.replace(".MP4", ".mp4"))), "its graded copy stays in Cloudflare");
   await unmoved("a clip come");
   const keptNow = () => page.evaluate(async () => (await (await fetch("/api/offload/keep")).json()).clips);
-  assert.deepEqual(await keptNow(), [gone, gone.replace(".MP4", ".mp4")].sort(), "what's brought back is kept out of offload");
-  await copy(gone, "original").click();
+  assert.deepEqual(await keptNow(), [gone], "what's brought back is kept out of offload");
+  await copy(gone).click();
   const broughtRow = page.locator(`.clip[data-name="${gone}"]`);
   await broughtRow.waitFor({ timeout: 10_000 });
   assert.equal(await picker.inputValue(), `mac:${cloudDay}`);
@@ -400,7 +397,7 @@ try {
 
   // Another comes to the day that's open: it joins the list, and the clip on screen stays as it is.
   const shown = await page.locator("#video").evaluate((el) => el.src);
-  await page.evaluate((clip) => fetch("/api/bring", { method: "POST", headers: { "X-Grade": "1" }, body: JSON.stringify({ what: "original", names: [clip] }) }), second);
+  await page.evaluate((clip) => fetch("/api/bring", { method: "POST", headers: { "X-Grade": "1" }, body: JSON.stringify({ names: [clip] }) }), second);
   await page.locator(`.clip[data-name="${second}"]`).waitFor({ timeout: 15_000 });
   assert.deepEqual(await page.locator("#clip-list .clip").evaluateAll((all) => all.map((el) => el.dataset.name)), [gone, second]);
   assert.equal(await broughtRow.getAttribute("aria-pressed"), "true");
@@ -454,7 +451,6 @@ try {
     running: true, sentBytes: 430, speed: null, waiting: null, finished: null, error: null,
     copy: { on: true, mode: "on", total: 1, bytes: 1000, done: 0, doneBytes: 0, current: null, waiting: null, skipped: [] },
     send: { on: true, mode: "on", total: 1, bytes: 1000, done: 0, doneBytes: 0, current: [], waiting: null, skipped: [] },
-    exports: { on: false, mode: "off", total: 0, bytes: 0, done: 0, doneBytes: 0, current: [], waiting: null, skipped: [], sentBytes: 0 },
     ...change,
   });
   await composer.goto("http://127.0.0.1:4321/");
@@ -474,8 +470,6 @@ try {
   await says("an offload with nothing to send", null, null);
   work = { offload: offload({ send: { ...offload().send, on: false, mode: "off" } }) };
   await says("only the camera being copied", null, null);
-  work = { offload: offload({ exports: { ...offload().exports, on: true, mode: "on", bytes: 1000, sentBytes: 70 } }) };
-  await says("the exports going up as well", 0.25, null);
   work = { offload: offload() };
   await says("an offload again", 0.43, null);
   work = { offload: offload({ running: false, error: "The camera was unplugged" }) };
@@ -498,7 +492,6 @@ try {
     const info = () => ({
       camera: { mounted: true, clips: 12, bytes: 3.2e9 },
       mac: { clips: 4, bytes: 1.1e9, sent: 0 },
-      exports: { clips: 2, bytes: 5e8, sent: 0 },
       transcripts: { toSend: 2 },
       kept: { days: keptDays, clips: keptClips, count: keptDays.length * 227 + keptClips.length },
       days: [{ day: "2026-11-18", clips: 12, bytes: 3.2e9 }, { day: "2026-11-08", clips: 227, bytes: 7e10 }].map((d) => ({ ...d, kept: keptDays.includes(d.day), keptClips: d.day === "2026-11-18" ? keptClips : [] })),
@@ -510,8 +503,8 @@ try {
     const off = lane({ on: false, mode: "off", total: 0, bytes: 0, done: 0, doneBytes: 0 });
     const going = (change = {}) => ({
       running: true, unattended: false, youtube: true, clearCardAfter: "copied", paused: null, waiting: null, speed: 250_000, sentBytes: 4e8, finished: null, error: null,
-      transcripts: { sent: 0, error: null }, freed: { camera: 0, mac: 0, exports: 0 },
-      copy: lane({ current: null, onCamera: 0 }), send: lane({ total: 16, bytes: 4.3e9 }), exports: { ...off, sentBytes: 0 },
+      transcripts: { sent: 0, error: null }, freed: { camera: 0, mac: 0 },
+      copy: lane({ current: null, onCamera: 0 }), send: lane({ total: 16, bytes: 4.3e9 }),
       ...change,
     });
     await menu.route("**/api/jobs", async (route) => route.fulfill({ json: { ...(await (await route.fetch()).json()), offload: run } }));
@@ -536,7 +529,6 @@ try {
         .catch(async () => assert.fail(`${id} says “${await said(id).textContent()}”, not “${text}”`));
     await saysNow("camera", "12 clips · 3.2 GB");
     await saysNow("mac", "4 clips · 1.1 GB to send");
-    await saysNow("exports", "2 clips · 500 MB to send");
     const spots = () =>
       menu.evaluate(() =>
         [...document.querySelectorAll("#export-menu, #export-menu .lane, #export-menu .lane button, #export-menu .menu-row, #export-menu label, #export, #export-more, #footage-link")].map((el) => {
