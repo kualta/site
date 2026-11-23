@@ -27,6 +27,7 @@
     "music:publish": "node scripts/publish-music.mjs",
     "publisher": "node scripts/publisher/cli.mjs",
     "grade": "node scripts/grade/server.mjs --open",
+    "film": "node scripts/film/cli.mjs",
     "publisher:setup": "sh scripts/publisher/setup.sh"
   },
   "dependencies": {
