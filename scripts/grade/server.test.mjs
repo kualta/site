@@ -168,6 +168,9 @@ async function until(check, ms = 60_000) {
 const frames = (f) => Number([...spawnSync(ffmpeg, ["-hide_banner", "-i", f, "-map", "0:v:0", "-f", "null", "-"]).stderr.toString().matchAll(/frame=\s*(\d+)/g)].at(-1)?.[1]);
 const patch = (f) =>
   execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", f, "-map", "0:v:0", "-frames:v", "1", "-vf", "crop=16:16:40:40,scale=1:1:flags=area+accurate_rnd+full_chroma_int,format=rgb24", "-f", "rawvideo", "-"]);
+/** The same patch of a JPEG picture, read as a browser reads one (BT.601, full range). */
+const jpegPatch = (jpeg) =>
+  execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-i", "-", "-vf", "crop=16:16:40:40,scale=1:1:flags=area+accurate_rnd+full_chroma_int:in_color_matrix=bt601:in_range=pc,format=rgb24", "-f", "rawvideo", "-"], { input: jpeg });
 
 // A stand-in for uvx and the Whisper it runs: it waits for `go`, then says the name of the clip it was given.
 const uvx = join(root, "uvx");
@@ -391,6 +394,19 @@ test.if(usable)("keeps a ledger of every clip and where its copies are, sent who
   const jpeg = site.thumbs.get("DJI_20260203101500_0007_D");
   expect(jpeg.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
   expect(marked.clips.DJI_20260101120000_0099_D.thumb).toBeUndefined();
+  // The log clip's picture goes graded as it exports (the stand-in base inverts), its record keyed by that grade, while
+  // the cache keeps the log one to grade again; the Rec.709 one goes as it was made.
+  expect(marked.clips.DJI_20260203101500_0007_D.thumb).toMatch(/^[0-9a-f]{12}$/);
+  const cached = (clip) => readFileSync(join(root, "cache/thumbs", `${clip}.jpg`));
+  const sentPatch = jpegPatch(jpeg);
+  const logPatch = jpegPatch(cached("DJI_20260203101500_0007_D"));
+  const exportPatch = patch(join(exported, "DJI_20260203101500_0007_D.mp4"));
+  for (let k = 0; k < 3; k++) {
+    expect(Math.abs(sentPatch[k] - exportPatch[k])).toBeLessThan(5);
+    expect(Math.abs(sentPatch[k] - (255 - logPatch[k]))).toBeLessThan(5);
+  }
+  expect(marked.clips.DJI_20260205090000_0001_D.thumb).toBe(true);
+  expect(site.thumbs.get("DJI_20260205090000_0001_D")).toEqual(cached("DJI_20260205090000_0001_D"));
 
   // The films: one on this Mac, one only the archive holds.
   expect(marked.projects).toEqual({

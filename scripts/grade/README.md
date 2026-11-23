@@ -102,8 +102,17 @@ unplugged (the Footage tab says as of when), and the archive between askings (ev
 `ledger.json` is the ledger as last merged. Whenever anything in it changes it's sent whole to the site's archive
 (`ledger/footage.json`, through `helper/archive/ledger` on the helper's pairing), but only once the archive's copy has
 been read back and merged in, so a fresh `ledger.json` on a new Mac can't drop clips only the archive knows. Each
-clip's thumbnail (made in the cache a dozen per look, from the original's still or a frame, or from the graded copy
-once the original is gone) goes to `ledger/thumbs/<clip>.jpg` once, and the clip's record says `thumb`. Along with a
+clip's thumbnail is made in the cache a dozen per look, log, from the original's still or a frame (or from the graded
+copy once the original is gone, which `thumb-copies.json` notes), and stays there. It goes to
+`ledger/thumbs/<clip>.jpg` graded as the clip would export (`thumbs.mjs`): through its saved grade, else its profile's
+default look, by the LUT an export bakes, from the cached picture and what its original was probed as (the cache's
+`meta.json`), so it's graded again after the clip has left this Mac. The record's `thumb` says what it went through:
+that grade's key (deflicker aside: a still can't show it), or `true` for one sent as it was made (Rec.709 as shot, one
+made from the graded copy, or one whose look has no LUT here, which the log says once). It goes again only when that
+changes, at most 24 a look as the ledger goes: the pictures sent before they were graded all go again, graded, 350 of
+them in 15 looks. The tabs ask for it by its key, so a regraded picture isn't the browser's day-old copy. On
+D-Log2 through OpenDRT Colorful it's within 2 to 4 levels of the export's frame over a region, red and blue a little
+low: DJI's still is its first frame a touch darker. Along with a
 ledger that's sent go `grades.json` and `exports.json`, as the archive's `_settings` project: only if they changed, and
 at most every 10 minutes (`bun run publisher restore _settings <folder>` brings them back). Without a paired helper all
 of it stays on this Mac.

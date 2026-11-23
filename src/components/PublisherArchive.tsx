@@ -15,7 +15,7 @@ import {
   stemOf,
   writeArchiveView,
 } from "@/lib/publisher/archive-view";
-import { dayOf, type Ledger, type LedgerClip } from "@/lib/publisher/ledger";
+import { dayOf, type Ledger, type LedgerClip, thumbUrl } from "@/lib/publisher/ledger";
 import "@/styles/publisher-archive.css";
 
 interface Props {
@@ -42,7 +42,7 @@ function Thumb({ stem, record }: { stem: string; record: LedgerClip | undefined 
     <span className="publisher-archive-thumb">
       {record?.thumb && !failed && (
         <img
-          src={`/api/publisher/footage/thumbs/${encodeURIComponent(stem)}.jpg`}
+          src={thumbUrl(stem, record.thumb)}
           alt=""
           loading="lazy"
           decoding="async"
