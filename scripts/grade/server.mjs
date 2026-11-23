@@ -353,7 +353,9 @@ async function pumpExports() {
   exportBusy = true;
   while (jobs.export.queue.length) {
     const job = jobs.export.queue.shift();
-    jobs.export.current = { ...job, progress: 0 };
+    // Its own record: ffmpeg can still report progress after the export has ended, when there's no current one.
+    const current = { ...job, progress: 0 };
+    jobs.export.current = current;
     exportAbort = new AbortController();
     try {
       await exportOne(
@@ -361,7 +363,7 @@ async function pumpExports() {
         job.name,
         job.quality,
         (p) => {
-          jobs.export.current.progress = p;
+          current.progress = p;
         },
         exportAbort.signal,
       );
