@@ -1,20 +1,19 @@
-// Offloading frees the camera's card fast and the Mac after it, by three switches (lane.mjs), each on or off whatever the
-// others are:
+// Offloading frees the camera's card fast and the Mac after it, by two switches (lane.mjs), each on or off whatever the
+// other is:
 //
-//   Camera → Mac          each clip is copied off the card to Movies/Original (hashed as it's read, then read back on the
-//                         Mac and checked against that), a clip at a time while the Mac has room for the next with
-//                         `keepFree` to spare, and deleted from the card with its .LRF: once it's on the Mac, or only
-//                         once Cloudflare has it.
-//   Mac → Cloudflare      each clip in Movies/Original goes to the site's archive under its SHA-256, `together` at a time,
-//                         and is deleted from the Mac once it's checked there (read back, unless R2 checked it whole).
-//   Exports → Cloudflare  the same for the graded copies in Movies/Exported.
+//   Camera → Mac      each clip is copied off the card to Movies/Original (hashed as it's read, then read back on the Mac
+//                     and checked against that), a clip at a time while the Mac has room for the next with `keepFree` to
+//                     spare, and deleted from the card with its .LRF: once it's on the Mac, or only once Cloudflare has it.
+//   Mac → Cloudflare  each clip in Movies/Original goes to the site's archive under its SHA-256, `together` at a time,
+//                     and is deleted from the Mac once it's checked there (read back, unless R2 checked it whole).
 //
-// Each switch deletes only what it takes from: the card's clips only Camera → Mac, the Mac's only the other two. With the
-// first two on, each clip gone from the Mac makes room for the next off the card.
+// Each switch deletes only what it takes from: the card's clips only Camera → Mac, the Mac's only Mac → Cloudflare. With
+// both on, each clip gone from the Mac makes room for the next off the card. Only originals go: graded copies are made
+// again when they're wanted.
 //
 // Each shoot day is a manifest of its own in the archive, `_originals-<day>`, holding its clips as `assets/<file>`, saved
-// again after every clip so a clip is safe the moment it's in; its graded copies are `_graded-<day>`. The ledger counts an
-// archived file the original's size as the original in Cloudflare; the leading `_` keeps these out of the films.
+// again after every clip so a clip is safe the moment it's in. The ledger counts an archived file the original's size as
+// the original in Cloudflare; the leading `_` keeps these out of the films.
 // `bun run publisher restore _originals-<day>` brings a day back.
 //
 // Each clip's sound is taken before its Mac copy goes, to be transcribed meanwhile or later (transcripts.mjs). A
@@ -32,9 +31,8 @@ import { makeLane, RETRY } from "./lane.mjs";
 /** Each request carries this much of a clip: on a slow uplink one still lands well inside a request's ten minutes. */
 export const OFFLOAD_PART = 16 * 1024 * 1024;
 
-export const LANES = ["copy", "send", "exports"];
+export const LANES = ["copy", "send"];
 export const originalsName = (day) => `_originals-${day}`;
-export const gradedName = (day) => `_graded-${day}`;
 const clipPath = (name) => `assets/${name}`;
 const lrfOf = (path) => path.replace(/\.mp4$/i, ".LRF");
 const gb = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`;
@@ -236,7 +234,7 @@ const onTheWay = ({ reaching, status }) =>
 
 /** No transcripts: an offload of clips alone. */
 const NO_TRANSCRIPTS = { take: async () => {}, ready: async () => [], sent: async () => {} };
-/** No exports: an offload of originals alone. */
+/** No record: what goes to the archive isn't kept. */
 const NO_RECORDS = { read: async () => ({}), add: async () => {}, drop: async () => {} };
 
 const UNPLUGGED = "The camera isn't plugged in";
@@ -259,11 +257,11 @@ function inTurn(work) {
 
 /**
  * Starts offloading, with the switches `lanes` on. What there is to take is listed as it goes: `camera({ fresh })` says the
- * card's clips, or null while it's unplugged (`fresh`: not from a listing a few seconds old); `mac()` Movies/Original's;
- * `exports()` Movies/Exported's. Each clip is `{ name, path, size, mtime, day }`, oldest first, with `settles` the time
- * until which it may still be being written. `dir` is Movies/Original; `room()` says how many bytes are free there.
+ * card's clips, or null while it's unplugged (`fresh`: not from a listing a few seconds old); `mac()` Movies/Original's.
+ * Each clip is `{ name, path, size, mtime, day }`, oldest first, with `settles` the time until which it may still be
+ * being written. `dir` is Movies/Original; `room()` says how many bytes are free there.
  *
- * `records` (`graded` for the exports) keeps what went to the archive: `read()` says name → `{ sha256, size, card }`, and
+ * `records` keeps what went to the archive: `read()` says name → `{ sha256, size, card }`, and
  * `add(clip, sha256, { card })` is done once it's on disk, as `drop(sha256)` is, which forgets a hash. A clip there that
  * the archive still holds is only deleted. `card` is the time the card's file had when the hash was read off it.
  *
@@ -286,9 +284,7 @@ export function startOffload({
   lanes: wanted = ["copy", "send"],
   camera = async () => null,
   mac = async () => [],
-  exports = async () => [],
   records = NO_RECORDS,
-  graded = NO_RECORDS,
   dir,
   request,
   room,
@@ -319,14 +315,12 @@ export function startOffload({
     copy: makeLane({ current: null, onCamera: 0 }, { retry, log }),
     /** Up to the archive: what's on the Mac, and what Camera → Mac brings while it's on. */
     send: makeLane({ current: [] }, { retry, log }),
-    exports: makeLane({ current: [] }, { retry, log }),
   };
   const { copy, send } = lanes;
   const state = {
     running: true,
     copy: copy.state,
     send: send.state,
-    exports: lanes.exports.state,
     /** Transcripts filed, and why one couldn't be: it waits for the next run. */
     transcripts: { sent: 0, error: null },
     /** Set while the next clip off the card waits for room on the Mac. */
@@ -335,14 +329,13 @@ export function startOffload({
     },
     /** Why uploads wait, while they do. */
     get paused() {
-      const held = [send, lanes.exports].find((lane) => lane.state.waiting?.for === "page");
-      return held?.state.waiting ?? null;
+      return send.state.waiting?.for === "page" ? send.state.waiting : null;
     },
     /** Bytes sent to the archive: [time, total] over the last minute or so, for the speed. */
     sent: 0,
     samples: [],
-    /** Bytes deleted from the card, from Movies/Original and from Movies/Exported. */
-    freed: { camera: 0, mac: 0, exports: 0 },
+    /** Bytes deleted from the card and from Movies/Original. */
+    freed: { camera: 0, mac: 0 },
     finished: null,
     error: null,
   };
@@ -438,12 +431,10 @@ export function startOffload({
   function totals() {
     const { done, doneBytes } = copy.state;
     Object.assign(copy.state, { total: done + cardLeft.length, bytes: doneBytes + sum(cardLeft) });
-    for (const source of [originals, gradedCopies]) {
-      const { state: s } = source.lane;
-      if (!s.on) continue;
-      const coming = source === originals && copy.state.on ? [...source.left, ...cardLeft] : source.left;
-      Object.assign(s, { total: s.done + coming.length, bytes: s.doneBytes + sum(coming) });
-    }
+    const { state: s } = originals.lane;
+    if (!s.on) return;
+    const coming = copy.state.on ? [...originals.left, ...cardLeft] : originals.left;
+    Object.assign(s, { total: s.done + coming.length, bytes: s.doneBytes + sum(coming) });
   }
 
   /** A clip's SHA-256 as this run read it off the card, if the card's file is still that one. */
@@ -646,7 +637,7 @@ export function startOffload({
     }
   }
 
-  // ---- Mac → Cloudflare and Exports → Cloudflare -----------------------------------------------------------------------
+  // ---- Mac → Cloudflare ------------------------------------------------------------------------------------------------
 
   const gateLook = Math.min(look, 1000);
   /** Waits while uploads are paused. Throws once the lane is told to stop now. */
@@ -724,17 +715,6 @@ export function startOffload({
       const mine = offCard.get(clip.name);
       return mine?.sha256 === sha256 ? { card: mine.mtime } : {};
     },
-  });
-  const gradedCopies = source(lanes.exports, {
-    where: "exports",
-    records: graded,
-    list: exports,
-    project: gradedName,
-    // A clip graded and exported again is its graded copy from then on.
-    lasting: false,
-    before: async () => true,
-    feeding: () => false,
-    proof: () => ({}),
   });
 
   /** How long until a clip may be seen to: one that failed has a wait, and one that may still be being written. */
@@ -926,7 +906,7 @@ export function startOffload({
 
   // ---- the switches ----------------------------------------------------------------------------------------------------
 
-  const works = { copy: copyAll, send: sendOriginals, exports: () => senders(gradedCopies) };
+  const works = { copy: copyAll, send: sendOriginals };
   let on = 0;
   let over;
   const done = new Promise((resolve) => {

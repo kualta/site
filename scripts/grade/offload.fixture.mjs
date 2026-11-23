@@ -1,5 +1,5 @@
-// What the offload's tests run against: the site's archive in memory, and a card, a Movies/Original and a Movies/Exported in
-// a throwaway folder.
+// What the offload's tests run against: the site's archive in memory, and a card and a Movies/Original in a throwaway
+// folder.
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, renameSync, statSync } from "node:fs";
@@ -86,13 +86,13 @@ export const plenty = async () => 1e12;
 const WHEN = new Date("2026-11-18T12:00:00Z");
 
 /**
- * A card (DCIM/DJI_001, each clip with its .LRF), a Movies/Original and a Movies/Exported, with these clips on them, each
- * `[name, body, day]`. A run lists them as they are: the card not at all between `unplug()` and `plug()`.
+ * A card (DCIM/DJI_001, each clip with its .LRF) and a Movies/Original, with these clips on them, each `[name, body, day]`.
+ * A run lists them as they are: the card not at all between `unplug()` and `plug()`.
  */
-export async function place(card, mac = [], exported = []) {
+export async function place(card, mac = []) {
   const root = await mkdtemp(join(tmpdir(), "offload-"));
-  const [dcim, original, graded] = [join(root, "DCIM/DJI_001"), join(root, "Original"), join(root, "Exported")];
-  for (const dir of [dcim, original, graded]) await mkdir(dir, { recursive: true });
+  const [dcim, original] = [join(root, "DCIM/DJI_001"), join(root, "Original")];
+  for (const dir of [dcim, original]) await mkdir(dir, { recursive: true });
   const days = new Map();
   const make = async (dir, [name, body, day], lrf = false) => {
     const path = join(dir, name);
@@ -103,7 +103,6 @@ export async function place(card, mac = [], exported = []) {
   };
   for (const clip of card) await make(dcim, clip, true);
   for (const clip of mac) await make(original, clip);
-  for (const clip of exported) await make(graded, clip);
   const list = (dir) =>
     files(dir)
       .filter((name) => /^[^.].*\.(mp4|mov)$/i.test(name))
@@ -117,11 +116,9 @@ export async function place(card, mac = [], exported = []) {
     root,
     dcim,
     original,
-    graded,
     camera: async () => (existsSync(dcim) ? list(dcim) : null),
     mac: async () => list(original),
-    exports: async () => list(graded),
-    /** A clip put on the card, in Movies/Original or in Movies/Exported since. */
+    /** A clip put on the card or in Movies/Original since. */
     put: make,
     unplug: () => renameSync(join(root, "DCIM"), away),
     plug: () => renameSync(away, join(root, "DCIM")),
@@ -150,9 +147,7 @@ export const begin = (at, options) =>
   startOffload({
     camera: at.camera,
     mac: at.mac,
-    exports: at.exports,
     records: records(),
-    graded: records(),
     dir: at.original,
     room: plenty,
     retry: { first: 5, most: 20, tries: 5 },

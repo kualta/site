@@ -59,14 +59,17 @@ Each day shows how many of its clips have an export, and the clip list can show 
                                           and what encoded it
   encoder.json                            what exports are encoded on, as chosen (below)
   ledger.json                             the footage ledger (below), also kept in the site's archive
-  offloaded.json, graded.json             what each offloaded clip and export was (below)
+  offloaded.json                          what each offloaded clip was (below)
   keep.json, offload.json                 what's kept out of offload, and when the card's copies go (below)
   backup.json                             which of the settings above the archive has
   transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each offloaded clip (below)
   transcripts.json                        which clips have one, and which of those are in the archive
+  previews.json, trims.json               what each of a film's preview copies and trims was made from (below)
   luts/                                   GRADE_LUTS: base looks (below)
 ~/Library/Caches/Grade/                   GRADE_CACHE: metadata, thumbnails, previews; safe to delete, but for
   audio/<day>/                              the sound of offloaded clips not transcribed yet
+  previews/<clip>.mp4                     a film's preview copies, and its trims (below): made again when asked
+  trims/<clip>-<start ms>-<end ms>-<grade hash>.mp4
 ```
 
 Clips are known by file name, so a clip graded off the card and the same clip copied into `Original/` share one grade
@@ -115,8 +118,9 @@ or dark, and says how far its offload and export are, each time it reads `/api/j
 
 ## Offload: the card to this Mac, this Mac to Cloudflare
 
-The foot of the Export button's menu has three switches, each started and stopped by itself while the others are on
-or off. Nothing starts until one is clicked, and after a restart of the server nothing starts by itself.
+The foot of the Export button's menu has two switches, each started and stopped by itself while the other is on or
+off. Nothing starts until one is clicked, and after a restart of the server nothing starts by itself. Only originals
+go: exports stay in `Exported/`.
 
 - **Camera → Mac** copies the card's clips, a clip at a time, oldest first, while this Mac has room for the next with
   `GRADE_KEEP_FREE` (5 GB) to spare: into `Original/` (as a hidden `.part` until it's checked), hashed (SHA-256) as
@@ -130,15 +134,11 @@ or off. Nothing starts until one is clicked, and after a restart of the server n
   `_originals-<day>` (as `assets/<file>`, the manifest saved again after every clip), recorded in `offloaded.json`,
   then deleted from this Mac, which makes room for the next clip off the card. A file changed in the last two minutes
   may still be being written, and waits. The card isn't looked at.
-- **Exports → Cloudflare** does the same for `Exported/`: the exports the app made (`exports.json` says so), unchanged
-  for two minutes and not being made again, filed in `_graded-<day>` and recorded in `graded.json`. Exported frames and
-  files put there by hand stay, and so does one the YouTube uploads are on until it's up. An offloaded export still
-  counts as exported here, as a graded copy in the ledger, and for the YouTube uploads.
 
-Each switch deletes only what it takes from: the card's clips only Camera → Mac, this Mac's only the other two. So with
-**Once in Cloudflare** the card is cleared while both of the first two are on, as each clip is checked (Camera → Mac
-stays on until then), or by Camera → Mac the next time it is. Mac → Cloudflare ends once there's nothing left to send
-and nothing more coming off the card, so start the two together, or Camera → Mac first.
+Each switch deletes only what it takes from: the card's clips only Camera → Mac, this Mac's only Mac → Cloudflare. So
+with **Once in Cloudflare** the card is cleared while both are on, as each clip is checked (Camera → Mac stays on until
+then), or by Camera → Mac the next time it is. Mac → Cloudflare ends once there's nothing left to send and nothing more
+coming off the card, so start the two together, or Camera → Mac first.
 
 **Checked before anything goes.** R2 checks a file sent whole against its hash but not one sent in parts, so a clip over
 16 MiB is read back in full and hashed before its Mac copy goes: each is downloaded once as well as uploaded, and one
@@ -166,20 +166,19 @@ for a minute, and go on when one does; the switch says so. **Keep going when thi
 lets a run go on without. Camera → Mac never pauses.
 
 **Kept.** Shoot days ticked in the menu, and clips named in `keep.json` (those brought back, above all; by name without
-extension, so a clip's original and its export are kept alike), stay on the card and on this Mac: they're never copied,
-sent or deleted, aren't counted, and get no transcript. A day with some of its clips kept shows a dash, and a click lets
-those go. While `keep.json` can't be read nothing is taken or deleted.
+extension), stay on the card and on this Mac: they're never copied, sent or deleted, aren't counted, and get no
+transcript. A day with some of its clips kept shows a dash, and a click lets those go. While `keep.json` can't be read nothing is taken or deleted.
 
 `offloaded.json` (beside `grades.json`) records each clip's hash, size and day, and for one read off the card the time
-its file had there (`card`); `graded.json` the same of exports. Started by hand or by a script:
+its file had there (`card`). Started by hand or by a script:
 
 ```sh
 curl -X POST http://127.0.0.1:4777/api/offload -H 'X-Grade: 1' -H 'Content-Type: application/json' -d '{
   "lanes": ["copy", "send"], "unattended": true, "clearCardAfter": "sent", "youtube": false }'
 ```
 
-`lanes` are the switches to start (`copy`, `send`, `exports`; without it, the first two, the card's if it's plugged in);
-none only changes how the run goes. `POST /api/offload/stop` takes `lanes` too, and `now`; `GET` and `POST
+`lanes` are the switches to start (`copy`, `send`; without it, both, the card's if it's plugged in); none only changes
+how the run goes, and any other is refused. `POST /api/offload/stop` takes `lanes` too, and `now`; `GET` and `POST
 /api/offload/keep` read and set `{ "days": [], "clips": [] }`; `GET /api/offload` says how it all stands.
 
 **Transcripts.** As soon as a clip is on the Mac its sound is taken out of it (copied, a second or two) into the cache;
@@ -207,35 +206,36 @@ While anything is being sent, and not paused, the grade app keeps the composer c
 open; `"youtube": false` in the request keeps that off for the run. Log clips without a grade get the default look as
 settings first (`GRADE_DEFAULT_LOOK`, OpenDRT Colorful), to change before any export. The ledger counts offloaded clips
 as in Cloudflare (an archived file the original's size) as they go, and reads the archive's own list of them at most
-every 10 minutes and once a run is over; `_originals-*` and `_graded-*` aren't films. To bring a day back, transcripts
-and all: `bun run publisher restore _originals-<day> <folder>`.
+every 10 minutes and once a run is over; `_originals-*` aren't films. To bring a day back, transcripts and all:
+`bun run publisher restore _originals-<day> <folder>`.
 
 ## Bring to Mac: from Cloudflare back here
 
 Under **Cloudflare**, **Clips from** lists each shoot day with clips the archive has and this Mac doesn't. Picking one
-lists them with their sizes, and **Bring** gets one back: an original into `Original/`, a graded copy into `Exported/`.
-**Bring all** takes every original, or graded copy, of the day that isn't here. A brought original is in its day under
-**On this Mac** again, with the grade it had (its button then says **Grade**, and opens it there). The status line says
-how far it is and **Stop bringing** ends it. A clip asked for by name (`#clip=<file>`, or the composer's message) that's
-neither on the card nor here opens its day in Cloudflare, marked; the Footage tab's **Grade** button is off for those.
+lists them with their sizes, and **Bring** gets one back into `Original/`. **Bring all** takes every clip of the day
+that isn't here. A brought clip is in its day under **On this Mac** again, with the grade it had (its button then says
+**Grade**, and opens it there). The status line says how far it is and **Stop bringing** ends it. A clip asked for by
+name (`#clip=<file>`, or the composer's message) that's neither on the card nor here opens its day in Cloudflare,
+marked; the Footage tab's **Grade** button is off for those.
 
-Originals are in `_originals-<day>` projects in the archive and graded copies in `_graded-<day>` ones, each clip as
-`assets/<file>`. A day's manifest is read once each time it's archived, and the list of days again when an offload ends,
-after an hour, or on **Refresh**. Nothing is ever written to the archive. What's on this Mac is told by name and size.
+Originals are in `_originals-<day>` projects in the archive, each clip as `assets/<file>`. Only they come back: graded
+copies offloaded before (`_graded-<day>`) stay in the archive, and one is made again from its original. A day's
+manifest is read once each time it's archived, and the list of days again when an offload ends, after an hour, or on
+**Refresh**. Nothing is ever written to the archive. What's on this Mac is told by name and size.
 
 Clips come one at a time, each streamed to a hidden `.<file>.bring.part` beside where it goes and hashed as it comes. It
-takes its name only if its size and SHA-256 are what its manifest lists, with the time it had (the footage uploads know a
-clip they've put up by its size and time), and never over a file that has that name by then: the very same file is
-skipped, another is left as it is and the clip stays in Cloudflare, saying so. One that's stopped, fails or comes back
-different leaves nothing here; a clip's own trouble lets the next come, and the archive out of reach ends the run. The
-`.part`s of a server killed meanwhile go when it starts again. A clip of 3.5 GB takes about 15 minutes at 30 Mbit/s.
+takes its name only if its size and SHA-256 are what its manifest lists, with the time it had, and never over a file
+that has that name by then: the very same file is skipped, another is left as it is and the clip stays in Cloudflare,
+saying so. One that's stopped, fails or comes back different leaves nothing here; a clip's own trouble lets the next
+come, and the archive out of reach ends the run. The `.part`s of a server killed meanwhile go when it starts again. A
+clip of 3.5 GB takes about 15 minutes at 30 Mbit/s.
 
 It starts only if `GRADE_KEEP_FREE` (5 GB) stays free after all that's asked for, and with room for what an export or the
 offload's copy off the card has still to write (an export is counted at its original's size, times its quality). That's
 looked at again before each clip and every few seconds during one: when room runs short the clip gives way, saying why.
 
-A clip brought here, original or graded copy, is kept out of offload (**Kept**, above) from just before it takes its
-name, so one that's on doesn't take it off again: it stays until its day is let go in the Export menu.
+A clip brought here is kept out of offload (**Kept**, above) from just before it takes its name, so one that's on
+doesn't take it off again: it stays until its day is let go in the Export menu.
 
 ## Grading
 
@@ -362,3 +362,64 @@ each was made with; a clip is current when its record's `key` matches `gradeKey(
 which the app shows as "graded" and otherwise as "changed since export". A clip graded in the app but never exported
 shows as "grade not exported"; one with no export and the starting grade shows as "not graded". Regrading and exporting
 again replaces the file under the same name, so trims and captions in a film stay valid.
+
+## For a film: preview copies while it's made, trims when it's rendered
+
+A whole clip's export at full quality is several times the original's size (H.264 at 100%: 277 Mbit/s on the CPU and
+418 on the GPU for 4K60, against the camera's 127). A film needs neither all of it nor all of that while it's being
+made, so it can ask for less. Both kinds live in the cache, never in `Movies/Exported/`, and are found by the clip's
+name (any case, with or without its extension) wherever the clip is: `Original/` or `Preexp/`, else the card. A clip
+on neither, only in Cloudflare, isn't fetched: it's `missing`, and its `error` says to bring it back with Bring to Mac.
+
+**Preview copies** are whole clips through their saved grade, deflicker and all, made small: 1920 on the long side
+(either way up, never larger than the clip), 8-bit H.264 BT.709 at 12 Mbit/s on the GPU, a key frame every half second,
+the sound copied as it was. The original's code values are made small first and then graded, where an export grades at
+full size: twice as fast on 4K60 (1.2 to 1.3 times real time here), and within 56.8 dB of grading first. 12 Mbit/s came from
+looking at 4K60 D-Log2 (stone under string lights: VMAF 95 against the graded frames, 92.5 at 8 Mbit/s) and 4K24
+foliage walked through (81, and 70 at 8, which smeared the leaves). They're for judging a cut and its grade, not for
+keeping: a 4K60 clip's is a tenth of its size, where its export at 100% on the GPU is three times it.
+
+```sh
+curl -X POST http://127.0.0.1:4777/api/previews -H 'X-Grade: 1' -H 'Content-Type: application/json' \
+  -d '{"names": ["DJI_20261111172302_0286_D.MP4"]}'
+curl 'http://127.0.0.1:4777/api/previews?names=DJI_20261111172302_0286_D.MP4,DJI_…'
+```
+
+Both answer for each name asked, under that name, `{ state, path, key, error }`: `state` is `ready`, `stale` (its clip
+has been graded since: `path` is the copy as it was, `key` the grade it was made from), `queued`, `making`, `missing`
+(none made: `error` says why when the clip isn't here, else it's null and a POST makes it) or `failed` (`error`).
+`key` is the grade key the file at `path` was made from, as `exports.json` keys exports. Asking again remakes a stale
+one, and leaves a ready one as it is. With **Remake a film's preview copies after a regrade** (in the Export menu,
+`POST /api/previews/options {"autoRemake": true}`, off to begin with) a clip graded again has its preview copy made again
+by itself once its grade has been still for five seconds.
+
+**Trims** are full-quality exports of part of a clip, for a render:
+
+```sh
+curl -X POST http://127.0.0.1:4777/api/trims -H 'X-Grade: 1' -H 'Content-Type: application/json' \
+  -d '{"trims": [{"name": "DJI_20261111172302_0286_D.MP4", "start": 12.4, "end": 15.1}]}'
+curl 'http://127.0.0.1:4777/api/trims?id=<id>'
+```
+
+`start` and `end` are seconds in the original. Both answer `{ id, trims }`, each trim as asked, in order: `{ name,
+start, end, state, path, actualStart, actualEnd, error }`, `state` one of `queued`, `making`, `ready`, `missing` (its clip
+isn't here: `error` says where it is) or `failed`. A trim holds the frame on screen at `start` to the last frame that
+starts before `end` (each to within half a millisecond, as times come rounded to it). `actualStart` and `actualEnd` are
+those two frames' times in the original: the trim's own time 0 is `actualStart`, so `#t=a,b` in the original is
+`#t=a−actualStart,b−actualStart` in the trim, and its picture lasts until a frame after `actualEnd`. Its video is
+encoded as an export is, on what **Encode on** says, at full quality unless the request says `"quality"` (10 to 100).
+Its sound is AAC at 320 kbit/s in the `.mp4`, encoded again from the same sample as the first frame to the end of the
+last, so an `<audio>` of the trim plays in step with its picture; a decoder that ignores the file's edit list plays up to
+1023 samples of silence after that. It's graded from a tenth of a second before `start` and, for deflicker, which evens each
+frame out with the ones after it, past `end`, and cut afterwards, so its frames are the whole export's. The file is
+`trims/<clip>-<start ms>-<end ms>-<hash of the grade key, and the quality below 100>.mp4`, and an identical request,
+with the clip graded the same, is answered with it as it is, even once the clip has gone from this Mac. The ids are
+forgotten when the server restarts; asking again finds the same files.
+
+One is made at a time, trims first. Neither starts while an export is going or waiting: an export asked for stops the
+one being made, which goes back to the head of its queue and starts over once the exports are done. Each is checked for
+room first, as Bring to Mac is (`GRADE_KEEP_FREE` stays free, with what exports, the card and Bring to Mac still have to
+write), and a clip being made into either isn't offloaded meanwhile. Before each, those nobody has asked for in 30 days
+go, as do files in their folders with no record that old. `/api/jobs` says how both queues stand (`previews` and
+`trims`: `current` with its `progress`, `queued`, `failed`, `waiting` for the exports, and `autoRemake`), and so does the
+status line.

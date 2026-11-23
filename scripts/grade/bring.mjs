@@ -1,6 +1,6 @@
 // Bring to Mac: the offload's other way round. What the site's archive holds of the shoot days that this Mac doesn't,
-// read from the days' manifests (`_originals-<day>`, the originals, and `_graded-<day>`, their graded copies, each clip
-// as `assets/<file>`), and clips brought back from there: originals to Movies/Original, graded copies to Movies/Exported.
+// read from the days' manifests (`_originals-<day>`, each clip as `assets/<file>`), and clips brought back from there to
+// Movies/Original. Only originals come back: graded copies are made again from them.
 //
 // The archive is only read, and nothing on this Mac is written over or deleted: a clip is streamed to a hidden `.part`
 // beside where it goes, hashed as it comes, and takes its name only once it's the clip its manifest lists, if no other
@@ -12,7 +12,7 @@ import { stemOf } from "./ledger.mjs";
 import { VIDEO } from "./media.mjs";
 import { hashFile } from "./offload.mjs";
 
-const PROJECT = /^_(originals|graded)-(\d{4}-\d{2}-\d{2})$/;
+const PROJECT = /^_originals-(\d{4}-\d{2}-\d{2})$/;
 /** The archive's list and a day's manifest are small: one that can't be reached is said so in a minute. */
 const READ_TIMEOUT = 60_000;
 const PART = ".bring.part";
@@ -21,7 +21,7 @@ const gb = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`;
 const sum = (clips) => clips.reduce((total, clip) => total + clip.size, 0);
 /** What went wrong: "fetch failed" says no more than that, but its cause does. */
 const reason = (error) => (error.cause?.code ? `${error.message} (${error.cause.code})` : error.message);
-const keyOf = ({ what, name }) => `${what}/${name.toLowerCase()}`;
+const keyOf = ({ name }) => name.toLowerCase();
 export const cloudId = (day) => `cloud:${day}`;
 
 /** A clip's own trouble: the next one is still tried. Anything else (no archive, no room) ends the run. */
@@ -37,21 +37,21 @@ class AskError extends Error {
 // ---- what the archive holds ---------------------------------------------------------------------------------------
 
 /** A manifest's clips. Its names end up as files on this Mac: only a video's plain name will do. */
-function clipsOf(what, day, files) {
+function clipsOf(day, files) {
   return files.flatMap(({ path, sha256, size, mtime }) => {
     const name = /^assets\/([^/\\]+)$/.exec(path)?.[1];
     const plain = name && VIDEO.test(name) && !name.startsWith(".") && !name.includes("\0");
     const known = /^[0-9a-f]{64}$/.test(sha256) && Number.isSafeInteger(size) && Number.isFinite(mtime);
-    return plain && known ? [{ what, day, name, size, sha256, mtime }] : [];
+    return plain && known ? [{ day, name, size, sha256, mtime }] : [];
   });
 }
 const transcriptsOf = (files) => files.flatMap(({ path }) => /^transcripts\/([^/]+)\.vtt$/.exec(path)?.[1] ?? []);
 
 /**
- * The shoot days in the archive. `read(request)` says every clip there, `{ what: "original" | "graded", day, name, size,
- * sha256, mtime, transcript }`, with when it was read and, if it can't be read now, why (the clips are then as last
- * read). A day's manifest is read once each time it's archived, and the list of days kept for `every` ms unless `refresh`
- * asks again; an archive that couldn't be read is left alone for a minute.
+ * The shoot days in the archive. `read(request)` says every clip there, `{ day, name, size, sha256, mtime, transcript }`,
+ * with when it was read and, if it can't be read now, why (the clips are then as last read). A day's manifest is read
+ * once each time it's archived, and the list of days kept for `every` ms unless `refresh` asks again; an archive that
+ * couldn't be read is left alone for a minute.
  */
 export function archiveDays({ every = 10 * 60_000, patience = 60_000 } = {}) {
   const manifests = new Map();
@@ -65,14 +65,13 @@ export function archiveDays({ every = 10 * 60_000, patience = 60_000 } = {}) {
     const { projects } = await request("projects", { timeout: READ_TIMEOUT });
     const names = [];
     for (const { name, archivedAt } of projects) {
-      const [, kind, day] = PROJECT.exec(name) ?? [];
-      if (!kind) continue;
+      const day = PROJECT.exec(name)?.[1];
+      if (!day) continue;
       names.push(name);
       if (manifests.get(name)?.archivedAt === archivedAt) continue;
       const at = `projects/${encodeURIComponent(name)}?at=${encodeURIComponent(archivedAt)}`;
       const { files } = await request(at, { timeout: READ_TIMEOUT });
-      const what = kind === "graded" ? "graded" : "original";
-      manifests.set(name, { archivedAt, day, clips: clipsOf(what, day, files), transcripts: transcriptsOf(files) });
+      manifests.set(name, { archivedAt, day, clips: clipsOf(day, files), transcripts: transcriptsOf(files) });
     }
     listed = names;
     readAt = new Date().toISOString();
@@ -113,16 +112,15 @@ async function namesIn(dir) {
 }
 
 /**
- * Those clips, each with whether its copy is on this Mac: `here` is "yes", "no", or "different" when another file has its
- * name. Told by name and size; bringing one checks its bytes. `folders` says where each kind goes.
+ * Those clips, each with whether its copy is in `dir`: `here` is "yes", "no", or "different" when another file has its
+ * name. Told by name and size; bringing one checks its bytes.
  */
-export async function withHere(clips, folders) {
-  const names = {};
-  for (const [what, dir] of Object.entries(folders)) names[what] = await namesIn(dir);
-  const here = async ({ what, name, size }) => {
-    const found = names[what].get(name.toLowerCase());
+export async function withHere(clips, dir) {
+  const names = await namesIn(dir);
+  const here = async ({ name, size }) => {
+    const found = names.get(name.toLowerCase());
     if (!found) return "no";
-    const info = await stat(join(folders[what], found)).catch(() => null);
+    const info = await stat(join(dir, found)).catch(() => null);
     return info?.isFile() && info.size === size ? "yes" : "different";
   };
   return Promise.all(clips.map(async (clip) => ({ ...clip, here: await here(clip) })));
@@ -133,47 +131,42 @@ const weigh = (clips) => ({ clips: clips.length, bytes: sum(clips) });
 /** The days among those clips (withHere's), newest first: how much of each is in the archive, and not on this Mac. */
 export function summarise(clips) {
   const days = [...Map.groupBy(clips, (clip) => clip.day)].sort(([a], [b]) => b.localeCompare(a));
-  return days.map(([day, all]) => {
-    const missing = all.filter((clip) => clip.here === "no");
-    const of = (list, what) => weigh(list.filter((clip) => clip.what === what));
-    const part = (what) => ({ ...of(all, what), missing: of(missing, what) });
-    const away = new Set(missing.map((clip) => stemOf(clip.name).toLowerCase())).size;
-    return { id: cloudId(day), day, away, original: part("original"), graded: part("graded") };
-  });
+  return days.map(([day, all]) => ({
+    id: cloudId(day),
+    day,
+    ...weigh(all),
+    missing: weigh(all.filter((clip) => clip.here === "no")),
+  }));
 }
 
 /**
- * A day's clips by name without extension (`stem`), each with its original and its graded copy where the archive has them.
- * IMG_0001.MOV and IMG_0001.MP4 are two clips: the second goes by its whole name.
+ * A day's clips, each by its name without extension (`stem`). IMG_0001.MOV and IMG_0001.MP4 are two clips: the second
+ * goes by its whole name.
  */
 export function dayClips(clips, day) {
   const rows = new Map();
   for (const clip of clips) {
     if (clip.day !== day) continue;
-    const { what, name, size, sha256, here } = clip;
-    const stem = rows.get(stemOf(name).toLowerCase())?.[what] ? name : stemOf(name);
-    const row = rows.get(stem.toLowerCase()) ?? { stem, transcript: false, original: null, graded: null };
-    row[what] = { name, size, sha256, here };
-    row.transcript ||= clip.transcript;
-    rows.set(stem.toLowerCase(), row);
+    const { name, size, sha256, here, transcript } = clip;
+    const stem = rows.has(stemOf(name).toLowerCase()) ? name : stemOf(name);
+    rows.set(stem.toLowerCase(), { stem, name, size, sha256, here, transcript });
   }
   return [...rows.values()].sort((a, b) => a.stem.localeCompare(b.stem));
 }
 
 /**
  * The clips a request asks for: a day's that aren't on this Mac, or those named (of `day`, when two days share a name).
- * Throws, saying why, when one isn't in the archive.
+ * Throws, saying why, when one isn't in the archive. Only originals come back: a request for anything else is refused.
  */
-export function pickClips(clips, { what, names = null, day = null }) {
-  if (what !== "original" && what !== "graded") throw new AskError('Say what to bring: "original" or "graded"');
-  const kind = clips.filter((clip) => clip.what === what && (day === null || clip.day === day));
+export function pickClips(clips, { what = "original", names = null, day = null }) {
+  if (what !== "original") throw new AskError("Only originals come back from Cloudflare");
+  const ofDay = clips.filter((clip) => day === null || clip.day === day);
   if (names === null && day !== null)
-    return kind.filter((clip) => clip.here === "no").sort((a, b) => a.name.localeCompare(b.name));
+    return ofDay.filter((clip) => clip.here === "no").sort((a, b) => a.name.localeCompare(b.name));
   if (!Array.isArray(names) || !names.length) throw new AskError("Name the clips to bring, or their day");
   return [...new Set(names)].map((name) => {
-    const found = kind.filter((clip) => clip.name === name);
-    if (!found.length)
-      throw new AskError(`${name} isn't in the archive as ${what === "graded" ? "a graded copy" : "an original"}`);
+    const found = ofDay.filter((clip) => clip.name === name);
+    if (!found.length) throw new AskError(`${name} isn't in the archive`);
     if (new Set(found.map((clip) => clip.sha256)).size > 1) throw new AskError(`Two days have a ${name}: say which`);
     return found[0];
   });
@@ -258,16 +251,16 @@ export async function clearParts(dirs) {
 }
 
 /**
- * Brings clips back, one at a time, in the order they're added. `folders` says where each kind goes, `room()` how many
- * bytes are free there, of which `keepFree` stay so; `claims()` says what else is being written there and how much of it
- * is still to come, `[{ by, bytes }]`: a clip comes only while there's room for both, looked at again every `every` ms.
+ * Brings clips back into `dir`, one at a time, in the order they're added. `room()` says how many bytes are free there,
+ * of which `keepFree` stay so; `claims()` says what else is being written there and how much of it is still to come,
+ * `[{ by, bytes }]`: a clip comes only while there's room for both, looked at again every `every` ms.
  * `landed(clip)` hears each one, and `placing(clip)` each before it takes its name (bringClip).
  *
  * Says `{ add, stop, state, settled }`: `add(request, clips)` refuses, by throwing, what there's no room for, `stop()` ends
  * the run and keeps what's landed, `state()` says how far it is, `settled()` when it has ended.
  */
 export function bringer({
-  folders,
+  dir,
   room,
   keepFree = 5e9,
   claims = async () => [],
@@ -350,7 +343,7 @@ export function bringer({
     };
     try {
       const options = { signal: cutting.signal, onBytes, ready, placing };
-      const how = await bringClip(request, clip, folders[clip.what], options);
+      const how = await bringClip(request, clip, dir, options);
       run[how]++;
       run.doneBytes += clip.size;
       if (how === "landed") {
@@ -359,7 +352,7 @@ export function bringer({
       }
     } catch (error) {
       if (error instanceof ClipError) {
-        run.failed.push({ what: clip.what, day: clip.day, name: clip.name, why: error.message });
+        run.failed.push({ day: clip.day, name: clip.name, why: error.message });
         run.doneBytes += clip.size;
         return;
       }
@@ -420,7 +413,7 @@ export function bringer({
     settled: async () => running,
 
     state() {
-      const about = ({ what, day, name, size }) => ({ what, day, name, size });
+      const about = ({ day, name, size }) => ({ day, name, size });
       return {
         ...run,
         arrived,
