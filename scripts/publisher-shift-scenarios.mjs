@@ -726,6 +726,24 @@ export const scenarios = [
   },
   {
     tab: "footage",
+    name: "pauses and starts a switch",
+    run: async (page, { still, step }) => {
+      const sending = page.getByRole("group", { name: "Mac → Cloudflare" });
+      for (const [button, next] of [
+        ["Pause", "starts it again"],
+        ["Start", "is done"],
+      ]) {
+        await step(`asks to ${button.toLowerCase()} Mac → Cloudflare`);
+        await sending.getByRole("button", { name: button, exact: true }).click();
+        await sleep(1500);
+        await still(`the Mac takes it, then ${next}`);
+        await page.evaluate(() => window.publisherMac.take());
+        await sleep(6000);
+      }
+    },
+  },
+  {
+    tab: "footage",
     name: "loads paused, then follows the Mac",
     query: { paused: "" },
     run: async (page, { still }) => {

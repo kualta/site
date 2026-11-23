@@ -1,6 +1,14 @@
 import { type ArchiveBucket, isClipName, isProjectName, LEDGER, ledgerThumbKey } from "./archive";
 import type { FootageLink } from "./ledger";
-import { MAX_MAC_REPORT, type Paused, readMacReport } from "./mac";
+import {
+  type LaneAsks,
+  MAC_LANES,
+  type MacLaneName,
+  MAX_MAC_REPORT,
+  type Paused,
+  readLaneAsks,
+  readMacReport,
+} from "./mac";
 import { type MediaBucket, validId } from "./server";
 
 /*
@@ -23,12 +31,21 @@ const MAC = "footage/mac.json";
  * their restarts. Like the rest here it's under the bucket's 31-day expiry: a pause left that long lapses.
  */
 const PAUSED = "footage/paused.json";
+/**
+ * The owner's last Start or Pause of each of the offload's switches, from the tab, and when it was asked. The grade app
+ * hears them in the answers it already gets and does each once, by when it was asked; its report says which it has.
+ */
+const LANES = "footage/lanes.json";
 
 export async function readPaused(media: MediaBucket): Promise<Paused | null> {
   const object = await media.get(PAUSED);
   if (!object) return null;
   const since = Number((JSON.parse(await new Response(object.body).text()) as Partial<Paused>).since);
   return Number.isFinite(since) ? { since } : null;
+}
+async function readLanes(media: MediaBucket): Promise<LaneAsks> {
+  const object = await media.get(LANES);
+  return object ? readLaneAsks(JSON.parse(await new Response(object.body).text())) : {};
 }
 /**
  * How long the tab counts as open after it last said so. It says so every 30 seconds, but a background tab's timers
@@ -98,9 +115,11 @@ async function readLinks(archive: Pick<ArchiveBucket, "get">): Promise<Record<st
  * `footage/thumbs/<clip>.jpg` (the ledger and its pictures, from the archive), `footage/links` (each Pipeline piece's
  * footage; PUT `footage/links/<piece>` sets one), and `helper/footage` (the laptop asks whether the tab is open, and
  * with a POST sends its status; `helper/footage/watch` POST counts the tab as open while an offload the grade app runs
- * goes), `helper/footage/mac` (POST: how the grade app's offload stands, which `footage/mac` reads), and
- * `footage/pause` (POST pauses everything, DELETE goes on; the tab's and the laptops' answers say `paused`). Anything
- * else is null.
+ * goes), `helper/footage/mac` (POST: how the grade app's offload stands, which `footage/mac` reads),
+ * `footage/pause` (POST pauses everything, DELETE goes on; the tab's and the laptops' answers say `paused`), and
+ * `footage/lanes` (POST `{ lane, want }`: Start or Pause a switch; `footage/mac` says them, and the grade app hears them
+ * from `helper/footage/lanes`, which it asks instead of `helper/footage`, and in its report's answer). Anything else is
+ * null.
  */
 export async function footageResponse(
   path: string,
@@ -195,17 +214,34 @@ export async function footageResponse(
     if ("error" in sent) return json({ error: sent.error }, sent.status);
     const report = readMacReport(sent.sent);
     if (!report) return json({ error: "The offload report isn't one the Footage tab can read" }, 400);
-    const [paused] = await Promise.all([
+    const [paused, lanes] = await Promise.all([
       readPaused(media),
+      readLanes(media),
       media.put(MAC, JSON.stringify(report), { httpMetadata: { contentType: "application/json" } }),
     ]);
-    return json({ ok: true, paused });
+    return json({ ok: true, paused, lanes });
+  }
+  // What the grade app asks between reports: whether everything's paused, and each switch's Start or Pause.
+  if (path === "helper/footage/lanes" && request.method === "GET") {
+    const [paused, lanes] = await Promise.all([readPaused(media), readLanes(media)]);
+    return json({ paused, lanes });
   }
   if (path === "footage/mac" && request.method === "GET") {
-    const { text, age } = await readObject(media, MAC, now);
-    return new Response(`{"age":${age},"report":${text}}`, {
+    const [{ text, age }, lanes] = await Promise.all([readObject(media, MAC, now), readLanes(media)]);
+    return new Response(`{"age":${age},"report":${text},"lanes":${JSON.stringify(lanes)}}`, {
       headers: { ...headers, "Content-Type": "application/json" },
     });
+  }
+  // Start or Pause a switch: only the owner, from the tab. Each ask is later than the one it replaces.
+  if (path === "footage/lanes" && request.method === "POST") {
+    const { lane, want } = (await request.json().catch(() => ({}))) as { lane?: MacLaneName; want?: string };
+    if (!MAC_LANES.includes(lane as MacLaneName) || (want !== "start" && want !== "pause"))
+      return json({ error: "Say which switch, and start or pause" }, 400);
+    const lanes = await readLanes(media);
+    const name = lane as MacLaneName;
+    lanes[name] = { want, at: Math.max(now, (lanes[name]?.at ?? 0) + 1) };
+    await media.put(LANES, JSON.stringify(lanes), { httpMetadata: { contentType: "application/json" } });
+    return json({ lanes });
   }
   return null;
 }

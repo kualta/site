@@ -389,20 +389,36 @@ clip's thumbnail once to `ledger/thumbs/<clip>.jpg` (`PUT helper/archive/ledger`
 Standard class since they're rewritten). The Footage tab shows it under the uploads, read through
 `GET footage/ledger` and `footage/thumbs/<clip>.jpg` (both streamed from the archive, pictures cached a
 day): how much footage is where (the card's originals, as of when it was last plugged in; the
-Mac's and the archive's originals and graded copies; YouTube's videos, counted since they're
-re-encoded), then every clip by day, newest first, with its grade, ✓ or – for each copy, the clip
+Mac's and the archive's originals and graded copies, with what keeping the archive's costs a month;
+YouTube's videos, counted since they're re-encoded), then every clip by day, newest first, with its grade, ✓ or – for each copy, the clip
 going up to YouTube with its share, and filters for clips at risk (no copy off the Mac and the
 card), not graded, not on YouTube and not in Cloudflare. A clip's **Grade** opens it in the Grade
 tab.
 
+The archive's cost is the footage's bytes (originals and graded copies, as the ledger counts them) at R2's Infrequent
+Access price, the archive bucket's default class, which the Worker's puts of footage don't override: $0.01 a GB-month,
+with no free allowance (R2's 10 GB-month free is Standard's only; Standard is $0.015). From
+developers.cloudflare.com/r2/pricing, November 2026; reads ($0.01 a GB) and requests aren't counted
+(`archiveCost` in `src/lib/publisher/ledger.ts`).
+
 **This Mac.** Under the uploads, the Footage tab shows how the grade app's offload stands, as numbers that keep their
-places whatever they say: for **Camera → Mac** and **Mac → Cloudflare** each, its state (running, paused and why,
-waiting for the camera, the network, room or Cloudflare, stopping, done, stopped, failed, idle), clips and GB through of
-how many, speed and time left, and a line on what holds it or what's left for it; then the transcripts made, waiting and
-failed, what the run freed from the card and from the Mac, the room left on the Mac, the days kept out of offload, and
-the clips passed over with why (three lines, more scroll). It says when the run started, or when the last one ran, and
-"Updated 3 min ago": a run the Mac has said nothing of for 4 minutes reads as stale ("Not heard from the Mac for 25 min:
-it may be asleep or off"), its numbers greyed. `#this-mac` opens the tab there.
+places whatever they say, and none counted from when a run started, since the app runs on. For **Camera → Mac** and
+**Mac → Cloudflare** each: its state (Running, Waiting, Held, Pausing, Paused, Done, Failed) and its **Start** or
+**Pause**; the space where it takes clips from, used of the volume's size and as a share with a bar ("109 of 112 GB ·
+97%" for the card while it's plugged in, the Mac's volume that holds `~/Movies` for the other); the clips and GB left for
+it; speed and time left; and a line only when there's something to say: what holds it or went wrong, or the clips it
+passed over. Under them, the days kept out of offload, and the transcripts waiting, to send and failed. "Updated 3 min
+ago" beside the heading; a run the Mac has said nothing of for 4 minutes reads as stale ("Not heard from for 25 min"),
+its numbers greyed. `#this-mac` opens the tab there.
+
+**Start** and **Pause** go to the site (`POST footage/lanes`, `{ lane, want }`, the owner only), which keeps the last ask
+of each switch with when it was asked (`footage/lanes.json` in the media bucket, never D1). The grade app hears them in
+answers it already gets (`GET helper/footage/lanes`, which it asks every 30 seconds instead of `helper/footage`, and the
+answer to its report) and does each once: Start as the owner runs it (`unattended`, the card cleared once Cloudflare
+has each clip, nothing to YouTube, the kept days kept out), Pause as the switch's own Stop (what's in flight finishes).
+The switch says "Starting…" or "Pausing…" until the Mac's report says it's taken it, and why if it couldn't; the tab reads
+every 5 seconds meanwhile, and the Mac reports at once. The button asks for the other of what was last asked, so one on
+its way can be taken back. `GET footage/mac` answers the asks with the report.
 
 The grade app sends it (`scripts/grade/report.mjs`) to `POST helper/footage/mac` on the helper's pairing, and the tab
 reads it with `GET footage/mac` every 15 seconds while it's shown. The site checks every field (`src/lib/publisher/mac.ts`)
@@ -421,9 +437,10 @@ and from stopping a switch. The flag is one small object in the media bucket (`f
 with `POST footage/pause` and cleared with `DELETE footage/pause` by the owner only, so it works from a phone and holds
 through restarts of the grade app and the helper; like the rest there it lapses after the bucket's 31 days. The laptops
 hear it in answers they already get: the helper in `helper/footage` (asked every 10 seconds, and in the answer to its
-status), the grade app in the answer to its report and by asking `helper/footage` at start and every 30 seconds. Both
-keep reporting while paused, so the tab says "Paused by you · since 10:42" over the uploads and This Mac, with what each
-holds: the clip going up at its share, each switch at its numbers ("Paused by you"). The title doesn't lead with the
+status), the grade app in the answer to its report and by asking `helper/footage/lanes` at start and every 30 seconds.
+Both keep reporting while paused, so the tab says "Paused by you · since 10:42" over the uploads, with what each holds:
+the clip going up at its share, each switch that's on "Held by Pause all". A switch's Start and Pause still work while
+everything's paused: one started waits for Resume all, one paused stays off after it. The title doesn't lead with the
 percentage of an upload that's held.
 
 **Grade tab.** post.kualta.dev/grade frames the grade app on the Mac (http://127.0.0.1:4777), so

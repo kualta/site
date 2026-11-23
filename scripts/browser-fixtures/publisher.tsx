@@ -470,19 +470,23 @@ function footage() {
     },
   };
 }
-// This Mac: the grade app's offload, the card copied and Mac → Cloudflare 7 of 167 at 7.1 Mbit/s; ?mac=waiting, paused,
-// stale, done, failed or none shows it otherwise, and so does window.publisherMac.state.
-const macState = { state: new URLSearchParams(location.search).get("mac") };
+// This Mac: the grade app's offload, the card copied and Mac → Cloudflare sending at 7.1 Mbit/s; ?mac=waiting, paused,
+// stale, done, failed or none shows it otherwise, and so does window.publisherMac.state. Each switch's Start or Pause is
+// kept as the site keeps it, and window.publisherMac.take() has the Mac take what's been asked, as it would.
+const macState = {
+  state: new URLSearchParams(location.search).get("mac"),
+  asks: {} as Record<string, { want: string; at: number }>,
+  taken: {} as Record<string, { want: string; at: number }>,
+  take() {
+    macState.taken = { ...macState.asks };
+  },
+};
 Object.assign(window, { publisherMac: macState });
 function macReply() {
-  const { state } = macState;
-  if (state === "none") return { age: null, report: null };
+  const { state, asks, taken } = macState;
+  if (state === "none") return { age: null, report: null, lanes: asks };
   const lane = (extra: Record<string, unknown>) => ({
     state: "running",
-    done: 0,
-    total: 0,
-    sentBytes: 0,
-    totalBytes: 0,
     speed: null,
     left: null,
     waiting: null,
@@ -491,48 +495,44 @@ function macReply() {
   });
   const ended = state === "done" || state === "failed";
   const until = new Date(Date.now() + 4 * 60_000).toISOString();
-  const sending = { done: 7, total: 167, sentBytes: 1.4e9, totalBytes: 40.1e9 };
   // Paused from the Footage tab, a run going holds after the part in flight.
   const held = pause.since !== null && !ended ? "held" : null;
-  const send =
+  let send =
     {
-      held: lane({ ...sending, state: "paused", waiting: { for: "owner", why: "Paused from the Footage tab", until: null } }),
-      paused: lane({ ...sending, state: "paused", waiting: { for: "page", why: "No Grade page is open", until: null } }),
-      waiting: lane({ ...sending, state: "waiting", waiting: { for: "network", why: "fetch failed", until } }),
-      done: lane({ state: "done", done: 167, total: 167, sentBytes: 40.1e9, totalBytes: 40.1e9 }),
+      held: lane({ state: "paused", waiting: { for: "owner", why: "Paused from the Footage tab", until: null } }),
+      paused: lane({ state: "paused", waiting: { for: "page", why: "No Grade page is open", until: null } }),
+      waiting: lane({ state: "waiting", waiting: { for: "network", why: "fetch failed", until } }),
+      done: lane({ state: "done" }),
       failed: lane({
         state: "failed",
-        done: 90,
-        total: 167,
-        sentBytes: 21.6e9,
-        totalBytes: 40.1e9,
         error: "Cloudflare refused the pairing (401): pair the crossposter helper again",
       }),
-    }[held ?? state ?? ""] ?? lane({ ...sending, speed: 887_500, left: 43_600 });
-  const copy =
+    }[held ?? state ?? ""] ?? lane({ speed: 887_500, left: 43_600 });
+  let copy =
     state === "waiting"
-      ? lane({
-          state: "waiting",
-          done: 120,
-          total: 167,
-          sentBytes: 28.8e9,
-          totalBytes: 40.1e9,
-          waiting: { for: "camera", why: "The camera isn't plugged in", until },
-        })
-      : lane({ state: "done", done: 167, total: 167, sentBytes: 40.1e9, totalBytes: 40.1e9 });
-  const started = Date.now() - 50 * 60_000;
+      ? lane({ state: "waiting", waiting: { for: "camera", why: "The camera isn't plugged in", until } })
+      : lane({ state: "done" });
+  // What the Mac has taken of the owner's Start and Pause.
+  if (taken.send) send = taken.send.want === "pause" ? lane({ state: "stopped" }) : lane({ speed: 887_500, left: 43_600 });
+  if (taken.copy) copy = taken.copy.want === "pause" ? lane({ state: "stopped" }) : lane({ waiting: null });
+  const heard = (name: string) => (taken[name] ? { at: taken[name].at, error: null } : null);
   return {
     age: state === "stale" ? 25 * 60_000 : 20_000,
+    lanes: asks,
     report: {
       version: 1,
       at: new Date(Date.now() - 20_000).toISOString(),
       running: !ended,
-      startedAt: new Date(started).toISOString(),
-      endedAt: ended ? new Date(Date.now() - 5 * 60_000).toISOString() : null,
       lanes: { copy, send },
-      camera: { mounted: state !== "waiting", clips: 0, bytes: 0 },
-      mac: { clips: state === "done" ? 0 : 160, bytes: state === "done" ? 0 : 38.7e9 },
-      freed: { camera: 40.1e9, mac: state === "done" ? 40.1e9 : 1.4e9 },
+      camera:
+        state === "waiting"
+          ? { mounted: false, clips: 0, bytes: 0, space: null }
+          : { mounted: true, clips: 0, bytes: 0, space: { used: 2.1e9, total: 111.86e9 } },
+      mac: {
+        clips: state === "done" ? 0 : 160,
+        bytes: state === "done" ? 0 : 38.7e9,
+        space: { used: state === "done" ? 415e9 : 454e9, total: 494.38e9 },
+      },
       skipped: [
         {
           lane: "send",
@@ -540,9 +540,9 @@ function macReply() {
           why: "doesn't read back from Cloudflare as it was sent: it stays on this Mac",
         },
       ],
-      transcripts: { made: 12, waiting: 3, failed: 1, toSend: 4, error: "uvx isn't installed, so Whisper can't run" },
+      transcripts: { waiting: 3, failed: 1, toSend: 4, error: "uvx isn't installed, so Whisper can't run" },
       kept: { days: ["2026-11-08", "2026-11-15"], clips: 45 },
-      room: { free: 123e9, keepFree: 5e9 },
+      heard: { copy: heard("copy"), send: heard("send") },
     },
   };
 }
@@ -670,6 +670,11 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const archived = archiveAnswer(path);
   if (archived) return archived;
   if (path === "footage/mac") return json(macReply());
+  if (path === "footage/lanes" && method === "POST") {
+    const was = macState.asks[body.lane]?.at ?? 0;
+    macState.asks = { ...macState.asks, [body.lane]: { want: body.want, at: Math.max(Date.now(), was + 1) } };
+    return json({ lanes: macState.asks });
+  }
   if (path === "footage/pause") {
     if (method === "POST") pause.since ??= Date.now();
     if (method === "DELETE") pause.since = null;

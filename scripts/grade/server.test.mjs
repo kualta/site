@@ -36,7 +36,7 @@ let server;
 // The site's archive as the ledger meets it: a film holding a clip no longer anywhere else, and the ledger it's sent.
 const publisher = join(root, "publisher");
 const token = "a".repeat(64);
-const site = { ledger: null, sends: 0, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0, listings: 0, asked: 0, settings: [], slow: 0, reports: [], paused: null };
+const site = { ledger: null, sends: 0, auth: new Set(), thumbs: new Map(), blobs: new Map(), manifests: new Map(), watched: 0, listings: 0, asked: 0, settings: [], slow: 0, reports: [], paused: null, lanes: {} };
 const bytesOf = async (req) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -48,9 +48,10 @@ const siteServer = createServer(async (req, res) => {
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(typeof body === "string" ? body : JSON.stringify(body));
   };
-  // Whether all's paused, asked every 300 ms here (every 30 seconds for real), and not counted among what's asked.
-  if (req.url === "/api/publisher/helper/footage" && req.method === "GET")
-    return reply(200, { watching: false, paused: site.paused });
+  // Whether all's paused, and each switch's Start or Pause from the Footage tab: asked every 300 ms here (every 30
+  // seconds for real), and not counted among what's asked.
+  if (req.url === "/api/publisher/helper/footage/lanes" && req.method === "GET")
+    return reply(200, { paused: site.paused, lanes: site.lanes });
   site.asked++;
   const path = req.url.replace("/api/publisher/helper/archive/", "");
   // The offload keeps the composer counted as watching the footage uploads.
@@ -64,7 +65,7 @@ const siteServer = createServer(async (req, res) => {
   if (req.url === "/api/publisher/helper/footage/mac" && req.method === "POST") {
     if (!req.headers["content-type"]) return reply(403, { error: "Cross-site POST form submissions are forbidden" });
     site.reports.push({ at: Date.now(), report: JSON.parse(await bytesOf(req)) });
-    return reply(200, { ok: true, paused: site.paused });
+    return reply(200, { ok: true, paused: site.paused, lanes: site.lanes });
   }
   // What's offloaded: files by hash (whole, or in parts), and a manifest per shoot day; and the settings.
   if (path === "missing" && req.method === "POST") {
@@ -1077,6 +1078,75 @@ test.if(usable)("holds everything while it's paused from the Footage tab, and go
   expect((await json("/api/jobs")).paused).toBeNull();
 }, 120_000);
 
+test.if(usable)("starts and pauses each switch as the Footage tab asks, as the owner runs it, each ask once", async () => {
+  const flying = "DJI_20260226100000_0013_D.MP4";
+  clip(join(original, flying), "D-Log2");
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  // Everything paused from the tab first: started meanwhile, the switch is on, held before anything goes.
+  site.paused = { since: Date.now() };
+  await until(async () => (await json("/api/jobs")).paused);
+  const started = Date.now();
+  site.lanes = { send: { want: "start", at: started } };
+  const run = await until(async () => {
+    const { run } = await json("/api/offload");
+    return run?.send.waiting?.for === "owner" && run;
+  });
+  expect(run).toMatchObject({ running: true, unattended: true, youtube: false, clearCardAfter: "sent", copy: { on: false } });
+  // The report says it's taken, at once rather than at its pace.
+  await until(() => site.reports.at(-1)?.report.heard.send?.at === started, 5_000);
+  expect(site.reports.at(-1).report.lanes.send.state).toBe("paused");
+  expect(JSON.parse(readFileSync(join(data, "asked.json"), "utf8"))).toEqual({ send: { at: started, error: null } });
+  // Paused with nothing in flight, it stops there, and the clip stays.
+  site.lanes = { send: { want: "pause", at: Date.now() } };
+  expect((await ended()).run).toMatchObject({ finished: "stopped", send: { finished: "stopped", done: 0 } });
+  expect(readdirSync(original)).toContain(flying);
+  site.paused = null;
+
+  // Paused with clips in flight (their days' manifests slow to save), it sees those through and then stops.
+  site.slow = 3000;
+  let inFlight;
+  try {
+    site.lanes = { send: { want: "start", at: Date.now() } };
+    inFlight = await until(async () => {
+      const { run } = await json("/api/offload");
+      return run?.send.current.length > 0 && run.send.current.map((clip) => clip.name);
+    });
+    const pausedAt = Date.now();
+    site.lanes = { send: { want: "pause", at: pausedAt } };
+    await until(async () => (await json("/api/offload")).run.send.mode === "finishing", 2_500);
+    // Asked again, nothing more: told to stop twice, a switch cuts what's in flight.
+    site.lanes = { send: { want: "pause", at: pausedAt + 1 } };
+    await until(() => site.reports.at(-1)?.report.heard.send?.at === pausedAt + 1, 2_500);
+    expect((await json("/api/offload")).run.send.mode).toBe("finishing");
+  } finally {
+    site.slow = 0;
+  }
+  const after = await ended();
+  expect(after.run).toMatchObject({ finished: "stopped", send: { finished: "stopped", skipped: [] } });
+  expect(after.run.send.done).toBeGreaterThanOrEqual(inFlight.length);
+  for (const name of inFlight) expect(readdirSync(original)).not.toContain(name);
+
+  // A Start that can't be done says why, and isn't tried again until it's asked again.
+  const keepFile = join(data, "keep.json");
+  const keptBefore = existsSync(keepFile) ? readFileSync(keepFile) : null;
+  writeFileSync(keepFile, "{ half written");
+  const refused = Date.now();
+  try {
+    site.lanes = { send: { want: "start", at: refused } };
+    const asked = () => JSON.parse(readFileSync(join(data, "asked.json"), "utf8")).send;
+    await until(() => asked().at === refused);
+    expect(asked().error).toMatch(/list of kept clips can't be read/);
+  } finally {
+    if (keptBefore) writeFileSync(keepFile, keptBefore);
+    else rmSync(keepFile);
+  }
+  // The report says why once it can be made again, without its being tried again.
+  await until(() => site.reports.at(-1)?.report.heard.send?.at === refused);
+  expect(site.reports.at(-1).report.heard.send.error).toMatch(/list of kept clips can't be read/);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect((await json("/api/offload")).run.running).toBe(false);
+}, 120_000);
+
 test.if(usable)("tells the site how the offload stands as it changes, in reports the Footage tab reads", async () => {
   const { readMacReport } = await import("../../src/lib/publisher/mac.ts");
   // The last run's end is said within its pace.
@@ -1085,9 +1155,14 @@ test.if(usable)("tells the site how the offload stands as it changes, in reports
   expect(site.reports.length).toBeGreaterThan(2);
   for (const { report } of site.reports) expect(readMacReport(report)).toEqual(report);
   const going = site.reports.filter(({ report }) => report.running);
-  expect(going.some(({ report }) => report.startedAt && report.lanes.send.total > 0)).toBe(true);
-  const ended = site.reports.filter(({ report }) => !report.running && report.endedAt);
-  expect(ended.some(({ report }) => report.lanes.send.state === "done" && report.lanes.send.done === report.lanes.send.total)).toBe(true);
+  expect(going.some(({ report }) => report.lanes.send.state === "running" || report.lanes.send.state === "paused")).toBe(true);
+  const ended = site.reports.filter(({ report }) => !report.running);
+  expect(ended.some(({ report }) => report.lanes.send.state === "done")).toBe(true);
+  // The Mac's space, and the card's while it's plugged in, as the volumes they're on say.
+  const last = site.reports.at(-1).report;
+  expect(last.mac.space.used).toBeGreaterThan(0);
+  expect(last.mac.space.used).toBeLessThanOrEqual(last.mac.space.total);
+  expect(last.camera.space).toEqual(last.camera.mounted ? expect.objectContaining({ total: expect.any(Number) }) : null);
   // An idle Mac sends only what changed.
   const said = site.reports.map(({ report }) => JSON.stringify({ ...report, at: null }));
   for (let i = 1; i < said.length; i++) if (!site.reports[i].report.running) expect(said[i]).not.toBe(said[i - 1]);

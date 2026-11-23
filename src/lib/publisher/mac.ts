@@ -1,7 +1,8 @@
 /*
  * What the grade app on the Mac says of its offload (scripts/grade/report.mjs), for the Footage tab's This Mac: each
- * switch's numbers, the clips it passed over, the transcripts, what's kept and freed, and the room left. It's one small
- * object in the media bucket, checked here field by field and stored as checked, so the tab reads only these fields.
+ * switch's state, speed and time left; what's left for each, and the space on the card and the Mac; the clips passed
+ * over, the transcripts and what's kept; and which of the tab's Start and Pause it has taken. It's one small object in
+ * the media bucket, checked here field by field and stored as checked, so the tab reads only these fields.
  */
 
 /** The switches the tab shows: Camera → Mac and Mac → Cloudflare. */
@@ -13,17 +14,21 @@ export type MacLaneState = (typeof STATES)[number];
 
 export interface MacLane {
   state: MacLaneState;
-  /** Clips through, of the clips it has taken on. */
-  done: number;
-  total: number;
-  /** Bytes through (with what's in flight), of the bytes it has taken on. */
-  sentBytes: number;
-  totalBytes: number;
   /** Bytes a second, and seconds left at that; null while it isn't moving or hasn't been measured. */
   speed: number | null;
   left: number | null;
-  /** What it waits for (`camera`, `network`, `room`, `cloudflare`, `page`, or something that went wrong), and why. */
+  /** What it waits for (`camera`, `network`, `room`, `cloudflare`, `page`, `owner`, or what went wrong), and why. */
   waiting: { for: string; why: string; until: string | null } | null;
+  error: string | null;
+}
+/** A volume's bytes in use, and its size. */
+export interface Space {
+  used: number;
+  total: number;
+}
+/** The tab's last Start or Pause of a switch that the Mac has taken, by when it was asked, and why it couldn't be done. */
+export interface Heard {
+  at: number;
   error: string | null;
 }
 export interface MacReport {
@@ -31,20 +36,17 @@ export interface MacReport {
   /** When the Mac made it. */
   at: string;
   running: boolean;
-  /** When the run going, or the last one, started and ended. */
-  startedAt: string | null;
-  endedAt: string | null;
   lanes: Record<MacLaneName, MacLane>;
-  /** What's on the card to copy, and in Movies/Original to send. */
-  camera: { mounted: boolean; clips: number; bytes: number };
-  mac: { clips: number; bytes: number };
-  /** Bytes deleted from the card and from the Mac by the run. */
-  freed: { camera: number; mac: number };
+  /** The card: plugged in or not, its clips to copy, and its space while it's plugged in. */
+  camera: { mounted: boolean; clips: number; bytes: number; space: Space | null };
+  /** Movies/Original's clips to send, and the space on the volume that holds it. */
+  mac: { clips: number; bytes: number; space: Space | null };
   skipped: { lane: MacLaneName; name: string; why: string }[];
-  transcripts: { made: number; waiting: number; failed: number; toSend: number; error: string | null };
+  /** Clips waiting for a transcript, those that failed (and the last one's why), and those made but not yet sent. */
+  transcripts: { waiting: number; failed: number; toSend: number; error: string | null };
   /** Shoot days kept out of offload, and how many clips here are kept. */
   kept: { days: string[]; clips: number };
-  room: { free: number; keepFree: number };
+  heard: Record<MacLaneName, Heard | null>;
 }
 
 /** Far more than a report with every list at its longest. */
@@ -65,6 +67,9 @@ function amount(value: unknown, most = 1e15, whole = false): number {
 }
 const count = (value: unknown) => amount(value, 1e7, true);
 const maybe = <T>(value: unknown, read: (value: unknown) => T): T | null => (value === null ? null : read(value));
+/** What a report from before the field was added leaves out, as none. */
+const optional = <T>(value: unknown, read: (value: unknown) => T): T | null =>
+  value === undefined ? null : maybe(value, read);
 function flag(value: unknown): boolean {
   if (typeof value !== "boolean") throw new Invalid();
   return value;
@@ -94,15 +99,21 @@ function lane(value: unknown): MacLane {
   });
   return {
     state: oneOf(l.state, STATES),
-    done: count(l.done),
-    total: count(l.total),
-    sentBytes: amount(l.sentBytes),
-    totalBytes: amount(l.totalBytes),
     speed: maybe(l.speed, (value) => amount(value, 1e12)),
     left: maybe(l.left, (value) => amount(value, 1e9)),
     waiting,
     error: maybe(l.error, text),
   };
+}
+function space(value: unknown): Space {
+  const s = object(value);
+  const [used, total] = [amount(s.used), amount(s.total)];
+  if (used > total) throw new Invalid();
+  return { used, total };
+}
+function heard(value: unknown): Heard {
+  const h = object(value);
+  return { at: amount(h.at), error: maybe(h.error, text) };
 }
 
 /** The report as the grade app sent it, with only the fields the tab reads; null if anything in it is amiss. */
@@ -113,38 +124,57 @@ export function readMacReport(value: unknown): MacReport | null {
     const lanes = object(r.lanes);
     const camera = object(r.camera);
     const mac = object(r.mac);
-    const freed = object(r.freed);
     const transcripts = object(r.transcripts);
     const kept = object(r.kept);
-    const room = object(r.room);
+    const asked = r.heard === undefined ? {} : object(r.heard);
     return {
       version: 1,
       at: time(r.at),
       running: flag(r.running),
-      startedAt: maybe(r.startedAt, time),
-      endedAt: maybe(r.endedAt, time),
       lanes: { copy: lane(lanes.copy), send: lane(lanes.send) },
-      camera: { mounted: flag(camera.mounted), clips: count(camera.clips), bytes: amount(camera.bytes) },
-      mac: { clips: count(mac.clips), bytes: amount(mac.bytes) },
-      freed: { camera: amount(freed.camera), mac: amount(freed.mac) },
+      camera: {
+        mounted: flag(camera.mounted),
+        clips: count(camera.clips),
+        bytes: amount(camera.bytes),
+        space: optional(camera.space, space),
+      },
+      mac: { clips: count(mac.clips), bytes: amount(mac.bytes), space: optional(mac.space, space) },
       skipped: list(r.skipped, MOST_SKIPPED, (value) => {
         const s = object(value);
         return { lane: oneOf(s.lane, MAC_LANES), name: text(s.name, 200), why: text(s.why) };
       }),
       transcripts: {
-        made: count(transcripts.made),
         waiting: count(transcripts.waiting),
         failed: count(transcripts.failed),
         toSend: count(transcripts.toSend),
         error: maybe(transcripts.error, text),
       },
       kept: { days: list(kept.days, MOST_DAYS, (value) => text(value, 20)), clips: count(kept.clips) },
-      room: { free: amount(room.free), keepFree: amount(room.keepFree) },
+      heard: { copy: optional(asked.copy, heard), send: optional(asked.send, heard) },
     };
   } catch (error) {
     if (error instanceof Invalid) return null;
     throw error;
   }
+}
+
+/** What the owner last asked of a switch from the tab, and when (the site's clock): kept until the next. */
+export type LaneWant = "start" | "pause";
+export interface LaneAsk {
+  want: LaneWant;
+  at: number;
+}
+export type LaneAsks = Partial<Record<MacLaneName, LaneAsk>>;
+/** The asks as stored, with any that's amiss left out. */
+export function readLaneAsks(value: unknown): LaneAsks {
+  const asks: LaneAsks = {};
+  if (!value || typeof value !== "object") return asks;
+  for (const name of MAC_LANES) {
+    const ask = (value as Record<string, Partial<LaneAsk> | undefined>)[name];
+    if ((ask?.want === "start" || ask?.want === "pause") && Number.isFinite(ask.at))
+      asks[name] = { want: ask.want, at: Number(ask.at) };
+  }
+  return asks;
 }
 
 /**

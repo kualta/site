@@ -1,11 +1,13 @@
 // Tells the composer's Footage tab how the offload stands, so it can show it as numbers under This Mac: each switch's
-// clips and bytes, speed, time left and what it waits for; the clips passed over; the transcripts; what's kept and freed;
-// and the room on this Mac. It goes to the site (`helper/footage/mac`, on the crossposter helper's pairing), which keeps
-// it as one small object.
+// state, speed, time left and what it waits for; what's on the card to copy and on this Mac to send, and the space each
+// has; the clips passed over; the transcripts; what's kept; and which of the tab's Start and Pause it has taken
+// (asks.mjs). It goes to the site (`helper/footage/mac`, on the crossposter helper's pairing), which keeps it as one small
+// object. Nothing in it is counted from when a run started: the app runs on, so it says how things stand.
 //
 // Sent only when it changed: at most every 30 seconds while a run goes, and every 10 minutes otherwise, so an idle Mac
 // whose numbers stay put sends nothing at all. While a run goes and nothing changes (waiting for the camera, say) it's
-// sent again every 2 minutes, so the tab can tell a Mac that's asleep or off from one that's waiting.
+// sent again every 2 minutes, so the tab can tell a Mac that's asleep or off from one that's waiting. A Start or Pause
+// just taken is said at the next look, whatever the pace.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -14,7 +16,13 @@ export const REPORT_EVERY = { running: 30_000, idle: 10 * 60_000, alive: 2 * 60_
 const MOST_SKIPPED = 50;
 const MOST_DAYS = 300;
 const cut = (text, most) => (text.length > most ? `${text.slice(0, most - 1)}…` : text);
-const iso = (ms) => (ms === null ? null : new Date(ms).toISOString());
+const iso = (ms) => new Date(ms).toISOString();
+/** A volume's space with what's used rounded to `step`, so a little written or deleted isn't a change. */
+function space(volume, step) {
+  if (!volume) return null;
+  const total = Math.max(0, volume.total);
+  return { used: Math.min(total, Math.round(Math.max(0, volume.used) / step) * step), total };
+}
 
 /** What a lane is doing, as the tab says it. */
 function laneState(lane) {
@@ -36,10 +44,6 @@ function laneReport(lane, sent, speed) {
   const { waiting } = lane ?? {};
   return {
     state,
-    done: lane?.done ?? 0,
-    total: lane?.total ?? 0,
-    sentBytes: Math.max(0, Math.round(sent)),
-    totalBytes: lane?.bytes ?? 0,
     speed: moving ? Math.round(speed) : null,
     left: left === null ? null : Math.round(left),
     waiting: waiting
@@ -50,11 +54,12 @@ function laneReport(lane, sent, speed) {
 }
 
 /**
- * The report, from `/api/offload`'s summary. `copySpeed` is how fast clips come off the card, measured between reports;
- * `startedAt` and `endedAt` the run's times as seen here. The room is said in whole GB, so it doesn't count as a change
- * every time any app writes a file.
+ * The report, from `/api/offload`'s summary, with each volume's `space` (`{ used, total }`, the card's null while it's
+ * unplugged). `copySpeed` is how fast clips come off the card, measured between reports; `heard` the tab's Start and
+ * Pause taken (asks.mjs). The Mac's space is said in whole GB, so it doesn't count as a change every time any app writes
+ * a file; the card's, which only the offload writes, in tenths.
  */
-export function macReport(summary, { now, copySpeed = null, startedAt = null, endedAt = null }) {
+export function macReport(summary, { now, copySpeed = null, heard = {} }) {
   const run = summary.run;
   const copied = run ? run.copy.doneBytes + (run.copy.current?.sent ?? 0) : 0;
   const skipped = run
@@ -66,30 +71,28 @@ export function macReport(summary, { now, copySpeed = null, startedAt = null, en
         })),
       )
     : [];
-  const { transcripts, kept, room } = summary;
+  const { camera, mac, transcripts, kept } = summary;
+  const took = (lane) =>
+    heard[lane] ? { at: heard[lane].at, error: heard[lane].error && cut(heard[lane].error, 600) } : null;
   return {
     version: 1,
     at: iso(now),
     running: Boolean(run?.running),
-    startedAt: iso(startedAt),
-    endedAt: iso(endedAt),
     lanes: {
       copy: laneReport(run?.copy, copied, copySpeed),
       send: laneReport(run?.send, run?.sentBytes ?? 0, run?.speed ?? null),
     },
-    camera: { mounted: summary.camera.mounted, clips: summary.camera.clips, bytes: summary.camera.bytes },
-    mac: { clips: summary.mac.clips, bytes: summary.mac.bytes },
-    freed: { camera: run?.freed.camera ?? 0, mac: run?.freed.mac ?? 0 },
+    camera: { mounted: camera.mounted, clips: camera.clips, bytes: camera.bytes, space: space(camera.space, 1e8) },
+    mac: { clips: mac.clips, bytes: mac.bytes, space: space(mac.space, 1e9) },
     skipped: skipped.slice(0, MOST_SKIPPED),
     transcripts: {
-      made: transcripts.done,
       waiting: transcripts.waiting + (transcripts.current ? 1 : 0),
       failed: transcripts.failed,
       toSend: transcripts.toSend,
       error: transcripts.error ? cut(transcripts.error, 600) : null,
     },
     kept: { days: kept.days.slice(0, MOST_DAYS), clips: kept.count },
-    room: { free: Math.floor(Math.max(0, room.free) / 1e9) * 1e9, keepFree: room.keepFree },
+    heard: { copy: took("copy"), send: took("send") },
   };
 }
 
@@ -123,14 +126,17 @@ export function pairedSite(publisherDir, fetcher = fetch) {
 }
 
 /**
- * Looks at the offload every few seconds, cheaply (`running()`), and at its summary (`summary()`, `/api/offload`'s) only
- * when a report could go: then sends it with `post(report)` if it changed. `post` says the site's answer, or null when
- * there's nowhere to send it. Says `{ start, stop, tick }`; `tick` is one look, for tests.
+ * Looks at the offload every few seconds, cheaply (`running()`), and at its summary (`summary()`, `/api/offload`'s, with
+ * `space`) only when a report could go: then sends it with `post(report)` if it changed. `heard()` says the tab's Start
+ * and Pause taken. `post` says the site's answer, or null when there's nowhere to send it. Says
+ * `{ start, stop, tick, soon }`: `tick` is one look, for tests; `soon()` has the next look go whatever the pace, as one
+ * does after a Start or Pause.
  */
 export function macReporter({
   summary,
   running,
   post,
+  heard = () => ({}),
   every = REPORT_EVERY,
   clock = Date.now,
   log = (line) => console.error(`grade: report: ${line}`),
@@ -138,17 +144,13 @@ export function macReporter({
   /** What the site has: when it was sent, what it said (without its time), and whether a run went. */
   let sent = { at: Number.NEGATIVE_INFINITY, key: null, running: false };
   let lookedAt = Number.NEGATIVE_INFINITY;
-  let run = { going: false, startedAt: null, endedAt: null };
   /** The bytes copied off the card at the last look, for how fast they come. */
   let copied = null;
   let failed = null;
   let busy = false;
+  let hurry = false;
   let timer = null;
 
-  function follow(going, now) {
-    if (going && !run.going) run = { going, startedAt: now, endedAt: null };
-    else if (!going && run.going) run = { ...run, going, endedAt: now };
-  }
   function copySpeed(summary, now) {
     const copy = summary.run?.copy;
     const bytes = copy?.on ? copy.doneBytes + (copy.current?.sent ?? 0) : null;
@@ -164,15 +166,14 @@ export function macReporter({
     try {
       const now = clock();
       const going = running();
-      follow(going, now);
       // A run going, or one the site still thinks goes, is said every 30 seconds; otherwise every 10 minutes.
       const pace = going || sent.running ? every.running : every.idle;
-      if (now - sent.at < pace) return;
-      if (going === sent.running && now - lookedAt < pace) return;
+      if (!hurry && now - sent.at < pace) return;
+      if (!hurry && going === sent.running && now - lookedAt < pace) return;
+      hurry = false;
       lookedAt = now;
       const current = await summary();
-      const { startedAt, endedAt } = run;
-      const report = macReport(current, { now, copySpeed: copySpeed(current, now), startedAt, endedAt });
+      const report = macReport(current, { now, copySpeed: copySpeed(current, now), heard: heard() });
       const key = JSON.stringify({ ...report, at: null });
       const alive = going && now - sent.at >= every.alive;
       if (key === sent.key && !alive) return;
@@ -199,6 +200,9 @@ export function macReporter({
 
   return {
     tick,
+    soon() {
+      hurry = true;
+    },
     start() {
       void tick();
       timer = setInterval(tick, Math.min(5_000, every.running));
