@@ -1071,9 +1071,10 @@ const encoderButtons = document.querySelectorAll("[data-encoder]");
 /** What exporting the selection at the menu's quality comes to: its size below 100%, and a badge on Export. */
 function renderQuality() {
   const q = state.quality;
-  // What encodes exports is the server's to remember.
+  // What encodes exports is the server's to remember, and so is remaking a film's preview copies.
   for (const b of encoderButtons)
     b.setAttribute("aria-pressed", String(b.dataset.encoder === (state.jobs?.export.encoder ?? "gpu")));
+  $("previews-remake").checked = Boolean(state.jobs?.previews?.autoRemake);
   $("quality-out").textContent = `${q}%`;
   $("quality-rail").style.setProperty("--b", `${((q - 10) / 90) * 100}%`);
   $("export-quality").hidden = q === 100;
@@ -1126,6 +1127,15 @@ for (const b of encoderButtons)
     }
     poll();
   });
+$("previews-remake").addEventListener("change", async (e) => {
+  try {
+    await api("/api/previews/options", { method: "POST", json: { autoRemake: e.target.checked } });
+  } catch (error) {
+    e.target.checked = !e.target.checked;
+    return showError(error);
+  }
+  poll();
+});
 $("stop-export").addEventListener("click", async () => {
   try {
     const { stopped } = await (await api("/api/export/stop", { method: "POST" })).json();
@@ -1220,12 +1230,28 @@ function renderStatus() {
   if (j?.thumbs) parts.push(`Reading thumbnails · ${j.thumbs} left`);
   const failed = j?.export.failed.filter((f) => f.id === state.source) ?? [];
   if (failed.length) parts.push(`${failed.length} export${failed.length === 1 ? "" : "s"} failed: ${failed[0].error}`);
+  for (const line of [filmLine("Cutting trims", "trim", "trims", j?.trims), filmLine("Making preview copies", "preview copy", "preview copies", j?.previews)])
+    if (line) parts.push(line);
   if (state.error) parts.push(state.error);
   if (statusNote && (statusFirst || !parts.length)) parts.unshift(statusNote);
   $("status").textContent = parts.join(" · ");
   $("status").title = $("status").textContent;
   $("transcribing").textContent = transcribingText(j?.transcripts);
   $("transcribing").title = j?.transcripts?.error ?? "";
+}
+/**
+ * How a film's preview copies or trims are coming (server's film.mjs): the one being made and how many wait, or that
+ * they wait for the exports; and the last that failed.
+ */
+function filmLine(doing, one, many, q) {
+  if (!q) return "";
+  const parts = [];
+  const left = q.queued.length;
+  const named = (job) => state.byName.get(job.name)?.stem ?? job.name;
+  if (q.current) parts.push(`${doing} · ${named(q.current)}${onCpu(q.current)} · ${Math.round(q.current.progress * 100)}%${left ? ` · ${left} queued` : ""}`);
+  else if (left) parts.push(`${left} ${left === 1 ? one : many} waiting${q.waiting ? " for the exports" : ""}`);
+  if (q.failed.length) parts.push(`${q.failed.length} ${q.failed.length === 1 ? one : many} failed: ${q.failed[0].error}`);
+  return parts.join(" · ");
 }
 /** What Whisper is doing, in a few words: the clip it's on, those waiting for an export to end, or those it couldn't do. */
 function transcribingText(t) {
@@ -1365,7 +1391,8 @@ async function poll() {
     lastDone = done;
     renderStatus();
     updateRows();
-    const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || jobs.bring?.running || waiting;
+    const filming = [jobs.previews, jobs.trims].some((q) => q?.current || q?.queued.length);
+    const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || jobs.bring?.running || waiting || filming;
     if (!exportMenu.hidden) offload.render(jobs.offload);
     pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {

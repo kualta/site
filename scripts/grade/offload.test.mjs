@@ -41,7 +41,7 @@ test("the card goes to the Mac and the Mac to the archive, each deleted once the
     expect(run.state).toMatchObject({ running: false, finished: "done", error: null });
     expect(run.state.copy).toMatchObject({ total: 3, done: 3, on: false, finished: "done", skipped: [] });
     expect(run.state.send).toMatchObject({ total: 4, done: 4, current: [], finished: "done", skipped: [] });
-    expect(run.state.freed).toEqual({ camera: 50, mac: 68, exports: 0 });
+    expect(run.state.freed).toEqual({ camera: 50, mac: 68 });
     expect(Object.fromEntries(landed)).toEqual({
       "DJI_20261118203054_0316_D.MP4": sha("a clip long enough to go in parts"),
       "DJI_20261118203937_0317_D.MP4": sha("short"),

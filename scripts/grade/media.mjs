@@ -198,7 +198,15 @@ export async function exportClip({
         { onProgress, duration, signal },
       ),
     );
-  if (encoder === "cpu" || quality < GPU_FROM) {
+  return onGpuOrCpu(quality < GPU_FROM ? "cpu" : encoder, encode, { signal, onFallback });
+}
+
+/**
+ * Runs `encode(on)` on the GPU, or on the CPU when that's what's asked. A GPU that can't encode it gives way to the CPU
+ * from the start, and `onFallback` hears why. Says what encoded it, and that reason as `fallback`.
+ */
+async function onGpuOrCpu(encoder, encode, { signal, onFallback }) {
+  if (encoder === "cpu") {
     await encode("cpu");
     return { encoder: "cpu" };
   }
@@ -215,8 +223,12 @@ export async function exportClip({
   }
 }
 
-/** The original's code values, read as limited range at 16 bits, through a clip's grade LUT. */
-const gradeFilter = (matrix, cube) => `scale=in_color_matrix=${matrix}:in_range=tv,format=gbrp16le,lut3d=file='${filterPath(cube)}':interp=tetrahedral`;
+/**
+ * The original's code values, read as limited range at 16 bits, through a clip's grade LUT. `size`, scale's own
+ * arguments, makes it smaller first.
+ */
+const gradeFilter = (matrix, cube, size = "") =>
+  `scale=${size ? `${size}:` : ""}in_color_matrix=${matrix}:in_range=tv,format=gbrp16le,lut3d=file='${filterPath(cube)}':interp=tetrahedral`;
 
 /**
  * ffmpeg's deflicker, after the grade: each frame's luma scaled by one factor, so its mean matches the mean over it
@@ -235,10 +247,13 @@ const deflickerFilter = (frames, pixFmt, out = "") =>
 
 const exportTail = "format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv";
 
-/** The export's whole filter graph. With `deflicker` off it is the grade alone, as it always was. */
-export function exportFilter({ matrix = "bt709", cube, deflicker = null }) {
+/**
+ * The export's whole filter graph. With `deflicker` off it is the grade alone, as it always was. `size` (scale's
+ * arguments) makes the picture smaller before it's graded, as preview copies are.
+ */
+export function exportFilter({ matrix = "bt709", cube, deflicker = null, size = "" }) {
   const frames = deflickerFrames(deflicker);
-  const grade = gradeFilter(matrix, cube);
+  const grade = gradeFilter(matrix, cube, size);
   if (!frames) return `${grade},scale=out_color_matrix=bt709:out_range=tv,${exportTail}`;
   // 4:2:0, as the export ends up: deflicker only touches luma, it holds that many frames at a time, and what's left
   // is to cut it to 8 bits.
@@ -305,6 +320,163 @@ export async function exportFrame({ src, dst, cube, matrix = "bt709", deflicker 
   await writeAtomically(dst, (tmp) =>
     run(["-ss", time.toFixed(6), "-i", src, "-map", "0:v:0", "-frames:v", "1", "-vf", frameFilter({ matrix, cube, deflicker }), tmp]),
   );
+}
+
+// ---- a film's assets: preview copies while it's made, trims when it's rendered ----------------------------------------
+
+/**
+ * A preview copy's long side, video bitrate, and how often it has a key frame (seconds). 12 Mbit/s: on 4K60 D-Log2
+ * (carved stone under string lights) it came to VMAF 95 against the graded frames at that size, 8 Mbit/s to 92.5; on 4K24
+ * foliage walked through, 81 and 70, with 8 visibly smearing the leaves. The grade reads true either way; it's not for
+ * keeping.
+ */
+export const PREVIEW_SIDE = 1920;
+export const PREVIEW_RATE = 12e6;
+export const PREVIEW_KEYS = 0.5;
+
+/**
+ * scale's arguments for a preview copy: PREVIEW_SIDE on the long side, never larger than the original, sides even. It
+ * scales the original's code values before the grade, where the export grades first: four times fewer pixels through the
+ * LUT, twice as fast on 4K60, and the frames come out within 56.8 dB (PSNR) of grading first.
+ */
+const previewScale = `w='if(gte(iw,ih),min(${PREVIEW_SIDE},iw),-2)':h='if(gte(iw,ih),-2,min(${PREVIEW_SIDE},ih))':flags=lanczos`;
+
+/** A preview copy's filter graph: the export's, grade and deflicker, on the picture made smaller first. */
+export const previewFilter = ({ matrix = "bt709", cube, deflicker = null }) =>
+  exportFilter({ matrix, cube, deflicker, size: previewScale });
+
+/** The size a preview copy of a `width` × `height` clip comes out at, as previewScale makes it. */
+export function previewDims(width, height) {
+  const long = Math.max(width, height);
+  if (long <= PREVIEW_SIDE) return { width, height };
+  const short = 2 * Math.round((Math.min(width, height) * PREVIEW_SIDE) / long / 2);
+  return width >= height ? { width: PREVIEW_SIDE, height: short } : { width: short, height: PREVIEW_SIDE };
+}
+
+/**
+ * The H.264 level a picture's size and frame rate take, when it's more than 4.0's: VideoToolbox names it by the frame's
+ * size alone, 4.0 for 1080p at any rate.
+ */
+function h264Level(width, height, fps) {
+  const blocks = Math.ceil(width / 16) * Math.ceil(height / 16) * fps;
+  const level = [[245_760, null], [522_240, "4.2"], [983_040, "5.1"]].find(([most]) => blocks <= most)?.[1] ?? "5.2";
+  return level ? ["-level", level] : [];
+}
+
+/** A preview copy's encoder and rate, as ffmpeg's arguments. */
+export function previewVideo(encoder, { width = 0, height = 0, fps = 0 } = {}) {
+  const rate = String(PREVIEW_RATE);
+  if (encoder === "gpu")
+    return ["-c:v", "h264_videotoolbox", "-profile:v", "high", ...h264Level(width, height, fps), "-g", "250", "-b:v", rate];
+  const most = ["-maxrate", String(PREVIEW_RATE * 1.5), "-bufsize", String(PREVIEW_RATE * 2)];
+  return ["-c:v", "libx264", "-preset", "veryfast", "-b:v", rate, ...most];
+}
+
+/**
+ * A preview copy: the clip through its grade, deflicker and all, PREVIEW_SIDE on its long side, 8-bit H.264 BT.709 at
+ * PREVIEW_RATE with a key frame every PREVIEW_KEYS seconds, the sound copied. On the GPU, or the CPU when it's asked
+ * for or the GPU can't (exportClip). Says what encoded it, and its size.
+ */
+export async function makePreview({
+  src, dst, cube, matrix = "bt709", deflicker = null, duration, width, height, fps, encoder = "gpu", onProgress,
+  onFallback, signal,
+}) {
+  const size = previewDims(width, height);
+  const encode = (on) =>
+    writeAtomically(dst, (tmp) =>
+      run(
+        [
+          "-i", src,
+          "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0",
+          "-vf", previewFilter({ matrix, cube, deflicker }),
+          ...previewVideo(on, { ...size, fps }), "-force_key_frames", `expr:gte(t,n_forced*${PREVIEW_KEYS})`,
+          "-c:a", "copy", "-movflags", "+faststart", tmp,
+        ],
+        { onProgress, duration, signal },
+      ),
+    );
+  return { ...(await onGpuOrCpu(encoder, encode, { signal, onFallback })), ...size };
+}
+
+/** A trim's sound: encoded again, so it starts and ends where its picture does. AAC, so a film's <audio> plays it. */
+export const TRIM_AUDIO = ["-c:a", "aac", "-b:a", "320k"];
+
+/**
+ * The frames a trim of [start, end) seconds holds: from the one on screen at `start` to the last that starts before
+ * `end`. Times come rounded to the millisecond, so a frame starting within half of one after `start` counts as at it,
+ * and one starting within half of one before `end` as at it too. Says the first frame's time and the last's, when the
+ * last leaves the screen (`until`), and half the shortest time a frame is on screen (`slack`). Read off the file's own
+ * packets around both ends, so a clip is cut on its own frames, at whatever rate, steady or not.
+ */
+export async function trimFrames(src, start, end) {
+  const around = (t) => `${Math.max(0, t - 2).toFixed(6)}%${(t + 1).toFixed(6)}`;
+  const ask = ["-v", "error", "-select_streams", "v:0", "-read_intervals", `${around(start)},${around(end)}`];
+  const entries = ["-show_entries", "packet=pts,duration:stream=time_base", "-of", "json"];
+  const { stdout } = await exec(FFPROBE, [...ask, ...entries, src], { maxBuffer: 64 * 1024 * 1024 });
+  const { packets = [], streams = [] } = JSON.parse(stdout);
+  // In the stream's own time base, so a time is the very number ffmpeg has for it.
+  const [num, den] = String(streams[0]?.time_base ?? "1/1").split("/").map(Number);
+  const time = (pts) => (pts * num) / den;
+  const lengths = new Map(packets.filter((p) => Number.isInteger(p.pts)).map((p) => [p.pts, p.duration]));
+  const all = [...lengths.keys()].sort((a, b) => a - b);
+  const gaps = all.slice(1).map((pts, i) => pts - all[i]);
+  const shortest = gaps.length ? Math.min(...gaps) : lengths.get(all[0]) || den / num / 24;
+  const us = (t) => Math.round(t * 1e6);
+  const first = all.findLast((pts) => us(time(pts)) <= us(start) + 500) ?? all[0];
+  const last = all.findLast((pts) => us(time(pts)) < us(end) - 500);
+  if (first === undefined || last === undefined || last < first) throw new Error(`no frames from ${start} s to ${end} s`);
+  const until = all.find((pts) => pts > last) ?? last + (lengths.get(last) || shortest);
+  return { first: time(first), last: time(last), until: time(until), slack: time(shortest) / 2 };
+}
+
+/** When a clip's sound starts, and its sample rate; null when it has none. */
+async function soundOf(src) {
+  const ask = ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=start_time,sample_rate", "-of", "json", src];
+  const [sound] = JSON.parse((await exec(FFPROBE, ask)).stdout).streams ?? [];
+  return sound ? { start: Number(sound.start_time) || 0, rate: Number(sound.sample_rate) || 48_000 } : null;
+}
+
+/**
+ * A full-quality graded export of part of a clip, [start, end) seconds of it (trimFrames), encoded as exports are
+ * (exportVideo, at `quality`, on `encoder`). The first frame is the one on screen at `start`, at time 0; the sound
+ * (TRIM_AUDIO) starts on the same sample and lasts as long as the picture. It's graded from a little before and, for
+ * deflicker, which evens each frame out with the ones after it, a little past the end, then cut, so each frame comes
+ * out as it does in the clip's whole export. Says the first and last frame's times in the original (`actualStart`,
+ * `actualEnd`), and what encoded it.
+ */
+export async function exportTrim({
+  src, dst, cube, matrix = "bt709", deflicker = null, start, end, duration, width, height, fps, quality = 100,
+  videoBitrate = 0, encoder = "gpu", onProgress, onFallback, signal,
+}) {
+  const stop = Math.min(end, duration || end);
+  if (start >= stop) throw new Error(`no frames from ${start} s to ${end} s: the clip ends at ${duration} s`);
+  const { first, last, until, slack } = await trimFrames(src, start, stop);
+  const sound = await soundOf(src);
+  // Only the frames from `from` on are graded: those before it are decoded and dropped.
+  const from = Math.max(0, first - 0.1);
+  const ahead = (deflickerFrames(deflicker) + 2) / (fps || 24) + 0.1;
+  const s = (t) => Math.max(0, t).toFixed(6);
+  const picture = `[0:v:0]${exportFilter({ matrix, cube, deflicker })},trim=start=${s(first - slack)}:end=${s(last + slack)},setpts=PTS-STARTPTS[v]`;
+  // A clip whose sound starts after its picture has silence put before it.
+  const late = sound ? Math.round((sound.start - first) * sound.rate) : 0;
+  const delay = late > 0 ? `,adelay=delays=${late}S:all=1` : "";
+  const audio = sound && `;[0:a:0]atrim=start=${s(first)}:end=${s(until)},asetpts=PTS-STARTPTS${delay},apad=whole_dur=${s(until - first)}[a]`;
+  const encode = (on) =>
+    writeAtomically(dst, (tmp) =>
+      run(
+        [
+          "-ss", s(from), "-t", s(until + ahead - from), "-copyts", "-i", src,
+          "-filter_complex", picture + (audio || ""),
+          "-map", "[v]", ...(audio ? ["-map", "[a]"] : []), "-map_metadata", "0",
+          ...exportVideo(on, { quality, videoBitrate, width, height, fps }), "-force_key_frames", "expr:gte(t,n_forced*0.25)",
+          // Its length counted in samples, where by default it's in milliseconds.
+          ...(audio ? [...TRIM_AUDIO, "-movie_timescale", String(sound.rate)] : []), "-movflags", "+faststart", tmp,
+        ],
+        { onProgress, duration: until - first, signal },
+      ),
+    );
+  const made = await onGpuOrCpu(quality < GPU_FROM ? "cpu" : encoder, encode, { signal, onFallback });
+  return { ...made, actualStart: first, actualEnd: last };
 }
 
 /**

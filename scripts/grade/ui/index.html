@@ -62,10 +62,10 @@
         </div>
         <p class="menu-note">Below 50% always the CPU: it keeps more at that size</p>
       </div>
+      <label class="menu-check" title="A film's preview copies are small graded copies of whole clips, kept in the cache. On, one whose clip is graded again is made again a few seconds after the grade stops changing; off, it stays as it was until a film asks for it again."><input type="checkbox" id="previews-remake">Remake a film's preview copies after a regrade</label>
       <div class="menu-offload">
         <div class="lane" data-lane="copy" title="Each clip is copied to this Mac, checked, and deleted from the camera. Log clips without a grade get the Colorful look as settings."><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>
         <div class="lane" data-lane="send" title="Each clip on this Mac is sent to Cloudflare, read back and checked, and deleted from this Mac. Its transcript is made here and filed beside it. Graded clips go to YouTube meanwhile."><span>Mac → Cloudflare</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
-        <div class="lane" data-lane="exports" title="Each finished export is sent to Cloudflare, read back and checked, and deleted from this Mac. Exported frames stay."><span>Exports → Cloudflare</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-exports"></output></div>
         <div class="offload-places">
           <div class="menu-row"><span>Transcripts</span><output id="offload-transcripts"></output></div>
           <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
@@ -106,7 +106,6 @@
         <button id="cloud-refresh" class="link" type="button" title="Read the archive again">Refresh</button>
       </div>
       <div class="cloud-kind"><span>Originals</span><output id="cloud-original"></output><button id="bring-original" class="btn small" type="button" title="Bring the day's originals that aren't here to Movies/Original" disabled>Bring all</button></div>
-      <div class="cloud-kind"><span>Graded</span><output id="cloud-graded"></output><button id="bring-graded" class="btn small" type="button" title="Bring the day's graded copies that aren't here to Movies/Exported" disabled>Bring all</button></div>
       <div class="cloud-kind" title="Room for clips on this Mac, past what is always kept free"><span>Room</span><output id="cloud-room"></output></div>
       <p id="cloud-note" class="cloud-note" role="status"></p>
     </div>

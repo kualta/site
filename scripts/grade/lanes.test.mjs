@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { chmodSync, closeSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
-import { rename, utimes, writeFile } from "node:fs/promises";
+import { utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   begin,
@@ -17,11 +17,10 @@ import {
   stall,
   until,
 } from "./offload.fixture.mjs";
-import { archiveFootage, exportedClips, isUp } from "../publisher/footage.mjs";
 import { archiveDays, bringer, pickClips, withHere } from "./bring.mjs";
 import { keepList } from "./keep.mjs";
 import { archivedFootage } from "./ledger.mjs";
-import { copyClip, dayManifests, gradedName, sendBlob } from "./offload.mjs";
+import { copyClip, dayManifests, sendBlob } from "./offload.mjs";
 
 // The offload's switches: each on its own, stopped, waiting out what's in their way, paused, kept out of, and above all
 // deleting nothing that isn't safe somewhere else.
@@ -544,7 +543,7 @@ test("a paused run starts no upload, no read back and no transcript", async () =
   const request = site();
   let readied = 0;
   const run = begin(at, {
-    lanes: ["send", "exports"],
+    lanes: ["send"],
     request,
     paused: () => "No Grade page is open",
     transcripts: {
@@ -562,10 +561,9 @@ test("a paused run starts no upload, no read back and no transcript", async () =
   await sleep(40);
   expect(request.asked).toEqual([]);
   // Stopped while paused, with nothing in flight, it ends at once.
-  run.stop(["exports"]);
-  await until(() => run.state.exports.finished === "stopped");
-  run.stop(["send"], { now: true });
+  run.stop(["send"]);
   await run.done;
+  expect(run.state.send.finished).toBe("stopped");
   expect(files(at.original)).toEqual([one]);
 
   // Paused once a clip is picked: not a byte of it goes up.
@@ -1421,262 +1419,7 @@ test("a Mac copy that's gone before the card's could be deleted: the card's is c
   expect(files(at.dcim)).toEqual([]);
 });
 
-// ---- Exports → Cloudflare ----------------------------------------------------------------------------------------------
-
-const graded = (n) => name(n).replace(".MP4", ".mp4");
-
-test("the exports go to the archive as their day's graded copies, checked and recorded, then go from the Mac", async () => {
-  const at = await given(
-    [[one, "on the card", day]],
-    [[two, "on the Mac", day]],
-    [
-      [graded(1), LONG, day],
-      [graded(2), "short", other],
-    ],
-  );
-  await writeFile(join(at.graded, "DJI_20261118100001_0001_D_f0012.png"), "a frame");
-  const reading = stall();
-  const request = site({ hold: (rest, init, pass) => (readsBlob(rest, init) ? reading.hold(init, pass) : null) });
-  const [kept, originals] = [records(), records()];
-  const run = begin(at, { lanes: ["exports"], request, part: 8, graded: kept, records: originals });
-  await reading.reached;
-  await sleep(20);
-  // Being read back, it's still here.
-  expect(files(at.graded)).toContain(graded(1));
-  reading.go();
-  await run.done;
-  expect(run.state).toMatchObject({ finished: "done", exports: { done: 2, total: 2 }, send: { on: false } });
-  expect(run.state.freed).toEqual({ camera: 0, mac: 0, exports: LONG.length + 5 });
-  expect(files(at.graded)).toEqual(["DJI_20261118100001_0001_D_f0012.png"]);
-  expect(await listed(request, day, gradedName(day))).toEqual({ [`assets/${graded(1)}`]: sha(LONG) });
-  expect(await listed(request, other, gradedName(other))).toEqual({ [`assets/${graded(2)}`]: sha("short") });
-  expect(kept.clips).toEqual({
-    [graded(1)]: { sha256: sha(LONG), size: LONG.length, day },
-    [graded(2)]: { sha256: sha("short"), size: 5, day: other },
-  });
-  // The originals are none of its business.
-  expect(originals.clips).toEqual({});
-  expect(files(at.dcim)).toEqual(onCard(one));
-  expect(files(at.original)).toEqual([two]);
-});
-
-test("an export that doesn't read back, or whose clip is being exported again, stays on the Mac", async () => {
-  const at = await given(
-    [],
-    [],
-    [
-      [graded(1), LONG, day],
-      [graded(3), "being made again", day],
-    ],
-  );
-  let spoilt = true;
-  const request = site({
-    hold: (rest, init) => (spoilt && readsBlob(rest, init) ? Promise.resolve(new Response("not it")) : null),
-  });
-  const known = records();
-  let exporting = true;
-  const options = {
-    lanes: ["exports"],
-    request,
-    part: 20,
-    graded: known,
-    removable: async (clip) => !(exporting && clip.name === graded(3)),
-  };
-  const run = begin(at, options);
-  await run.done;
-  expect(run.state.exports).toMatchObject({ done: 1, skipped: [{ name: graded(1) }] });
-  expect(files(at.graded)).toEqual([graded(1), graded(3)]);
-  expect(Object.keys(known.clips)).toEqual([graded(3)]);
-  // Made by now, and read back as it should be, both go: the one in the archive already is only deleted.
-  exporting = false;
-  spoilt = false;
-  const next = begin(at, options);
-  await next.done;
-  expect(next.state.exports).toMatchObject({ total: 1, done: 1 });
-  expect(files(at.graded)).toEqual([]);
-});
-
-test("a kept clip's export is left alone, even one the archive has", async () => {
-  const at = await given(
-    [],
-    [],
-    [
-      [graded(1), "kept by its day", other],
-      [graded(2), "brought back", day],
-      [graded(3), "goes", day],
-    ],
-  );
-  const request = site();
-  const had = await put(request, `assets/${graded(2)}`, "brought back");
-  const before = request.asked.length;
-  const run = begin(at, {
-    lanes: ["exports"],
-    request,
-    graded: records({ [graded(2)]: { sha256: had.sha256, size: had.size, day } }),
-    keeping: async () => (clip) => clip.day === other || clip.name === graded(2),
-  });
-  await run.done;
-  expect(run.state.exports).toMatchObject({ total: 1, done: 1 });
-  expect(files(at.graded)).toEqual([graded(1), graded(2)]);
-  expect(uploads({ asked: request.asked.slice(before) })).toEqual([
-    `PUT blobs/${sha("goes")}`,
-    `PUT projects/${gradedName(day)}`,
-  ]);
-});
-
-test("a clip exported again while its last export goes up keeps the new one, which goes up next", async () => {
-  const at = await given([], [], [[graded(1), LONG, day]]);
-  const held = stall();
-  const request = site({
-    hold: (rest, init, pass) => (savesDay(rest, init) ? held.hold(init, pass) : null),
-  });
-  const run = begin(at, { lanes: ["exports"], request, part: 8 });
-  await held.reached;
-  // Written under another name and moved into place, as exports are.
-  await writeFile(join(at.graded, ".new.part"), "graded again");
-  await rename(join(at.graded, ".new.part"), join(at.graded, graded(1)));
-  held.go();
-  await run.done;
-  expect(run.state.exports.done).toBe(2);
-  expect(files(at.graded)).toEqual([]);
-  expect(await listed(request, day, gradedName(day))).toEqual({ [`assets/${graded(1)}`]: sha("graded again") });
-});
-
-test("an export of a recorded one's size made since isn't taken for it", async () => {
-  const at = await given([], [], [[graded(1), "graded anew", day]]);
-  const request = site();
-  const was = await put(request, `assets/${graded(1)}`, "graded once");
-  const kept = records({ [graded(1)]: { sha256: was.sha256, size: was.size, day } });
-  const run = begin(at, { lanes: ["exports"], request, graded: kept });
-  await run.done;
-  expect(kept.clips[graded(1)].sha256).toBe(sha("graded anew"));
-  expect(await listed(request, day, gradedName(day))).toEqual({ [`assets/${graded(1)}`]: sha("graded anew") });
-  expect(files(at.graded)).toEqual([]);
-});
-
-test("the exports wait for their page and their network like the originals", async () => {
-  const at = await given([], [], [[graded(1), LONG, day]]);
-  let down = true;
-  let why = "No Grade page is open";
-  const request = site({ hold: () => (down ? failing() : null) });
-  const run = begin(at, { lanes: ["exports"], request, part: 8, paused: () => why });
-  await until(() => run.state.paused);
-  why = null;
-  await until(() => run.state.exports.waiting?.for === "network");
-  expect(files(at.graded)).toEqual([graded(1)]);
-  down = false;
-  await run.done;
-  expect(run.state.exports).toMatchObject({ finished: "done", done: 1 });
-  expect(files(at.graded)).toEqual([]);
-});
-
-/** The graded copies here that the footage uploads would put up. */
-const uploadsDue = async (at, state, clips) => {
-  const exportsFile = join(at.root, "exports.json");
-  await writeFile(exportsFile, JSON.stringify({ clips: Object.fromEntries(clips.map((clip) => [clip, {}])) }));
-  return (await exportedClips({ exported: at.graded, exportsFile })).filter((clip) => !isUp(state, clip));
-};
-/** Brings a day's graded copies back, kept as they come. */
-async function bringBack(at, request, keep) {
-  const folders = { original: at.original, graded: at.graded };
-  const brought = bringer({ folders, room: async () => 1e12, placing: (clip) => keep.add(clip.name) });
-  const { clips } = await archiveDays().read(request);
-  await brought.add(request, pickClips(await withHere(clips, folders), { what: "graded", day }));
-  await brought.settled();
-  return brought.state();
-}
-
-test("an export put up to YouTube, offloaded and brought back, isn't taken for a new one and put up again", async () => {
-  const at = await given([], [], [[graded(1), LONG, day]]);
-  // Its time as a disk keeps it, finer than the milliseconds it's known by.
-  const when = 1_763_467_200.1237;
-  await utimes(join(at.graded, graded(1)), when, when);
-  const [up] = await uploadsDue(at, { clips: {} }, [one]);
-  const state = { clips: { [graded(1)]: [{ video: "v1", size: up.size, mtime: up.mtime }] } };
-  expect(await uploadsDue(at, state, [one])).toEqual([]);
-
-  const request = site();
-  const run = begin(at, { lanes: ["exports"], request, part: 8 });
-  await run.done;
-  expect(files(at.graded)).toEqual([]);
-  // Known by the archive's copy too, whichever way it went up.
-  const [held] = await archiveFootage(request);
-  expect(held).toMatchObject({ name: graded(1), size: up.size, mtime: up.mtime });
-  const viaArchive = {
-    clips: { [graded(1)]: [{ video: "v2", size: held.size, sha256: held.sha256, mtime: held.mtime }] },
-  };
-
-  const keep = keepList(join(at.root, "keep.json"));
-  expect(await bringBack(at, request, keep)).toMatchObject({ landed: 1, failed: [] });
-  expect(files(at.graded)).toEqual([graded(1)]);
-  for (const known of [state, viaArchive]) expect(await uploadsDue(at, known, [one])).toEqual([]);
-  // Graded and exported again, it's new.
-  await at.put(at.graded, [graded(1), "graded again", day]);
-  expect(await uploadsDue(at, state, [one])).toHaveLength(1);
-});
-
-test("a graded copy brought back while the exports go up is never sent or deleted, whole or as it comes", async () => {
-  const at = await given([], [], [[graded(1), LONG, day]]);
-  let half = null;
-  const request = site({
-    // Half of the clip comes, and then no more until it's let go.
-    hold: (rest, init) => {
-      if (!readsBlob(rest, init) || !half) return null;
-      const body = new ReadableStream({
-        async start(it) {
-          it.enqueue(Buffer.from(LONG.slice(0, 20)));
-          await half;
-          it.enqueue(Buffer.from(LONG.slice(20)));
-          it.close();
-        },
-      });
-      return Promise.resolve(new Response(body));
-    },
-  });
-  const known = records();
-  const keep = keepList(join(at.root, "keep.json"));
-  const options = { lanes: ["exports"], request, part: 8, graded: known, keeping: keep.keeping, exports: at.exports };
-  await begin(at, options).done;
-  expect(files(at.graded)).toEqual([]);
-
-  let go;
-  half = new Promise((resolve) => {
-    go = resolve;
-  });
-  const asked = request.asked.length;
-  const bringing = bringBack(at, request, keep);
-  await until(() => files(at.graded).length === 1);
-  expect(files(at.graded)).toEqual([`.${graded(1)}.bring.part`]);
-  // A run while it's half here, one that looks again and again as it lands, and one after.
-  await begin(at, options).done;
-  expect(files(at.graded)).toEqual([`.${graded(1)}.bring.part`]);
-  let landing = true;
-  const watching = begin(at, {
-    ...options,
-    exports: async () => {
-      const settles = landing ? Date.now() + 2 : 0;
-      return [
-        ...(await at.exports()),
-        ...(landing ? [{ name: graded(9), path: "/none", size: 1, mtime: 1, day, settles }] : []),
-      ];
-    },
-  });
-  go();
-  expect(await bringing).toMatchObject({ landed: 1, failed: [] });
-  await sleep(30);
-  landing = false;
-  await watching.done;
-  await begin(at, options).done;
-  expect(files(at.graded)).toEqual([graded(1)]);
-  expect(readFileSync(join(at.graded, graded(1)), "utf8")).toBe(LONG);
-  expect(uploads({ asked: request.asked.slice(asked) })).toEqual([]);
-  expect(await keep.read()).toEqual({ days: [], clips: [graded(1)] });
-
-  // Let go by the owner, it's checked against the archive and goes.
-  await keep.set({ clips: [] });
-  await begin(at, options).done;
-  expect(files(at.graded)).toEqual([]);
-});
+// ---- what's brought back -----------------------------------------------------------------------------------------------
 
 test("an original brought back stays through the offloads after it, till it's let go", async () => {
   const at = await given([], [[one, "graded, then offloaded", day]]);
@@ -1687,10 +1430,9 @@ test("an original brought back stays through the offloads after it, till it's le
   await begin(at, options).done;
   expect(files(at.original)).toEqual([]);
 
-  const folders = { original: at.original, graded: at.graded };
-  const brought = bringer({ folders, room: async () => 1e12, placing: (clip) => keep.add(clip.name) });
+  const brought = bringer({ dir: at.original, room: async () => 1e12, placing: (clip) => keep.add(clip.name) });
   const { clips } = await archiveDays().read(request);
-  await brought.add(request, pickClips(await withHere(clips, folders), { what: "original", day }));
+  await brought.add(request, pickClips(await withHere(clips, at.original), { day }));
   await brought.settled();
   const run = begin(at, options);
   await run.done;

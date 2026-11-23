@@ -562,13 +562,13 @@ test("a site that's down is logged once, not every time the helper asks", async 
   expect(logs).toEqual(["Footage archive: fetch failed", "Footage archive: Publisher request failed (503)"]);
 });
 
-test("of what the grade app keeps in the archive, only a day's graded copies go to YouTube", async () => {
+test("nothing the grade app keeps in the archive goes to YouTube, a day's graded copies offloaded before included", async () => {
   const file = (name) => ({ path: `assets/${name}`, sha256: "ab", size: 1 });
   const projects = {
     "_graded-2026-11-08": [file("DJI_20261108115341_0022_D.mp4")],
     "_originals-2026-11-08": [file("DJI_20261108115341_0023_D.MP4")],
     _settings: [file("DJI_20261108115341_0024_D.mp4")],
-    _graded: [file("DJI_20261108115341_0025_D.mp4")],
+    "014-walk": [file("DJI_20261108115341_0025_D.mp4")],
   };
   const asked = [];
   const request = async (path) => {
@@ -576,18 +576,18 @@ test("of what the grade app keeps in the archive, only a day's graded copies go 
     if (path === "projects") return { projects: Object.keys(projects).map((name) => ({ name })) };
     return { files: projects[path.slice("projects/".length)] };
   };
-  const records = new Map([["dji_20261108115341_0022_d", { base: { name: "Umbra" } }]]);
+  const records = new Map([["dji_20261108115341_0025_d", { base: { name: "Umbra" } }]]);
   expect(await archiveFootage(request, records)).toEqual([
     {
-      name: "DJI_20261108115341_0022_D.mp4",
+      name: "DJI_20261108115341_0025_D.mp4",
       sha256: "ab",
       size: 1,
       record: { base: { name: "Umbra" } },
       from: "archive",
-      project: "_graded-2026-11-08",
+      project: "014-walk",
     },
   ]);
-  expect(asked).toEqual(["projects", "projects/_graded-2026-11-08"]);
+  expect(asked).toEqual(["projects", "projects/014-walk"]);
 });
 
 test("a shoot day's offloaded originals and their transcripts aren't graded footage, so they never go to YouTube", async () => {
