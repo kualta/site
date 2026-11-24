@@ -267,3 +267,35 @@ test("a request without a body still says its type, and a retry is told", async 
   await request("projects");
   expect(sent).toEqual(["GET -"]);
 });
+
+test("a download goes on as long as it keeps coming, and is given up once it stalls", async () => {
+  // A body sent a chunk every `gap` ms, `chunks` times, that stops when the request is.
+  const fetcher = (gap, chunks) => async (_url, init) => {
+    let sent = 0;
+    let timer;
+    const body = new ReadableStream({
+      start(out) {
+        init.signal.addEventListener("abort", () => {
+          clearInterval(timer);
+          out.error(init.signal.reason);
+        });
+        timer = setInterval(() => {
+          out.enqueue(new Uint8Array([sent]));
+          if (++sent === chunks) {
+            clearInterval(timer);
+            out.close();
+          }
+        }, gap);
+      },
+    });
+    return new Response(body);
+  };
+  const read = async (request) =>
+    new Uint8Array(await (await request("blobs/x", { raw: true, timeout: 100, stall: 80 })).arrayBuffer());
+  // 300 ms of download against a 100 ms limit on the answer: it's still coming, so it's let finish.
+  const slow = archiveClient({ origin: "https://post.kualta.dev", token: "token", fetcher: fetcher(30, 10) });
+  expect(await read(slow)).toEqual(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
+  // Nothing for 200 ms against an 80 ms stall: given up.
+  const stuck = archiveClient({ origin: "https://post.kualta.dev", token: "token", fetcher: fetcher(200, 3) });
+  await expect(read(stuck)).rejects.toThrow("timeout");
+});
