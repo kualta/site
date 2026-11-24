@@ -69,7 +69,7 @@ test("each switch says its state, the space where it takes clips from, what's le
     "Camera → Mac",
     "Done",
     "Start",
-    "Camera",
+    "Card",
     "109 of 112 GB · 97%",
     "To copy",
     "98 clips",
@@ -84,7 +84,7 @@ test("each switch says its state, the space where it takes clips from, what's le
     "Mac → Cloud",
     "Running",
     "Pause",
-    "Mac",
+    "Disk",
     "454 of 494 GB · 92%",
     "To send",
     "160 clips",
@@ -136,7 +136,7 @@ test("an unplugged camera, and a Mac or switch with nothing left, say so without
     "Camera → Mac",
     "Paused",
     "Start",
-    "Camera",
+    "Card",
     "Not plugged in",
     "To copy",
     "—",
@@ -267,6 +267,6 @@ test("a report kept from before the grade app said its space and what it's heard
     mac: { clips: 160, bytes: 38.7e9 },
   } as unknown as MacReport;
   const lines = says(heard(old, 20_000, { send: { want: "pause", at: 3 } }));
-  expect(laneOf(lines, "Camera → Mac", 5).slice(3)).toEqual(["Camera", "—"]);
+  expect(laneOf(lines, "Camera → Mac", 5).slice(3)).toEqual(["Card", "—"]);
   expect(laneOf(lines, "Mac → Cloud", 3)).toEqual(["Mac → Cloud", "Pausing…", "Start"]);
 });

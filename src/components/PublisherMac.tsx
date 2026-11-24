@@ -41,8 +41,8 @@ const STATES: Record<MacLaneState, string> = {
 };
 /** A switch that's on, whatever it's doing. */
 const ON: MacLaneState[] = ["running", "paused", "waiting", "stopping"];
-/** Where each switch takes its clips from, whose space it shows. */
-const FROM: Record<MacLaneName, string> = { copy: "Camera", send: "Mac" };
+/** Where each switch takes its clips from, whose space it shows: the whole volume, footage and everything else. */
+const FROM: Record<MacLaneName, string> = { copy: "Card", send: "Disk" };
 
 const gb = (bytes: number) => (bytes / 1e9).toFixed(1);
 /** GB as a volume's size is said: tenths below 100, whole above. */
@@ -143,6 +143,10 @@ function Lane({
   if (source && !unplugged) left = source.clips ? clips(source.clips) : "None";
   if (source && !unplugged && source.clips) leftBytes = `${gb(source.bytes)} GB`;
   const measuring = lane?.state === "running" ? "Measuring…" : "—";
+  // The bar is the whole volume: what's used, faint, and solid within it the footage still to go from it.
+  const percent = (bytes: number) => (space?.total ? Math.min(100, (bytes / space.total) * 100) : 0);
+  const toGo = source && !unplugged ? Math.min(source.bytes, space?.used ?? 0) : 0;
+  const leftLabel = name === "copy" ? "To copy" : "To send";
   return (
     <div className="publisher-mac-lane" role="group" aria-label={LANE_NAMES[name]} data-state={lane?.state}>
       <div className="publisher-mac-lane-head">
@@ -156,12 +160,17 @@ function Lane({
         <span>{FROM[name]}</span>
         <span>{spaceSays}</span>
       </div>
-      <div className="publisher-archive-bar" aria-hidden="true">
-        <span style={{ width: `${space ? share(space) : 0}%` }} />
+      <div
+        className="publisher-archive-bar publisher-mac-bar"
+        aria-hidden="true"
+        title={space ? `Solid: ${gb(toGo)} GB ${leftLabel.toLowerCase()}. Faint: everything else on it.` : undefined}
+      >
+        <span style={{ width: `${percent(space?.used ?? 0)}%` }} />
+        <span style={{ width: `${percent(toGo)}%` }} />
       </div>
       <dl>
         <div>
-          <dt>{name === "copy" ? "To copy" : "To send"}</dt>
+          <dt>{leftLabel}</dt>
           <dd>
             {left}
             <small>{leftBytes}</small>
