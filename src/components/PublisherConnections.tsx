@@ -82,7 +82,8 @@ export default function PublisherConnections({
       {[...platforms.filter((p) => p !== "bluesky"), ...archiveAccounts].map((platform: Account) => {
         const label = labelOf(platform);
         const ready = connected.includes(platform);
-        // Signed in again where it signed in first, without disconnecting: its queued posts stay queued meanwhile.
+        // Its profile on the laptop lost the sign-in. Sign in opens the same window as Connect without disconnecting,
+        // so its queued posts stay queued.
         const lost = ready && signedOut.includes(platform);
         const latest = connections.find(
           (c) => c.platform === platform || (platform === "grain" && c.platform === "bluesky"),

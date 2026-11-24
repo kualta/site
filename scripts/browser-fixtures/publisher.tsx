@@ -645,6 +645,7 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === `drafts/${chineseDraft.id}`) return json(chineseDraft);
   if (path.startsWith("drafts/")) return json({ error: "This draft has expired or was already posted" }, 404);
   if (path === "session") return json({ allowed: true, signedIn: true });
+  if (path === "accounts" && method === "POST") return json({ id: "00000000-0000-4000-8000-00000000c045" }, 201);
   if (path === "status")
     return json({
       helper: {

@@ -897,6 +897,9 @@ try {
   }
   await account("X / Twitter").getByText("Connected", { exact: true }).waitFor();
   assert.equal(await accounts.getByRole("button", { name: "Sign in", exact: true }).count(), 2);
+  // Every button turns on once the laptop is heard from, then fades in.
+  await page.waitForFunction(() => ![...document.querySelectorAll(".publisher-account button")].some((b) => b.disabled));
+  await page.waitForTimeout(300);
   if (shots) await page.screenshot({ path: path.join(shots, "accounts-signed-out.png"), fullPage: true });
   await page.evaluate(() => window.publisherRequests.splice(0));
   await account("Instagram").getByRole("button", { name: "Sign in", exact: true }).click();
@@ -908,6 +911,7 @@ try {
   // On a phone, Sign in comes beside Disconnect and the page still fits.
   await page.setViewportSize({ width: 320, height: 900 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.waitForTimeout(300);
   if (shots) await page.screenshot({ path: path.join(shots, "accounts-signed-out-320.png"), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
   // The footage card sends the owner to Accounts, and a post waits for its signed-out destination.
