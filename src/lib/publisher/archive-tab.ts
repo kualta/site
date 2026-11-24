@@ -1,4 +1,4 @@
-import { isClipName, isHash } from "./archive";
+import { isClipName, isHash, isProjectName } from "./archive";
 
 /*
  * The footage the grade app offloaded to the archive, for the Footage tab's player to find a clip in and watch it.
@@ -148,6 +148,20 @@ async function cachedListing(
   return new Response(text, { headers });
 }
 
+/**
+ * A film's manifest as last archived, streamed through as R2 hands it over: a film's names thousands of files (Studio's
+ * history among them), more than the Worker has the CPU to read.
+ */
+async function projectManifest(archive: ArchiveReader, name: string, now: number): Promise<Response> {
+  const latest = await latestVersion(archive, name, now);
+  const object = latest && (await archive.get(latest.key));
+  if (!object)
+    return Response.json({ error: "Not in the archive" }, { status: 404, headers: { "Cache-Control": "no-store" } });
+  return new Response(object.body, {
+    headers: { "Content-Type": "application/json", "Cache-Control": "private, max-age=60" },
+  });
+}
+
 /* ── files, by hash, with Range ─────────────────────────────────────────── */
 
 const TYPES: Record<string, string> = {
@@ -225,6 +239,7 @@ async function fileResponse(archive: ArchiveReader, request: Request, hash: stri
  *
  *   GET archive/days/<day>         the day's clips (ArchivedDay)
  *   GET archive/settings           the grade app's backed-up settings (ArchivedSettings)
+ *   GET archive/projects/<name>    a film's manifest as last archived, streamed (404 when it isn't archived)
  *   GET archive/files/<sha256>/<name>  a file, typed by its name's extension, with Range (HEAD too)
  */
 export async function archiveTabResponse(
@@ -250,5 +265,12 @@ export async function archiveTabResponse(
   }
   if (path === "archive/settings")
     return cachedListing(cache, origin, "settings", () => archivedSettings(archive, now));
+  const project = /^archive\/projects\/([^/]+)$/.exec(path)?.[1];
+  if (project !== undefined) {
+    // Shoot days' originals and the grade app's settings are projects too, `_` first, read by the routes above.
+    if (!isProjectName(project) || project.startsWith("_"))
+      return Response.json({ error: "Invalid project" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+    return projectManifest(archive, project, now);
+  }
   return null;
 }

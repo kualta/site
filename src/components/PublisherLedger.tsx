@@ -1,7 +1,16 @@
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { Fragment, type MouseEvent, type RefObject, useEffect, useRef, useState } from "react";
 import PublisherArchivePlayer from "./PublisherArchivePlayer";
-import { clipNumber, clock, readFootageView, writeFootageView } from "@/lib/publisher/archive-view";
-import type { Content } from "@/lib/publisher/content";
+import PublisherProject from "./PublisherProject";
+import {
+  clipNumber,
+  clock,
+  type FootageView,
+  filmLabel,
+  filmParts,
+  readFootageView,
+  writeFootageView,
+} from "@/lib/publisher/archive-view";
+import type { Content, PiecePost } from "@/lib/publisher/content";
 import {
   archiveCost,
   atRisk,
@@ -166,30 +175,35 @@ function Thumb({ clip, record, size, onPlay }: { clip: string; record: LedgerCli
   );
 }
 
-/** The films a clip is in, each linking to its post's numbers once a Pipeline piece made from it is posted. */
-function Films({
-  names,
-  posted,
-  statsHref,
-}: { names: string[]; posted: Map<string, string>; statsHref: Props["statsHref"] }) {
-  if (!names.length) return null;
+/** A click the page takes itself: one that a modifier or another button would send to a new tab or window. */
+const plainClick = (event: MouseEvent) =>
+  event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+
+/**
+ * The films a clip is in, each opening its page: "013 · maybe-later", or by their numbers when it's in several. When
+ * they change, the new list takes the old one's place, rather than a film's link sliding along to its new place in it.
+ */
+function Films({ names, onOpen }: { names: string[]; onOpen: (name: string) => void }) {
+  const sorted = [...names].sort();
+  const several = sorted.length > 1;
   return (
-    <span className="films">
-      {names.map((name, i) => {
-        const job = posted.get(name);
-        return (
-          <span key={name}>
-            {i ? ", " : " · in "}
-            {job ? (
-              <a href={statsHref(job)} title="Its post's numbers">
-                {name}
-              </a>
-            ) : (
-              name
-            )}
-          </span>
-        );
-      })}
+    <span key={sorted.join(" ")}>
+      {sorted.map((name, i) => (
+        <Fragment key={name}>
+          {i ? ", " : null}
+          <a
+            href={writeFootageView({ clip: null, day: null, project: name })}
+            title={several ? filmLabel(name) : undefined}
+            onClick={(event) => {
+              if (!plainClick(event)) return;
+              event.preventDefault();
+              onOpen(name);
+            }}
+          >
+            {several ? filmParts(name).number ?? name : filmLabel(name)}
+          </a>
+        </Fragment>
+      ))}
     </span>
   );
 }
@@ -199,12 +213,13 @@ function Columns() {
     <colgroup>
       <col style={{ width: 76 }} />
       <col />
-      <col style={{ width: 84 }} />
-      <col style={{ width: 112 }} />
+      <col style={{ width: 128 }} />
+      <col style={{ width: 72 }} />
+      <col style={{ width: 104 }} />
+      <col style={{ width: 68 }} />
+      <col style={{ width: 48 }} />
+      <col style={{ width: 60 }} />
       <col style={{ width: 76 }} />
-      <col style={{ width: 56 }} />
-      <col style={{ width: 64 }} />
-      <col style={{ width: 86 }} />
       <col style={{ width: 78 }} />
     </colgroup>
   );
@@ -215,6 +230,7 @@ function Heads() {
       <tr>
         <th>Recorded</th>
         <th>Clip</th>
+        <th>Project</th>
         <th>Profile</th>
         <th>Grade</th>
         <th className="mark first">Camera</th>
@@ -318,14 +334,21 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Each film's post, from the Pipeline piece with its number or that names it: read once, as nothing here changes them.
+  // What each post went out to, by its job, for a film's page; null until read, so a page opened by its address shows its
+  // post as it opens.
   const [posted, setPosted] = useState(new Map<string, string>());
+  const [posts, setPosts] = useState<Map<string, PiecePost> | null>(null);
   useEffect(() => {
     let active = true;
     Promise.all([request("footage/links"), request("content")])
       .then(([{ links }, { items }]: [{ links: Record<string, FootageLink> }, { items: Content[] }]) => {
-        if (active) setPosted(filmPosts(items, links));
+        if (!active) return;
+        setPosted(filmPosts(items, links));
+        setPosts(new Map(items.flatMap((piece) => (piece.job_id && piece.post ? [[piece.job_id, piece.post]] : []))));
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) setPosts(new Map());
+      });
     return () => {
       active = false;
     };
@@ -391,9 +414,13 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
   const films = filmsByClip(ledger);
 
   // The clip playing, by its address: the ledger's key and record of it, and the day the cloud files it under. A clip
-  // the ledger doesn't know opens only with a day in its address.
+  // the ledger doesn't know opens only with a day in its address. Or the film whose page is open.
   const view = readFootageView(search);
-  const go = (clip: string | null, replace = false) => onNavigate(writeFootageView({ clip, day: null }), replace);
+  const show = (shown: Partial<FootageView>, replace = false) =>
+    onNavigate(writeFootageView({ clip: null, day: null, project: null, ...shown }), replace);
+  const go = (clip: string | null, replace = false) => show({ clip }, replace);
+  const openFilm = view.project;
+  const openJob = openFilm ? posted.get(openFilm) : undefined;
   const openKey = view.clip ? ledgerKey(ledger, view.clip) : undefined;
   const openRecord = openKey ? ledger.clips[openKey] : undefined;
   const openStem = openKey ?? view.clip;
@@ -488,7 +515,7 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
             {[...days].map(([day, rows]) => (
               <tbody key={day} data-day={day}>
                 <tr className="day">
-                  <th colSpan={9} scope="colgroup">
+                  <th colSpan={10} scope="colgroup">
                     <span className="publisher-ledger-day">{dayText(day, rows.length)}</span>
                   </th>
                 </tr>
@@ -513,12 +540,16 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
                       }
                     >
                       <td className="dim">{c.recorded?.slice(11, 16) ?? ""}</td>
-                      <td className="clip" title={[c.name, ...(films.get(key) ?? [])].join(" · ")}>
+                      <td className="clip" title={c.name}>
                         <Thumb clip={key} record={c} size={size} onPlay={play} />
-                        <b>{clipNumber(c.name)}</b>
-                        {bytes ? <small>{fileSize(bytes)}</small> : null}
-                        {lost(c) ? <span className="note">No copy left</span> : null}
-                        <Films names={films.get(key) ?? []} posted={posted} statsHref={statsHref} />
+                        <span className="label">
+                          <b>{clipNumber(c.name)}</b>
+                          {bytes ? <small>{fileSize(bytes)}</small> : null}
+                          {lost(c) ? <span className="note">No copy left</span> : null}
+                        </span>
+                      </td>
+                      <td className="films">
+                        <Films names={films.get(key) ?? []} onOpen={(project) => show({ project })} />
                       </td>
                       <td className="dim">{(c.profile && PROFILES[c.profile]) ?? "—"}</td>
                       <td className={c.graded ? undefined : "dim"}>{gradeText(c)}</td>
@@ -558,6 +589,22 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
             go(null, true);
             onGrade(file);
           }}
+        />
+      )}
+      {/* A film's page waits for its post to be read, so it opens whole. */}
+      {openFilm && posts && (
+        <PublisherProject
+          key={openFilm}
+          name={openFilm}
+          project={ledger.projects?.[openFilm]}
+          clips={(ledger.projects?.[openFilm]?.clips ?? []).flatMap((key) =>
+            ledger.clips[key] ? [[key, ledger.clips[key]] as [string, LedgerClip]] : [],
+          )}
+          job={openJob}
+          post={openJob ? posts.get(openJob) : undefined}
+          statsHref={statsHref}
+          onClose={() => go(null)}
+          onClip={(clip) => go(clip)}
         />
       )}
     </section>

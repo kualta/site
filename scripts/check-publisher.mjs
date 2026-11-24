@@ -7,6 +7,7 @@ import ffmpeg from "ffmpeg-static";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 import { checkPlayer } from "./check-publisher-player.mjs";
+import { checkProject } from "./check-publisher-project.mjs";
 import { findShifts } from "./publisher-shifts.mjs";
 
 // Drives the publisher's composer with a mocked API: what each mix of text and media can reach, and what it queues.
@@ -1916,13 +1917,24 @@ try {
     await row("0258").getByRole("link", { name: "✓" }).waitFor();
     await row("0001").getByText("No copy left").waitFor();
     await row("IMG_4857").getByText("Not log").waitFor();
-    // Each clip names the films it's in; a film whose piece is posted links to the post's numbers.
-    await row("0402").getByText("· in 014-walk").waitFor();
+    // Each clip's films are a column of their own, each a link to its page: by number and name, or by number alone
+    // when the clip is in several. Its size stays beside its number.
+    assert.equal(await row("0402").locator("td.films").textContent(), "014 · walk");
+    assert.equal(await row("0402").locator("td.clip .label").textContent(), "04023.0 GB");
+    assert.deepEqual(await row("0258").locator("td.films a").allTextContents(), ["012", "013"]);
+    assert.equal(await row("0258").getByRole("link", { name: "013" }).getAttribute("title"), "013 · maybe-later");
+    assert.equal(await row("0001").locator("td.films").textContent(), "");
+    for (const [clip, link, film] of [
+      ["0086", "013 · maybe-later", "013-maybe-later"],
+      ["0258", "012", "012-noon"],
+    ])
+      assert.equal(await row(clip).getByRole("link", { name: link }).getAttribute("href"), `?project=${film}`);
     // Where each clip's original is, and its video on YouTube. Graded copies aren't kept, so none are shown: not the
     // exports on the Mac, nor an old film's copy in the cloud.
     assert.deepEqual(await ledger.locator(".publisher-ledger-scroll thead th").allTextContents(), [
       "Recorded",
       "Clip",
+      "Project",
       "Profile",
       "Grade",
       "Camera",
@@ -1950,10 +1962,6 @@ try {
     assert.deepEqual(await storage.nth(1).locator("small").allTextContents(), ["2 originals"]);
     // What keeping the footage in the cloud costs: R2 Infrequent Access, $0.01 a GB-month, none of it free.
     assert.deepEqual(await storage.nth(2).locator("small").allTextContents(), ["2 originals", "$0.06 a month"]);
-    assert.match(
-      await row("0258").getByRole("link", { name: "013-maybe-later" }).getAttribute("href"),
-      /\/analytics\?post=00000000-0000-4000-8000-000000000008$/,
-    );
     assert.equal(await row("0086").getByRole("button", { name: "Grade" }).isDisabled(), true);
     await ledger.locator(".publisher-ledger-thumb img").first().waitFor();
     assert.deepEqual(
@@ -2056,6 +2064,9 @@ try {
 
   // A clip's player in the Footage tab: its transcript and looks (scripts/check-publisher-player.mjs).
   await checkPlayer(browser, { composer: "http://127.0.0.1:8797/publisher.html", dir: clips, shots });
+  // A film's page, from the footage table's Project column: its outputs, its post and its clips
+  // (scripts/check-publisher-project.mjs).
+  await checkProject(browser, { composer: "http://127.0.0.1:8797/publisher.html", dir: clips, shots });
   // Scrolled, the column heads and the shoot day of the rows at the top stay at the top of the window: the day changes
   // as the next day's heading slides under it, and on a phone, where the table scrolls sideways in a box of its own,
   // the heads move sideways with it while the day stays at its left.

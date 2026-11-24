@@ -615,7 +615,7 @@ const ledger = {
     DJI_20261101090000_0001_D: ledgerClip("DJI_20261101090000_0001_D.MP4", "2026-11-01T09:00:00", {}),
     IMG_4857: ledgerClip("IMG_4857.MOV", "2026-10-30T20:15:04", { profile: "rec709", original: original(false, true) }),
   },
-  // A film being made on the Mac, and one archived since it was posted.
+  // A film being made on the Mac, one archived since it was posted, and an earlier one sharing a clip with it.
   projects: {
     "013-maybe-later": {
       clips: ["DJI_20261108122204_0086_D", "DJI_20261111161230_0258_D"],
@@ -623,6 +623,7 @@ const ledger = {
       archived: true,
     },
     "014-walk": { clips: ["DJI_20261120183012_0399_D", "DJI_20261121101500_0402_D"], local: true, archived: false },
+    "012-noon": { clips: ["DJI_20261111161230_0258_D"], local: false, archived: true },
   },
 };
 // Pipeline pieces' footage: a shoot day for the footage-ready walk, and the posted piece's film linked by name, as

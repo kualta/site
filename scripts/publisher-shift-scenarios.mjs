@@ -888,6 +888,76 @@ export const scenarios = [
       await sleep(1500);
     },
   },
+  // The table's Project column as the films its clips are in change: a clip joins a second film, one with a long name,
+  // and leaves them.
+  {
+    tab: "footage",
+    name: "follows its films",
+    run: async (page, { still }) => {
+      await still("clips join films and leave them");
+      for (const turn of [1, 2, 3]) {
+        await page.evaluate((turn) => {
+          window.publisherFixture.change = (path, value) => {
+            if (path !== "footage/ledger") return value;
+            value.updatedAt = new Date().toISOString();
+            if (turn === 1)
+              value.projects["015-a-long-walk-through-the-night-market"] = {
+                clips: ["DJI_20261121101500_0402_D", "DJI_20261108122204_0086_D"],
+                local: true,
+                archived: false,
+              };
+            if (turn === 2) {
+              const { "012-noon": _, ...rest } = value.projects;
+              value.projects = rest;
+            }
+            if (turn === 3) value.projects = {};
+            return value;
+          };
+        }, turn);
+        await sleep(2400);
+      }
+    },
+  },
+  // A film's page, opened from the table: its outputs from the archive, playing in place, its post and its clips.
+  {
+    tab: "footage",
+    name: "opens a film and plays its outputs",
+    routes: (page, { media }) =>
+      page.route("**/api/publisher/archive/files/**", (route) =>
+        route.fulfill({ contentType: media.tall.mimeType, body: media.tall.buffer }).catch(() => {}),
+      ),
+    run: async (page, { opens, still, step }) => {
+      await opens("opens the film");
+      await page.getByRole("link", { name: "013 · maybe-later" }).first().click();
+      await sleep(1500);
+      await still("reads its outputs' lengths");
+      await sleep(1500);
+      const film = page.getByRole("dialog");
+      for (const output of ["Render", "Chinese"]) {
+        await step(`plays the ${output === "Render" ? "render" : "Chinese render"}`);
+        await film.locator(`video[aria-label="${output}"]`).evaluate((video) => video.play());
+        await sleep(900);
+      }
+      await opens("opens one of its clips");
+      await film.getByRole("button", { name: "Play clip 0086" }).click();
+      await sleep(1500);
+      await opens("comes back to the film");
+      await page.goBack();
+      await sleep(1500);
+      await step("closes it");
+      await page.keyboard.press("Escape");
+      await sleep(900);
+    },
+  },
+  {
+    tab: "footage",
+    name: "loads a film's page",
+    query: { project: "013-maybe-later" },
+    routes: (page, { media }) =>
+      page.route("**/api/publisher/archive/files/**", (route) =>
+        route.fulfill({ contentType: media.tall.mimeType, body: media.tall.buffer }).catch(() => {}),
+      ),
+  },
 
   // Grade.
   {
