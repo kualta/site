@@ -67,7 +67,8 @@ The links record holds the contact list in display order and the armored PGP pub
 key, so it can be read without the website.
 
 They are synced by their own deployment step, `bun run atproto:publish:profile`,
-after the articles and music, so a problem here does not hold those back. These
+after the articles and music, so a problem here does not hold those back. It runs
+even when an earlier step failed, so a music stop does not hold these back either. These
 records are part of the generated manifest, so `bun run atproto:preview`
 lists them, `bun run atproto:verify` compares them with the PDS, and they are synced
 only once the deployed site serves the same snapshot. They follow the article
@@ -76,6 +77,10 @@ write. Removing a project or a `dev.kualta.*` lexicon file stops the sync and li
 the stale URIs; delete those records explicitly, then rerun the workflow. Adding a
 lexicon file under `scripts/lexicons/` with a `dev.kualta.` name publishes its schema
 on the next deploy.
+
+`dev.kualta.track` is another: its schema is published here, and its records (lyrics,
+scores and authorship, one per track) by `bun run music:publish`. See "Lyrics and
+scores" in `docs/music-publishing.md`.
 
 `dev.kualta.post` is one of those lexicons, so its schema is published here, but its
 records are not part of this sync: the publisher's laptop helper writes one per
