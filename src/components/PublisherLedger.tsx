@@ -7,6 +7,7 @@ import {
   atRisk,
   dayOf,
   type FootageLink,
+  filmPosts,
   filmsByClip,
   type Ledger,
   type LedgerClip,
@@ -316,18 +317,13 @@ function Pinned({
 export default function PublisherLedger({ request, uploading, onGrade, statsHref, search, onNavigate }: Props) {
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Each film's post, from the Pipeline pieces that name it: read once, as nothing here changes them.
+  // Each film's post, from the Pipeline piece with its number or that names it: read once, as nothing here changes them.
   const [posted, setPosted] = useState(new Map<string, string>());
   useEffect(() => {
     let active = true;
     Promise.all([request("footage/links"), request("content")])
       .then(([{ links }, { items }]: [{ links: Record<string, FootageLink> }, { items: Content[] }]) => {
-        const films = new Map<string, string>();
-        for (const piece of items) {
-          const film = links[piece.id]?.project;
-          if (film && piece.stage === "posted" && piece.job_id) films.set(film, piece.job_id);
-        }
-        if (active) setPosted(films);
+        if (active) setPosted(filmPosts(items, links));
       })
       .catch(() => {});
     return () => {

@@ -67,6 +67,57 @@ export function ledgerKey(ledger: Ledger, stem: string) {
   return Object.keys(ledger.clips).find((key) => key.toLowerCase() === lower);
 }
 
+/** A film's number, from its folder's name (017-big-cookie), or null for a name without one. */
+export function filmNumber(name: string) {
+  const match = /^(\d{3,})-/.exec(name);
+  return match ? Number(match[1]) : null;
+}
+
+/** The ledger's film made from the piece numbered `number`: the one whose name starts with it. */
+export function numberedFilm(number: number | null, ledger: Ledger | null) {
+  if (number === null) return undefined;
+  return Object.keys(ledger?.projects ?? {}).find((name) => filmNumber(name) === number);
+}
+
+/**
+ * A piece's footage: the film it was linked to by name, as pieces were before they had numbers; else the film with its
+ * number, once the ledger has it; else the shoot day it was linked to before there was a film.
+ */
+export function pieceFootage(
+  number: number | null,
+  link: FootageLink | undefined,
+  ledger: Ledger | null,
+): FootageLink | undefined {
+  if (link?.project) return link;
+  const film = numberedFilm(number, ledger);
+  if (film) return { project: film };
+  return link?.day ? link : undefined;
+}
+
+/**
+ * Each film's post, by the film's name: the post its piece went out as. A film's piece is the one with its number, or
+ * one linked to it by name; `get` finds either.
+ */
+export function filmPosts(
+  pieces: { id: string; number: number | null; stage: string; job_id: string | null }[],
+  links: Record<string, FootageLink>,
+): Map<string, string> {
+  const byName = new Map<string, string>();
+  const byNumber = new Map<number, string>();
+  for (const piece of pieces) {
+    if (piece.stage !== "posted" || !piece.job_id) continue;
+    const film = links[piece.id]?.project;
+    if (film) byName.set(film, piece.job_id);
+    if (piece.number !== null) byNumber.set(piece.number, piece.job_id);
+  }
+  return new (class extends Map<string, string> {
+    get(film: string) {
+      const number = filmNumber(film);
+      return super.get(film) ?? (number === null ? undefined : byNumber.get(number));
+    }
+  })(byName);
+}
+
 /** The clips a piece's footage is, or null when it names none or the film isn't in the ledger yet. */
 export function linkedClips(link: FootageLink | undefined, ledger: Ledger | null): LedgerClip[] | null {
   if (!link || !ledger) return null;

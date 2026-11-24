@@ -42,7 +42,7 @@ import type { Draft } from "@/lib/publisher/drafts";
 import { describeProgress, readWithProgress } from "@/lib/publisher/download";
 import { frameAt } from "@/lib/publisher/frame";
 import { coverPlatforms, locationPlatforms, MAX_LOCATION, validatePost, validId } from "@/lib/publisher/server";
-import { stageNames, stages, type Content } from "@/lib/publisher/content";
+import { pieceLabel, stageNames, stages, type Content } from "@/lib/publisher/content";
 import { parseTags, problem, renderVariant, usage, type Variant } from "@/lib/publisher/variants";
 import { readPath, tabPath, type Tab } from "@/lib/publisher/route";
 import { readFootageView, writeFootageView } from "@/lib/publisher/archive-view";
@@ -1613,7 +1613,7 @@ export default function Publisher({
                       <optgroup key={stage} label={stageNames[stage]}>
                         {here.map((piece) => (
                           <option key={piece.id} value={piece.id}>
-                            {piece.title}
+                            {pieceLabel(piece)}
                           </option>
                         ))}
                       </optgroup>

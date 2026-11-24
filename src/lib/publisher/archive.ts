@@ -195,9 +195,13 @@ function md5Of(object: unknown): string | null {
   return isMd5(etag) ? etag : null;
 }
 
-/** A post that holds a file the laptop asked about. */
+/**
+ * A post the laptop asked about: one holding a file of its (`md5`), or the one the piece numbered as one of its films
+ * went out as (`number`).
+ */
 export interface PostedUpload {
-  md5: string;
+  md5: string | null;
+  number?: number;
   job: string;
   queuedAt: number;
   platforms: { platform: string; state: string }[];
@@ -207,35 +211,55 @@ export interface PostedUpload {
  * Which of `md5s`, the MD5s of files on the laptop, are videos of a post that went out or is set to: one with a
  * destination that succeeded or is queued or working, as a scheduled post waits. A post whose every destination failed
  * doesn't count. Each video's MD5 is read from the media bucket, or from the archive's copy once that has expired.
+ * `numbers`, films' numbers, add the post each of those pieces went out as, by the same measure: a film is the piece
+ * with its number, whatever video its post holds.
  */
 export async function postedUploads(
   db: NewsletterDB,
   media: Pick<MediaBucket, "head">,
   archive: ArchiveBucket,
   md5s: unknown,
+  numbers: unknown = [],
 ): Promise<PostedUpload[]> {
   if (!Array.isArray(md5s) || md5s.length > 1000 || !md5s.every(isMd5))
     throw new ArchiveError("Send up to 1000 MD5s, each as 32 hexadecimal digits");
+  if (!Array.isArray(numbers) || numbers.length > 50 || !numbers.every((n) => Number.isSafeInteger(n) && n > 0))
+    throw new ArchiveError("Send up to 50 film numbers");
   const wanted = new Set(md5s);
-  const { results } = await db
-    .prepare(
-      `SELECT j.id, j.payload, j.created_at, t.platform, t.state FROM publisher_jobs j
-       JOIN publisher_targets t ON t.job_id = j.id
-       WHERE j.id IN (SELECT job_id FROM publisher_targets WHERE state IN ('queued','working','succeeded'))`,
-    )
-    .all<{ id: string; payload: string; created_at: number; platform: string; state: string }>();
+  const [{ results }, { results: pieces }] = await Promise.all([
+    db
+      .prepare(
+        `SELECT j.id, j.payload, j.created_at, t.platform, t.state FROM publisher_jobs j
+         JOIN publisher_targets t ON t.job_id = j.id
+         WHERE j.id IN (SELECT job_id FROM publisher_targets WHERE state IN ('queued','working','succeeded'))`,
+      )
+      .all<{ id: string; payload: string; created_at: number; platform: string; state: string }>(),
+    numbers.length
+      ? db
+          .prepare(`SELECT number, job_id FROM publisher_content WHERE number IN (${numbers.map(() => "?").join(",")})`)
+          .bind(...numbers)
+          .all<{ number: number; job_id: string | null }>()
+      : { results: [] },
+  ]);
   const jobs = new Map<string, { payload: string; queuedAt: number; platforms: PostedUpload["platforms"] }>();
   for (const row of results) {
     const job = jobs.get(row.id) ?? { payload: row.payload, queuedAt: row.created_at, platforms: [] };
     job.platforms.push({ platform: row.platform, state: row.state });
     jobs.set(row.id, job);
   }
-  const videos = [...jobs].flatMap(([job, { payload, queuedAt, platforms }]) =>
-    postUploads(JSON.parse(payload) as Post)
-      .filter((upload) => upload.kind === "video" && validId(upload.id))
-      .map((upload) => ({ upload: upload.id, job, queuedAt, platforms })),
-  );
   const posted: PostedUpload[] = [];
+  for (const { number, job_id: job } of pieces) {
+    const found = job ? jobs.get(job) : undefined;
+    if (job && found) posted.push({ md5: null, number, job, queuedAt: found.queuedAt, platforms: found.platforms });
+  }
+  // Asked only by number, no upload needs reading.
+  const videos = wanted.size
+    ? [...jobs].flatMap(([job, { payload, queuedAt, platforms }]) =>
+        postUploads(JSON.parse(payload) as Post)
+          .filter((upload) => upload.kind === "video" && validId(upload.id))
+          .map((upload) => ({ upload: upload.id, job, queuedAt, platforms })),
+      )
+    : [];
   await each(videos, async ({ upload, job, queuedAt, platforms }) => {
     const md5 = md5Of((await media.head(upload)) ?? (await archive.head(mediaKey(upload))));
     if (md5 && wanted.has(md5)) posted.push({ md5, job, queuedAt, platforms });
@@ -430,8 +454,9 @@ export async function readManifest(archive: ArchiveBucket, name: string, at?: st
  *   GET    projects                   { projects: [{ name, archivedAt, versions }] }
  *   GET    projects/<name>?at=…       the manifest as last archived, or as archived at that time
  *   POST   media                      archives the uploads of every post queued in the last 31 days
- *   POST   posted                     { md5s: [md5] } → { posted: [{ md5, job, queuedAt, platforms }] }: the posts,
- *                                      published or scheduled, whose videos are those files
+ *   POST   posted                     { md5s: [md5], numbers?: [n] } → { posted: [{ md5, number?, job, queuedAt,
+ *                                      platforms }] }: the posts, published or scheduled, whose videos are those
+ *                                      files, or that the pieces with those films' numbers went out as
  *   GET    ledger                     the footage ledger, as the grade app last sent it (404 before the first)
  *   PUT    ledger                     the footage ledger, whole: the grade app is its only writer
  *   PUT    ledger/thumbs/<clip>       a clip's small picture (JPEG), for the composer's Footage tab
@@ -516,8 +541,8 @@ export async function archiveResponse(
     }
     if (rest === "media" && method === "POST") return json(await archiveRecentPosts(db, media, archive));
     if (rest === "posted" && method === "POST") {
-      const { md5s } = (await request.json()) as { md5s?: unknown };
-      return json({ posted: await postedUploads(db, media, archive, md5s) });
+      const { md5s, numbers } = (await request.json()) as { md5s?: unknown; numbers?: unknown };
+      return json({ posted: await postedUploads(db, media, archive, md5s, numbers) });
     }
     return json({ error: "Not found" }, 404);
   } catch (error) {

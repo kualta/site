@@ -10,6 +10,7 @@ import {
   type Platform,
   type PostKind,
 } from "@/lib/publisher/presets";
+import { pieceNumber } from "@/lib/publisher/content";
 import { publicationLink } from "@/lib/publisher/links";
 import { localInput } from "@/lib/publisher/schedule";
 import { coverPlatforms, STOPPED_BEFORE } from "@/lib/publisher/server";
@@ -44,6 +45,8 @@ type Target = {
 type Post = {
   id: string;
   created_at: number;
+  /** The number of the Pipeline piece it went out as, when that has one. */
+  number?: number | null;
   post: {
     title: string;
     caption: string;
@@ -679,6 +682,7 @@ export default function PublisherHistory({
         <div className="publisher-history-body">
           <div className="publisher-history-head">
             <p className="publisher-history-text" data-title={Boolean(title)}>
+              {post.number ? `${pieceNumber(post.number)} · ` : ""}
               {title || caption}
             </p>
             <time dateTime={new Date(post.created_at).toISOString()}>
