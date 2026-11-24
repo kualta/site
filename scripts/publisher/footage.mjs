@@ -529,6 +529,7 @@ export async function footageStatus({
   speed = null,
   busy = false,
   held = false,
+  failure = null,
   now = Date.now(),
 }) {
   const state = await readState(stateDir);
@@ -573,6 +574,8 @@ export async function footageStatus({
   if (busy) phase = "busy";
   // Paused from the Footage tab: the clip in flight, if any, is held after its part.
   else if (held) phase = "held";
+  // Nothing can go up at all, the channel's session gone say: the tab says why rather than that it's starting.
+  else if (failure) phase = "failed";
   else if (progress) phase = "uploading";
   else if (pausedUntil) phase = "paused";
   else if (!due.length) phase = "done";
@@ -583,6 +586,7 @@ export async function footageStatus({
     daily,
     today,
     state: phase,
+    error: phase === "failed" ? failure : null,
     pausedUntil,
     lastError: pausedUntil ? state.lastError ?? null : null,
     current: progress ? { ...progress, title: clipTitle(progress.name) } : null,
@@ -643,6 +647,8 @@ export async function watchedFootage({
   let missed = 0;
   /** Paused from the Footage tab, as the site's last answer says. */
   let held = false;
+  /** What stopped the last round before any clip could go (the channel's session gone, say), till one gets past it. */
+  let failure = null;
   let archived = [];
   if (request)
     archived = await archiveFootage(request, await exportRecords(exportsFile)).catch((error) => {
@@ -661,6 +667,7 @@ export async function watchedFootage({
         speed: meter.speed,
         busy,
         held,
+        failure,
         now: now(),
       });
       const { watching, paused } = await ask(status);
@@ -710,8 +717,11 @@ export async function watchedFootage({
           progress: (upload) => meter.update(upload),
           ready,
         });
+        failure = null;
       } catch (error) {
-        log(`Footage archive: ${error.message}`);
+        // Said once, and to the tab, rather than every round.
+        if (error.message !== failure) log(`Footage archive: ${error.message}`);
+        failure = error instanceof Stopped ? null : error.message;
         done = { uploaded: 0 };
       }
       meter.clear();
