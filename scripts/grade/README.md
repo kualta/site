@@ -134,6 +134,18 @@ site run locally on port 4321). In the frame the app says it's there, opens the 
 asks for (`#clip=<file>` in its address, or a message; `/api/find` says which day holds it), takes the composer's light
 or dark, and says how far its offload and export are, each time it reads `/api/jobs`, for the composer's title.
 
+**The Footage tab's player.** A clip opened in the Footage tab plays from here when the ledger has its original on this
+Mac or the card and the browser can reach the app (the Mac's own, with local network access allowed), free and at once;
+otherwise from Cloudflare, if it's there; otherwise the player says where it is ("It's on the Mac. Open this page
+there…"). `GET /footage/<clip>` says what the clip is (its file, on the Mac or the camera, its day, size, recorded time,
+profile, duration, the camera's white balance, its grade as saved here, and whether its transcript is here);
+`/footage/<clip>/original` streams it, seekable; `/footage/<clip>/transcript.vtt` is its transcript from
+`transcripts/`. `<clip>` is a file's name, with or without its extension and in any case, and only a clip the app lists
+(`Original/`, `Preexp/`, the card) is served. It's read only, and only for the composer: a request has to carry
+`Origin: https://post.kualta.dev` (or `http://localhost:4321`), which the answer allows by CORS so the player can draw
+the clip on its GPU. Any other origin, or none (a plain `<video>` or link on some other page), gets a 403. A preflight is
+answered for `Range`, and for Chrome's private network ask.
+
 **The offload in the Footage tab.** The status line says the offload short, "Offloading 7 / 167 · 12.1 h left" (the
 clips sent of those to send, or with only Camera → Mac on, copied of those to copy; then the time left, or what holds
 it: paused, waiting for the camera, can't reach Cloudflare, waiting for room, stopping). It's a link to the composer's

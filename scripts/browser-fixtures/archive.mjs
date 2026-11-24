@@ -74,6 +74,44 @@ export const archiveSettings = {
   files: Object.fromEntries(Object.entries(files).map(([sha256, file]) => [file.path, { sha256, size: 1 }])),
 };
 
+/** The clip the checks play off the Mac: the ledger has it there alone, graded there and not backed up yet. */
+export const ON_MAC = "DJI_20261120183012_0399_D";
+export const MAC_GRADE = { base: "fujifilm-velvia", exposure: -0.3, kelvin: 5000 };
+export const MAC_KELVIN = 5400;
+const macClips = {
+  [ON_MAC]: {
+    name: `${ON_MAC}.MP4`,
+    on: "mac",
+    day: "2026-11-20",
+    size: 3_000_000_000,
+    recorded: "2026-11-20T18:30:12",
+    profile: "dlog2",
+    duration: 4,
+    cameraKelvin: MAC_KELVIN,
+    grade: MAC_GRADE,
+    transcript: true,
+  },
+};
+
+/**
+ * What the grade app on the Mac answers the composer's player (scripts/grade/server.mjs), to a Playwright route: what a
+ * clip it has is, its original (`original`, a { mimeType, buffer } to play) and its transcript, allowed to the page
+ * asking. As the app does, it refuses a request that names no origin, and says it hasn't any other clip.
+ */
+export async function macAnswer(route, original) {
+  const request = route.request();
+  const origin = await request.headerValue("origin");
+  if (!origin) return route.fulfill({ status: 403, contentType: "application/json", body: '{"error":"no origin"}' });
+  const headers = { "Access-Control-Allow-Origin": origin, Vary: "Origin" };
+  const asked = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt))?$/.exec(new URL(request.url()).pathname);
+  const clip = asked && macClips[decodeURIComponent(asked[1])];
+  if (!clip)
+    return route.fulfill({ status: 404, headers, contentType: "application/json", body: '{"error":"not here"}' });
+  if (asked[2] === "original") return route.fulfill({ headers, contentType: original.mimeType, body: original.buffer });
+  if (asked[2]) return route.fulfill({ headers, contentType: "text/vtt", body: VTT });
+  return route.fulfill({ headers, contentType: "application/json", body: JSON.stringify(clip) });
+}
+
 /** What the archive routes answer, or null for any other path. */
 export function archiveAnswer(path) {
   const day = /^archive\/days\/(.+)$/.exec(path)?.[1];

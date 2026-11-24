@@ -627,6 +627,8 @@ const links: Record<string, { project?: string; day?: string }> = {
 const realFetch = window.fetch.bind(window);
 const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const url = new URL(String(input), location.href);
+  // The grade app on the Mac answers for itself: each check stands in for it.
+  if (url.origin === "http://127.0.0.1:4777") return realFetch(input, init);
   const path = url.pathname.replace("/api/publisher/", "");
   const method = init.method || "GET";
   const body = typeof init.body === "string" ? JSON.parse(init.body) : null;

@@ -1,4 +1,5 @@
 /** What the post app is put through to see that nothing on it moves by itself (publisher-shifts.mjs runs these). */
+import { macAnswer, ON_MAC } from "./browser-fixtures/archive.mjs";
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const draftId = "00000000-0000-4000-8000-00000000d1af";
@@ -848,6 +849,43 @@ export const scenarios = [
       await step("seeks from the transcript");
       await player.getByRole("button", { name: /Let's walk/ }).click();
       await sleep(900);
+    },
+  },
+  // A clip on the Mac, played from the grade app there.
+  {
+    tab: "footage",
+    name: "watches a clip on the Mac",
+    query: { clip: ON_MAC },
+    init: () => {
+      const can = HTMLMediaElement.prototype.canPlayType;
+      HTMLMediaElement.prototype.canPlayType = function (type) {
+        return /hvc1|hev1/.test(type) ? "probably" : can.call(this, type);
+      };
+    },
+    routes: (page, { media }) =>
+      page.route("http://127.0.0.1:4777/footage/**", (route) => macAnswer(route, media.wide).catch(() => {})),
+    run: async (page, { still, step }) => {
+      const player = page.getByRole("dialog");
+      await page.waitForFunction(() => document.querySelector(".publisher-archive-stage video")?.currentTime > 0);
+      await still("plays from the Mac, its lines said over it");
+      await sleep(2000);
+      for (const look of ["Log", "Its grade"]) {
+        await step(`picks ${look}`);
+        await player.getByRole("group", { name: "Look" }).getByRole("button", { name: look }).click();
+        await sleep(900);
+      }
+    },
+  },
+  // The same away from the Mac: it says where the clip is.
+  {
+    tab: "footage",
+    name: "can't reach the Mac for a clip there",
+    query: { clip: ON_MAC },
+    grade: false,
+    run: async (page, { still }) => {
+      await still("says to open it on the Mac");
+      await page.getByRole("dialog").getByRole("button", { name: "Try again" }).click({ timeout: 3000 });
+      await sleep(1500);
     },
   },
 

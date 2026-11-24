@@ -26,7 +26,7 @@ export function recordedAt(name, fallback = null) {
 }
 
 /** A time as a local clock reads it, like the camera's in a DJI name: "2026-11-11T16:12:30". */
-function localTime(ms) {
+export function localTime(ms) {
   const d = new Date(ms);
   const two = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(
