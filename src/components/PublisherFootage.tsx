@@ -26,7 +26,9 @@ export interface FootageStatus {
   daily: number;
   today: number;
   /** `held`: paused from this tab, with the clip in flight, if any, held after its part. */
-  state: "uploading" | "waiting" | "done" | "limit" | "paused" | "busy" | "held";
+  state: "uploading" | "waiting" | "done" | "limit" | "paused" | "busy" | "held" | "failed";
+  /** Why nothing can go up, while the state is failed. */
+  error?: string | null;
   pausedUntil: number | null;
   lastError: { clip: string; message: string; at: string } | null;
   current: { name: string; title: string; size: number; sent: number; from: string } | null;
@@ -101,6 +103,11 @@ function noticeFor(
   switch (status.state) {
     case "paused":
       return { text: failedText(status), tone: "bad" };
+    case "failed": {
+      const error = status.error ?? "Can't upload.";
+      // The channel signed out is fixed in Accounts.
+      return { text: error, tone: "bad", accounts: /session is gone|connect/i.test(error) };
+    }
     case "limit":
       return { text: "Daily limit reached. More tomorrow." };
     case "busy":

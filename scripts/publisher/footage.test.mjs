@@ -693,3 +693,38 @@ test("a shoot day's offloaded originals and their transcripts aren't graded foot
       : { files: projects[path.slice("projects/".length)] };
   expect((await archiveFootage(request)).map((clip) => clip.name)).toEqual(["DJI_20261115224628_0313_D.mp4"]);
 });
+
+test("a round that can't start, the channel signed out, tells the tab why, and the log once", async () => {
+  const root = await mkdtemp(join(tmpdir(), "footage-"));
+  try {
+    const { stateDir, exported, exportsFile } = await footage(root);
+    const gone = "The footage channel's session is gone: connect the YouTube footage archive again";
+    const statuses = [];
+    const ask = async (status) => {
+      statuses.push(status);
+      return { watching: statuses.length < 6 };
+    };
+    const lines = [];
+    await watchedFootage({
+      stateDir,
+      config: { footage: { channel: "@archive" } },
+      ask,
+      connect: async () => {
+        throw new Error(gone);
+      },
+      exported,
+      exportsFile,
+      log: (line) => lines.push(line),
+      wait: tick,
+    });
+    // Not just "waiting", which the tab shows as starting: what's in the way. (A report already under way as a round
+    // fails can land after it, still waiting; the next says it.)
+    expect(statuses[0]).toMatchObject({ state: "waiting", error: null });
+    const failed = statuses.filter((status) => status.state === "failed");
+    expect(failed.length).toBeGreaterThan(0);
+    for (const status of failed) expect(status).toMatchObject({ error: gone, totals: { due: 2 } });
+    expect(lines.filter((line) => line.includes("session is gone"))).toHaveLength(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
