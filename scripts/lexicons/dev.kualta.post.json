@@ -39,12 +39,50 @@
             "accept": ["image/jpeg", "image/png", "image/webp"],
             "maxSize": 200000
           },
+          "media": {
+            "type": "array",
+            "description": "The post's photos or its video, as a copy that is up shows them, in order.",
+            "maxLength": 20,
+            "items": { "type": "union", "refs": ["#image", "#video"] }
+          },
           "syndication": {
             "type": "array",
             "description": "The copies of this post that are up now.",
             "items": { "type": "ref", "ref": "#copy" }
           }
         }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["image"],
+      "properties": {
+        "image": { "type": "blob", "accept": ["image/*"], "maxSize": 2000000 },
+        "alt": { "type": "string", "description": "What the picture shows, for those who can't see it." },
+        "aspectRatio": { "type": "ref", "ref": "#aspectRatio" }
+      }
+    },
+    "video": {
+      "type": "object",
+      "required": ["video"],
+      "properties": {
+        "video": { "type": "blob", "accept": ["video/mp4"], "maxSize": 300000000 },
+        "alt": {
+          "type": "string",
+          "description": "What the video shows, for those who can't see it.",
+          "maxLength": 10000,
+          "maxGraphemes": 1000
+        },
+        "aspectRatio": { "type": "ref", "ref": "#aspectRatio" }
+      }
+    },
+    "aspectRatio": {
+      "type": "object",
+      "description": "Width to height, in any unit.",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
       }
     },
     "copy": {

@@ -35,11 +35,63 @@ function recordUri(platform, url) {
   return match ? `at://${match[1]}/${type}/${match[2]}` : undefined;
 }
 
+const feedPost = "app.bsky.feed.post";
+const blob = (value) => value?.$type === "blob" && typeof value.ref?.$link === "string";
+const described = ({ alt, aspectRatio }) => ({
+  ...(alt ? { alt } : {}),
+  ...(aspectRatio ? { aspectRatio: { width: aspectRatio.width, height: aspectRatio.height } } : {}),
+});
+/** The photos or video a Bluesky post's embed holds, as `media` items pointing at the same blobs. */
+export function embedMedia(embed) {
+  const held = embed?.$type === "app.bsky.embed.recordWithMedia" ? embed.media : embed;
+  if (held?.$type === "app.bsky.embed.images")
+    return held.images
+      .filter((item) => blob(item.image))
+      .map((item) => ({ $type: `${collection}#image`, image: item.image, ...described(item) }));
+  if (held?.$type === "app.bsky.embed.video" && blob(held.video))
+    return [{ $type: `${collection}#video`, video: held.video, ...described(held) }];
+  return [];
+}
+
+/**
+ * A post with the media its record may hold, or with `noMedia` saying why it holds none. A record can point at any
+ * blob its repository stores, so the photos or video of the Bluesky copy that is up are reused as they are: nothing is
+ * uploaded, and nothing is shown that the copy doesn't show already. The archive's uploads are never sent, since they
+ * are the camera's files and nothing here can tell which of them a copy elsewhere shows.
+ */
+export async function withMedia({ media: _, ...source }, pds, fetcher = fetch) {
+  const live = source.targets.filter((target) => !target.deleted);
+  if (!live.length || source.post.kind === "text") return source;
+  const prefix = `at://${owner}/${feedPost}/`;
+  const posts = live
+    .map((target) => recordUri(target.platform, target.url))
+    .filter((uri) => uri?.startsWith(prefix))
+    .map((uri) => uri.slice(prefix.length));
+  if (!posts.length)
+    return {
+      ...source,
+      noMedia: `no Bluesky copy is up, and the archive's uploads can't be shown to match what ${live
+        .map((target) => target.platform)
+        .join(", ")} shows`,
+    };
+  let found = false;
+  for (const rkey of posts) {
+    const post = await readRecord(pds, feedPost, rkey, fetcher);
+    const media = embedMedia(post?.value.embed);
+    if (media.length) return { ...source, media };
+    found ||= !!post;
+  }
+  return {
+    ...source,
+    noMedia: found ? "the Bluesky copy holds no photos or video" : "the Bluesky copy is gone from the repository",
+  };
+}
+
 /**
  * The record a post should have, or null when none of its copies is up. Each field is taken by name, from what the
  * site says the copies that are up show (`src/lib/publisher/post-records.ts`); nothing else a post holds is public.
  */
-export function buildPostRecord({ post, targets, thumbnail, created_at }) {
+export function buildPostRecord({ post, targets, thumbnail, media, created_at }) {
   const live = targets.filter((target) => !target.deleted);
   if (!live.length) return null;
   // Deleted copies count, so taking the first one down doesn't move the post's date.
@@ -61,6 +113,7 @@ export function buildPostRecord({ post, targets, thumbnail, created_at }) {
           },
         }
       : {}),
+    ...(media?.length ? { media } : {}),
     syndication: live.map((target) => {
       const uri = recordUri(target.platform, target.url);
       return {
@@ -156,8 +209,8 @@ export function carriesMetadata(bytes) {
 }
 
 const xrpc = (pds, method, query) => new URL(`/xrpc/com.atproto.repo.${method}?${new URLSearchParams(query)}`, pds);
-/** A post's record as the repository holds it now. Records are public, so reading one takes no sign-in. */
-export async function readPostRecord(pds, rkey, fetcher = fetch) {
+/** A record as the owner's repository holds it now. Records are public, so reading one takes no sign-in. */
+async function readRecord(pds, collection, rkey, fetcher) {
   const response = await fetcher(xrpc(pds, "getRecord", { repo: owner, collection, rkey }), {
     signal: AbortSignal.timeout(30_000),
   });
@@ -166,6 +219,7 @@ export async function readPostRecord(pds, rkey, fetcher = fetch) {
   if (data.error === "RecordNotFound") return null;
   throw new Error(`The repository could not be read (${response.status}${data.message ? `: ${data.message}` : ""})`);
 }
+export const readPostRecord = (pds, rkey, fetcher = fetch) => readRecord(pds, collection, rkey, fetcher);
 export async function listPostRecords(pds, fetcher = fetch) {
   const found = new Map();
   let cursor;
@@ -253,9 +307,21 @@ export async function reconcilePostRecords({ api, job, authorization, fetcher = 
     ? new Map([[postRecordKey(job), await readPostRecord(pds, postRecordKey(job), fetcher)]])
     : await listPostRecords(pds, fetcher);
   const counts = { create: 0, update: 0, delete: 0, none: 0, failed: 0, orphans: 0 };
-  for (const source of sources) {
-    const plan = planPostRecord(source, existing.get(postRecordKey(source.id)));
-    existing.delete(plan.rkey);
+  for (const bare of sources) {
+    const rkey = postRecordKey(bare.id);
+    const held = existing.get(rkey);
+    existing.delete(rkey);
+    let source;
+    try {
+      source = await withMedia(bare, pds, fetcher);
+    } catch (error) {
+      // Planning without its media would take the media off the record.
+      counts.failed++;
+      log(`FAILED ${rkey} ${bare.id}: ${error.message}`);
+      continue;
+    }
+    if (source.noMedia) log(`no media for ${rkey} ${source.id} ${label(source)}: ${source.noMedia}`);
+    const plan = planPostRecord(source, held);
     if (plan.action === "none") {
       counts.none++;
       continue;
@@ -302,9 +368,10 @@ export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = c
     );
   });
   const work = (async () => {
-    const { job: source } = await (await api(`post-records/${job}`)).json();
-    if (!source) return "none";
+    const { job: bare } = await (await api(`post-records/${job}`)).json();
+    if (!bare) return "none";
     const authorization = await oauth.agent();
+    const source = await withMedia(bare, authorization.pdsUrl, fetcher);
     const plan = planPostRecord(source, await readPostRecord(authorization.pdsUrl, postRecordKey(job), fetcher));
     await applyPostRecord(plan, source, { authorization, api });
     if (plan.action !== "none") log(`Post record ${plan.rkey}: ${plan.action}`);

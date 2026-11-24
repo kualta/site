@@ -10,11 +10,13 @@ import {
   buildPostRecord,
   carriesMetadata,
   collection,
+  embedMedia,
   planPostRecord,
   postRecordKey,
   reconcilePostRecords,
   scopeDenied,
   syncPostRecord,
+  withMedia,
 } from "./post-record.mjs";
 
 const owner = "did:plc:jhvnnnd3adml7t6anu3ay7ip";
@@ -340,12 +342,18 @@ function site(sources) {
     return json({ job: null });
   };
 }
-function pds(records) {
+function pds(records, posts = {}) {
   return async (address) => {
     const url = new URL(address);
     if (url.hostname === "plc.directory")
       return json({ service: [{ type: "AtprotoPersonalDataServer", serviceEndpoint: "https://pds.test" }] });
     expect(url.origin).toBe("https://pds.test");
+    expect(url.searchParams.get("repo")).toBe(owner);
+    if (url.searchParams.get("collection") === "app.bsky.feed.post") {
+      expect(url.pathname).toEndWith("getRecord");
+      const post = posts[url.searchParams.get("rkey")];
+      return post ? json({ cid: "bafypost", value: post }) : json({ error: "RecordNotFound" }, 400);
+    }
     expect(url.searchParams.get("collection")).toBe(collection);
     if (url.pathname.endsWith("listRecords"))
       return json({
@@ -372,6 +380,7 @@ test("a dry run plans every post across pages and writes nothing", async () => {
   });
   expect(counts).toEqual({ create: 1, update: 0, delete: 1, none: 0, failed: 0, orphans: 1 });
   expect(lines).toEqual([
+    `no media for ${postRecordKey(job)} ${job} "Bogotá": the Bluesky copy is gone from the repository`,
     `would create ${postRecordKey(job)} ${job} "Bogotá" → bluesky, instagram`,
     `would delete ${postRecordKey(other)} ${other}`,
     "no post for record strayrecordkey; left alone",
@@ -446,4 +455,179 @@ test("a repository that never answers holds the queue only until the deadline", 
   expect(lines).toEqual([
     `Post record for ${job} was NOT written: no answer within 0.03 s, though the write may still land. Repair it with: bun run publisher post-records --write`,
   ]);
+});
+
+const blob = (name, mimeType = "image/jpeg", size = 1234) => ({
+  $type: "blob",
+  ref: { $link: blobCid(createHash("sha256").update(name).digest("hex")) },
+  mimeType,
+  size,
+});
+const images = {
+  $type: "app.bsky.embed.images",
+  images: [
+    { image: blob("bafkone"), alt: "A street at dawn", aspectRatio: { width: 4, height: 3 } },
+    { image: blob("bafktwo", "image/png"), alt: "" },
+  ],
+};
+const video = {
+  $type: "app.bsky.embed.video",
+  video: blob("bafkfilm", "video/mp4", 3_402_606),
+  alt: "A walk downhill",
+  aspectRatio: { width: 9, height: 16 },
+  captions: [{ lang: "en", file: blob("bafkcaptions", "text/vtt", 90) }],
+};
+const feedPost = (embed) => ({ $type: "app.bsky.feed.post", text: "Morning light", createdAt: "2026-11-02", embed });
+const pictures = [
+  {
+    $type: "dev.kualta.post#image",
+    image: blob("bafkone"),
+    alt: "A street at dawn",
+    aspectRatio: { width: 4, height: 3 },
+  },
+  { $type: "dev.kualta.post#image", image: blob("bafktwo", "image/png") },
+];
+const film = [
+  {
+    $type: "dev.kualta.post#video",
+    video: blob("bafkfilm", "video/mp4", 3_402_606),
+    alt: "A walk downhill",
+    aspectRatio: { width: 9, height: 16 },
+  },
+];
+const host = new URL("https://pds.test");
+
+test("media points at the blobs the Bluesky copy's embed holds, whichever embed it is", () => {
+  expect(embedMedia(images)).toEqual(pictures);
+  expect(embedMedia(video)).toEqual(film);
+  const quote = { $type: "app.bsky.embed.record", record: { uri: "at://did:plc:x/app.bsky.feed.post/3k", cid: "b" } };
+  expect(embedMedia({ $type: "app.bsky.embed.recordWithMedia", record: quote, media: images })).toEqual(pictures);
+  expect(embedMedia({ $type: "app.bsky.embed.recordWithMedia", record: quote, media: video })).toEqual(film);
+  expect(embedMedia(quote)).toEqual([]);
+  expect(
+    embedMedia({ $type: "app.bsky.embed.external", external: { uri: "https://kualta.dev", thumb: blob("b") } }),
+  ).toEqual([]);
+  expect(embedMedia(undefined)).toEqual([]);
+  const legacy = { $type: "app.bsky.embed.images", images: [{ image: { cid: "bafkold", mimeType: "image/jpeg" } }] };
+  expect(embedMedia(legacy)).toEqual([]);
+});
+
+test("a record with media is valid under its lexicon and uploads nothing", async () => {
+  const lexicons = new Lexicons([JSON.parse(readFileSync("scripts/lexicons/dev.kualta.post.json", "utf8"))]);
+  for (const [embed, media] of [
+    [images, pictures],
+    [video, film],
+  ]) {
+    const withIt = await withMedia(source({ thumbnail: null }), host, pds({}, { "3kabcdefghijk": feedPost(embed) }));
+    expect(withIt.media).toEqual(media);
+    const plan = planPostRecord(withIt, null);
+    expect(plan).toMatchObject({ action: "create", upload: false, record: { media } });
+    lexicons.assertValidRecord(collection, jsonToLex(plan.record));
+    const calls = [];
+    await applyPostRecord(plan, withIt, { authorization: { agent: repo(calls), scope }, api: thumbnailApi });
+    expect(calls.map(([name]) => name)).toEqual(["createRecord"]);
+    expect(calls[0][1].record.media).toEqual(media);
+  }
+});
+
+test("media changes update the record, and a second run plans nothing", async () => {
+  const posts = { "3kabcdefghijk": feedPost(images) };
+  const before = stored(buildPostRecord(source()));
+  const first = planPostRecord(await withMedia(source(), host, pds({}, posts)), before);
+  expect(first).toMatchObject({ action: "update", upload: false, cid: "bafyrecord", record: { media: pictures } });
+  const held = stored(Object.fromEntries(Object.entries(first.record).reverse()));
+  expect(planPostRecord(await withMedia(source(), host, pds({}, posts)), held).action).toBe("none");
+  posts["3kabcdefghijk"] = feedPost(video);
+  expect(planPostRecord(await withMedia(source(), host, pds({}, posts)), held)).toMatchObject({
+    action: "update",
+    record: { media: film },
+  });
+});
+
+test("media leaves the record when the Bluesky copy comes down, in the publisher or on Bluesky itself", async () => {
+  const posts = { "3kabcdefghijk": feedPost(images) };
+  const held = stored(buildPostRecord({ ...source(), media: pictures }));
+  const deleted = await withMedia(
+    source({ targets: [{ ...bluesky, deleted: true }, instagram] }),
+    host,
+    pds({}, posts),
+  );
+  expect(deleted.media).toBeUndefined();
+  expect(deleted.noMedia).toContain("no Bluesky copy is up");
+  const dropped = planPostRecord(deleted, held);
+  expect(dropped.action).toBe("update");
+  expect(dropped.record).not.toHaveProperty("media");
+  const gone = await withMedia(source(), host, pds({}, {}));
+  expect(gone.noMedia).toBe("the Bluesky copy is gone from the repository");
+  expect(planPostRecord(gone, held).record).not.toHaveProperty("media");
+  const bare = await withMedia(source(), host, pds({}, { "3kabcdefghijk": feedPost(undefined) }));
+  expect(bare.noMedia).toBe("the Bluesky copy holds no photos or video");
+});
+
+test("a repository that can't be read fails the post instead of taking its media off", async () => {
+  const lines = [];
+  const down = async (address) =>
+    new URL(address).searchParams.get("collection") === collection
+      ? json({ records: [] })
+      : json({ message: "Upstream" }, 502);
+  const counts = await reconcilePostRecords({
+    api: site([source()]),
+    fetcher: down,
+    authorization: { agent: repo([]), scope, pdsUrl: host },
+    log: (line) => lines.push(line),
+  });
+  expect(counts).toMatchObject({ failed: 1, create: 0, update: 0 });
+  expect(lines).toEqual([`FAILED ${postRecordKey(job)} ${job}: The repository could not be read (502: Upstream)`]);
+});
+
+test("a post with no Bluesky copy has no media, and the plan says why", async () => {
+  const xiaohongshu = {
+    platform: "xiaohongshu",
+    url: "https://www.xiaohongshu.com/explore/65f0a1b2c3d4e5f6a7b8c9d0",
+    published_at: Date.UTC(2026, 10, 3),
+    deleted: false,
+  };
+  const refuse = async () => {
+    throw new Error("nothing should be read");
+  };
+  const only = source({ targets: [xiaohongshu], post: { ...source().post, kind: "video" }, thumbnail: null });
+  const planned = await withMedia(only, host, refuse);
+  expect(planned.media).toBeUndefined();
+  expect(planned.noMedia).toBe(
+    "no Bluesky copy is up, and the archive's uploads can't be shown to match what xiaohongshu shows",
+  );
+  const calls = [];
+  const lines = [];
+  await reconcilePostRecords({
+    api: site([only]),
+    fetcher: pds({}),
+    authorization: { agent: repo(calls), scope, pdsUrl: host },
+    log: (line) => lines.push(line),
+  });
+  expect(calls.map(([name]) => name)).toEqual(["createRecord"]);
+  expect(calls[0][1].record).not.toHaveProperty("media");
+  expect(lines[0]).toBe(`no media for ${postRecordKey(job)} ${job} "Bogotá": ${planned.noMedia}`);
+});
+
+test("media comes only from a public copy in the owner's own repository", async () => {
+  const refuse = async () => {
+    throw new Error("nothing should be read");
+  };
+  const elsewhere = { ...bluesky, url: "https://bsky.app/profile/did:plc:someoneelse/post/3kabcdefghijk" };
+  const byHandle = { ...bluesky, url: "https://bsky.app/profile/kualta.dev/post/3kabcdefghijk" };
+  for (const targets of [[elsewhere], [byHandle], [instagram], []])
+    expect((await withMedia(source({ targets }), host, refuse)).media).toBeUndefined();
+  // The site sends no media; whatever arrives under that name is dropped, never written.
+  const smuggled = await withMedia(source({ targets: [instagram], media: pictures }), host, refuse);
+  expect(planPostRecord(smuggled, null).record).not.toHaveProperty("media");
+  expect((await withMedia(source({ post: { ...source().post, kind: "text" } }), host, refuse)).noMedia).toBeUndefined();
+  expect(await withMedia({ id: job, targets: [] }, host, refuse)).toEqual({ id: job, targets: [] });
+});
+
+test("the helper's record after publishing carries the Bluesky copy's media", async () => {
+  const calls = [];
+  const oauth = { agent: async () => ({ agent: repo(calls), scope, pdsUrl: host }) };
+  const fetcher = pds({}, { "3kabcdefghijk": feedPost(video) });
+  expect(await syncPostRecord(job, { api: site([source()]), oauth, fetcher, log: () => {} })).toBe("create");
+  expect(calls.at(-1)[1].record.media).toEqual(film);
 });
