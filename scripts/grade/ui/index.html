@@ -25,7 +25,7 @@
   <symbol id="i-sound" viewBox="0 0 16 16"><path d="M2.5 6v4h2.6L8.5 13V3L5.1 6Z"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M10.8 5.6a3.4 3.4 0 0 1 0 4.8M12.6 3.8a6 6 0 0 1 0 8.4"/></symbol>
   <symbol id="i-muted" viewBox="0 0 16 16"><path d="M2.5 6v4h2.6L8.5 13V3L5.1 6Z"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="m10.5 6 3.5 4M14 6l-3.5 4"/></symbol>
   <symbol id="i-camera" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M2 5.5A1.5 1.5 0 0 1 3.5 4h1.3l1-1.5h4.4l1 1.5h1.3A1.5 1.5 0 0 1 14 5.5v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5Z"/><circle cx="8" cy="8.4" r="2.4" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
-  <symbol id="i-export" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M8 10.5V2.5M5 5.5l3-3 3 3M3 9.5v3a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M12.77 6.9 14.44 7.1v1.8l-1.67.2-.61 1.5 1.03 1.31-1.28 1.28-1.31-1.03-1.5.61-.2 1.67H7.1l-.2-1.67-1.5-.61-1.31 1.03-1.28-1.28 1.03-1.31-.61-1.5-1.67-.2V7.1l1.67-.2.61-1.5-1.03-1.31 1.28-1.28 1.31 1.03 1.5-.61.2-1.67h1.8l.2 1.67 1.5.61 1.31-1.03 1.28 1.28-1.03 1.31Z"/><circle cx="8" cy="8" r="2.1" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
   <symbol id="i-left" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M9.5 4.5 6 8l3.5 3.5"/></symbol>
   <symbol id="i-right" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="m6.5 4.5 3.5 3.5-3.5 3.5"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="m4.5 6 3.5 3.5L11.5 6"/></symbol>
@@ -43,47 +43,41 @@
   <span class="transcribing" id="transcribing"></span>
   <p class="status" id="status" role="status"></p>
   <button id="stop-offload" class="btn" type="button" hidden>Stop offloading</button>
-  <button id="stop-export" class="btn" type="button" hidden>Stop exporting</button>
   <button id="stop-bring" class="btn" type="button" hidden>Stop bringing</button>
-  <div class="split" id="export-group">
-    <button id="export" class="btn primary" type="button" disabled><svg><use href="#i-export"/></svg><span id="export-label">Export</span><span id="export-quality" class="badge" hidden></span></button>
-    <button id="export-more" class="btn primary" type="button" aria-label="More ways to export" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu"><svg><use href="#i-chevron"/></svg></button>
-    <div class="menu" id="export-menu" hidden>
-      <button id="export-frame" class="menu-item" type="button">Export frame</button>
-      <button id="export-changed" class="menu-item" type="button">All up to date</button>
-      <div class="menu-quality">
-        <div class="menu-row"><label for="quality">Quality</label><output id="quality-out" for="quality">100%</output></div>
-        <span class="rail" id="quality-rail"><input type="range" id="quality" min="10" max="100" step="5" value="100"></span>
-        <p id="quality-size" class="menu-note">Near lossless</p>
-        <div class="menu-row"><span id="encoder-name">Encode on</span>
-          <div class="seg small" role="group" aria-labelledby="encoder-name">
-            <button type="button" data-encoder="gpu" aria-pressed="true">GPU</button><button type="button" data-encoder="cpu" aria-pressed="false">CPU</button>
-          </div>
-        </div>
-        <p class="menu-note">Below 50% always the CPU</p>
+  <div class="menu-at" id="offload-group">
+    <button id="offload-more" class="btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="offload-menu">Offload<svg><use href="#i-chevron"/></svg></button>
+    <div class="menu menu-offload" id="offload-menu" hidden>
+      <div class="lane" data-lane="copy"><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>
+      <div class="lane" data-lane="send"><span>Mac → Cloud</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
+      <div class="offload-places">
+        <div class="menu-row"><span>Transcripts</span><output id="offload-transcripts"></output></div>
+        <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
       </div>
-      <label class="menu-check"><input type="checkbox" id="previews-remake">Remake a film's preview copies after a regrade</label>
-      <div class="menu-offload">
-        <div class="lane" data-lane="copy"><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>
-        <div class="lane" data-lane="send"><span>Mac → Cloud</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
-        <div class="offload-places">
-          <div class="menu-row"><span>Transcripts</span><output id="offload-transcripts"></output></div>
-          <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
+      <label class="menu-check" title="This run only"><input type="checkbox" id="offload-unattended">Keep going when this tab is closed</label>
+      <div class="offload-choice">
+        <span id="clear-after-name">Delete from the camera</span>
+        <div class="seg small" role="group" aria-labelledby="clear-after-name">
+          <button type="button" data-clear-after="copied" aria-pressed="true">Once on this Mac</button><button type="button" data-clear-after="sent" aria-pressed="false">Once in the cloud</button>
         </div>
-        <label class="menu-check" title="This run only"><input type="checkbox" id="offload-unattended">Keep going when this tab is closed</label>
-        <div class="offload-choice">
-          <span id="clear-after-name">Delete from the camera</span>
-          <div class="seg small" role="group" aria-labelledby="clear-after-name">
-            <button type="button" data-clear-after="copied" aria-pressed="true">Once on this Mac</button><button type="button" data-clear-after="sent" aria-pressed="false">Once in the cloud</button>
-          </div>
-        </div>
-        <div class="offload-choice">
-          <div class="menu-row"><span>Kept on the camera and Mac</span><output id="offload-kept"></output></div>
-          <div class="offload-days" id="offload-days" role="group" aria-label="Days kept on the camera and this Mac"></div>
-        </div>
+      </div>
+      <div class="offload-choice">
+        <div class="menu-row"><span>Kept on the camera and Mac</span><output id="offload-kept"></output></div>
+        <div class="offload-days" id="offload-days" role="group" aria-label="Days kept on the camera and this Mac"></div>
       </div>
     </div>
   </div>
+  <div class="menu-at" id="settings-group">
+    <button id="settings-more" class="btn" type="button" aria-label="Settings" title="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu"><svg><use href="#i-gear"/></svg></button>
+    <div class="menu" id="settings-menu" hidden>
+      <div class="menu-row menu-encode"><span id="encoder-name">Encode on</span>
+        <div class="seg small" role="group" aria-labelledby="encoder-name">
+          <button type="button" data-encoder="gpu" aria-pressed="true">GPU</button><button type="button" data-encoder="cpu" aria-pressed="false">CPU</button>
+        </div>
+      </div>
+      <label class="menu-check"><input type="checkbox" id="previews-remake">Remake a film's preview copies after a regrade</label>
+    </div>
+  </div>
+  <button id="export-frame" class="btn" type="button" disabled>Export frame</button>
 </header>
 
 <main class="work">
@@ -160,7 +154,7 @@
         <div class="seg" role="group" aria-labelledby="deflicker-name" id="deflicker">
           <button type="button" data-deflicker="" aria-pressed="true">Off</button><button type="button" data-deflicker="light" aria-pressed="false" title="Evens out fast flicker, and keeps brightness that changes as the camera moves">Light</button><button type="button" data-deflicker="strong" aria-pressed="false" title="Evens out more, for tripod and timelapse shots">Strong</button>
         </div>
-        <p class="ctl-note">Applies on export; the preview doesn't show it.</p>
+        <p class="ctl-note">Applies in renders; the preview doesn't show it.</p>
       </div>
     </section>
 

@@ -819,7 +819,8 @@ test.if(usable)(
     expect(files(original)).toEqual([name]);
     expect(readFileSync(join(original, name))).toEqual(film);
     const library = await json("/api/library");
-    expect(library.folders).toEqual([{ id: folder, label: clipDay, clips: 1, graded: 0 }]);
+    // Graded by its grade, which came with it.
+    expect(library.folders).toEqual([{ id: folder, label: clipDay, clips: 1, graded: 1 }]);
     const day = await json(`/api/sources/${folder}`);
     expect(day.clips[0]).toMatchObject({ name, profile: "dlog2", bytes: film.length });
     expect(day.grades).toEqual({ [name]: grade });

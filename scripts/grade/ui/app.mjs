@@ -1,4 +1,4 @@
-import { blockMeans, composeLut, gradeKey, inputCurves, resolveGrade, sampleTetra } from "/color.mjs";
+import { blockMeans, composeLut, inputCurves, isGraded, resolveGrade, sampleTetra } from "/color.mjs";
 import { bringView, isCloud } from "/ui/bring.mjs";
 import { offloadLine, offloadMenu, offloadMoves, offloadShare } from "/ui/offload.mjs";
 import { Viewer } from "/ui/viewer.mjs";
@@ -99,8 +99,6 @@ const state = {
   error: null,
   input: null,
   filter: ["all", "graded", "ungraded"].includes(store.get("grade.filter")) ? store.get("grade.filter") : "all",
-  // Export quality in percent, 100 (near lossless) each time the app opens.
-  quality: 100,
   /** The server's /api/ledger answer: the ledger and whether it's saved to Cloudflare. */
   ledger: null,
   /** The ledger's clips by name without extension, any case. */
@@ -127,31 +125,12 @@ function fileSize(bytes) {
   return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }
 const primaryClip = () => state.byName.get(state.primary);
-const exporting = (clip) => state.jobs?.export.current?.id === state.source && state.jobs.export.current.name === clip.name;
-const queued = (clip) => state.jobs?.export.queue.some((j) => j.id === state.source && j.name === clip.name);
-/** An export button waiting for its confirming second click ({ button, timer }), or null. */
-let armed = null;
 
 /**
- * What "Re-export N changed" exports, and what it counts: clips that already have a graded copy whose grade has
- * moved since. Never-graded clips are left out (a camera day can hold hundreds); they're exported by selecting them.
+ * Whether a clip has a grade made here: not the one it starts with (a reset clip is back to it), nor the look an
+ * offload gives log clips nobody graded. The server counts each day's the same way.
  */
-function needsReexport(clip) {
-  return Boolean(clip.exported) && stale(clip) && !exporting(clip) && !queued(clip);
-}
-
-/** Whether a clip's grade differs from the one it starts with. A reset clip is back to the start. */
-function hasGrade(clip) {
-  return gradeKey(gradeOf(clip)) !== gradeKey(resolveGrade(undefined, baseIds(clip)));
-}
-
-/** Whether a clip needs exporting: never graded, or graded with a different grade than it has now. */
-function stale(clip) {
-  if (!clip.exported) return true;
-  // A graded file made outside the app has no recorded grade: it counts as graded until you grade the clip here.
-  if (clip.exported.key === null) return clip.name in state.grades;
-  return clip.exported.key !== gradeKey(gradeOf(clip));
-}
+const hasGrade = (clip) => isGraded(state.grades[clip.name], baseIds(clip), state.library?.defaultLook);
 
 // ---- base looks and LUTs ------------------------------------------------------------------------------------------
 
@@ -180,7 +159,7 @@ async function lutFor(clip, size, input = null) {
 
 /**
  * Decode the calibration ramp the way proxies are decoded and compare it with what ffmpeg reads, so the preview
- * starts from the same code values the export does. Without it the preview still works, uncorrected.
+ * starts from the same code values a render does. Without it the preview still works, uncorrected.
  */
 async function calibrate() {
   try {
@@ -408,7 +387,7 @@ function addArrived({ clips, grades }) {
   updateRows();
 }
 
-/** Pick up thumbnails and previews that finished and exports that landed, keeping grades edited here. */
+/** Pick up thumbnails and previews that finished, keeping grades edited here. */
 async function refreshSource() {
   if (!state.source || isCloud(state.source)) return;
   const payload = await (await api(`/api/sources/${encodeURIComponent(state.source)}`)).json();
@@ -448,10 +427,10 @@ function prepareSelection() {
 
 // ---- clip list ----------------------------------------------------------------------------------------------------
 
-/** The clip list's filter: everything, only clips with a graded copy, or only clips without one. */
+/** The clip list's filter: everything, only clips with a grade, or only clips without one. */
 const shown = (clip) => {
-  if (state.filter === "graded") return Boolean(clip.exported);
-  if (state.filter === "ungraded") return !clip.exported;
+  if (state.filter === "graded") return hasGrade(clip);
+  if (state.filter === "ungraded") return !hasGrade(clip);
   return true;
 };
 const visibleClips = () => state.clips.filter(shown);
@@ -472,7 +451,7 @@ function clipRow(clip) {
   b.dataset.name = clip.name;
   const { title, time } = label(clip);
   b.innerHTML =
-    '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span><span class="state"></span></span><span class="sub-row"><span class="profile"></span><span class="size"></span></span></span><span class="progress" hidden><i></i></span>';
+    '<canvas class="thumb" width="16" height="9"></canvas><span class="info"><span class="title-row"><b></b><span class="when"></span><span class="state"></span></span><span class="sub-row"><span class="profile"></span><span class="size"></span></span></span>';
   b.querySelector("b").textContent = title;
   b.querySelector(".when").textContent = [time, `${clip.duration.toFixed(1)} s`].filter(Boolean).join(" · ");
   b.querySelector(".size").textContent = clip.bytes ? fileSize(clip.bytes) : "";
@@ -484,7 +463,7 @@ function clipRow(clip) {
   return li;
 }
 
-/** That an export was, or is being, encoded on the CPU because the GPU couldn't, and why. */
+/** That a trim or preview copy was, or is being, encoded on the CPU because the GPU couldn't, and why. */
 const onCpu = ({ fallback }) => (fallback ? ` on the CPU, the GPU couldn't: ${fallback}` : "");
 function updateRows() {
   for (const b of document.querySelectorAll(".clip")) {
@@ -494,41 +473,23 @@ function updateRows() {
     b.classList.toggle("primary-clip", clip.name === state.primary && state.selected.size > 1);
     b.parentElement.hidden = !shown(clip);
     const chip = b.querySelector(".state");
-    let text = "Graded";
-    let kind = "ok";
-    if (exporting(clip)) [text, kind] = [`Exporting ${Math.round((state.jobs.export.current.progress ?? 0) * 100)}%`, "busy"];
-    else if (queued(clip)) [text, kind] = ["Export queued", "busy"];
-    else if (!clip.exported && hasGrade(clip)) [text, kind] = ["Grade not exported", "unexported"];
-    else if (!clip.exported) [text, kind] = ["Not graded", "none"];
-    else if (stale(clip)) [text, kind] = ["Changed since export", "changed"];
+    const own = hasGrade(clip);
+    const text = own ? "Graded" : "Not graded";
     // Just the dot; the words stay for screen readers and as its tooltip.
-    chip.className = `state ${kind}`;
-    chip.title = kind === "ok" ? `${text}${onCpu(clip.exported)}` : text;
+    chip.className = `state ${own ? "ok" : "none"}`;
+    chip.title = text;
     const words = document.createElement("span");
     words.className = "sr-only";
     words.textContent = text;
     chip.replaceChildren(words);
-    const bar = b.querySelector(".progress");
-    bar.hidden = !exporting(clip);
-    if (!bar.hidden) bar.firstElementChild.style.width = `${(state.jobs.export.current.progress ?? 0) * 100}%`;
   }
   const n = state.selected.size;
-  const graded = state.clips.filter((c) => c.exported).length;
+  const graded = state.clips.filter(hasGrade).length;
   $("clip-count").textContent = n > 1 ? `${n} selected` : `${graded} of ${state.clips.length} graded`;
   $("select-all").textContent = n === visibleClips().length && n > 1 ? "Select one" : "Select all";
   for (const b of document.querySelectorAll("#filter button")) b.setAttribute("aria-pressed", String(b.dataset.filter === state.filter));
-  const changed = state.clips.filter(needsReexport).length;
   const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted !== false;
-  const exportButton = $("export");
-  exportButton.disabled = n === 0 || !reachable;
-  exportButton.title = n > 1 ? `Export the ${n} selected clips` : "Export this clip";
-  const again = $("export-changed");
-  again.disabled = changed === 0 || !reachable;
-  // A button waiting for its confirming second click keeps its prompt.
-  if (armed?.button !== exportButton) $("export-label").textContent = "Export";
-  if (armed?.button !== again) again.textContent = changed ? `Re-export ${changed} changed` : "All up to date";
   $("export-frame").disabled = !primaryClip() || !reachable;
-  if (!$("export-menu").hidden) renderQuality();
 }
 
 $("clip-list").addEventListener("click", (e) => {
@@ -585,7 +546,7 @@ function setPrimary(name) {
 
 /**
  * The preview plays the original itself at full size, decoded by the Mac (still 8-bit on the GPU: Chrome hands video
- * to WebGL at 8 bits, so judge banding on the export).
+ * to WebGL at 8 bits, so judge banding on a render).
  * HLG plays a proxy: its HDR transfer tag invites the browser to tone-map it, which would bend what the grade sees.
  */
 const playsOriginal = (clip) => clip?.profile !== "hlg";
@@ -933,7 +894,7 @@ function stepLook(delta) {
 $("base-prev").addEventListener("click", () => stepLook(-1));
 $("base-next").addEventListener("click", () => stepLook(1));
 
-// Deflicker: Off, Light or Strong, set on every selected clip. Only the export does it, so the preview stays as is.
+// Deflicker: Off, Light or Strong, set on every selected clip. Only renders and Export frame do it, so the preview stays as is.
 // ← → step through the choices as they step a slider, and double-clicking the name (or the group's Reset) turns it off.
 const deflickerOf = (clip) => gradeOf(clip).deflicker ?? "";
 const deflickerLevels = [...document.querySelectorAll("#deflicker button")].map((b) => b.dataset.deflicker);
@@ -1014,41 +975,9 @@ function pasteGrade() {
   touched([...state.selected]);
 }
 
-// ---- export, jobs, camera -----------------------------------------------------------------------------------------
+// ---- Export frame, the bar's menus, jobs ----------------------------------------------------------------------------
 
-// More than this many clips at once asks for a second click: a day on the card can hold hundreds.
-const CONFIRM_OVER = 10;
-
-/** Ask for a second click on `button` within four seconds before exporting `count` clips. */
-function arm(button, count) {
-  disarm();
-  (button.querySelector("span") ?? button).textContent = `Click again to export ${count} clips`;
-  armed = { button, timer: setTimeout(disarm, 4000) };
-}
-
-/** Drop a pending confirmation; the buttons get their own labels back. */
-function disarm() {
-  if (!armed) return;
-  clearTimeout(armed.timer);
-  armed = null;
-  updateRows();
-}
-
-async function exportNames(names, button) {
-  if (!names.length) return;
-  if (names.length > CONFIRM_OVER && armed?.button !== button) return arm(button, names.length);
-  disarm();
-  await save();
-  try {
-    await api("/api/export", { method: "POST", json: { source: state.source, names, quality: state.quality } });
-  } catch (e) {
-    return showError(e);
-  }
-  updateRows();
-  poll();
-}
-
-/** Save the frame on screen, graded, as a full-size PNG beside the clip's export. */
+/** Save the frame on screen, graded, as a full-size PNG in Movies/Exported. */
 async function exportFrame() {
   const clip = primaryClip();
   if (!clip || !state.source) return;
@@ -1064,56 +993,34 @@ async function exportFrame() {
   }
 }
 
+$("export-frame").addEventListener("click", exportFrame);
+
 const encoderButtons = document.querySelectorAll("[data-encoder]");
-/** What exporting the selection at the menu's quality comes to: its size below 100%, and a badge on Export. */
-function renderQuality() {
-  const q = state.quality;
-  // What encodes exports is the server's to remember, and so is remaking a film's preview copies.
+/** The settings as the server keeps them: what encodes trims and preview copies, and remaking those after a regrade. */
+function renderSettings() {
   for (const b of encoderButtons)
     b.setAttribute("aria-pressed", String(b.dataset.encoder === (state.jobs?.export.encoder ?? "gpu")));
   $("previews-remake").checked = Boolean(state.jobs?.previews?.autoRemake);
-  $("quality-out").textContent = `${q}%`;
-  $("quality-rail").style.setProperty("--b", `${((q - 10) / 90) * 100}%`);
-  $("export-quality").hidden = q === 100;
-  $("export-quality").textContent = `${q}%`;
-  if (q === 100) {
-    $("quality-size").textContent = "Near lossless";
-    return;
-  }
-  const clips = [...state.selected].map((n) => state.byName.get(n)).filter(Boolean);
-  // Below 100% the video gets q% of the original's bitrate and the sound is copied, so the size is known.
-  const bitsPerSecond = (c) => ((c.videoBitrate ?? 0) * q) / 100 + (c.audioBitrate ?? 0);
-  const bytes = clips.reduce((sum, c) => sum + (bitsPerSecond(c) * c.duration) / 8, 0);
-  const which = clips.length === 1 ? "this clip" : `the ${clips.length} selected`;
-  $("quality-size").textContent = clips.length ? `≈ ${fileSize(bytes)} for ${which}` : "";
 }
 
-const exportMenu = $("export-menu");
-function setExportMenu(open) {
-  exportMenu.hidden = !open;
-  $("export-more").setAttribute("aria-expanded", String(open));
-  if (open) {
-    renderQuality();
-    offload.load();
+/** The bar's menus, each opened by its button: Offload, and Settings. One is open at a time. */
+const menus = [
+  { group: $("offload-group"), button: $("offload-more"), menu: $("offload-menu"), opened: () => offload.load() },
+  { group: $("settings-group"), button: $("settings-more"), menu: $("settings-menu"), opened: renderSettings },
+];
+const openMenu = () => menus.find((m) => !m.menu.hidden);
+function setMenu(which, open) {
+  for (const m of menus) {
+    const on = open && m === which;
+    m.menu.hidden = !on;
+    m.button.setAttribute("aria-expanded", String(on));
   }
+  if (open) which.opened();
 }
-$("export-more").addEventListener("click", () => setExportMenu(exportMenu.hidden));
+for (const m of menus) m.button.addEventListener("click", () => setMenu(m, m.menu.hidden));
 document.addEventListener("pointerdown", (e) => {
-  if (!exportMenu.hidden && !e.target.closest("#export-group")) setExportMenu(false);
-});
-$("export").addEventListener("click", () => exportNames([...state.selected], $("export")));
-$("export-changed").addEventListener("click", async () => {
-  await exportNames(state.clips.filter(needsReexport).map((c) => c.name), $("export-changed"));
-  // A long list waits for its second click with the menu still open.
-  if (armed?.button !== $("export-changed")) setExportMenu(false);
-});
-$("export-frame").addEventListener("click", () => {
-  setExportMenu(false);
-  exportFrame();
-});
-$("quality").addEventListener("input", (e) => {
-  state.quality = Number(e.target.value);
-  renderQuality();
+  const m = openMenu();
+  if (m && !m.group.contains(e.target)) setMenu(m, false);
 });
 for (const b of encoderButtons)
   b.addEventListener("click", async () => {
@@ -1133,18 +1040,11 @@ $("previews-remake").addEventListener("change", async (e) => {
   }
   poll();
 });
-$("stop-export").addEventListener("click", async () => {
-  try {
-    const { stopped } = await (await api("/api/export/stop", { method: "POST" })).json();
-    setStatus(`Stopped exporting: ${stopped} clip${stopped === 1 ? "" : "s"} not exported`);
-  } catch (e) {
-    showError(e);
-  }
-  poll();
-});
 
 // ---- moving clips to the Trash (⌘⌫) -------------------------------------------------------------------------------
 
+// More than this many clips at once asks for a second press: a day on the card can hold hundreds.
+const CONFIRM_OVER = 10;
 /** When a pending ⌘⌫ for more than CONFIRM_OVER clips stops waiting for its confirming second press. */
 let trashArmedUntil = 0;
 /** A ⌘⌫ is on its way: another press until it lands would send the same clips again. */
@@ -1191,7 +1091,7 @@ async function trashSelected() {
 let statusNote = "";
 let statusFirst = false;
 let statusTimer = null;
-/** A note in the status line for three seconds. `first` shows it ahead of exports and previews in progress. */
+/** A note in the status line for three seconds. `first` shows it ahead of what's in progress. */
 function setStatus(text, { first = false } = {}) {
   statusNote = text;
   statusFirst = first;
@@ -1209,13 +1109,9 @@ function showError(e) {
 function renderStatus() {
   const j = state.jobs;
   const parts = [];
-  $("stop-export").hidden = !(j?.export.current || j?.export.queue.length);
   offload.renderStop(j?.offload);
   // Paused from the composer's Footage tab: nothing new starts here until it goes on there.
-  if (j?.paused) {
-    const waiting = j.export.queue.length;
-    parts.push(`Paused from the Footage tab${waiting ? ` · ${waiting} export${waiting === 1 ? "" : "s"} waiting` : ""}`);
-  }
+  if (j?.paused) parts.push("Paused from the Footage tab");
   const offloading = offloadLine(j?.offload);
   if (offloading) {
     offloadLink.textContent = offloading;
@@ -1225,16 +1121,9 @@ function renderStatus() {
   if (bringLine) parts.push(bringLine);
   if (state.source?.startsWith("camera:") && state.library && !state.library.camera.mounted)
     parts.push(`${state.library.camera.name} disconnected: plug it in to preview and export`);
-  if (j?.export.current) {
-    const c = state.byName.get(j.export.current.name);
-    const who = c && j.export.current.id === state.source ? label(c).title : j.export.current.name;
-    parts.push(`Exporting ${who}${onCpu(j.export.current)} · ${Math.round((j.export.current.progress ?? 0) * 100)}%${j.export.queue.length ? ` · ${j.export.queue.length} queued` : ""}`);
-  }
   const preparing = state.clips.filter((c) => c.proxy === "queued" || c.proxy === "working").length;
   if (preparing) parts.push(`Making preview${preparing === 1 ? "" : "s"} · ${preparing} left`);
   if (j?.thumbs) parts.push(`Reading thumbnails · ${j.thumbs} left`);
-  const failed = j?.export.failed.filter((f) => f.id === state.source) ?? [];
-  if (failed.length) parts.push(`${failed.length} export${failed.length === 1 ? "" : "s"} failed: ${failed[0].error}`);
   for (const line of [filmLine("Cutting trims", "trim", "trims", j?.trims), filmLine("Making preview copies", "preview copy", "preview copies", j?.previews)])
     if (line) parts.push(line);
   if (state.error) parts.push(state.error);
@@ -1375,7 +1264,6 @@ function sayProgress(jobs) {
 }
 
 let pollTimer = null;
-let lastDone = 0;
 let lastMoves = "";
 let libraryAt = 0;
 async function poll() {
@@ -1385,12 +1273,11 @@ async function poll() {
     jobs = await (await api("/api/jobs")).json();
     state.jobs = jobs;
     sayProgress(jobs);
-    const done = jobs.export.done.length;
     const arrived = bring.update(jobs);
     const waiting = jobs.thumbs > 0 || state.clips.some((c) => c.proxy === "queued" || c.proxy === "working");
     // The library is re-read every few seconds, so the camera appears when it's plugged in and graded counts update.
     const moves = offloadMoves(jobs.offload);
-    if (Date.now() - libraryAt > 4000 || done !== lastDone || moves !== lastMoves || arrived) {
+    if (Date.now() - libraryAt > 4000 || moves !== lastMoves || arrived) {
       libraryAt = Date.now();
       const wasMounted = state.library?.camera.mounted;
       state.library = await (await api("/api/library")).json();
@@ -1408,13 +1295,13 @@ async function poll() {
     // The ledger changes when the server looks again: every 30 seconds, and after exports.
     if (Date.now() - ledgerAt > 20000) await loadLedger();
     const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted;
-    if (reachable && (done !== lastDone || waiting || arrived)) await refreshSource();
-    lastDone = done;
+    if (reachable && (waiting || arrived)) await refreshSource();
     renderStatus();
     updateRows();
     const filming = [jobs.previews, jobs.trims].some((q) => q?.current || q?.queued.length);
-    const active = jobs.export.current || jobs.export.queue.length || jobs.offload?.running || jobs.bring?.running || waiting || filming;
-    if (!exportMenu.hidden) offload.render(jobs.offload);
+    const active = jobs.offload?.running || jobs.bring?.running || waiting || filming;
+    if (!$("offload-menu").hidden) offload.render(jobs.offload);
+    if (!$("settings-menu").hidden) renderSettings();
     pollTimer = setTimeout(poll, active ? 700 : 2500);
   } catch (e) {
     if (!jobs) sayProgress(null);
@@ -1435,9 +1322,10 @@ let heldMode = null;
 document.addEventListener("keydown", (e) => {
   const t = e.target;
   if (t.matches?.("select, textarea, input:not([type=range]):not([type=checkbox])")) return;
-  if (e.key === "Escape" && !exportMenu.hidden) {
-    setExportMenu(false);
-    $("export-more").focus();
+  const open = openMenu();
+  if (e.key === "Escape" && open) {
+    setMenu(open, false);
+    open.button.focus();
   } else if (e.key === " " && !(t instanceof HTMLButtonElement)) {
     e.preventDefault();
     togglePlay();

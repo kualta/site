@@ -346,15 +346,32 @@ test.if(usable)("exports straight off the card, writing only the export", async 
   expect(record.source).toBe(`Pocket 4P: DCIM/DJI_001/${withStill}`);
   expect(frames(join(movies, record.file))).toBe(frames(join(camera, "DJI_001", withStill)));
   expect(readdirSync(join(camera, "DJI_001")).sort()).toEqual([withStill, noStill].sort());
-  const library = await json("/api/library");
-  expect(library.camera.days[0]).toMatchObject({ id: camId, clips: 2, graded: 1 });
 }, 120_000);
 
-test.if(usable)("counts an export put in Movies/Exported by hand as graded", async () => {
+test.if(usable)("counts clips graded by hand, not exports, starting looks or the offload's look", async () => {
   writeFileSync(join(exported, "DJI_20260205090100_0002_D.mp4"), "made by hand");
   const s = await json(`/api/sources/${encodeURIComponent(camId)}`);
   expect(s.clips[1].exported).toMatchObject({ key: null });
-  expect((await json("/api/library")).camera.days[0].graded).toBe(2);
+  const library = await json("/api/library");
+  expect(library.defaultLook).toBe("agx-punchy");
+  // Both of the day's clips have an export, and neither a grade.
+  expect(library.camera.days[0]).toMatchObject({ id: camId, clips: 2, graded: 0 });
+  const counted = async (grade) => {
+    const put = await api(`/api/sources/${encodeURIComponent(camId)}/grades`, {
+      method: "PUT",
+      body: JSON.stringify({ clips: { [noStill]: grade } }),
+    });
+    expect(put.status).toBe(200);
+    return (await json("/api/library")).camera.days[0].graded;
+  };
+  expect(await counted({ base: "agx-punchy" })).toBe(0);
+  // ACES is where a D-Log2 clip starts here, with no OpenDRT.
+  expect(await counted({ base: "aces", exposure: 0 })).toBe(0);
+  expect(await counted({ base: "agx-punchy", exposure: 0.5 })).toBe(1);
+  expect(await counted({ base: "aces", deflicker: "light" })).toBe(1);
+  expect(await counted({ base: null })).toBe(0);
+  // The Mac's day: its clip's grade is the look it starts on.
+  expect((await json("/api/library")).folders.find((f) => f.id === folder).graded).toBe(0);
 });
 
 test.if(usable)("keeps a ledger of every clip and where its copies are, sent whole to the site's archive", async () => {

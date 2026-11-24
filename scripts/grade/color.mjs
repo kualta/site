@@ -227,6 +227,16 @@ export function resolveGrade(grade, baseIds) {
 }
 
 /**
+ * Whether a clip's saved grade is one made by hand: it moves the clip from where it starts, and isn't `given`, the
+ * look an offload gives a log clip nobody graded (the server's GRADE_DEFAULT_LOOK). One made by hand that comes to
+ * either can't be told from it.
+ */
+export function isGraded(grade, baseIds, given = DEFAULT_LOOKS[0]) {
+  const key = gradeKey(resolveGrade(grade, baseIds));
+  return key !== gradeKey(resolveGrade(undefined, baseIds)) && key !== gradeKey(resolveGrade({ base: given }, baseIds));
+}
+
+/**
  * The per-pixel adjustment for one clip as a function of code values, plus everything it needs precomputed.
  * `shotK` is the white balance the camera recorded (Kelvin); a grade's `kelvin: null` keeps it.
  */
