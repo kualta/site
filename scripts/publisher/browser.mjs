@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { Innertube } from "youtubei.js";
 import { humanClick, humanType, lookAround, pause } from "./human.mjs";
 import { rejected } from "./protocol.mjs";
+import { hasSession, signedOutMessage } from "./sessions.mjs";
 import { openStealthProfile } from "./stealth.mjs";
 
 export const destinations = {
@@ -381,7 +382,7 @@ export async function composeYoutubePost(page, files, caption) {
   await page.goto("https://www.youtube.com/profile");
   await page.waitForURL(/youtube\.com\/(?:channel\/UC[\w-]+|@[\w.-]+)/, { timeout: 30_000 }).catch(() => {});
   const channel = new URL(page.url()).pathname.match(/^\/(channel\/UC[\w-]+|@[\w.-]+)/)?.[1];
-  if (!channel) throw new Error("Log in to YouTube first");
+  if (!channel) throw rejected(signedOutMessage("YouTube"));
   await page.goto(`https://www.youtube.com/${channel}/posts`);
   const dialog = page.locator("ytd-backstage-post-dialog-renderer").first();
   await dialog.getByRole("button", { name: "Add an image", exact: true }).click();
@@ -485,6 +486,7 @@ async function confirmTikTokDraft(page, caption, profile) {
     message: "TikTok's draft list doesn't show the draft. Check TikTok Studio's drafts. Screenshot: last-error.png.",
   };
 }
+const names = { youtube: "YouTube", tiktok: "TikTok", xiaohongshu: "Xiaohongshu" };
 /** `draft`: TikTok saves the video as a draft instead of posting it, for the owner to post from the phone. */
 export async function publishBrowser(platform, profile, files, post, infos = [], signal, { cover, draft = false } = {}) {
   const context = await openProfile(profile);
@@ -494,10 +496,13 @@ export async function publishBrowser(platform, profile, files, post, infos = [],
     if (signal?.aborted) throw new Error("Stopped");
     const page = context.pages()[0] || (await context.newPage());
     page.setDefaultTimeout(60_000);
+    // A profile that has lost its sign-in posts nothing: say where to sign in again rather than time out on a login page.
+    if (!hasSession(platform, await context.cookies(await destination(platform, context))))
+      throw rejected(signedOutMessage(names[platform]));
     // Photos go to the channel's Posts tab in the browser below; a video goes up through YouTube's API.
     if (platform === "youtube" && post.kind === "video") {
       const cookie = youtubeCookie(await context.cookies("https://www.youtube.com"));
-      if (!cookie) throw new Error("Log in to YouTube first");
+      if (!cookie) throw rejected(signedOutMessage("YouTube"));
       const yt = await Innertube.create({
         cookie,
         retrieve_player: false,

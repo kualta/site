@@ -61,6 +61,18 @@ click **Finish sign-in** in the composer. Missing or expired sessions are not
 marked connected; Cancel closes the pending connection. No terminal input is
 needed for platform connections.
 
+A connected browser account can lose its sign-in later: a Chrome update once emptied every
+profile's cookie store while Accounts still said Connected. The helper looks for each one's
+sign-in cookie by name (Instagram `sessionid`, X `auth_token`, YouTube and the footage archive
+`SAPISID` or `__Secure-3PAPISID`, TikTok `sessionid` or `sessionid_ss`, Xiaohongshu
+`web_session`) in a copy of its profile's cookie store, never reading a value or opening Chrome:
+at start, every five minutes and after each connection. It sends the ones it finds signed out
+when that changes and hourly (`helper/sessions`, kept in the media bucket as
+`helper/sessions.json`, not D1). Accounts then says **Signed out** with **Sign in**, which opens
+the same window as Connect without disconnecting; **Disconnect** stays for disconnecting. Their
+posts wait in the queue until then, as a disconnected account's do, and a post or footage upload
+that still meets a signed-out profile fails saying to sign in again from Accounts.
+
 **Grain / Bluesky** opens the account's AT Protocol OAuth authorization page on
 your laptop and connects both destinations automatically after approval. The
 official Node OAuth client handles PKCE, DPoP and token refresh. The helper

@@ -8,6 +8,8 @@ const requests: { path: string; method: string; body: any; query: string }[] = [
 Object.assign(window, { publisherRequests: requests });
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 const connecting = new URLSearchParams(location.search).get("connecting");
+// Connected accounts the laptop found signed out, e.g. ?signedOut=instagram,youtube-footage.
+const signedOut = new URLSearchParams(location.search).get("signedOut")?.split(",") ?? [];
 const minutes = (count: number) => Date.now() - count * 60_000;
 const target = (platform: string, state: string, extra: Record<string, unknown> = {}) => ({
   id: `${platform}-${state}-${Math.random()}`,
@@ -664,6 +666,7 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
             },
           ]
         : [],
+      signedOut,
     });
   if (path === "footage" || path === "footage/watch") {
     if (method === "DELETE") return json({ watching: false });

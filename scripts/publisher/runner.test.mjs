@@ -395,6 +395,16 @@ test("stopping before anything is published leaves nothing to check", async () =
   expect(published).toBe(false);
 });
 
+test("a profile found signed out fails, nothing posted, and says to sign in again from Accounts", async () => {
+  const message = "X is signed out. Sign in again from Accounts, then retry.";
+  const result = await publish(
+    { platform: "twitter" },
+    post,
+    fixture({ python: async () => ({ ok: false, signedOut: true, message }) }),
+  );
+  expect(result).toEqual({ state: "failed", message });
+});
+
 test("a confirmed post without a link warns against retrying", async () => {
   const result = await publish(
     { platform: "instagram" },

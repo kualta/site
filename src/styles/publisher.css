@@ -242,6 +242,8 @@
 .publisher-history-pill[data-tone="gone"] > span::after { content:""; position:absolute; left:7px; right:7px; top:calc(50% - 1px); height:2px; border-radius:1px; background:currentColor; box-shadow:0 0 0 1.5px var(--publisher-page); transform:rotate(-40deg); }
 .publisher-account-status::before { content:""; flex:none; width:6px; height:6px; border-radius:50%; background:var(--publisher-muted); }
 .publisher-account-status[data-tone="ok"]::before { background:var(--publisher-success); }
+.publisher-account-status[data-tone="bad"] { color:var(--publisher-danger); }
+.publisher-account-status[data-tone="bad"]::before { background:var(--publisher-danger); }
 .publisher-account-status[data-tone="busy"]::before { animation:publisher-pulse 1.2s ease-in-out infinite; }
 /* A draft's one action: an ink chip beside its status, so it reads as the way in. */
 .publisher a.publisher-history-open { display:inline-flex; align-items:center; padding:2px 12px; border-radius:999px; background:var(--publisher-ink); color:var(--publisher-on-ink); font-size:12px; line-height:20px; transition:opacity 160ms; }
@@ -304,6 +306,8 @@
 .publisher-account-row { display:flex; align-items:center; gap:12px; }
 .publisher-account-row > div { flex:1; min-width:0; font-size:15px; line-height:22px; }
 .publisher-account-status { display:flex; align-items:center; gap:6px; margin:0; overflow:hidden; line-height:20px; text-overflow:ellipsis; white-space:nowrap; }
+/* On one line, so Sign in coming beside Disconnect when it signs out moves nothing. */
+.publisher-account-name { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .publisher .publisher-account-problem { margin:0; padding:0; border:0; }
 .publisher .publisher-account-problem > summary { overflow:hidden; color:var(--publisher-danger); font-size:13px; line-height:20px; list-style:none; text-overflow:ellipsis; white-space:nowrap; }
 .publisher-account-problem > summary::-webkit-details-marker { display:none; }

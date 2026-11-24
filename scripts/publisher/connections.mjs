@@ -5,6 +5,7 @@ import { destination, destinations, openProfile } from "./browser.mjs";
 import { connectFarcaster, disconnectFarcaster } from "./farcaster.mjs";
 import { FOOTAGE, FOOTAGE_HOME, channelIn } from "./footage.mjs";
 import { connectLens, disconnectLens } from "./lens.mjs";
+import { hasSession } from "./sessions.mjs";
 
 // Posted to directly with their own keys, so there's no browser session to keep.
 const keyed = {
@@ -14,24 +15,6 @@ const keyed = {
 
 // Where each browser account signs in: the destinations, and the footage archive's own YouTube channel.
 const sites = { ...destinations, [FOOTAGE]: FOOTAGE_HOME };
-
-// Session cookies are checked only after the owner finishes the interactive login.
-export function hasSession(platform, cookies) {
-  const youtube = ["SAPISID", "__Secure-3PAPISID"];
-  const names =
-    {
-      instagram: ["sessionid"],
-      twitter: ["auth_token"],
-      youtube,
-      [FOOTAGE]: youtube,
-      tiktok: ["sessionid", "sessionid_ss"],
-      xiaohongshu: ["web_session"],
-    }[platform] || [];
-  return cookies.some(
-    (cookie) =>
-      names.includes(cookie.name) && cookie.value && (cookie.expires === -1 || cookie.expires > Date.now() / 1000),
-  );
-}
 
 /** The channel the YouTube destination posts to, so the footage archive never lands on it. */
 async function postingChannel(stateDir, open) {
@@ -109,7 +92,7 @@ export async function connectAccount(
           /\/(login|accounts\/login|signin)(\/|\?|$)/i.test(page.url()) ||
           !hasSession(connection.platform, await browser.cookies(url))
         )
-          throw new Error("No signed-in session found. Connect again and finish signing in before confirming.");
+          throw new Error("No signed-in session found. Try again, and finish signing in before confirming.");
         if (connection.platform === FOOTAGE) connected = await footageChannel(page, { stateDir, config, open });
         await active();
         config.platforms = [...new Set([...config.platforms, connection.platform])];

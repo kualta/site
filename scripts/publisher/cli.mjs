@@ -27,6 +27,7 @@ import { createOAuth, ensureClientKey } from "./oauth.mjs";
 import { reconcilePostRecords, sweepPostRecords, sweepWait, syncPostRecord } from "./post-record.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
+import { CHECK_EVERY, signInWatch } from "./sessions.mjs";
 import { archiveStories, crosspostStories, storiesRoot } from "./stories.mjs";
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -127,6 +128,16 @@ if (command === "connect") {
       .catch((error) => console.error(`Chrome copy cleanup failed: ${error.message}`));
   void sweep();
   setInterval(sweep, 10 * 60_000).unref();
+  // Accounts says which connected browser accounts' profiles have lost their sign-in, read from their cookie stores
+  // without opening Chrome; their posts wait for it, as a disconnected account's do.
+  const signIns = signInWatch({
+    stateDir,
+    platforms: () => config.platforms,
+    api,
+    log: (line) => console.log(`${new Date().toISOString()} ${line}`),
+  });
+  await signIns.check();
+  setInterval(() => void signIns.check(), CHECK_EVERY).unref();
   // Graded clips go up to the footage archive's channel beside the publishing, and only while the composer's Archive
   // tab is open, so they never take the network unseen. The helper asks every 10 seconds; closing the tab stops the
   // upload mid-part, to resume there the next time it opens.
@@ -146,7 +157,13 @@ if (command === "connect") {
     try {
       config = JSON.parse(await readFile(configFile, "utf8"));
       const { target, post, connection, deletion, analytics } = await (
-        await api("claim", { platforms: config.platforms, deletePublications: true, analytics: true, carousels: true })
+        await api("claim", {
+          platforms: config.platforms,
+          signedOut: signIns.signedOut(),
+          deletePublications: true,
+          analytics: true,
+          carousels: true,
+        })
       ).json();
       if (analytics) {
         const result = await collectAnalytics(analytics.target, { stateDir });
@@ -171,6 +188,8 @@ if (command === "connect") {
       }
       if (connection) {
         const result = await connectAccount(connection, { stateDir, config, oauth, api, save });
+        // Accounts hears whether the profile is signed in now along with the result, not a check later.
+        await signIns.check();
         // Retry the receipt only; never reopen or repeat an account action.
         for (let attempt = 0; attempt < 5; attempt++) {
           try {
@@ -222,7 +241,11 @@ if (command === "connect") {
         if (delivered && result.state === "succeeded") await syncPostRecord(post.id, { api, oauth });
       } else if (config.platforms.includes("bluesky") && Date.now() >= recordsDue) {
         recordsDue = Date.now() + sweepWait(await sweepPostRecords({ api, oauth }));
-      } else if (config.platforms.includes("instagram") && Date.now() >= storiesDue) {
+      } else if (
+        config.platforms.includes("instagram") &&
+        !signIns.signedOut().includes("instagram") &&
+        Date.now() >= storiesDue
+      ) {
         storiesDue = Date.now() + 60 * 60_000;
         const { saved, removed, total } = await archiveStories({ stateDir });
         if (saved) console.log(`Saved ${saved} Instagram stories (${total} in ${storiesRoot})`);
