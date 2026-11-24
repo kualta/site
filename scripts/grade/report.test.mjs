@@ -63,8 +63,17 @@ test("says each switch's state, what's left for it and the space it has, the tra
     left: Math.round((40.1e9 - 1.4e9) / 887_500),
     waiting: null,
     error: null,
+    // The upload in flight, with how far it's got.
+    current: [{ name: "DJI_8.MP4", sent: 0.1e9, size: 0.3e9 }],
   });
-  expect(report.lanes.copy).toEqual({ state: "done", speed: null, left: null, waiting: null, error: null });
+  expect(report.lanes.copy).toEqual({
+    state: "done",
+    speed: null,
+    left: null,
+    waiting: null,
+    error: null,
+    current: [],
+  });
   expect(report).toEqual({
     version: 1,
     at: "2026-11-23T12:00:00.000Z",
@@ -119,7 +128,7 @@ test("says what a switch waits for, that it's paused, stopping or failed, and th
   // No run yet: every switch idle, with what waits for it.
   const idle = macReport(summary(null), { now: 0 });
   expect(idle.running).toBe(false);
-  expect(idle.lanes.copy).toEqual({ state: "idle", speed: null, left: null, waiting: null, error: null });
+  expect(idle.lanes.copy).toEqual({ state: "idle", speed: null, left: null, waiting: null, error: null, current: [] });
   expect(readMacReport(idle)).toEqual(idle);
 });
 

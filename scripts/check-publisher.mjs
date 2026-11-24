@@ -2236,6 +2236,11 @@ try {
           Math.abs(shares[0] - 454 / 494) < 0.01 && Math.abs(shares[1] - 38.7 / 494) < 0.01,
           `The Mac's bar shows ${shares}`,
         );
+        // The clips in flight, a row each with how far it's got; the card's row is kept, empty.
+        const files = await mac
+          .locator(".publisher-mac-files")
+          .evaluateAll((lists) => lists.map((list) => [...list.children].map((row) => row.textContent)));
+        assert.deepEqual(files, [["\u00a0\u00a0"], ["008659%", "008727%"]]);
       }
       if (expected.figures) assert.deepEqual(await figures(), expected.figures);
       if (expected.copy) assert.match(copy.at(-1), expected.copy);

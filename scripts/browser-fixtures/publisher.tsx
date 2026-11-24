@@ -493,8 +493,14 @@ function macReply() {
     left: null,
     waiting: null,
     error: null,
+    current: [],
     ...extra,
   });
+  // The two uploads in flight while Mac → Cloud runs.
+  const flying = [
+    { name: "DJI_20261108122204_0086_D.MP4", sent: 101e6, size: 171e6 },
+    { name: "DJI_20261108122224_0087_D.MP4", sent: 50e6, size: 180e6 },
+  ];
   const ended = state === "done" || state === "failed";
   const until = new Date(Date.now() + 4 * 60_000).toISOString();
   // Paused from the Footage tab, a run going holds after the part in flight.
@@ -509,13 +515,13 @@ function macReply() {
         state: "failed",
         error: "Cloudflare refused the pairing (401): pair the crossposter helper again",
       }),
-    }[held ?? state ?? ""] ?? lane({ speed: 887_500, left: 43_600 });
+    }[held ?? state ?? ""] ?? lane({ speed: 887_500, left: 43_600, current: flying });
   let copy =
     state === "waiting"
       ? lane({ state: "waiting", waiting: { for: "camera", why: "The camera isn't plugged in", until } })
       : lane({ state: "done" });
   // What the Mac has taken of the owner's Start and Pause.
-  if (taken.send) send = taken.send.want === "pause" ? lane({ state: "stopped" }) : lane({ speed: 887_500, left: 43_600 });
+  if (taken.send) send = taken.send.want === "pause" ? lane({ state: "stopped" }) : lane({ speed: 887_500, left: 43_600, current: flying });
   if (taken.copy) copy = taken.copy.want === "pause" ? lane({ state: "stopped" }) : lane({ waiting: null });
   const heard = (name: string) => (taken[name] ? { at: taken[name].at, error: null } : null);
   return {

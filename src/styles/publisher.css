@@ -371,6 +371,13 @@
 .publisher-mac dt { color:var(--publisher-muted); font-size:13px; }
 .publisher-mac dd { margin:2px 0 0; overflow:hidden; font-size:15px; font-variant-numeric:tabular-nums; text-overflow:ellipsis; white-space:nowrap; }
 .publisher .publisher-mac dd small { display:block; overflow:hidden; color:var(--publisher-muted); font-size:12px; line-height:18px; height:18px; text-overflow:ellipsis; }
+/* The clips in flight, a row each, kept whether or not one is going. */
+.publisher-mac-files { margin:10px 0 0; padding:0; list-style:none; }
+.publisher-mac-files > li { display:grid; grid-template-columns:4.5em minmax(0,1fr) 3em; gap:12px; align-items:center; height:20px; font-size:13px; font-variant-numeric:tabular-nums; }
+.publisher-mac-files > li > span:first-child { color:var(--publisher-muted); }
+.publisher-mac-files > li > span:last-child { text-align:right; }
+.publisher-mac-files .publisher-archive-bar { height:4px; }
+.publisher-mac-files > li[data-empty] { visibility:hidden; }
 .publisher-mac-why { height:20px; margin:4px 0 0; overflow:hidden; color:var(--publisher-muted); font-size:13px; line-height:20px; text-overflow:ellipsis; white-space:nowrap; }
 .publisher-mac-figures { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:16px 24px; margin:20px 0 0; padding:16px 0; border-bottom:1px solid var(--publisher-line); }
 /* What a Mac that's stopped saying anything last said. */
