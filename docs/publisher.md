@@ -345,7 +345,7 @@ own account) before Finish. The helper keeps the channel the window is on, with 
 picks it among a Google account's channels, and refuses the channel the YouTube destination posts to.
 
 The helper uploads only while the composer's **Footage** tab (post.kualta.dev/footage; its old
-address, /archive, is the Archive tab's now) is open, so the uploads never take the network unseen. The tab says it's open when it opens and every 30
+address, /archive, opens it too) is open, so the uploads never take the network unseen. The tab says it's open when it opens and every 30
 seconds after, and says it closed when it's left (another tab, a reload, the window closed); a tab
 that goes quiet without saying so counts as closed after 150 seconds. The helper asks every 10
 seconds and, while the tab is open, sends it what's up every 5 seconds during an upload: the clip
@@ -393,7 +393,12 @@ Mac's and the archive's originals and graded copies, with what keeping the archi
 YouTube's videos, counted since they're re-encoded), then every clip by day, newest first, with its grade, ✓ or – for each copy, the clip
 going up to YouTube with its share, and filters for clips at risk (no copy off the Mac and the
 card), not graded, not on YouTube and not in Cloudflare. A clip's **Grade** opens it in the Grade
-tab.
+tab, and one whose original is in Cloudflare plays from its row (see Playing a clip). **Small**, **Medium** and
+**Large** set every row's picture: 32, 128 and 288 px wide (Large no wider than a phone has room for beside the time,
+250 px on a 390 px phone), with the clip's length once it's Medium; the choice is kept in the browser. Scrolled, the
+column heads and the shoot day of the rows at the top stay at the top of the window, the day changing as the next one's
+heading slides under it. The table scrolls sideways in a box of its own where it's wider than the page, so these are a
+copy outside the box, moved sideways with it; each day's heading stays at the box's left.
 
 The archive's cost is the footage's bytes (originals and graded copies, as the ledger counts them) at R2's Infrequent
 Access price, the archive bucket's default class, which the Worker's puts of footage don't override: $0.01 a GB-month,
@@ -452,29 +457,29 @@ tabs are shown, takes the composer's light or dark, and opens the clips Grade as
 short ("Offloading 7 / 167 · 12.1 h left"), as a link: the app asks the composer (`grade-footage`, by the same messages
 and origin checks as the rest) to open the Footage tab at This Mac. See `scripts/grade/README.md`.
 
-**Archive tab.** post.kualta.dev/archive (once the Footage tab's address; an old link lands here) shows the originals the
-grade app offloaded to Cloudflare, its `_originals-<day>` projects, a shoot day at a time, newest first, and 24 clips a
-page. Each clip has the ledger's thumbnail, recording time, duration and profile, its size, whether its transcript is
-filed, and where else it is (the camera, the Mac, a graded copy). The day, page and open clip are in the address
-(`?day=2026-11-08&page=2&clip=DJI_20261108122204_0086_D`). It reads no D1, and nothing the laptop runs:
+**Playing a clip.** In the Footage tab, a clip whose original the grade app offloaded to Cloudflare (its
+`_originals-<day>` projects) opens in a player from its picture or anywhere on its row. The clip open is in the address
+(`/footage?clip=DJI_20261108122204_0086_D`), so it can be linked and Back closes it. The Archive tab that used to list
+the days is gone: its address, `/archive?day=2026-11-08&clip=…`, opens the Footage tab on the same clip. The player finds
+the clip in its shoot day's listing, the day the ledger says it was recorded (or the one an old link names). It reads no
+D1, and nothing the laptop runs:
 
-- `GET archive/days` lists the days from the projects' names alone (an R2 list with a `/` delimiter).
 - `GET archive/days/<day>` reads that day's latest manifest and answers about 200 bytes a clip: its file, hash, size
   and its transcript's hash. A day's manifest is saved after every clip, hundreds of versions, so the latest is found by
   listing only the last day's versions, then the last week's, month's, year's, before all of them.
 - `GET archive/settings` reads `_settings` the same way: the grade app's grades, export records and looks.
 - Each is kept in the Worker's cache (`caches.default`, per data centre) for 5 minutes and in the browser for one, so
-  opening the tab again costs neither the Worker nor the archive. A clip offloaded meanwhile shows up within 5 minutes.
+  opening clips again costs neither the Worker nor the archive. A clip offloaded meanwhile is found within 5 minutes.
 - `GET archive/files/<sha256>/<name>` streams a file of the archive, typed by its name (`.MP4` video/mp4, `.MOV`
   video/quicktime, `.vtt`, `.json`, `.cube`), with `Accept-Ranges: bytes`: a `Range` (one range, a suffix too) is passed
   to R2 and answered 206 with its `Content-Range`, one past the end 416 with `bytes */<size>`. R2's body goes straight
   through, never into the Worker. All of these need the owner's sign-in; the laptop's pairing doesn't open them.
 
-A clip opens in a player. Nothing of it is read until **Watch**, which says first what watching it through reads, at
-R2 Infrequent Access's $0.01 a GB (a 4K60 clip at 127 Mbit/s is about 1 GB a minute, so about a cent a minute):
-`Reads up to 2.86 GB, about $0.03`. Seeking reads only from there, and closing the player stops the read. The camera
-records 10-bit HEVC, which Safari, and Chrome or Edge on a Mac, decode in hardware. A browser that says it can't
-(Firefox, Chrome without hardware HEVC, most of Linux) shows so in place of Watch, with **Try anyway** (it reads only the
+The player plays the clip as it opens, as a preview does, reading at R2 Infrequent Access's $0.01 a GB (a 4K60 clip at
+127 Mbit/s is about 1 GB a minute, so about a cent a minute). Seeking reads only from there, and closing the player
+stops the read. A clip its day's listing doesn't have says so; a listing that can't be read offers **Try again**. The
+camera records 10-bit HEVC, which Safari, and Chrome or Edge on a Mac, decode in hardware. A browser that says it can't
+(Firefox, Chrome without hardware HEVC, most of Linux) reads nothing and says so, with **Try anyway** (it reads only the
 start before failing) and **Bring to Mac**; one that fails partway says it couldn't decode it. Watching streams the
 original's full bitrate, so a slow connection waits for it.
 
@@ -498,7 +503,8 @@ video to WebGL at 8 bits, there's no decoder calibration here, and an HLG origin
 before the look sees it. The choice is remembered in the browser.
 
 **Bring to Mac** (or **Open in Grade**, for a clip the camera or the Mac still has) opens the clip in the Grade tab
-(`#clip=<file>`), whose Cloudflare list has Bring for it.
+(`#clip=<file>`), whose Cloudflare list has Bring for it. The player closes as it goes, so coming back to Footage
+doesn't open it again.
 
 **The page's title** names the open tab (`footage · kualta`). While that tab shows something going up,
 its percentage leads (`43% · footage · kualta`): on Footage the clip going up to YouTube, on Grade the

@@ -1,9 +1,10 @@
 import { writeCube } from "../grade/color.mjs";
 
 /*
- * The Archive tab's side of the mocked API: three shoot days offloaded to Cloudflare, one long enough to page through,
- * and the grade app's settings backup with its grades, export records and two stand-in looks whose colours a check can
- * work out: the default look turns a colour to its negative, and Velvia moves each channel its own way.
+ * The archive's side of the mocked API, which the Footage tab's player reads: the shoot days the ledger's clips in the
+ * cloud are filed under, one of thirty clips, and the grade app's settings backup with its grades, export records and
+ * two stand-in looks whose colours a check can work out: the default look turns a colour to its negative, and Velvia
+ * moves each channel its own way.
  */
 export const hash = (n) => n.toString(16).padStart(64, "0");
 export const LOOKS = {
@@ -43,7 +44,6 @@ const day8 = Array.from({ length: 30 }, (_, i) => {
   return { file, sha256: hash(n), size: 2_000_000_000 + n * 10_000_000, ...(n % 4 ? { vtt: hash(10_000 + n) } : {}) };
 });
 export const archiveDays = {
-  "2026-11-21": [{ file: "DJI_20261121101500_0402_D.MP4", sha256: hash(402), size: 3_000_000_000, vtt: hash(10_402) }],
   "2026-11-11": [{ file: "DJI_20261111161230_0258_D.MP4", sha256: hash(258), size: 3_000_000_000 }],
   "2026-11-08": day8,
 };
@@ -76,7 +76,6 @@ export const archiveSettings = {
 
 /** What the archive routes answer, or null for any other path. */
 export function archiveAnswer(path) {
-  if (path === "archive/days") return Response.json({ days: Object.keys(archiveDays) });
   const day = /^archive\/days\/(.+)$/.exec(path)?.[1];
   if (day) return Response.json({ day, at: archiveSettings.at, clips: archiveDays[day] ?? [] });
   if (path === "archive/settings") return Response.json(archiveSettings);

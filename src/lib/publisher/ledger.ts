@@ -60,6 +60,13 @@ export const thumbUrl = (clip: string, thumb: LedgerClip["thumb"]) =>
 /** The day a clip was recorded, YYYY-MM-DD, or "" when unknown. */
 export const dayOf = (c: LedgerClip) => c.recorded?.slice(0, 10) ?? "";
 
+/** The ledger's key for a clip named by its name without the extension, in any case, as an address names it. */
+export function ledgerKey(ledger: Ledger, stem: string) {
+  if (Object.hasOwn(ledger.clips, stem)) return stem;
+  const lower = stem.toLowerCase();
+  return Object.keys(ledger.clips).find((key) => key.toLowerCase() === lower);
+}
+
 /** The clips a piece's footage is, or null when it names none or the film isn't in the ledger yet. */
 export function linkedClips(link: FootageLink | undefined, ledger: Ledger | null): LedgerClip[] | null {
   if (!link || !ledger) return null;

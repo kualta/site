@@ -1,26 +1,24 @@
 import { DEFAULT_LOOKS, normalizeGrade } from "../../../scripts/grade/color.mjs";
 import { lookPath } from "../../../scripts/grade/looks.mjs";
 import type { ArchivedClip, ArchivedSettings } from "./archive-tab";
-import type { LedgerClip } from "./ledger";
 
-/** What the Archive tab shows, kept in its address: the shoot day and the clip open. */
-export interface ArchiveView {
-  day: string | null;
+/**
+ * The clip the Footage tab's player has open, kept in its address: by its name without the extension, and the shoot day
+ * the cloud files it under when the address says (an Archive tab link does; otherwise the ledger knows).
+ */
+export interface FootageView {
   clip: string | null;
+  day: string | null;
 }
-export function readArchiveView(search: string): ArchiveView {
+export function readFootageView(search: string): FootageView {
   const params = new URLSearchParams(search);
+  const clip = params.get("clip") || null;
   const day = params.get("day");
-  return {
-    day: day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
-    clip: params.get("clip") || null,
-  };
+  return { clip, day: clip && day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null };
 }
-export function writeArchiveView({ day, clip }: ArchiveView): string {
-  const entries: string[] = [];
-  if (day) entries.push(`day=${day}`);
-  if (clip) entries.push(`clip=${encodeURIComponent(clip)}`);
-  return entries.length ? `?${entries.join("&")}` : "";
+export function writeFootageView({ clip, day }: FootageView): string {
+  if (!clip) return "";
+  return `?clip=${encodeURIComponent(clip)}${day ? `&day=${day}` : ""}`;
 }
 
 /** A clip's name without its extension: how the ledger and the transcripts know it. */
@@ -29,6 +27,9 @@ export const stemOf = (file: string) => file.replace(/\.[^.]+$/, "");
 export const clipNumber = (file: string) => /^DJI_\d{14}_(\d+)/.exec(file)?.[1] ?? stemOf(file);
 /** When a DJI clip was recorded, by its name, for a clip the ledger doesn't know: "12:22:04". */
 export const nameTime = (file: string) => /^DJI_\d{8}(\d{2})(\d{2})(\d{2})_/.exec(file)?.slice(1).join(":") ?? null;
+/** A shoot day's clip by its name without the extension, in any case, as the ledger keys it. */
+export const archivedClip = (clips: ArchivedClip[], stem: string) =>
+  clips.find((clip) => stemOf(clip.file).toLowerCase() === stem.toLowerCase());
 
 /** Where a file of the archive is read, by its hash, named for its type. */
 export const fileUrl = (sha256: string, name: string) =>
@@ -55,21 +56,6 @@ export function clock(seconds: number) {
 }
 
 export const PROFILES: Record<string, string> = { dlog2: "D-Log2", dlog: "D-Log", hlg: "HLG", rec709: "Rec.709" };
-
-/**
- * Where else a clip is, from the ledger, in a line: its original on the camera or the Mac, and its graded video on
- * YouTube; nothing when the cloud's is the only one. Graded copies aren't kept, so any left aren't named.
- */
-export function otherCopies(clip: LedgerClip | undefined) {
-  if (!clip) return "Not in the ledger";
-  const original = [clip.original.camera && "camera", clip.original.mac && "Mac"].filter(Boolean);
-  const parts = [];
-  if (original.length) parts.push(`Also on ${original.join(", ")}`);
-  if (clip.graded?.youtube) parts.push("graded on YouTube");
-  if (!parts.length) return "";
-  const line = parts.join(" · ");
-  return line[0].toUpperCase() + line.slice(1);
-}
 
 /** A transcript's lines, from its WebVTT: when each starts and ends, in seconds, and what's said. */
 export interface Cue {
@@ -122,11 +108,11 @@ export function defaultLook(profile: string | null | undefined, settings: Archiv
 }
 
 /**
- * The clip's own grade, as the grade app would bake it: its grade from the backed-up grades.json over its look's LUT,
+ * The clip's own grade, by its file's name, as the grade app would bake it: its grade from the backed-up grades.json over its look's LUT,
  * with the camera's white balance from its export record when the grade moves it.
  */
 export function ownGrade(
-  clip: ArchivedClip,
+  file: string,
   profile: string | null | undefined,
   settings: ArchivedSettings | null,
   grades: Record<string, Record<string, unknown>> | null,
@@ -134,7 +120,7 @@ export function ownGrade(
 ): Look {
   if (!profile || !PROFILES[profile]) return { ok: false, why: "The ledger doesn't know its profile yet" };
   if (!settings || !grades) return { ok: false, why: "Reading its grade…" };
-  const saved = grades[clip.file];
+  const saved = grades[file];
   if (!saved) return { ok: false, why: "It hasn't been graded" };
   const grade = normalizeGrade(saved) as Record<string, unknown> & {
     base: string | null;
@@ -150,7 +136,7 @@ export function ownGrade(
   const path = base === "none" ? null : backedUp(settings, profile, base);
   if (base !== "none" && !path) return { ok: false, why: "Its look isn't backed up yet" };
   // Moving the white balance starts from the camera's, which only an export records.
-  const shotK = Number(exports?.[clip.file]?.cameraKelvin) || null;
+  const shotK = Number(exports?.[file]?.cameraKelvin) || null;
   if ((grade.kelvin !== null || grade.tint) && !shotK)
     return { ok: false, why: "Its white balance needs the camera's, which only its export records" };
   return { ok: true, path, grade: { ...grade, base }, shotK, name: base };

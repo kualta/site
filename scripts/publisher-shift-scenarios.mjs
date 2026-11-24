@@ -25,7 +25,7 @@ const preset = (active, change = {}) => ({
     })),
   }),
 });
-const tabs = ["compose", "pipeline", "history", "calendar", "analytics", "footage", "archive", "grade", "accounts"];
+const tabs = ["compose", "pipeline", "history", "calendar", "analytics", "footage", "grade", "accounts"];
 const tabNames = tabs.map((tab) => tab[0].toUpperCase() + tab.slice(1));
 /** Text of a length, in words. */
 const words = (length) => "long words ".repeat(400).slice(0, length);
@@ -63,7 +63,7 @@ export const scenarios = [
     name: "opens a draft that's gone",
     query: { draft: "00000000-0000-4000-8000-000000000bad" },
   },
-  ...["compose", "pipeline", "history", "calendar", "analytics", "footage", "archive", "accounts"].flatMap((tab) => [
+  ...["compose", "pipeline", "history", "calendar", "analytics", "footage", "accounts"].flatMap((tab) => [
     {
       tab,
       name: "loads with nothing in it",
@@ -75,7 +75,6 @@ export const scenarios = [
           calendar: { posts: [] },
           analytics: { posts: [], next: null },
           "footage/links": { links: {} },
-          "archive/days": { days: [] },
           "footage/mac": { age: null, report: null },
         };
         window.publisherFixture.change = (path, value) =>
@@ -757,29 +756,36 @@ export const scenarios = [
     },
   },
 
-  // Archive.
   {
-    tab: "archive",
-    name: "changes days",
-    query: { day: "2026-11-08" },
+    tab: "footage",
+    name: "loads with large pictures",
+    storage: { "publisher.footageThumbs": "large" },
+  },
+  {
+    tab: "footage",
+    name: "switches picture sizes",
     run: async (page, { step }) => {
-      for (const day of ["11 Nov", "21 Nov", "8 Nov"]) {
-        await step(`opens ${day}`);
-        await page
-          .getByRole("navigation", { name: "Shoot days" })
-          .getByRole("button", { name: new RegExp(day) })
-          .click();
-        await sleep(1000);
+      const sizes = page.getByRole("group", { name: "Thumbnails" });
+      // Each change a step of its own name: small to large, large to small, small to medium, medium to large.
+      for (const [from, size] of [
+        ["small", "Large"],
+        ["large", "Small"],
+        ["small", "Medium"],
+        ["medium", "Large"],
+      ]) {
+        await step(`shows them ${size.toLowerCase()}, from ${from}`);
+        await sizes.getByRole("button", { name: size }).click();
+        await sleep(900);
       }
     },
   },
+  // A clip in the cloud, played in the Footage tab.
   {
-    tab: "archive",
+    tab: "footage",
     name: "opens a clip and picks its looks",
-    query: { day: "2026-11-08" },
     run: async (page, { opens, still, step }) => {
       await opens("opens the clip");
-      await page.getByRole("button", { name: "Clip 0086, recorded 12:22:04" }).click();
+      await page.getByRole("button", { name: "Play clip 0086" }).click();
       await sleep(1500);
       await still("reads its transcript and grade");
       await sleep(1500);
@@ -792,12 +798,15 @@ export const scenarios = [
         await player.getByRole("group", { name: "Look" }).getByRole("button", { name: look }).click();
         await sleep(900);
       }
+      await step("closes it");
+      await page.keyboard.press("Escape");
+      await sleep(900);
     },
   },
   {
-    tab: "archive",
+    tab: "footage",
     name: "watches a clip in each look",
-    query: { day: "2026-11-08", clip: "DJI_20261108122204_0086_D" },
+    query: { clip: "DJI_20261108122204_0086_D" },
     // A browser that plays HEVC, given a WebM in the original's place.
     init: () => {
       const can = HTMLMediaElement.prototype.canPlayType;

@@ -10,7 +10,7 @@ test("the title names the open tab", () => {
     "calendar · kualta",
     "analytics · kualta",
     "footage · kualta",
-    "archive · kualta",
+    "footage · kualta",
     "grade · kualta",
     "accounts · kualta",
   ]);

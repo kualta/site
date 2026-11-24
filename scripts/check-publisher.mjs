@@ -6,7 +6,7 @@ import path from "node:path";
 import ffmpeg from "ffmpeg-static";
 import { createServer } from "vite";
 import { chromium } from "playwright";
-import { checkArchive } from "./check-publisher-archive.mjs";
+import { checkPlayer } from "./check-publisher-player.mjs";
 import { findShifts } from "./publisher-shifts.mjs";
 
 // Drives the publisher's composer with a mocked API: what each mix of text and media can reach, and what it queues.
@@ -1708,12 +1708,12 @@ try {
       await page.goto(`${composer}/${tab}`);
       await titled(`${tab} · kualta`);
     }
-    // The Footage tab's old address is the Archive tab's now.
+    // The Archive tab's old address, and the Footage tab's before it, opens the Footage tab.
     await page.goto(`${composer}/archive?archive=done`);
-    await titled("archive · kualta");
+    await titled("footage · kualta");
     await page.goto(`${composer}?archive=done`);
     await titled("compose · kualta");
-    const names = ["Pipeline", "History", "Calendar", "Analytics", "Footage", "Archive", "Grade", "Accounts", "Compose"];
+    const names = ["Pipeline", "History", "Calendar", "Analytics", "Footage", "Grade", "Accounts", "Compose"];
     for (const name of names) {
       await open(name);
       await titled(`${name.toLowerCase()} · kualta`);
@@ -1876,7 +1876,7 @@ try {
     await row("0402").getByText("· in 014-walk").waitFor();
     // Where each clip's original is, and its video on YouTube. Graded copies aren't kept, so none are shown: not the
     // exports on the Mac, nor an old film's copy in the cloud.
-    assert.deepEqual(await ledger.locator("thead th").allTextContents(), [
+    assert.deepEqual(await ledger.locator(".publisher-ledger-scroll thead th").allTextContents(), [
       "Recorded",
       "Clip",
       "Profile",
@@ -1911,7 +1911,7 @@ try {
       /\/analytics\?post=00000000-0000-4000-8000-000000000008$/,
     );
     assert.equal(await row("0086").getByRole("button", { name: "Grade" }).isDisabled(), true);
-    await ledger.locator("img.publisher-ledger-thumb").first().waitFor();
+    await ledger.locator(".publisher-ledger-thumb img").first().waitFor();
     assert.deepEqual(
       await ledger.getByRole("group", { name: "Show" }).getByRole("button").allTextContents(),
       ["All 6", "At risk 4", "Not graded 1", "Not on YouTube 2", "Not in the cloud 4"],
@@ -1922,6 +1922,46 @@ try {
     // The page never scrolls sideways: on a phone the table scrolls in its own box.
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     if (shots) await page.screenshot({ path: path.join(shots, `footage-${name}.png`), fullPage: true });
+
+    // Each row's picture at the size chosen, kept in this browser: Small keeps a row a line of text tall, Medium and
+    // Large grow it, Large wide enough to judge a shot but no wider than a phone has room for beside the time.
+    const sizes = ledger.getByRole("group", { name: "Thumbnails" });
+    assert.deepEqual(await sizes.getByRole("button").allTextContents(), ["Small", "Medium", "Large"]);
+    await sizes.getByRole("button", { name: "Small", pressed: true }).waitFor();
+    const picture = () =>
+      row("0402")
+        .locator(".publisher-ledger-thumb")
+        .evaluate((thumb) => {
+          const box = thumb.getBoundingClientRect();
+          return [box.width, box.height, thumb.closest("tr").getBoundingClientRect().height].map(Math.round);
+        });
+    const [, , lineTall] = await picture();
+    assert.deepEqual((await picture()).slice(0, 2), [32, 18]);
+    for (const [size, wide] of [
+      ["Medium", 128],
+      ["Large", width > 700 ? 288 : 250],
+    ]) {
+      await sizes.getByRole("button", { name: size }).click();
+      await sizes.getByRole("button", { name: size, pressed: true }).waitFor();
+      const [w, h, tall] = await picture();
+      assert.deepEqual([w, h], [wide, Math.round((wide * 9) / 16)]);
+      assert.ok(tall > h, `a ${size} row is ${tall}px tall around its ${h}px picture`);
+      assert.equal(await page.evaluate(() => localStorage.getItem("publisher.footageThumbs")), size.toLowerCase());
+    }
+    // Its length shows once there's room for it. On a desktop the whole table still fits, Grade and all.
+    await row("0402").locator(".publisher-ledger-thumb .length").filter({ hasText: "0:30" }).waitFor();
+    if (width > 700)
+      assert.equal(
+        await ledger.locator(".publisher-ledger-scroll").evaluate((box) => box.scrollWidth <= box.clientWidth),
+        true,
+      );
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-large-${name}.png`), fullPage: true });
+    await page.reload();
+    await sizes.getByRole("button", { name: "Large", pressed: true }).waitFor();
+    assert.equal((await picture())[0], width > 700 ? 288 : 250);
+    await sizes.getByRole("button", { name: "Small" }).click();
+    assert.deepEqual(await picture(), [32, 18, lineTall]);
 
     // Grade opens the clip in the Grade tab, and leaving the Footage tab tells the laptop to stop uploading.
     await row("0402").getByRole("button", { name: "Grade" }).click();
@@ -1969,8 +2009,121 @@ try {
     await context.close();
   }
 
-  // The Archive tab: shoot days, a clip's player, its transcript and looks (scripts/check-publisher-archive.mjs).
-  await checkArchive(browser, { composer: "http://127.0.0.1:8797/publisher.html", dir: clips, shots });
+  // A clip's player in the Footage tab: its transcript and looks (scripts/check-publisher-player.mjs).
+  await checkPlayer(browser, { composer: "http://127.0.0.1:8797/publisher.html", dir: clips, shots });
+  // Scrolled, the column heads and the shoot day of the rows at the top stay at the top of the window: the day changes
+  // as the next day's heading slides under it, and on a phone, where the table scrolls sideways in a box of its own,
+  // the heads move sideways with it while the day stays at its left.
+  for (const [width, name] of [
+    [1280, "desktop"],
+    [390, "mobile"],
+  ]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    // Three more days of twenty clips each.
+    await context.addInitScript(() => {
+      window.publisherAnswer = async (input, init, respond) => {
+        const response = await respond(input, init);
+        if (new URL(String(input), location.href).pathname !== "/api/publisher/footage/ledger") return response;
+        const ledger = await response.json();
+        const like = ledger.clips.DJI_20261108122204_0086_D;
+        for (const day of ["2026-11-19", "2026-11-18", "2026-11-17"])
+          for (let i = 0; i < 20; i++) {
+            const minute = String(i).padStart(2, "0");
+            const key = `DJI_${day.replaceAll("-", "")}10${minute}00_${String(500 + i).padStart(4, "0")}_D`;
+            ledger.clips[key] = { ...like, name: `${key}.MP4`, recorded: `${day}T10:${minute}:00` };
+          }
+        return Response.json(ledger);
+      };
+    });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/api/publisher/footage/thumbs/**", (route) =>
+      route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="36"><rect width="64" height="36" fill="#8a8f99"/></svg>',
+      }),
+    );
+    const theme = width > 700 ? "dark" : "light";
+    await page.goto(`http://127.0.0.1:8797/publisher.html/footage?theme=${theme}`);
+    const ledger = page.getByRole("region", { name: "Footage ledger" });
+    await ledger.locator('tbody[data-day="2026-11-17"]').waitFor();
+    const pin = ledger.locator(".publisher-ledger-pin");
+    const pinned = ledger.locator(".publisher-ledger-pin .publisher-ledger-day");
+    const heading = (day) => ledger.locator(`tbody[data-day="${day}"] .publisher-ledger-day`).textContent();
+    // Puts a day's heading `y` pixels from the top of the window.
+    const bring = (day, y) =>
+      page.evaluate(
+        ([day, y]) => scrollBy(0, document.querySelector(`tbody[data-day="${day}"]`).getBoundingClientRect().top - y),
+        [day, y],
+      );
+    const says = (text) =>
+      page.waitForFunction(
+        (text) => document.querySelector(".publisher-ledger-pin .publisher-ledger-day").textContent === text,
+        text,
+      );
+    // Above the table, its own heads are what's shown.
+    assert.equal(await pin.isHidden(), true);
+    await bring("2026-11-18", -200);
+    await says(await heading("2026-11-18"));
+    // At the very top, as tall as what it stands for, so the rows under it are where they'd be.
+    const measured = await page.evaluate(() => {
+      const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+      return {
+        top: box(".publisher-ledger-pin thead").top,
+        heads: [box(".publisher-ledger-pin thead").height, box(".publisher-ledger-scroll thead").height],
+        day: [box(".publisher-ledger-pin tr.day").height, box(".publisher-ledger-scroll tr.day").height],
+        under: box(".publisher-ledger-pin tr.day").bottom,
+      };
+    });
+    assert.equal(measured.top, 0);
+    assert.equal(measured.heads[0], measured.heads[1]);
+    assert.equal(measured.day[0], measured.day[1]);
+    // The next day's heading in view under it leaves it as it is; slid under it, the day is the next.
+    await bring("2026-11-17", measured.under + 4);
+    await page.waitForTimeout(150);
+    assert.equal(await pinned.textContent(), await heading("2026-11-18"));
+    await bring("2026-11-17", measured.heads[0] - 4);
+    await says(await heading("2026-11-17"));
+    // Back up a day, and back to the 18th.
+    await bring("2026-11-17", measured.under + 40);
+    await says(await heading("2026-11-18"));
+    // Its heads stand over the table's columns.
+    const lefts = () =>
+      page.evaluate(() => {
+        const of = (selector) =>
+          [...document.querySelectorAll(selector)].map((el) => Math.round(el.getBoundingClientRect().left));
+        return {
+          pinned: of(".publisher-ledger-pin thead th"),
+          table: of(".publisher-ledger-scroll thead th"),
+          day: of(".publisher-ledger-pin .publisher-ledger-day, .publisher-ledger-scroll tbody .publisher-ledger-day"),
+        };
+      });
+    const before = await lefts();
+    assert.deepEqual(before.pinned, before.table);
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-pinned-${name}.png`) });
+    if (width < 700) {
+      // Scrolled sideways, its heads go with the table's, and the days stay at its left.
+      await ledger.locator(".publisher-ledger-scroll").evaluate((box) => {
+        box.scrollLeft = 300;
+      });
+      await page.waitForFunction(
+        (was) => document.querySelector(".publisher-ledger-pin thead th").getBoundingClientRect().left < was - 1,
+        before.pinned[0],
+      );
+      const after = await lefts();
+      assert.deepEqual(after.pinned, after.table);
+      assert.equal(after.pinned[0], before.pinned[0] - 300);
+      assert.deepEqual(after.day, before.day);
+      if (shots) await page.screenshot({ path: path.join(shots, `footage-pinned-sideways-${name}.png`) });
+    }
+    // Back above the table, it goes.
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.waitForFunction(() => document.querySelector(".publisher-ledger-pin").hidden);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
   // This Mac, in the Footage tab: how the grade app's offload on the Mac stands, as it last said, its numbers in places
   // that are the same whatever they say, and a Mac gone quiet in a run read as stale. Nothing in it counts from when a
   // run started: the space on the card and the Mac, what's left for each switch, and each switch's Start and Pause.

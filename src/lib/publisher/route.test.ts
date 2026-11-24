@@ -24,10 +24,9 @@ test("the path says which tab is open, on the publisher's own host and under /pu
   expect(tabPath("/publish", "accounts")).toBe("/publish/accounts");
   expect(readPath("/footage")).toEqual({ base: "", tab: "footage" });
   expect(tabPath("", "footage")).toBe("/footage");
-  // The Footage tab's old address is the Archive tab's now: an old link lands there.
-  expect(readPath("/archive")).toEqual({ base: "", tab: "archive" });
-  expect(readPath("/publish/archive")).toEqual({ base: "/publish", tab: "archive" });
-  expect(tabPath("", "archive")).toBe("/archive");
+  // The Archive tab's address, and the Footage tab's before it, opens the Footage tab.
+  expect(readPath("/archive")).toEqual({ base: "", tab: "footage" });
+  expect(readPath("/publish/archive")).toEqual({ base: "/publish", tab: "footage" });
   expect(readPath("/grade")).toEqual({ base: "", tab: "grade" });
   expect(tabPath("/publish", "grade")).toBe("/publish/grade");
 });

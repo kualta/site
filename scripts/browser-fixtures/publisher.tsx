@@ -594,6 +594,7 @@ const ledger = {
       size: 2_860_000_000,
       original: original(false, false, true),
       graded: graded({ mac: false, cloudflare: "current" }),
+      thumb: "0f1e2d3c4b5a",
     }),
     DJI_20261101090000_0001_D: ledgerClip("DJI_20261101090000_0001_D.MP4", "2026-11-01T09:00:00", {}),
     IMG_4857: ledgerClip("IMG_4857.MOV", "2026-10-30T20:15:04", { profile: "rec709", original: original(false, true) }),

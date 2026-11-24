@@ -13,52 +13,21 @@ const near = (got, want, by, what) =>
     got.every((value, i) => Math.abs(value - want[i]) <= by),
     `${what}: ${got.join(",")}, wanted ${want.map(Math.round).join(",")} within ${by}`,
   );
+const CLIP = "DJI_20261108122204_0086_D";
 
 /**
- * The Archive tab against the mocked API (scripts/browser-fixtures/archive.mjs): its shoot days and a page of clips at a
- * time; a clip's player, which plays as it opens where the browser plays HEVC; its transcript, beside it and
- * as captions; the looks, checked on the WebGL canvas against stand-in LUTs whose colours are known; and Bring to Mac.
- * Playwright's Chromium has no HEVC, so it first says so, and then, told it has, plays a WebM in the original's place.
+ * A clip's player, opened from the Footage tab against the mocked API (scripts/browser-fixtures/archive.mjs): a clip in
+ * the cloud opens from its row, its address keeping it open; it's found in its shoot day's listing and plays as it
+ * opens where the browser plays HEVC; its transcript, beside it and as captions; the looks, checked on the WebGL canvas
+ * against stand-in LUTs whose colours are known; Bring to Mac; and the Archive tab's old address. Playwright's Chromium
+ * has no HEVC, so it first says so, and then, told it has, plays a WebM in the original's place.
  */
-export async function checkArchive(browser, { composer, dir, shots }) {
+export async function checkPlayer(browser, { composer, dir, shots }) {
   const file = path.join(dir, "archive-original.webm");
   const source = "color=c=0x406080:s=320x180:r=10:d=4";
   execFileSync(ffmpeg, ["-y", "-f", "lavfi", "-i", source, "-c:v", "libvpx", "-b:v", "2M", file], { stdio: "ignore" });
   const original = readFileSync(file);
-  const day = archiveDays["2026-11-08"];
-  const opened = day.find((clip) => clip.file === OPENED);
-
-  // Nothing archived yet, the archive unreadable, and a day unreadable: each says so where its list would be.
-  for (const [answers, where, text] of [
-    [{ "archive/days": { days: [] } }, ".publisher-archive-day", "Nothing in the cloud yet."],
-    [
-      { "archive/days": { error: "The archive is unavailable" } },
-      ".publisher-archive-days",
-      "The archive is unavailable",
-    ],
-    [
-      { "archive/days/2026-11-21": { error: "The day is unreadable" } },
-      ".publisher-archive-head",
-      "The day is unreadable",
-    ],
-  ]) {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-    await context.addInitScript((answers) => {
-      window.publisherAnswer = async (input, init, respond) => {
-        const path = new URL(String(input), location.href).pathname.replace("/api/publisher/", "");
-        const answer = answers[path];
-        if (!answer) return respond(input, init);
-        return Response.json(answer, { status: answer.error ? 503 : 200 });
-      };
-    }, answers);
-    const page = await context.newPage();
-    await page.goto(`${composer}/archive`);
-    await page.locator(where).getByText(text).waitFor();
-    // While it can't be read, the clips' places stay held.
-    if (where === ".publisher-archive-head")
-      assert.equal(await page.locator(".publisher-archive-clips").getAttribute("aria-busy"), "true");
-    await context.close();
-  }
+  const opened = archiveDays["2026-11-08"].find((clip) => clip.file === OPENED);
 
   for (const [width, name] of [
     [1280, "desktop"],
@@ -71,6 +40,9 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     await page.route("**/api/publisher/footage/thumbs/**", (route) =>
       route.fulfill({ contentType: "image/svg+xml", body: svg(64, 36) }),
     );
+    await page.route("https://i.ytimg.com/**", (route) =>
+      route.fulfill({ contentType: "image/svg+xml", body: svg(320, 180) }),
+    );
     // The original, read only where the browser can play it.
     const reads = [];
     await page.route(`**/api/publisher/archive/files/${opened.sha256}/**`, (route) => {
@@ -81,45 +53,28 @@ export async function checkArchive(browser, { composer, dir, shots }) {
       route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Grade</title>" }),
     );
     const theme = width > 700 ? "dark" : "light";
-    await page.goto(`${composer}/archive?theme=${theme}`);
-    const archive = page.getByRole("region", { name: "Archive", exact: true });
-    const days = archive.getByRole("navigation", { name: "Shoot days" });
-    const summary = archive.locator(".publisher-archive-head .publisher-note");
-    const cards = archive.locator(".publisher-archive-clips > li:not(.publisher-archive-slot)");
-
-    // The newest day first, open; each clip with what the ledger and the archive know of it.
-    await days.getByRole("button", { name: /21 Nov 2026/, pressed: true }).waitFor();
-    assert.deepEqual(
-      (await days.getByRole("button").allTextContents()).map((text) => text.replace(",", "")),
-      ["Sat 21 Nov 2026", "Wed 11 Nov 2026", "Sun 8 Nov 2026"],
-    );
-    await summary.filter({ hasText: "1 clip · 3.00 GB · 1 transcribed" }).waitFor();
-    const first = archive.getByRole("button", { name: "Clip 0402, recorded 10:15:00" });
-    assert.deepEqual(await first.locator(".line").allTextContents(), [
-      "040210:15:00",
-      "3.00 GB · D-Log2",
-      "Also on camera",
-    ]);
-    // A clip only in the cloud says nothing more: its copies line isn't there.
-    assert.equal(await archive.getByText(/^Only here$|^Transcript$|^No transcript$/).count(), 0);
-    await first.locator(".publisher-archive-thumb img").waitFor();
-
-    // A long day, all of it on one page.
-    await days.getByRole("button", { name: /8 Nov 2026/ }).click();
-    await page.waitForURL(/\?day=2026-11-08$/);
-    const bytes = day.reduce((sum, clip) => sum + clip.size, 0);
-    await summary
-      .filter({ hasText: `30 clips · ${(bytes / 1e9).toFixed(2)} GB · ${day.filter((c) => c.vtt).length} transcribed` })
-      .waitFor();
-    assert.equal(await cards.count(), 30);
-    assert.equal(await archive.getByRole("button", { name: /page/ }).count(), 0);
-
-    // A clip opens in its player. This browser can't play HEVC: it says so, offers to try, and reads nothing.
-    await archive.getByRole("button", { name: "Clip 0086, recorded 12:22:04" }).click();
-    await page.waitForURL(/clip=DJI_20261108122204_0086_D/);
+    await page.goto(`${composer}/footage?theme=${theme}`);
+    // The tab bar has no Archive tab: its clips play here.
+    const tabs = page.getByRole("navigation", { name: "Publisher sections" });
+    await tabs.getByRole("button", { name: "Footage", pressed: true }).waitFor();
+    assert.equal(await tabs.getByRole("button", { name: "Archive" }).count(), 0);
+    const ledger = page.getByRole("region", { name: "Footage ledger" });
+    const row = (clip) => ledger.getByRole("row").filter({ hasText: clip });
     const player = page.getByRole("dialog", { name: /^Clip 0086/ });
+
+    // Only a clip in the cloud plays: its picture is a button. One on the camera or the Mac has Grade alone.
+    await row("0086").getByRole("button", { name: "Play clip 0086" }).waitFor();
+    await row("0258").getByRole("button", { name: "Play clip 0258" }).waitFor();
+    for (const clip of ["0402", "0399", "IMG_4857"]) {
+      assert.equal(await row(clip).getByRole("button", { name: /^Play/ }).count(), 0);
+      assert.equal(await row(clip).getAttribute("data-plays"), null);
+    }
+
+    // A clip opens from anywhere on its row. This browser can't play HEVC: it says so, offers to try, and reads nothing.
+    await row("0086").locator("td.dim").last().click();
+    await page.waitForURL(new RegExp(`/footage\\?clip=${CLIP}$`));
     await player.getByText("This browser can't play HEVC, which the camera records.", { exact: false }).waitFor();
-    assert.equal(await player.getByText(/Reads up to|from Cloudflare/).count(), 0);
+    assert.match(await player.locator("h2 small").textContent(), /^8 Nov 2026, 12:22:04 · 2\.86 GB · D-Log2$/);
     await player.getByRole("button", { name: "Try anyway" }).waitFor();
     const transcript = player.getByRole("complementary", { name: "Transcript" });
     assert.deepEqual(await transcript.getByRole("button").allTextContents(), [
@@ -138,7 +93,43 @@ export async function checkArchive(browser, { composer, dir, shots }) {
       assert.equal(await looks.getByRole("button", { name: look }).isEnabled(), true);
     assert.deepEqual(reads, []);
     await page.keyboard.press("Escape");
-    await page.waitForURL(/\?day=2026-11-08$/);
+    await page.waitForURL(/\/footage$/);
+    await player.waitFor({ state: "detached" });
+
+    // From its picture, and Back closes it.
+    await row("0086").getByRole("button", { name: "Play clip 0086" }).click();
+    await page.waitForURL(new RegExp(`/footage\\?clip=${CLIP}$`));
+    await player.waitFor();
+    await page.goBack();
+    await page.waitForURL(/\/footage$/);
+    await player.waitFor({ state: "detached" });
+    assert.equal(await page.getByRole("dialog").count(), 0);
+
+    // A clip its day's listing doesn't have says so, with nothing to try; a listing that can't be read, until it can.
+    const listing = (answer) =>
+      page.evaluate((answer) => {
+        window.publisherAnswer = async (input, init, respond) => {
+          const asked = new URL(String(input), location.href).pathname;
+          if (!answer || asked !== "/api/publisher/archive/days/2026-11-11") return respond(input, init);
+          return Response.json(answer, { status: answer.error ? 503 : 200 });
+        };
+      }, answer);
+    const other = page.getByRole("dialog", { name: /^Clip 0258/ });
+    await listing({ day: "2026-11-11", at: null, clips: [] });
+    await row("0258").getByRole("button", { name: "Play clip 0258" }).click();
+    await other.getByText("It isn't in the cloud.").waitFor();
+    assert.equal(await other.locator(".publisher-archive-overlay button").count(), 0);
+    await other.getByRole("button", { name: "Close" }).click();
+    await other.waitFor({ state: "detached" });
+    await listing({ error: "The archive is unavailable" });
+    await row("0258").getByRole("button", { name: "Play clip 0258" }).click();
+    await other.getByText("Couldn't read it from the archive.").waitFor();
+    await listing(null);
+    await other.getByRole("button", { name: "Try again" }).click();
+    await other.getByText("This browser can't play HEVC", { exact: false }).waitFor();
+    await other.getByText("No transcript is filed for it.").waitFor();
+    await page.keyboard.press("Escape");
+    await other.waitFor({ state: "detached" });
 
     // Where HEVC plays: opened from its address, it plays with nothing to press, graded on the GPU.
     await page.addInitScript(() => {
@@ -147,7 +138,7 @@ export async function checkArchive(browser, { composer, dir, shots }) {
         return /hvc1|hev1/.test(type) ? "probably" : can.call(this, type);
       };
     });
-    await page.goto(`${composer}/archive?day=2026-11-08&clip=DJI_20261108122204_0086_D&theme=${theme}`);
+    await page.goto(`${composer}/footage?clip=${CLIP}&theme=${theme}`);
     const pause = player.getByRole("button", { name: "Pause" });
     await pause.waitFor();
     await page.waitForFunction(() => document.querySelector(".publisher-archive-stage video").currentTime > 0.3);
@@ -201,7 +192,7 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     await player.locator(".publisher-archive-caption").filter({ hasText: "Let's walk." }).waitFor();
     const at = await page.evaluate(() => document.querySelector(".publisher-archive-stage video").currentTime);
     assert.ok(at >= 2.4, `seeked to ${at}`);
-    if (shots) await page.screenshot({ path: path.join(shots, `archive-player-${name}.png`) });
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-player-${name}.png`) });
 
     // Bring to Mac: the Grade tab's cloud list, on this clip. It says what it does, with no tooltip to say it again.
     const bring = player.getByRole("button", { name: "Bring to Mac" });
@@ -212,12 +203,29 @@ export async function checkArchive(browser, { composer, dir, shots }) {
       await page.locator('iframe[title="Grade app"]').getAttribute("src"),
       `http://127.0.0.1:4777/?theme=${theme}#clip=${OPENED}`,
     );
-    // Closing the player stops the read.
+    // Closing the player stops the read, and the Footage tab it was in doesn't open it again.
     assert.equal(await page.locator(".publisher-archive-stage video").count(), 0);
+    await tabs.getByRole("button", { name: "Footage" }).click();
+    await page.waitForURL(/\/footage$/);
+    await row("0086").waitFor();
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    await page.goBack();
+    await page.waitForURL(/\/grade/);
+    await page.goBack();
+    await page.waitForURL(/\/footage$/);
+    await row("0086").waitFor();
+    assert.equal(await page.getByRole("dialog").count(), 0);
 
+    // The Archive tab's old address opens the Footage tab, on the same clip.
+    await page.goto(`${composer}/archive?day=2026-11-08&clip=${CLIP}&theme=${theme}`);
+    await page.waitForURL(new RegExp(`/footage\\?clip=${CLIP}&day=2026-11-08$`));
+    await pause.waitFor();
+    await page.keyboard.press("Escape");
+    await page.waitForURL(/\/footage$/);
     await page.goto(`${composer}/archive?day=2026-11-08&theme=${theme}`);
-    await cards.first().waitFor();
-    if (shots) await page.screenshot({ path: path.join(shots, `archive-${name}.png`), fullPage: true });
+    await page.waitForURL(/\/footage$/);
+    await row("0086").waitFor();
+    assert.equal(await page.getByRole("dialog").count(), 0);
     assert.deepEqual(errors, []);
     await context.close();
   }

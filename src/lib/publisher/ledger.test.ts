@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { atRisk, footageLine, type LedgerClip, lost, storage } from "./ledger";
+import { atRisk, footageLine, type Ledger, type LedgerClip, ledgerKey, lost, storage } from "./ledger";
 
 const clip = (extra: Partial<LedgerClip> = {}): LedgerClip => ({
   name: "DJI_20261108122204_0086_D.MP4",
@@ -21,6 +21,19 @@ const graded = {
   cloudflare: "current" as const,
   youtube: { video: "v", at: "", current: true },
 };
+
+test("a clip named in an address is found by its key in any case, and nothing else is", () => {
+  const ledger = {
+    updatedAt: "",
+    camera: { name: "Pocket 4P", mounted: false, seenAt: null },
+    archiveAt: null,
+    clips: { DJI_20261108122204_0086_D: clip(), IMG_4857: clip({ name: "IMG_4857.MOV" }) },
+  } as Ledger;
+  expect(ledgerKey(ledger, "DJI_20261108122204_0086_D")).toBe("DJI_20261108122204_0086_D");
+  expect(ledgerKey(ledger, "img_4857")).toBe("IMG_4857");
+  for (const missing of ["DJI_20261108122204_0087_D", "constructor", ""])
+    expect(ledgerKey(ledger, missing)).toBeUndefined();
+});
 
 test("only an original is a copy of a clip: a graded copy on the Mac, in the cloud or on YouTube isn't", () => {
   const nowhere = clip({ graded });
