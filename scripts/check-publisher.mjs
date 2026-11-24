@@ -2035,6 +2035,19 @@ try {
       await mac.getByRole("status").filter({ hasText: status }).waitFor();
       const [copy, send] = await lanes();
       if (expected.lanes) assert.deepEqual([copy, send], expected.lanes);
+      if (!state) {
+        // The Mac's bar is its whole disk: all it holds, faint, and solid from the left the footage still to send.
+        await page.waitForTimeout(450);
+        const shares = await mac
+          .locator(".publisher-mac-lane")
+          .nth(1)
+          .locator(".publisher-mac-bar > span")
+          .evaluateAll((spans) => spans.map((s) => s.offsetWidth / s.parentElement.offsetWidth));
+        assert.ok(
+          Math.abs(shares[0] - 454 / 494) < 0.01 && Math.abs(shares[1] - 38.7 / 494) < 0.01,
+          `The Mac's bar shows ${shares}`,
+        );
+      }
       if (expected.figures) assert.deepEqual(await figures(), expected.figures);
       if (expected.copy) assert.match(copy.at(-1), expected.copy);
       if (expected.copySpace) assert.equal(copy[3], expected.copySpace);
