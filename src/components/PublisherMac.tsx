@@ -60,6 +60,8 @@ export function goingShare(bytes: number, { total }: Space) {
 const clips = (count: number) => `${count} ${count === 1 ? "clip" : "clips"}`;
 /** The camera's number for a clip (DJI_20261120183012_0399_D.MP4 → 0399), or its name. */
 const clipNumber = (name: string) => /^DJI_\d{14}_(\d+)/.exec(name)?.[1] ?? name;
+/** The rows kept for clips in flight, as many as each switch has at once, so one starting or ending moves nothing. */
+const IN_FLIGHT_ROWS: Record<MacLaneName, string[]> = { copy: ["first"], send: ["first", "second"] };
 /** How long a time is, roughly: 25 min, 3 h, 2 days. */
 function howLong(ms: number) {
   const minutes = Math.floor(ms / 60_000);
@@ -195,6 +197,26 @@ function Lane({
           <dd>{lane && lane.left !== null ? formatDuration(lane.left) : measuring}</dd>
         </div>
       </dl>
+      <ul className="publisher-mac-files" aria-label="In flight">
+        {IN_FLIGHT_ROWS[name].map((row, i) => {
+          const file = lane?.state === "running" || lane?.state === "stopping" ? lane.current?.[i] : undefined;
+          const done = file?.size ? Math.min(100, Math.floor((file.sent / file.size) * 100)) : 0;
+          // An empty row keeps a file's parts, hidden, so one starting or ending moves nothing.
+          return (
+            <li
+              key={row}
+              data-empty={file ? undefined : ""}
+              title={file ? `${file.name}: ${gb(file.sent)} of ${gb(file.size)} GB` : undefined}
+            >
+              <span>{file ? clipNumber(file.name) : "\u00a0"}</span>
+              <span className="publisher-archive-bar" aria-hidden="true">
+                <span style={{ width: `${done}%` }} />
+              </span>
+              <span>{file ? `${done}%` : "\u00a0"}</span>
+            </li>
+          );
+        })}
+      </ul>
       <p className="publisher-mac-why" title={line.title ?? (line.text || undefined)}>
         {line.text}
       </p>

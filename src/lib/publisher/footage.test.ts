@@ -139,6 +139,8 @@ test("a Pipeline piece names its film, or a shoot day before there's one, and ca
 });
 
 /** How the grade app's offload stands, as it sends it. */
+/** A switch as a grade app from before it said what's in flight reports it. */
+const withoutCurrent = ({ current: _current, ...lane }: Record<string, unknown>) => lane;
 const macReport = () => ({
   version: 1,
   at: "2026-11-23T12:00:00.000Z",
@@ -150,8 +152,19 @@ const macReport = () => ({
       left: null,
       waiting: { for: "camera", why: "The camera isn't plugged in", until: "2026-11-23T12:05:00.000Z" },
       error: null,
+      current: [],
     },
-    send: { state: "running", speed: 887_500, left: 43_606, waiting: null, error: null },
+    send: {
+      state: "running",
+      speed: 887_500,
+      left: 43_606,
+      waiting: null,
+      error: null,
+      current: [
+        { name: "DJI_20261108122204_0086_D.MP4", sent: 101e6, size: 171e6 },
+        { name: "DJI_20261108122224_0087_D.MP4", sent: 50e6, size: 180e6 },
+      ],
+    },
   },
   camera: { mounted: false, clips: 0, bytes: 0, space: null },
   mac: { clips: 160, bytes: 38.7e9, space: { used: 454e9, total: 494.4e9 } },
@@ -186,8 +199,8 @@ test("a report from a grade app that hasn't been restarted since is read without
     startedAt: "2026-11-23T11:00:00.000Z",
     endedAt: null,
     lanes: {
-      copy: { ...rest.lanes.copy, done: 120, total: 167, sentBytes: 28.8e9, totalBytes: 40.1e9 },
-      send: { ...rest.lanes.send, done: 7, total: 167, sentBytes: 1.4e9, totalBytes: 40.1e9 },
+      copy: { ...withoutCurrent(rest.lanes.copy), done: 120, total: 167, sentBytes: 28.8e9, totalBytes: 40.1e9 },
+      send: { ...withoutCurrent(rest.lanes.send), done: 7, total: 167, sentBytes: 1.4e9, totalBytes: 40.1e9 },
     },
     camera: { mounted: camera.mounted, clips: camera.clips, bytes: camera.bytes },
     mac: { clips: mac.clips, bytes: mac.bytes },
@@ -199,6 +212,10 @@ test("a report from a grade app that hasn't been restarted since is read without
   const { report } = (await (await answer(bucket, "footage/mac")).json()) as { report: unknown };
   expect(report).toEqual({
     ...macReport(),
+    lanes: {
+      copy: { ...macReport().lanes.copy, current: [] },
+      send: { ...macReport().lanes.send, current: [] },
+    },
     mac: { ...macReport().mac, space: null },
     heard: { copy: null, send: null },
   });

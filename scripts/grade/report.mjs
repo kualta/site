@@ -14,6 +14,8 @@ import { join } from "node:path";
 export const REPORT_EVERY = { running: 30_000, idle: 10 * 60_000, alive: 2 * 60_000 };
 /** The lists are cut short well inside what the site takes. */
 const MOST_SKIPPED = 50;
+/** More than either switch ever has in flight. */
+const MOST_IN_FLIGHT = 4;
 const MOST_DAYS = 300;
 const cut = (text, most) => (text.length > most ? `${text.slice(0, most - 1)}…` : text);
 const iso = (ms) => new Date(ms).toISOString();
@@ -50,6 +52,16 @@ function laneReport(lane, sent, speed) {
       ? { for: cut(String(waiting.for), 40), why: cut(String(waiting.why ?? ""), 600), until: waiting.until ?? null }
       : null,
     error: lane?.error ? cut(lane.error, 600) : null,
+    // The clips in flight (the card's one, or the uploads together), each with how far it's got.
+    current: [lane?.current ?? []]
+      .flat()
+      .filter(Boolean)
+      .slice(0, MOST_IN_FLIGHT)
+      .map(({ name, sent, size }) => ({
+        name: cut(String(name), 200),
+        sent: Math.max(0, Math.round(sent ?? 0)),
+        size: Math.max(0, Math.round(size ?? 0)),
+      })),
   };
 }
 
