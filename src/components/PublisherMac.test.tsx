@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
 import type { LaneAsks, MacLane, MacReport } from "@/lib/publisher/mac";
-import { laneControl, MacSection, type MacReply, spaceText } from "./PublisherMac";
+import { goingShare, laneControl, MacSection, type MacReply, spaceText } from "./PublisherMac";
 
 const now = Date.parse("2026-11-23T12:00:00Z");
 const lane = (change: Partial<MacLane> = {}): MacLane => ({
@@ -70,7 +70,7 @@ test("each switch says its state, the space where it takes clips from, what's le
     "Done",
     "Start",
     "Card",
-    "109 of 112 GB · 97%",
+    "109 of 112 GB · 97% · 43% to copy",
     "To copy",
     "98 clips",
     "47.6 GB",
@@ -85,7 +85,7 @@ test("each switch says its state, the space where it takes clips from, what's le
     "Running",
     "Pause",
     "Disk",
-    "454 of 494 GB · 92%",
+    "454 of 494 GB · 92% · 8% to send",
     "To send",
     "160 clips",
     "38.7 GB",
@@ -113,6 +113,10 @@ test("a volume's space: tenths below 100 GB, whole above, and full only when it 
   expect(spaceText({ used: 47.64e9, total: 64e9 })).toBe("47.6 of 64.0 GB · 74%");
   expect(spaceText({ used: 237.9e9, total: 238e9 })).toBe("238 of 238 GB · 99%");
   expect(spaceText({ used: 238e9, total: 238e9 })).toBe("238 of 238 GB · 100%");
+  // The footage still to go, as a share of the volume: a sliver says so rather than 0%.
+  expect(goingShare(84.2e9, { used: 463e9, total: 494e9 })).toBe("17%");
+  expect(goingShare(1e9, { used: 463e9, total: 494e9 })).toBe("<1%");
+  expect(goingShare(0, { used: 463e9, total: 494e9 })).toBeNull();
 });
 
 test("an unplugged camera, and a Mac or switch with nothing left, say so without zeros", () => {
