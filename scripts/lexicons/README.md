@@ -19,3 +19,6 @@ owner's repository as a `com.atproto.lexicon.schema` record on deploy; see `docs
 `dev.kualta.post` describes the records the publisher writes for each crosspost
 (`scripts/publisher/post-record.mjs`, `docs/publisher.md`); the site's deploy publishes its
 schema only.
+
+`dev.kualta.track` describes the companion record `music:publish` writes for each track with
+lyrics or a score (`scripts/lib/music-companion.mjs`, `docs/music-publishing.md`).

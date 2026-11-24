@@ -14,6 +14,25 @@ Successful PDS verification alone proves publishing, not discovery. Check the ar
 
 Sources: [track schema](https://github.com/zzstoatzz/plyr.fm/blob/main/lexicons/track.json), [external-record ingestion](https://github.com/zzstoatzz/plyr.fm/blob/main/docs/internal/architecture/jetstream-ingest.md). The schema is vendored in `scripts/lexicons/fm.plyr.track.json` for validation.
 
+## Lyrics and scores
+
+`fm.plyr.track` has no field for lyrics or sheet music, so each track that has either also gets a companion `dev.kualta.track` record (`scripts/lexicons/dev.kualta.track.json`). `src/data/music.json` and `public/music/scores/` stay the source; the website does not read these records.
+
+| Field | Content |
+| --- | --- |
+| `track` | A `com.atproto.repo.strongRef` (URI and CID) to the track's `fm.plyr.track` record |
+| `kind`, `originalArtist` | `original` or `cover`, and who a cover is by: the credit the track's description carries as prose |
+| `lyrics` | `{ format, text }`; `format` is `lrc` when lines carry `[mm:ss.xx]` timestamps, otherwise `plain` |
+| `score` | The MusicXML file as a blob |
+
+The record key is a TID derived from `dev.kualta.track:<slug>`, so a track's slug is its permanent key here. The catalog `id` is positional and changes when tracks are added, which rules it out.
+
+A compressed score (`.mxl`) is uploaded as `application/vnd.recordare.musicxml`, its registered type; `.musicxml` and `.xml` as `application/vnd.recordare.musicxml+xml`. An `.mxl` is a ZIP container, and a PDS that names blobs by sniffing their content stores it as `application/zip` and refuses a record claiming another type for that blob. The record therefore carries the type the PDS reports, and the lexicon accepts all three. The bytes are identified by CID and size either way.
+
+`music:publish` syncs these records last, once the `fm.plyr.track` records and their artwork have settled, because the reference pins their final CIDs. A track record that changes gets a new CID, and the next run rewrites its companion. Writes are compare-and-swap with a readback, unchanged records are not written, and a score is uploaded only when its bytes differ from the published blob. `--dry-run` lists each companion with its lyrics and score sizes, and `--verify` compares them with the PDS without writing.
+
+Removing a track, its lyrics or its score never deletes or trims a published companion: the step fails and lists the affected URIs. Delete those records explicitly, then rerun the workflow. By then the site and the `fm.plyr.track` records are already published. A companion whose key points at a different `fm.plyr.track` URI also stops the step.
+
 ## Interactive scores
 
 Place a MuseScore MusicXML export next to the catalog in `public/music/scores/<track-slug>.mxl` (also `.musicxml` or `.xml`). `music:sync` discovers the attachment on every build. Dialogue, Self-Conscious Portrait and Embrace it include scores; tracks without a matching attachment keep their existing layout.

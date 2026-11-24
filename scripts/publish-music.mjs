@@ -2,15 +2,26 @@ import { readFile } from "node:fs/promises";
 import { AtpAgent } from "@atproto/api";
 import { prepareMusic, verifyMusicAssets, publishMusic } from "./lib/music-publish.mjs";
 import { syncMusicArtwork } from "./lib/music-artwork.mjs";
+import { prepareCompanions, publishCompanions } from "./lib/music-companion.mjs";
 
 const args = process.argv.slice(2);
 if (args.some((arg) => !["--dry-run", "--verify"].includes(arg))) throw new Error("Use --dry-run or --verify");
 const config = JSON.parse(await readFile("atproto.config.json", "utf8"));
 const tracks = JSON.parse(await readFile("src/data/music.json", "utf8"));
 const items = await prepareMusic(tracks, config.url);
+const companions = await prepareCompanions(tracks, config.did);
 if (args.includes("--dry-run")) {
   for (const item of items)
     console.log(`${item.slug}: ${item.record.audioBlob.size} audio bytes -> ${item.record.$type}`);
+  for (const { slug, uri, record } of companions)
+    console.log(
+      `${slug}: ${[
+        record.lyrics && `${Buffer.byteLength(record.lyrics.text)} ${record.lyrics.format} lyrics bytes`,
+        record.score && `${record.score.size} score bytes (${record.score.mimeType})`,
+      ]
+        .filter(Boolean)
+        .join(", ")} -> ${uri}`,
+    );
 } else {
   const verifyOnly = args.includes("--verify");
   if (!verifyOnly && !process.env.ATP_APP_PASSWORD) throw new Error("Set ATP_APP_PASSWORD to publish music");
@@ -32,4 +43,6 @@ if (args.includes("--dry-run")) {
   await syncMusicArtwork(items, config.did, { verifyOnly, token: process.env.PLYR_TOKEN });
   // plyr's artwork API can rebuild metadata; restore the site's authoritative fields.
   await publishMusic(items, agent, config.did, { verifyOnly });
+  // Last: each companion pins the CID its fm.plyr.track record settled on.
+  await publishCompanions(companions, items, agent, config.did, { verifyOnly });
 }

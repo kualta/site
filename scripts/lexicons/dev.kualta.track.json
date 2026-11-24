@@ -1,0 +1,63 @@
+{
+  "lexicon": 1,
+  "id": "dev.kualta.track",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "What the account owner publishes about one of their tracks beyond its fm.plyr.track record: lyrics, sheet music and authorship.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["track"],
+        "properties": {
+          "track": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The fm.plyr.track record this one describes, at the version it was written against."
+          },
+          "kind": {
+            "type": "string",
+            "maxLength": 64,
+            "knownValues": ["original", "cover"],
+            "description": "Whether the owner wrote the piece or performs someone else's."
+          },
+          "originalArtist": {
+            "type": "string",
+            "maxLength": 2560,
+            "maxGraphemes": 256,
+            "description": "Who the piece is by, when it is a cover."
+          },
+          "lyrics": { "type": "ref", "ref": "#lyrics" },
+          "score": {
+            "type": "blob",
+            "accept": [
+              "application/vnd.recordare.musicxml",
+              "application/vnd.recordare.musicxml+xml",
+              "application/zip"
+            ],
+            "maxSize": 2000000,
+            "description": "Sheet music as MusicXML: compressed (.mxl, application/vnd.recordare.musicxml) or plain (application/vnd.recordare.musicxml+xml). A compressed score is a ZIP container, and a server that names blobs by their content reports it as application/zip."
+          }
+        }
+      }
+    },
+    "lyrics": {
+      "type": "object",
+      "required": ["format", "text"],
+      "properties": {
+        "format": {
+          "type": "string",
+          "maxLength": 64,
+          "knownValues": ["lrc", "plain"],
+          "description": "lrc: lines carry [mm:ss.xx] timestamps. plain: untimed text."
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 100000,
+          "maxGraphemes": 20000,
+          "description": "The words, one line per sung line."
+        }
+      }
+    }
+  }
+}

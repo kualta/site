@@ -77,6 +77,10 @@ the stale URIs; delete those records explicitly, then rerun the workflow. Adding
 lexicon file under `scripts/lexicons/` with a `dev.kualta.` name publishes its schema
 on the next deploy.
 
+`dev.kualta.track` is another: its schema is published here, and its records (lyrics,
+scores and authorship, one per track) by `bun run music:publish`. See "Lyrics and
+scores" in `docs/music-publishing.md`.
+
 `dev.kualta.post` is one of those lexicons, so its schema is published here, but its
 records are not part of this sync: the publisher's laptop helper writes one per
 crosspost. See "Post records" in `docs/publisher.md`.

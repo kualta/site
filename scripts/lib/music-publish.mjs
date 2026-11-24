@@ -67,19 +67,21 @@ export async function verifyMusicAssets(items, fetcher = fetch) {
   }
 }
 
+// Match the site's source audio URL, preserving AT-URIs and listener interactions.
+export function matchTrack(existing, item) {
+  const source = item.record.description.split("\n")[0];
+  const matches = existing.filter(
+    (entry) => entry.value.audioUrl === item.record.audioUrl || entry.value.description?.split("\n")[0] === source,
+  );
+  if (matches.length > 1) throw new Error(`Duplicate remote music: ${item.slug}`);
+  return matches[0];
+}
+
 export async function publishMusic(items, agent, did, { verifyOnly = false, log = console.log } = {}) {
   if (!verifyOnly && agent.did !== did) throw new Error("Music publishing identity mismatch");
   const repo = agent.com.atproto.repo;
   const existing = await listRecords(repo, did, "fm.plyr.track");
-  // Match the site's source audio URL, preserving AT-URIs and listener interactions.
-  const plans = items.map((item) => {
-    const source = item.record.description.split("\n")[0];
-    const matches = existing.filter(
-      (entry) => entry.value.audioUrl === item.record.audioUrl || entry.value.description?.split("\n")[0] === source,
-    );
-    if (matches.length > 1) throw new Error(`Duplicate remote music: ${item.slug}`);
-    return { item, previous: matches[0] };
-  });
+  const plans = items.map((item) => ({ item, previous: matchTrack(existing, item) }));
   for (const { item, previous } of plans) {
     const record = { ...previous?.value, ...item.record };
     // API-uploaded artwork must survive subsequent site metadata publications.
