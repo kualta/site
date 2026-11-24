@@ -51,6 +51,12 @@ const volumeGb = (bytes: number) => (bytes >= 100e9 ? String(Math.round(bytes / 
 const share = ({ used, total }: Space) =>
   total ? Math.min(used < total ? 99 : 100, Math.round((used / total) * 100)) : 0;
 export const spaceText = (space: Space) => `${volumeGb(space.used)} of ${volumeGb(space.total)} GB · ${share(space)}%`;
+/** How much of a volume the footage still to go from it takes, in whole percent: "<1%" for a sliver, null for none. */
+export function goingShare(bytes: number, { total }: Space) {
+  if (!total || bytes <= 0) return null;
+  const going = (bytes / total) * 100;
+  return going < 1 ? "<1%" : `${Math.min(100, Math.round(going))}%`;
+}
 const clips = (count: number) => `${count} ${count === 1 ? "clip" : "clips"}`;
 /** The camera's number for a clip (DJI_20261120183012_0399_D.MP4 → 0399), or its name. */
 const clipNumber = (name: string) => /^DJI_\d{14}_(\d+)/.exec(name)?.[1] ?? name;
@@ -134,9 +140,15 @@ function Lane({
   const source = name === "copy" ? report?.camera : report?.mac;
   const unplugged = name === "copy" && report && !report.camera.mounted;
   const space = source?.space ?? null;
+  // The footage still to go from the volume, which the bar shows solid: its share is said beside the volume's.
+  const toGo = source && !unplugged ? Math.min(source.bytes, space?.used ?? 0) : 0;
+  const leftLabel = name === "copy" ? "To copy" : "To send";
   let spaceSays = "—";
-  if (space) spaceSays = spaceText(space);
-  else if (unplugged) spaceSays = "Not plugged in";
+  if (space) {
+    spaceSays = spaceText(space);
+    const going = goingShare(toGo, space);
+    if (going) spaceSays += ` · ${going} ${leftLabel.toLowerCase()}`;
+  } else if (unplugged) spaceSays = "Not plugged in";
   // What's left for it: unknown while the card's unplugged.
   let left = "—";
   let leftBytes = "";
@@ -145,8 +157,6 @@ function Lane({
   const measuring = lane?.state === "running" ? "Measuring…" : "—";
   // The bar is the whole volume: what's used, faint, and solid within it the footage still to go from it.
   const percent = (bytes: number) => (space?.total ? Math.min(100, (bytes / space.total) * 100) : 0);
-  const toGo = source && !unplugged ? Math.min(source.bytes, space?.used ?? 0) : 0;
-  const leftLabel = name === "copy" ? "To copy" : "To send";
   return (
     <div className="publisher-mac-lane" role="group" aria-label={LANE_NAMES[name]} data-state={lane?.state}>
       <div className="publisher-mac-lane-head">

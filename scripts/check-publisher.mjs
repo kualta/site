@@ -2015,7 +2015,7 @@ try {
         {
           lanes: [
             ["Camera → Mac", "Done", "Start", "2.1 of 112 GB · 2%", "None", "—", "—", ""],
-            ["Mac → Cloud", "Running", "Pause", "454 of 494 GB · 92%", "160 clips38.7 GB", "7.1 Mbit/s", "12 h 7 min", passed],
+            ["Mac → Cloud", "Running", "Pause", "454 of 494 GB · 92% · 8% to send", "160 clips38.7 GB", "7.1 Mbit/s", "12 h 7 min", passed],
           ],
           figures: ["2 days45 clips", "3 waiting4 to send · 1 failed: uvx isn't installed, so Whisper can't run"],
         },
@@ -2132,7 +2132,7 @@ try {
     assert.equal(await footage.locator(".publisher-archive-current-head > span").textContent(), "40%");
     await readAgain();
     await sending.getByText("Held by Pause all", { exact: true }).waitFor();
-    assert.deepEqual((await lanes())[1].slice(1, 5), ["Held", "Pause", "454 of 494 GB · 92%", "160 clips38.7 GB"]);
+    assert.deepEqual((await lanes())[1].slice(1, 5), ["Held", "Pause", "454 of 494 GB · 92% · 8% to send", "160 clips38.7 GB"]);
     // Nothing's going up, so the title doesn't lead with it.
     await page.waitForFunction(() => document.title === "footage · kualta");
     if (shots) await page.screenshot({ path: path.join(shots, `footage-paused-${name}.png`), fullPage: true });
