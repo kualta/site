@@ -54,15 +54,22 @@ test("where else a clip is, from the ledger", () => {
   expect(otherCopies(ledgerClip({ original: { camera: true, mac: true, cloudflare: true } }))).toBe(
     "Also on camera, Mac",
   );
+  // Graded copies aren't kept: one left on the Mac or in the cloud isn't named, the video on YouTube is.
   const graded = {
     look: "Umbra",
     at: null,
     size: 1,
-    mac: false,
+    mac: true,
     cloudflare: "current" as const,
     youtube: { video: "v", at: "", current: true },
   };
-  expect(otherCopies(ledgerClip({ graded }))).toBe("Graded on Cloudflare, YouTube");
+  expect(otherCopies(ledgerClip({ graded }))).toBe("Graded on YouTube");
+  expect(otherCopies(ledgerClip({ graded: { ...graded, youtube: null } }))).toBe("");
+  expect(
+    otherCopies(
+      ledgerClip({ original: { camera: true, mac: false, cloudflare: true }, graded: { ...graded, youtube: null } }),
+    ),
+  ).toBe("Also on camera");
 });
 
 test("a transcript's lines are read from its WebVTT, and the line said at a time found", () => {

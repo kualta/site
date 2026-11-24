@@ -40,7 +40,7 @@ test("held up, it says what by instead of the time left", () => {
   const held = (waiting) => offloadLine(run({ send: lane({ waiting }) }));
   expect(held({ for: "page", why: "No Grade page is open" })).toBe("Offloading 7 / 167 · paused");
   expect(held({ for: "owner", why: "Paused from the Footage tab" })).toBe("Offloading 7 / 167 · paused");
-  expect(held({ for: "network", why: "fetch failed", until })).toBe("Offloading 7 / 167 · can't reach Cloudflare");
+  expect(held({ for: "network", why: "fetch failed", until })).toBe("Offloading 7 / 167 · can't reach the cloud");
   expect(held({ for: "trouble", why: "x", until })).toBe("Offloading 7 / 167 · waiting");
   expect(offloadLine(run({ send: lane({ mode: "finishing" }) }))).toBe("Offloading 7 / 167 · stopping");
   const copying = (waiting) =>

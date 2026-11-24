@@ -1330,7 +1330,7 @@ test("a clip written to since it was sent isn't deleted: it stays, and doesn't t
   await run.done;
   expect(run.state.send).toMatchObject({
     done: 1,
-    skipped: [{ name: one, why: `Another ${one}, no smaller, is in Cloudflare already: this one stays where it is` }],
+    skipped: [{ name: one, why: `Another ${one}, no smaller, is in the cloud already: this one stays where it is` }],
   });
   expect(await listed(request, day)).toEqual({ [`assets/${one}`]: sha("before") });
   expect(files(at.original)).toEqual([one]);

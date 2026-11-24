@@ -1313,12 +1313,13 @@ function renderKept() {
     return;
   }
   const places = (pairs) => pairs.filter(([, v]) => v).map(([name, v]) => (v === "earlier" ? `${name} (earlier grade)` : name));
-  const original = places([["camera", record.original.camera], ["Mac", record.original.mac], ["Cloudflare", record.original.cloudflare]]);
+  const original = places([["camera", record.original.camera], ["Mac", record.original.mac], ["cloud", record.original.cloudflare]]);
   let text = `Original: ${original.join(", ") || "nowhere"}`;
+  // Graded copies aren't kept, and those left in the cloud are old films': only an export here and YouTube's are named.
   if (record.graded) {
     const youtube = record.graded.youtube && (record.graded.youtube.current ? true : "earlier");
-    const graded = places([["Mac", record.graded.mac], ["Cloudflare", record.graded.cloudflare], ["YouTube", youtube]]);
-    text += ` · Graded: ${graded.join(", ") || "nowhere"}`;
+    const graded = places([["Mac", record.graded.mac], ["YouTube", youtube]]);
+    if (graded.length) text += ` · Graded: ${graded.join(", ")}`;
   }
   $("clip-kept").textContent = text;
 }
@@ -1486,7 +1487,7 @@ try {
   const id = defaultSource();
   if (id) await openSource(id);
   else {
-    $("empty").textContent = `Plug in the ${state.library.camera.name}, put clips in ${state.library.original}, or pick a day in Cloudflare.`;
+    $("empty").textContent = `Plug in the ${state.library.camera.name}, put clips in ${state.library.original}, or pick a day in the cloud.`;
     updatePanel();
   }
   openFromAddress();

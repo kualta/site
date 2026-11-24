@@ -261,7 +261,7 @@ try {
   await days.getByRole("checkbox", { name: /2026-01-01/ }).uncheck();
   await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "", null, { timeout: 5_000 });
   // When the camera's copies go is remembered.
-  await page.getByRole("button", { name: "Once in Cloudflare" }).click();
+  await page.getByRole("button", { name: "Once in the cloud" }).click();
   await page.waitForFunction(() => document.querySelector('[data-clear-after="sent"]').getAttribute("aria-pressed") === "true");
   assert.deepEqual(JSON.parse(readFileSync(path.join(data, "offload.json"), "utf8")), { clearCardAfter: "sent" });
 
@@ -319,7 +319,7 @@ try {
   const option = picker.locator(`option[value="cloud:${cloudDay}"]`);
   await option.waitFor({ state: "attached", timeout: 10_000 });
   assert.equal(await option.textContent(), `${cloudDay} · 227 clips`);
-  assert.equal(await option.evaluate((el) => el.parentElement.label), "Cloudflare");
+  assert.equal(await option.evaluate((el) => el.parentElement.label), "Cloud");
   await picker.selectOption(`cloud:${cloudDay}`);
   const cloudRow = (file) => page.locator(`.cloud-clip[data-stem="${file.replace(/\.MP4$/, "")}"]`);
   const copy = (file) => cloudRow(file).locator(".cloud-file button");
@@ -561,7 +561,7 @@ try {
     assert.deepEqual(asked.splice(0), [["", { lanes: ["copy"], unattended: true }]]);
     await saysNow("mac", "4 clips · 1.1 GB to send");
     next = going({ unattended: true });
-    await menu.getByRole("button", { name: "Start Mac → Cloudflare" }).click();
+    await menu.getByRole("button", { name: "Start Mac → Cloud" }).click();
     await saysNow("mac", "3 of 16 · 400 MB of 4.3 GB");
     assert.deepEqual(asked.splice(0), [["", { lanes: ["send"] }]]);
     // The status line says it short, and links to how it stands in the composer's Footage tab, in a tab of its own.
@@ -584,7 +584,7 @@ try {
     await menu.waitForFunction(() => /^Paused while no Grade page was open/.test(document.getElementById("offload-mac").textContent), null, { timeout: 5_000 });
     run = going({ copy: lane({ current: null, onCamera: 0, waiting: { for: "room", why: "x" } }), send: lane({ waiting: { for: "network", why: "fetch failed", until } }) });
     await menu.waitForFunction(() => /^Waiting for room/.test(document.getElementById("offload-camera").textContent), null, { timeout: 5_000 });
-    await menu.waitForFunction(() => /^Can't reach Cloudflare, tries again \d/.test(document.getElementById("offload-mac").textContent), null, { timeout: 5_000 });
+    await menu.waitForFunction(() => /^Can't reach the cloud, tries again \d/.test(document.getElementById("offload-mac").textContent), null, { timeout: 5_000 });
     if (shots) await menu.screenshot({ path: path.join(shots, "grade-11-offload-waiting.png") });
 
     // Stopping: the files in flight are finished, or cut on a second click; which of the two is said.

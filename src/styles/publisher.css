@@ -393,10 +393,9 @@
    readers only (absolutely placed) stay in it too. */
 .publisher-ledger-scroll { position:relative; overflow-x:auto; }
 /* Its columns keep their widths as what's in them changes; a clip's films are cut short, and named on hover. */
-.publisher-ledger-table { width:100%; min-width:1088px; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
+.publisher-ledger-table { width:100%; min-width:892px; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
 .publisher-ledger-table th, .publisher-ledger-table td { padding:6px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--publisher-line); }
 .publisher-ledger-table thead th { color:var(--publisher-muted); font-size:11px; font-weight:400; letter-spacing:.04em; text-transform:uppercase; }
-.publisher-ledger-table thead th.span { text-align:center; }
 .publisher-ledger-table .mark { text-align:center; }
 .publisher-ledger-table td.mark > * { display:block; line-height:20px; }
 .publisher-ledger-table td.clip { overflow:hidden; text-overflow:ellipsis; }

@@ -183,7 +183,7 @@ async function projectFiles(request, project, signal) {
 function mayReplace(held, { path, sha256, size }) {
   const was = held.get(path);
   if (was && was.sha256 !== sha256 && was.size >= size)
-    throw final(`Another ${path.split("/").pop()}, no smaller, is in Cloudflare already: this one stays where it is`);
+    throw final(`Another ${path.split("/").pop()}, no smaller, is in the cloud already: this one stays where it is`);
 }
 
 /** Files in a project's manifest all it holds and these, until the manifest reads back with them. */
@@ -242,7 +242,7 @@ const NO_TRANSCRIPTS = { take: async () => {}, ready: async () => [], sent: asyn
 const NO_RECORDS = { read: async () => ({}), add: async () => {}, drop: async () => {} };
 
 const UNPLUGGED = "The camera isn't plugged in";
-const WAITS_FOR_CLOUDFLARE = "Clips stay on the camera until they're in Cloudflare";
+const WAITS_FOR_CLOUDFLARE = "Clips stay on the camera until they're in the cloud";
 const sum = (clips) => clips.reduce((total, clip) => total + clip.size, 0);
 /** A file as it was listed: one written since is another. */
 const idOf = ({ name, size, mtime }) => `${name}/${size}/${mtime}`;
@@ -756,7 +756,7 @@ export function startOffload({
       // What's there under this hash isn't this clip: send it over that, once.
       sending = true;
     }
-    throw final(`${clip.name} doesn't read back from Cloudflare as it was sent: it stays on this Mac`);
+    throw final(`${clip.name} doesn't read back from the cloud as it was sent: it stays on this Mac`);
   }
 
   /**

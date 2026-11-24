@@ -211,7 +211,7 @@ test("a clip sent in parts that doesn't read back is sent once more, and stays o
         expect(run.state.send.skipped).toEqual([
           {
             name: "DJI_20261117100000_0001_D.MP4",
-            why: expect.stringMatching(/doesn't read back from Cloudflare/),
+            why: expect.stringMatching(/doesn't read back from the cloud/),
           },
         ]);
         expect(files(at.original)).toEqual(["DJI_20261117100000_0001_D.MP4"]);

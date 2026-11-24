@@ -3,7 +3,7 @@
 
 const $ = (id) => document.getElementById(id);
 const LANES = ["copy", "send"];
-const NAMES = { copy: "Camera → Mac", send: "Mac → Cloudflare" };
+const NAMES = { copy: "Camera → Mac", send: "Mac → Cloud" };
 
 const clips = (count) => `${count} clip${count === 1 ? "" : "s"}`;
 function timeLeft(seconds) {
@@ -19,8 +19,8 @@ function again({ until }) {
 function waitingText(waiting) {
   if (waiting.for === "room") return "waiting for room on this Mac";
   if (waiting.for === "camera") return `camera unplugged${again(waiting)}`;
-  if (waiting.for === "network") return `can't reach Cloudflare${again(waiting)}`;
-  if (waiting.for === "cloudflare") return "keeping clips on the camera until Cloudflare has them";
+  if (waiting.for === "network") return `can't reach the cloud${again(waiting)}`;
+  if (waiting.for === "cloudflare") return "keeping clips on the camera until the cloud has them";
   if (waiting.for === "page") return "paused while no Grade page was open";
   if (waiting.for === "owner") return "paused from the Footage tab";
   return `${waiting.why}${again(waiting)}`;
@@ -32,7 +32,7 @@ function stoppingText(lane, { mode, current }) {
   if (current.length > 1) return `finishing ${current.length} uploads`;
   return current.length ? "finishing the upload" : "stopping";
 }
-const stayText = (count) => `${clips(count)} on the camera until Cloudflare has them`;
+const stayText = (count) => `${clips(count)} on the camera until the cloud has them`;
 const passedOver = (o) => LANES.flatMap((lane) => o[lane]?.skipped ?? []);
 
 /** How far the offload has moved clips: when it changes, the days they left are read again. */
@@ -62,9 +62,9 @@ function heldText({ mode, waiting }) {
   if (mode !== "on") return "stopping";
   if (waiting.for === "page" || waiting.for === "owner") return "paused";
   if (waiting.for === "camera") return "waiting for the camera";
-  if (waiting.for === "network") return "can't reach Cloudflare";
+  if (waiting.for === "network") return "can't reach the cloud";
   if (waiting.for === "room") return "waiting for room";
-  if (waiting.for === "cloudflare") return "waiting for Cloudflare";
+  if (waiting.for === "cloudflare") return "waiting for the cloud";
   return "waiting";
 }
 

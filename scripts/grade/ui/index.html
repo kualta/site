@@ -65,7 +65,7 @@
       <label class="menu-check"><input type="checkbox" id="previews-remake">Remake a film's preview copies after a regrade</label>
       <div class="menu-offload">
         <div class="lane" data-lane="copy"><span>Camera → Mac</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-camera"></output></div>
-        <div class="lane" data-lane="send"><span>Mac → Cloudflare</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
+        <div class="lane" data-lane="send"><span>Mac → Cloud</span><button class="btn" type="button">Start</button><output class="menu-note" id="offload-mac"></output></div>
         <div class="offload-places">
           <div class="menu-row"><span>Transcripts</span><output id="offload-transcripts"></output></div>
           <div class="menu-row"><span>Room on this Mac</span><output id="offload-room"></output></div>
@@ -74,7 +74,7 @@
         <div class="offload-choice">
           <span id="clear-after-name">Delete from the camera</span>
           <div class="seg small" role="group" aria-labelledby="clear-after-name">
-            <button type="button" data-clear-after="copied" aria-pressed="true">Once on this Mac</button><button type="button" data-clear-after="sent" aria-pressed="false">Once in Cloudflare</button>
+            <button type="button" data-clear-after="copied" aria-pressed="true">Once on this Mac</button><button type="button" data-clear-after="sent" aria-pressed="false">Once in the cloud</button>
           </div>
         </div>
         <div class="offload-choice">
@@ -101,7 +101,7 @@
     <ol id="clip-list" class="clip-list"></ol>
     <div class="bin-head" id="cloud-head">
       <div class="bin-row">
-        <span class="cap">Cloudflare</span>
+        <span class="cap">Cloud</span>
         <span id="cloud-count" class="count"></span>
         <button id="cloud-refresh" class="link" type="button">Refresh</button>
       </div>
