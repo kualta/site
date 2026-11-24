@@ -20,6 +20,16 @@ export interface MacLane {
   /** What it waits for (`camera`, `network`, `room`, `cloudflare`, `page`, `owner`, or what went wrong), and why. */
   waiting: { for: string; why: string; until: string | null } | null;
   error: string | null;
+  /**
+   * The clips in flight, each with the bytes gone of its size: the card's one, or the uploads going together. Missing
+   * from a report kept from before the Mac said it.
+   */
+  current?: InFlight[];
+}
+export interface InFlight {
+  name: string;
+  sent: number;
+  size: number;
 }
 /** A volume's bytes in use, and its size. */
 export interface Space {
@@ -103,7 +113,14 @@ function lane(value: unknown): MacLane {
     left: maybe(l.left, (value) => amount(value, 1e9)),
     waiting,
     error: maybe(l.error, text),
+    // A report from before the Mac said what's in flight has none.
+    current: l.current === undefined ? [] : list(l.current, 8, inFlight),
   };
+}
+function inFlight(value: unknown): InFlight {
+  const f = object(value);
+  const size = amount(f.size);
+  return { name: text(f.name, 200), sent: Math.min(amount(f.sent), size), size };
 }
 function space(value: unknown): Space {
   const s = object(value);
