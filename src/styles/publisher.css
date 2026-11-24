@@ -412,16 +412,17 @@
 /* Wider than a phone: the table scrolls sideways in its own box, never the page; positioned, so labels for screen
    readers only (absolutely placed) stay in it too. */
 .publisher-ledger-scroll { position:relative; overflow-x:auto; }
-/* Its columns keep their widths as what's in them changes; a clip's films are cut short, and named on hover. The clip
-   column grows with the pictures, and at its largest still fits the page's 1104px on a desktop. */
-.publisher-ledger-table { --thumb:32px; width:100%; min-width:max(892px, calc(816px + var(--thumb))); table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
+/* Its columns keep their widths as what's in them changes; a film's name too long for its column is cut short. The clip
+   column grows with the pictures, and at its largest still fits the page's 1104px on a desktop: a clip's number, size
+   and note stack beside a picture larger than a line of text. */
+.publisher-ledger-table { --thumb:32px; width:100%; min-width:max(916px, calc(812px + var(--thumb))); table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
 .publisher-ledger-table[data-thumbs="medium"] { --thumb:128px; }
 .publisher-ledger-table[data-thumbs="large"] { --thumb:min(288px, calc(100vw - 140px)); }
 .publisher-ledger-table th, .publisher-ledger-table td { padding:6px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--publisher-line); }
 .publisher-ledger-table thead th { color:var(--publisher-muted); font-size:11px; font-weight:400; letter-spacing:.04em; text-transform:uppercase; }
 .publisher-ledger-table .mark { text-align:center; }
 .publisher-ledger-table td.mark > * { display:block; line-height:20px; }
-.publisher-ledger-table td.clip { overflow:hidden; text-overflow:ellipsis; }
+.publisher-ledger-table td:is(.clip, .films) { overflow:hidden; text-overflow:ellipsis; }
 .publisher-ledger-table .first { border-left:1px solid var(--publisher-line); }
 .publisher-ledger-table tr.day th { padding-top:18px; color:var(--publisher-ink); font-size:13px; font-weight:400; }
 /* A day's heading stays at the left of the box as the table scrolls sideways under it. */
@@ -439,8 +440,11 @@
 .publisher-ledger-table .dim, .publisher-ledger-table .no, .publisher-ledger-table small { color:var(--publisher-muted); }
 .publisher-ledger-table .clip b { font-weight:400; font-variant-numeric:tabular-nums; }
 .publisher-ledger-table .clip small { margin-left:8px; font-size:12px; }
-.publisher-ledger-table .films { color:var(--publisher-muted); font-size:12px; }
-.publisher .publisher-ledger-table .films a { text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--publisher-edge); }
+.publisher-ledger-table:not([data-thumbs="small"]) .clip .label { display:inline-flex; flex-direction:column; align-items:flex-start; vertical-align:middle; }
+.publisher-ledger-table:not([data-thumbs="small"]) .clip :is(small, .note) { margin-left:0; }
+.publisher-ledger-table td.films { color:var(--publisher-muted); }
+.publisher .publisher-ledger-table td.films a { color:var(--publisher-ink); text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--publisher-edge); }
+.publisher .publisher-ledger-table td.films a:hover { text-decoration-color:currentColor; }
 .publisher-ledger-table .note { margin-left:8px; color:var(--publisher-danger); font-size:12px; }
 .publisher-ledger-table .old { color:var(--publisher-warning); font-size:12px; }
 .publisher-ledger-table .busy { color:var(--publisher-ink); }

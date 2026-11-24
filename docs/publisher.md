@@ -404,8 +404,9 @@ day): how much footage is where (the card's originals, as of when it was last pl
 Mac's and the archive's originals and graded copies, with what keeping the archive's costs a month;
 YouTube's videos, counted since they're re-encoded), then every clip by day, newest first, with its grade, ✓ or – for each copy, the clip
 going up to YouTube with its share, and filters for clips at risk (no copy off the Mac and the
-card), not graded, not on YouTube and not in Cloudflare. A clip's **Grade** opens it in the Grade
-tab, and one whose original is in Cloudflare plays from its row (see Playing a clip). **Small**, **Medium** and
+card), not graded, not on YouTube and not in Cloudflare. Its **Project** column names the films each clip is in
+(`013 · maybe-later`, or `012, 013` for a clip in several), each opening the film's page (see A film's page). A clip's
+**Grade** opens it in the Grade tab, and one whose original is in Cloudflare plays from its row (see Playing a clip). **Small**, **Medium** and
 **Large** set every row's picture: 32, 128 and 288 px wide (Large no wider than a phone has room for beside the time,
 250 px on a 390 px phone), with the clip's length once it's Medium; the choice is kept in the browser. Scrolled, the
 column heads and the shoot day of the rows at the top stay at the top of the window, the day changing as the next one's
@@ -517,6 +518,18 @@ before the look sees it. The choice is remembered in the browser.
 **Bring to Mac** (or **Open in Grade**, for a clip the camera or the Mac still has) opens the clip in the Grade tab
 (`#clip=<file>`), whose Cloudflare list has Bring for it. The player closes as it goes, so coming back to Footage
 doesn't open it again.
+
+**A film's page.** A film in the Project column opens its page, kept in the address like a clip
+(`/footage?project=013-maybe-later`, Back closes it). It shows what the film made, read from its manifest as last
+archived: the videos beside its `film.html`, its render (`<name>.mp4`) first and the Chinese render (`<name>-zh.mp4`)
+next, each playing in place from `GET archive/files/…` with Range, with its size, its length once the browser has read
+it, and **Download**. Beside them are the post it went out as (from the Pipeline piece naming the film, once posted),
+with **Analytics** and the platforms it went out to, and the clips it's cut from, each opening its player; Back from a
+clip comes back to the film. A film the archive doesn't hold says so (`Not archived yet`, while it's on the Mac).
+
+- `GET archive/projects/<name>` streams the film's latest manifest as R2 holds it, found as a day's is, never read into
+  the Worker: a film's names thousands of files (Studio's history among them). 404 when it isn't archived. The composer
+  reads an archived film's once until it's reloaded. Shoot days and the settings (`_` names) aren't films.
 
 **The page's title** names the open tab (`footage · kualta`). While that tab shows something going up,
 its percentage leads (`43% · footage · kualta`): on Footage the clip going up to YouTube, on Grade the
@@ -632,7 +645,7 @@ says how that footage stands from the ledger: `014-walk · 24 clips · 18 graded
 clips count toward graded; at risk is no copy off the Mac and the card). A film not in the ledger yet
 says so. The links are one small document in the archive (`pipeline/footage-links.json`, read with
 `GET footage/links` and set a piece at a time with `PUT footage/links/<piece>`), so pieces gained
-them without a D1 column. The Footage tab names each clip's films, and links a film to its post's
+them without a D1 column. The Footage tab names each clip's films, and a film's page links to its post's
 numbers once a piece naming it is posted.
 
 **Compose** opens the composer linked to that piece (`?content=<id>`), saving any edits first. The
