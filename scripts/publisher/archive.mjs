@@ -267,12 +267,19 @@ export async function projectFolders(dir = PROJECTS) {
   return found.sort();
 }
 
+/** A film's number, from its folder's name (`017-big-cookie`), or null when the name has none. */
+export function filmNumber(name) {
+  const match = /^(\d{3,})-/.exec(name);
+  return match ? Number(match[1]) : null;
+}
+
 /**
  * Takes a finished project off the laptop, once that loses nothing:
  *
  * 1. Its film is out or set to go: its render, `<name>.mp4`, is the video of a post with a destination that published
- *    or is queued or scheduled (a draft sends a render up unchanged, so their MD5s match), or `posted` says the owner
- *    confirmed it. Otherwise it's kept, and nothing else happens.
+ *    or is queued or scheduled (a draft sends a render up unchanged, so their MD5s match), or the Pipeline piece with
+ *    its number went out as such a post, or `posted` says the owner confirmed it. Otherwise it's kept, and nothing
+ *    else happens.
  * 2. The archive gets the project as it is now: only what changed since it was last archived goes up.
  * 3. Each clip in `exported` that the project copied (one of the same name in its assets) goes, but only when the
  *    archive holds those exact bytes. A clip exported again since the project copied it stays.
@@ -289,10 +296,19 @@ export async function cleanupProject(
   if (name === "zh" || !(await statOf(join(root, "film.html")))) throw new Error(`${root} isn't an OpenFilm project`);
   const request = archiveClient({ origin, token, fetcher, log });
   const render = join(root, `${name}.mp4`);
-  const posts = (await statOf(render))
-    ? (await request("posted", { method: "POST", json: { md5s: [await md5File(render)] } })).posted
-    : [];
-  if (!posts.length && !posted) return { name, skipped: `no published or scheduled post has ${name}.mp4 as its video` };
+  const md5s = (await statOf(render)) ? [await md5File(render)] : [];
+  const number = filmNumber(name);
+  const posts =
+    md5s.length || number !== null
+      ? (await request("posted", { method: "POST", json: { md5s, numbers: number === null ? [] : [number] } })).posted
+      : [];
+  if (!posts.length && !posted)
+    return {
+      name,
+      skipped:
+        `no published or scheduled post has ${name}.mp4 as its video` +
+        (number === null ? "" : `, and piece ${name.split("-")[0]} isn't posted`),
+    };
 
   const clips = [];
   for (const folder of ["assets", "zh/assets"]) {

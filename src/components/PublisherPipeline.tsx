@@ -3,13 +3,14 @@ import { ArrowUpRightIcon, CloseIcon, ImageIcon, PlusIcon, TrashIcon, VideoIcon 
 import {
   MAX_CONTENT_NOTES,
   MAX_CONTENT_TITLE,
+  pieceLabel,
   stageNames,
   stages,
   type Content,
   type PiecePost,
   type Stage,
 } from "@/lib/publisher/content";
-import { dayOf, type FootageLink, footageLine, type Ledger, linkedClips } from "@/lib/publisher/ledger";
+import { dayOf, type FootageLink, footageLine, type Ledger, linkedClips, pieceFootage } from "@/lib/publisher/ledger";
 import { combined, metricValue, type Metric } from "@/lib/publisher/metrics";
 import { platformNames } from "@/lib/publisher/presets";
 import { previewSources, storedThumbnail } from "@/lib/publisher/preview";
@@ -150,7 +151,7 @@ function Card({
       >
         {picture}
         <span className="publisher-pipeline-info">
-          <strong>{piece.title}</strong>
+          <strong>{pieceLabel(piece)}</strong>
           <small>
             <time dateTime={new Date(piece.stage_at).toISOString()}>{since(piece.stage_at)}</time>
             {views !== null && ` · ${compact.format(views)} views`}
@@ -258,6 +259,7 @@ function PieceEditor({
   onDeleted: (id: string) => void;
   /** The footage ledger, for the films and shoot days a piece can name; null until read. */
   ledger: Ledger | null;
+  /** Its footage as the board shows it: what it's linked to, or the film with its number. */
   link: FootageLink | undefined;
   onLinked: (links: Record<string, FootageLink>) => void;
 }) {
@@ -328,7 +330,7 @@ function PieceEditor({
         }}
       >
         <div className="publisher-pipeline-editor-head">
-          <h2 id="publisher-piece-title">{piece.title}</h2>
+          <h2 id="publisher-piece-title">{pieceLabel(piece)}</h2>
           <button type="button" aria-label="Close" onClick={() => dialog.current?.close()}>
             <CloseIcon size={16} />
           </button>
@@ -577,7 +579,7 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
                     <Card
                       key={`${piece.id}:${piece.job_id}`}
                       piece={piece}
-                      footage={footageOf(links[piece.id], ledger)}
+                      footage={footageOf(pieceFootage(piece.number, links[piece.id], ledger), ledger)}
                       carried={drag?.id === piece.id}
                       onOpen={() => setEditing(piece)}
                       // After the browser has its picture of the card, so the picture isn't the faded original.
@@ -604,7 +606,7 @@ export default function PublisherPipeline({ request, onError, onCompose, statsHr
           onSaved={put}
           onDeleted={(id) => setItems((list) => list.filter((piece) => piece.id !== id))}
           ledger={ledger}
-          link={links[editing.id]}
+          link={pieceFootage(editing.number, links[editing.id], ledger)}
           onLinked={setLinks}
         />
       )}

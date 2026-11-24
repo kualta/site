@@ -14,6 +14,8 @@ function fixture() {
     "0009_publisher_reposts.sql",
     "0010_publisher_thumbnails.sql",
     "0011_publisher_schedule.sql",
+    "0012_publisher_content.sql",
+    "0015_publisher_content_number.sql",
   ])
     sql.exec(readFileSync(`migrations/${name}`, "utf8"));
   const db = {
@@ -116,6 +118,22 @@ test("history pagination includes older jobs with stable tie-breaking", async ()
   expect(new Set([...first.posts, ...second.posts].map((post) => post.id)).size).toBe(31);
   expect(second.next).toBeNull();
   await expect(historyPage(db, "bad")).rejects.toThrow();
+});
+test("each post carries the number of the piece it went out as", async () => {
+  const { db, sql } = fixture();
+  sql.query("DELETE FROM publisher_targets").run();
+  sql.query("DELETE FROM publisher_jobs").run();
+  sql.query("INSERT INTO publisher_jobs VALUES ('numbered', '{}', 2), ('bare', '{}', 1)").run();
+  sql
+    .query(
+      "INSERT INTO publisher_content (id, title, stage, job_id, number, created_at, stage_at) VALUES ('p', 'Big cookie', 'posted', 'numbered', 17, 1, 1)",
+    )
+    .run();
+  const { posts } = await historyPage(db, null);
+  expect(posts.map((post) => [post.id, post.number])).toEqual([
+    ["numbered", 17],
+    ["bare", null],
+  ]);
 });
 test("bulk deletion waits for publishing to finish", async () => {
   const { db, sql, job, ids } = fixture();

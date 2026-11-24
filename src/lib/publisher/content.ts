@@ -19,6 +19,16 @@ export const MAX_CONTENT_NOTES = 20_000;
 /** How many posted pieces the Pipeline lists; the rest are in History. Their posts are read in one statement, which
  * binds at most 100 values. */
 export const POSTED_SHOWN = 30;
+/**
+ * The films made before pieces had numbers run to 016 (`node scripts/publisher/cli.mjs archives` lists them). Pieces
+ * count on from there, so a new piece's number is free for its film's folder.
+ */
+export const NUMBERED_AFTER = 16;
+/** A piece's number as its film's folder starts with it: 017. */
+export const pieceNumber = (number: number) => String(number).padStart(3, "0");
+/** A piece as the post app names it, "017 · Big cookie", or by its title alone until it has a number. */
+export const pieceLabel = ({ number, title }: Pick<Content, "number" | "title">) =>
+  number === null ? title : `${pieceNumber(number)} · ${title}`;
 
 /** A destination a piece's post went out to, with its latest counts. */
 export interface PieceTarget {
@@ -41,6 +51,8 @@ export interface PiecePost {
 /** A piece of content, from its idea to the post it went out as. */
 export interface Content {
   id: string;
+  /** Its film's folder starts with it. Null only for a piece from before numbers that hasn't been given one yet. */
+  number: number | null;
   title: string;
   /** The script, shot list or anything else written down for it. */
   notes: string;
@@ -57,7 +69,7 @@ export interface Content {
 }
 type ContentRow = Omit<Content, "post">;
 const COLUMNS =
-  "c.id, c.title, c.notes, c.stage, c.job_id, c.created_at, c.stage_at, t.created_at AS thumbnail FROM publisher_content c LEFT JOIN publisher_thumbnails t ON t.job_id = c.job_id";
+  "c.id, c.number, c.title, c.notes, c.stage, c.job_id, c.created_at, c.stage_at, t.created_at AS thumbnail FROM publisher_content c LEFT JOIN publisher_thumbnails t ON t.job_id = c.job_id";
 
 interface Fields {
   title?: string;
@@ -163,26 +175,66 @@ export async function readContent(db: NewsletterDB, id: string): Promise<Content
   return row && (await withPosts(db, [row]))[0];
 }
 
-export async function createContent(db: NewsletterDB, value: unknown, now = Date.now()): Promise<Content> {
+/** The piece numbered `number`, or null when none is. */
+export async function readNumbered(db: NewsletterDB, number: number): Promise<Content | null> {
+  const row = await db.prepare(`SELECT ${COLUMNS} WHERE c.number = ?`).bind(number).first<ContentRow>();
+  return row && (await withPosts(db, [row]))[0];
+}
+
+/**
+ * SQL for the number a new piece takes, in the statement that writes it: one more than every piece's and than the
+ * value bound as `after`. D1 runs one statement at a time, and its unique index refuses a number twice.
+ */
+const nextNumber = (after: string) => `(SELECT MAX(COALESCE(MAX(number), 0), ${after}) + 1 FROM publisher_content)`;
+const numberTaken = (error: unknown) =>
+  /UNIQUE constraint failed: publisher_content\.number/.test(String((error as Error | null)?.message));
+/** Runs a write that numbers a piece, again if another piece took its number meanwhile. */
+export async function numbering<T>(write: () => Promise<T>, tries = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await write();
+    } catch (error) {
+      if (attempt >= tries || !numberTaken(error)) throw error;
+    }
+  }
+}
+
+/** A new piece, numbered after every piece and after `after`: the laptop's highest film, when it asks. */
+export async function createContent(
+  db: NewsletterDB,
+  value: unknown,
+  now = Date.now(),
+  after = NUMBERED_AFTER,
+): Promise<Content> {
   const fields = readFields(value);
   if (fields.title === undefined) throw new PostError("Give it a title");
   if (fields.job !== undefined) throw new PostError("Link a post from the composer");
-  const piece: Content = {
-    id: crypto.randomUUID(),
-    title: fields.title,
-    notes: fields.notes ?? "",
-    stage: fields.stage ?? "idea",
+  const id = crypto.randomUUID();
+  const title = fields.title;
+  const notes = fields.notes ?? "";
+  const stage = fields.stage ?? "idea";
+  const row = await numbering(() =>
+    db
+      .prepare(
+        `INSERT INTO publisher_content (id, title, notes, stage, number, created_at, stage_at)
+         VALUES (?1, ?2, ?3, ?4, ${nextNumber("?6")}, ?5, ?5) RETURNING number`,
+      )
+      .bind(id, title, notes, stage, now, Math.max(after, NUMBERED_AFTER))
+      .first<{ number: number }>(),
+  );
+  if (!row) throw new Error("The piece wasn't saved");
+  return {
+    id,
+    number: row.number,
+    title,
+    notes,
+    stage,
     job_id: null,
     created_at: now,
     stage_at: now,
     thumbnail: null,
     post: null,
   };
-  await db
-    .prepare("INSERT INTO publisher_content (id, title, notes, stage, created_at, stage_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(piece.id, piece.title, piece.notes, piece.stage, now, now)
-    .run();
-  return piece;
 }
 
 /**
@@ -226,7 +278,8 @@ export async function deleteContent(db: NewsletterDB, id: string): Promise<boole
 /**
  * Where a post goes in the Pipeline as it's queued, in the same batch as the post, after it. The piece the composer
  * linked moves to Posted; a post without one, or whose piece has gone or holds another post, gets a piece of its own
- * in Posted, named as History names it and sharing the post's id.
+ * in Posted, named as History names it, sharing the post's id and numbered as any new piece is. Run the batch through
+ * `numbering`.
  */
 export function placeJob(
   db: NewsletterDB,
@@ -247,10 +300,11 @@ export function placeJob(
   statements.push(
     db
       .prepare(
-        `INSERT INTO publisher_content (id, title, notes, stage, job_id, created_at, stage_at)
-         SELECT ?1, ?2, '', 'posted', ?1, ?3, ?3 WHERE NOT EXISTS (SELECT 1 FROM publisher_content WHERE job_id = ?1)`,
+        `INSERT INTO publisher_content (id, title, notes, stage, job_id, number, created_at, stage_at)
+         SELECT ?1, ?2, '', 'posted', ?1, ${nextNumber("?4")}, ?3, ?3
+         WHERE NOT EXISTS (SELECT 1 FROM publisher_content WHERE job_id = ?1)`,
       )
-      .bind(post.id, postLabel(post), now),
+      .bind(post.id, postLabel(post), now, NUMBERED_AFTER),
   );
   return statements;
 }

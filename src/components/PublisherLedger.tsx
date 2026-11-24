@@ -16,6 +16,7 @@ import {
   atRisk,
   dayOf,
   type FootageLink,
+  filmPosts,
   filmsByClip,
   type Ledger,
   type LedgerClip,
@@ -332,21 +333,17 @@ function Pinned({
 export default function PublisherLedger({ request, uploading, onGrade, statsHref, search, onNavigate }: Props) {
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Each film's post, from the Pipeline pieces that name it: read once, as nothing here changes them. What each post went
-  // out to, by its job, for a film's page; null until read, so a page opened by its address shows its post as it opens.
+  // Each film's post, from the Pipeline piece with its number or that names it: read once, as nothing here changes them.
+  // What each post went out to, by its job, for a film's page; null until read, so a page opened by its address shows its
+  // post as it opens.
   const [posted, setPosted] = useState(new Map<string, string>());
   const [posts, setPosts] = useState<Map<string, PiecePost> | null>(null);
   useEffect(() => {
     let active = true;
     Promise.all([request("footage/links"), request("content")])
       .then(([{ links }, { items }]: [{ links: Record<string, FootageLink> }, { items: Content[] }]) => {
-        const films = new Map<string, string>();
-        for (const piece of items) {
-          const film = links[piece.id]?.project;
-          if (film && piece.stage === "posted" && piece.job_id) films.set(film, piece.job_id);
-        }
         if (!active) return;
-        setPosted(films);
+        setPosted(filmPosts(items, links));
         setPosts(new Map(items.flatMap((piece) => (piece.job_id && piece.post ? [[piece.job_id, piece.post]] : []))));
       })
       .catch(() => {

@@ -101,6 +101,8 @@ const history = {
     {
       id: "00000000-0000-4000-8000-000000000008",
       created_at: minutes(24 * 60),
+      // The Pipeline piece it went out as is film 013's.
+      number: 13,
       post: {
         kind: "video",
         title: "Lorax wisdom, part 7",
@@ -343,6 +345,7 @@ drafts = [...Object.values(saved).map((item) => listed(item, Date.now())), ...dr
 // The pipeline: a piece at every stage, the posted one linked to the first post in History.
 type Piece = {
   id: string;
+  number: number | null;
   title: string;
   notes: string;
   stage: string;
@@ -356,8 +359,13 @@ type Piece = {
     targets: { id: string; platform: string; url: string | null; deleted: boolean; metrics: Record<string, number> | null }[];
   } | null;
 };
+// Each piece's number: Square windows is film 014's, the posted Lorax 013's, and the photo from before numbers has none.
+const pieceNumbers: Record<number, number> = { 1: 21, 2: 20, 3: 19, 4: 18, 5: 14, 7: 13 };
+/** The number a new piece takes, as the server gives it: after every piece and the films from before numbers. */
+const nextNumber = () => Math.max(16, ...pieces.map((item) => item.number ?? 0)) + 1;
 const piece = (n: number, title: string, stage: string, daysAgo: number, notes = ""): Piece => ({
   id: `00000000-0000-4000-8000-0000000c0${String(n).padStart(3, "0")}`,
+  number: pieceNumbers[n] ?? null,
   title,
   notes,
   stage,
@@ -618,11 +626,11 @@ const ledger = {
     "012-noon": { clips: ["DJI_20261111161230_0258_D"], local: false, archived: true },
   },
 };
-// Pipeline pieces' footage: a shoot day for the footage-ready walk, films for the edit and a posted piece.
+// Pipeline pieces' footage: a shoot day for the footage-ready walk, and the posted piece's film linked by name, as
+// pieces were before numbers. The edit's film is 014-walk by its number alone.
 const pieceId = (n: number) => `00000000-0000-4000-8000-0000000c0${String(n).padStart(3, "0")}`;
 const links: Record<string, { project?: string; day?: string }> = {
   [pieceId(4)]: { day: "2026-11-21" },
-  [pieceId(5)]: { project: "014-walk" },
   [pieceId(7)]: { project: "013-maybe-later" },
 };
 const realFetch = window.fetch.bind(window);
@@ -731,6 +739,7 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
       pieces.unshift({
         ...piece(0, body.title || body.caption.trim().split("\n")[0].slice(0, 80) || "Untitled", "posted", 0),
         id: body.id,
+        number: nextNumber(),
         job_id: body.id,
       });
     return json({ id: body.id }, 201);
@@ -766,7 +775,12 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "content" && method === "GET")
     return json({ items: [...pieces].sort((a, b) => b.stage_at - a.stage_at) });
   if (path === "content" && method === "POST") {
-    const created = { ...piece(0, body.title.trim(), "idea", 0), id: crypto.randomUUID(), notes: body.notes ?? "" };
+    const created = {
+      ...piece(0, body.title.trim(), "idea", 0),
+      id: crypto.randomUUID(),
+      number: nextNumber(),
+      notes: body.notes ?? "",
+    };
     pieces = [created, ...pieces];
     return json(created, 201);
   }

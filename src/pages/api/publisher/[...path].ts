@@ -63,7 +63,9 @@ import {
   createContent,
   deleteContent,
   listContent,
+  numbering,
   readContent,
+  readNumbered,
   placeJob,
   releaseJob,
   updateContent,
@@ -212,6 +214,19 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (path === "content" && request.method === "GET") return json({ items: await listContent(db) });
     if (path === "content" && request.method === "POST")
       return json(await createContent(db, await request.json()), 201);
+    // The laptop's films: `film <number>` reads the piece a film is made from, and `film new` makes one, numbered
+    // after the films on the laptop and in the archive (`after`) as well as after every piece.
+    const numbered = path.match(/^helper\/content\/(\d{1,6})$/);
+    if (numbered && request.method === "GET") {
+      const item = await readNumbered(db, Number(numbered[1]));
+      return item ? json(item) : json({ error: `No piece is numbered ${numbered[1]}` }, 404);
+    }
+    if (path === "helper/content" && request.method === "POST") {
+      const { after = 0, ...fields } = (await request.json()) as { after?: unknown };
+      if (typeof after !== "number" || !Number.isSafeInteger(after) || after < 0 || after > 99_999)
+        return json({ error: "Invalid number" }, 400);
+      return json(await createContent(db, fields, Date.now(), after), 201);
+    }
     if (path.startsWith("content/")) {
       const id = path.slice("content/".length);
       if (!validId(id)) return json({ error: "Invalid content" }, 400);
@@ -496,18 +511,21 @@ export const ALL: APIRoute = async ({ request, params }) => {
           },
           400,
         );
-      await db.batch([
-        db
-          .prepare("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)")
-          .bind(post.id, JSON.stringify(post), Date.now()),
-        ...uploads.map((id) => db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ?").bind(post.id, id)),
-        ...post.platforms.map((platform) =>
+      // One batch, undone whole if another piece took the number its piece chose, so it can go again as it is.
+      await numbering(() =>
+        db.batch([
           db
-            .prepare("INSERT INTO publisher_targets (id, job_id, platform, scheduled_at) VALUES (?, ?, ?, ?)")
-            .bind(crypto.randomUUID(), post.id, platform, post.schedule?.[platform] ?? null),
-        ),
-        ...placeJob(db, post, content),
-      ]);
+            .prepare("INSERT INTO publisher_jobs (id, payload, created_at) VALUES (?, ?, ?)")
+            .bind(post.id, JSON.stringify(post), Date.now()),
+          ...uploads.map((id) => db.prepare("UPDATE publisher_media SET job_id = ? WHERE id = ?").bind(post.id, id)),
+          ...post.platforms.map((platform) =>
+            db
+              .prepare("INSERT INTO publisher_targets (id, job_id, platform, scheduled_at) VALUES (?, ?, ?, ?)")
+              .bind(crypto.randomUUID(), post.id, platform, post.schedule?.[platform] ?? null),
+          ),
+          ...placeJob(db, post, content),
+        ]),
+      );
       // Its uploads go to the archive now, so retries and crossposts work after the media bucket expires them.
       keep((archive) => archiveUploads(media, archive, postMedia(post)));
       return json({ id: post.id }, 201);

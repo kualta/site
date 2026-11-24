@@ -16,10 +16,12 @@ import {
   archiveProject,
   archiveRecentMedia,
   cleanupProject,
+  filmNumber,
   listArchived,
   projectFolders,
   restoreProject,
 } from "./archive.mjs";
+import { d1, describePlan, highestFilm, localFilms, numberPieces, pad, startFilm } from "./films.mjs";
 import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { DAILY, FOOTAGE, dueClips, readState, uploadFootage, watchFootage } from "./footage.mjs";
@@ -443,6 +445,62 @@ if (command === "connect") {
   } finally {
     await oauth?.close();
   }
+} else if (command === "film") {
+  // A film is the Pipeline piece with its number: its project is ~/Movies/OpenFilm/Projects/NNN-slug.
+  try {
+    if (!config.token) throw new Error("Connect the helper first");
+    const [what, ...rest] = process.argv.slice(3);
+    const usage = 'Usage: bun run publisher film <number> | film new "<title>"';
+    const archived = (await listArchived({ origin: config.origin, token: config.token }))
+      .map((project) => project.name)
+      .filter((name) => filmNumber(name) !== null);
+    let piece;
+    if (what === "new") {
+      const title = rest.join(" ").trim();
+      if (!title) throw new Error(usage);
+      // Numbered after the films here and in the archive, as well as after every piece.
+      const after = highestFilm([...archived, ...(await localFilms())]);
+      piece = await (await api("content", { title, stage: "footage", after })).json();
+      console.log(`Piece ${pad(piece.number)} “${piece.title}” is in the Pipeline, at Footage ready`);
+    } else {
+      if (!/^\d{1,6}$/.test(what ?? "") || rest.length) throw new Error(usage);
+      piece = await (await api(`content/${Number(what)}`)).json();
+    }
+    const { path, made } = await startFilm(piece, { archived });
+    console.log(made ? `Made ${path}` : `${path} was there already; opened it`);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+} else if (command === "number-pieces") {
+  // Once, after migration 0015: gives each piece from before numbers one. --dry-run says what it would write.
+  try {
+    if (!config.token) throw new Error("Connect the helper first");
+    const args = process.argv.slice(3);
+    const dryRun = args.includes("--dry-run");
+    const log = (line) => console.error(line);
+    const done = await numberPieces({
+      query: d1({ root, local: args.includes("--local") }),
+      request: archiveClient({ origin: config.origin, token: config.token, log }),
+      cache: join(stateDir, "render-md5.json"),
+      dryRun,
+      log,
+    });
+    for (const line of describePlan(done)) console.log(line);
+    if (done.missingColumn) console.log("Apply migrations/0015_publisher_content_number.sql before writing this.");
+    if (dryRun)
+      console.log(
+        `Would number ${done.assign.length} pieces. Nothing was written; run it without --dry-run to write them.`,
+      );
+    else console.log(`Numbered ${done.written} of ${done.assign.length} pieces.`);
+    if (!dryRun && done.written < done.assign.length) {
+      console.error("A piece took one of those numbers meanwhile: run it again.");
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 } else if (command === "oauth-key") {
   const file = join(stateDir, "oauth/client-key.json");
   const { created, jwk } = await ensureClientKey(file, `publisher-${new Date().toISOString().slice(0, 10)}`);
@@ -457,5 +515,6 @@ if (command === "connect") {
     "Usage: bun run publisher connect | start | install | uninstall | draft <post.json> | oauth-key |\n" +
       "  archive <project folder>… [--keep-cache] | restore <project> [folder] [--at <time>] | archives | archive-media |\n" +
       "  cleanup <project folder>… | --all [--posted] [--dry-run] | footage [--now] [--daily <clips>] |\n" +
-      "  post-records [--write] [--job <post id>]",
+      '  post-records [--write] [--job <post id>] | film <number> | film new "<title>" |\n' +
+      "  number-pieces [--dry-run] [--local]",
   );

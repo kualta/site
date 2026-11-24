@@ -325,6 +325,8 @@ try {
     await halloween.getByRole("button", { name: "Close" }).click();
     // Its videos expired before YouTube was retried: the post takes the video again, then retries and crossposts.
     const lorax = history.locator(".publisher-history-item", { hasText: "Lorax wisdom, part 7" });
+    // Named with the number of the Pipeline piece it went out as.
+    assert.equal(await lorax.locator(".publisher-history-text").textContent(), "013 · Lorax wisdom, part 7");
     await lorax.getByRole("button", { name: "Manage" }).click();
     const reupload = lorax.getByRole("group", { name: "Upload again" });
     await reupload.getByText("The video expired.").waitFor();
@@ -1233,7 +1235,7 @@ try {
     // Posted, a piece is its picture with its title, when it went out and its views over the top.
     assert.equal(await lorax.getAttribute("data-picture"), "true");
     await lorax.locator("img").evaluate((img) => img.complete || new Promise((done) => (img.onload = done)));
-    assert.match(await lorax.textContent(), /^Lorax wisdom, part 7Yesterday · 1\.5K views$/);
+    assert.match(await lorax.textContent(), /^013 · Lorax wisdom, part 7Yesterday · 1\.5K views$/);
     assert.equal(await card("Posted", "this, too, is modern art").getAttribute("data-picture"), "true");
     assert.equal(await card("Idea", "Why Bogotá has no seasons").getAttribute("data-picture"), null);
     if (shots) await page.screenshot({ path: path.join(shots, `pipeline-board-${name}.png`) });
@@ -1242,7 +1244,7 @@ try {
     await board.getByRole("button", { name: "Add" }).click();
     await card("Idea", "Hammock physics").waitFor();
     assert.equal(await idea.inputValue(), "");
-    assert.match(await column("Idea").getByRole("listitem").first().textContent(), /^Hammock physics/);
+    assert.match(await column("Idea").getByRole("listitem").first().textContent(), /^022 · Hammock physics/);
     const patches = (id) =>
       page.evaluate(
         (path) => window.publisherRequests.filter((r) => r.method === "PATCH" && r.path === path).map((r) => r.body),
@@ -1274,7 +1276,7 @@ try {
         ),
       );
       const hammock = await card("Footage ready", "Hammock physics").evaluate((li) => li.textContent);
-      assert.match(hammock, /^Hammock physicsToday$/);
+      assert.match(hammock, /^022 · Hammock physicsToday$/);
       // A posted piece dragged out would let go of its post, so that asks first; kept, nothing changes.
       page.once("dialog", (dialog) => dialog.dismiss());
       await drag(lorax.getByRole("button"), "Edit ready");
@@ -1285,7 +1287,7 @@ try {
     }
     // Opened, a piece takes its script and can move to any stage.
     await open(width > 700 ? "Footage ready" : "Idea", "Hammock physics");
-    const editor = page.getByRole("dialog", { name: "Hammock physics" });
+    const editor = page.getByRole("dialog", { name: "022 · Hammock physics" });
     const save = editor.getByRole("button", { name: "Save" });
     assert.ok(await save.isDisabled());
     assert.equal(await editor.getByRole("region", { name: "Stats" }).count(), 0);
@@ -1298,7 +1300,7 @@ try {
     if (shots) await page.screenshot({ path: path.join(shots, `pipeline-${name}.png`) });
     // A posted piece opens to each platform's numbers, linked to the post there, above its fields.
     await lorax.getByRole("button").click();
-    const stats = page.getByRole("dialog", { name: "Lorax wisdom, part 7" }).getByRole("region", { name: "Stats" });
+    const stats = page.getByRole("dialog", { name: "013 · Lorax wisdom, part 7" }).getByRole("region", { name: "Stats" });
     const rows = await stats.locator("tr").evaluateAll((trs) =>
       trs.map((tr) => [...tr.children].map((cell) => cell.textContent.trim())),
     );
@@ -1328,18 +1330,18 @@ try {
     // Composed from its editor, the composer links it, offering only the pieces not yet posted.
     const squareWindows = "00000000-0000-4000-8000-0000000c0005";
     await open("Edit ready", "Square windows");
-    await page.getByRole("dialog", { name: "Square windows" }).getByRole("button", { name: "Compose" }).click();
+    await page.getByRole("dialog", { name: "014 · Square windows" }).getByRole("button", { name: "Compose" }).click();
     const link = page.getByRole("combobox", { name: /^Pipeline/ });
     await link.locator(`option[value="${squareWindows}"]:checked`).waitFor({ state: "attached" });
     assert.equal(new URL(page.url()).search, `?content=${squareWindows}`);
     assert.equal(await link.inputValue(), squareWindows);
     assert.deepEqual(await link.locator("option").allTextContents(), [
       "Not in the pipeline",
-      "Square windows",
-      "Night market walk",
-      "Colombian breakfast tier list",
-      "Lorax wisdom, part 8",
-      "Why Bogotá has no seasons",
+      "014 · Square windows",
+      "018 · Night market walk",
+      "019 · Colombian breakfast tier list",
+      "021 · Lorax wisdom, part 8",
+      "020 · Why Bogotá has no seasons",
     ]);
     // A reload keeps the link.
     await page.reload();
@@ -1682,8 +1684,9 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
-  // A Pipeline piece names its footage, a film or a shoot day before there's one, and its card says how that footage
-  // stands from the ledger: its clips, how many graded, how many at risk.
+  // A Pipeline piece's film is the one with its number; before there's one it can name a shoot day (or, as pieces did
+  // before numbers, a film), and its card says how that footage stands from the ledger: its clips, how many graded, how
+  // many at risk.
   {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await context.newPage();
@@ -1692,7 +1695,12 @@ try {
     await page.goto("http://127.0.0.1:8797/publisher.html/pipeline");
     const board = page.getByRole("region", { name: "Pipeline" });
     const card = (title) => board.getByRole("listitem").filter({ hasText: title });
-    await card("Square windows").getByText("014-walk · 2 clips · 2 graded · 2 at risk").waitFor();
+    await card("014 · Square windows").getByText("014-walk · 2 clips · 2 graded · 2 at risk").waitFor();
+    await card("Square windows").getByRole("button").click();
+    const footage = page.getByRole("dialog", { name: "014 · Square windows" }).getByRole("combobox", { name: /^Footage/ });
+    assert.equal(await footage.inputValue(), "project:014-walk");
+    await page.keyboard.press("Escape");
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
     await card("Night market walk").getByText(/· 1 clip · 1 graded · 1 at risk$/).waitFor();
     await card("Why Bogotá has no seasons").getByRole("button").click();
     const editor = page.getByRole("dialog");

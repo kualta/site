@@ -6,8 +6,11 @@ import {
   createContent,
   deleteContent,
   listContent,
+  numbering,
+  pieceLabel,
   placeJob,
   readContent,
+  readNumbered,
   releaseJob,
   updateContent,
   type PiecePost,
@@ -27,6 +30,7 @@ function fixture() {
     "0010_publisher_thumbnails.sql",
     "0011_publisher_schedule.sql",
     "0012_publisher_content.sql",
+    "0015_publisher_content_number.sql",
   ])
     sql.exec(readFileSync(`migrations/${name}`, "utf8"));
   const statement = (query: string) => {
@@ -285,4 +289,63 @@ test("posts queued without a piece before queueing made one each get one, whatev
     { id: missed, title: "Baking one big chocolate chip cookie", job_id: missed, stage_at: 5 },
     { id: placed, title: "Placed", job_id: placed, stage_at: 1 },
   ]);
+});
+
+test("each new piece takes the next number after the films and every piece, however it's made", async () => {
+  const { db, sql } = fixture();
+  // Pieces from before numbers have none until they're given one.
+  sql.query("INSERT INTO publisher_content (id, title, created_at, stage_at) VALUES ('old', 'Old', 1, 1)").run();
+  sql.query("INSERT INTO publisher_content (id, title, created_at, stage_at) VALUES ('older', 'Older', 1, 1)").run();
+  const first = await createContent(db, { title: "Big cookie" }, 10);
+  expect(first.number).toBe(17);
+  expect(pieceLabel(first)).toBe("017 · Big cookie");
+  expect(pieceLabel({ number: null, title: "Old" })).toBe("Old");
+  expect((await readContent(db, first.id))?.number).toBe(17);
+  // The laptop's films can be further on than any piece.
+  expect((await createContent(db, { title: "Walk", stage: "footage" }, 20, 40)).number).toBe(41);
+  expect((await createContent(db, { title: "Run" }, 30, 3)).number).toBe(42);
+  // A post queued without a piece gets one, numbered the same way.
+  const job = crypto.randomUUID();
+  await db.batch([
+    db.prepare("INSERT INTO publisher_jobs VALUES (?, '{}', 40)").bind(job),
+    ...placeJob(db, { id: job, title: "Meow", caption: "" }, null, 40),
+  ]);
+  expect((await readContent(db, job))?.number).toBe(43);
+  expect((await readNumbered(db, 41))?.title).toBe("Walk");
+  expect(await readNumbered(db, 99)).toBeNull();
+  expect((await listContent(db)).find((piece) => piece.id === "old")?.number).toBeNull();
+  // D1 holds each number once.
+  expect(() => sql.query("UPDATE publisher_content SET number = 17 WHERE id = 'old'").run()).toThrow("UNIQUE");
+  expect(() => sql.query("UPDATE publisher_content SET number = 0 WHERE id = 'old'").run()).toThrow("CHECK");
+});
+
+test("a piece whose number another took meanwhile is numbered again", async () => {
+  const { db, sql } = fixture();
+  let raced = false;
+  // Another piece takes the number just before this one's write lands.
+  const racing = {
+    ...db,
+    prepare(query: string) {
+      const statement = db.prepare(query);
+      if (raced || !query.includes("RETURNING number")) return statement;
+      raced = true;
+      sql
+        .query("INSERT INTO publisher_content (id, title, number, created_at, stage_at) VALUES ('x', 'X', 17, 1, 1)")
+        .run();
+      return {
+        bind: () => ({
+          first: () => Promise.reject(new Error("D1_ERROR: UNIQUE constraint failed: publisher_content.number")),
+        }),
+      };
+    },
+  } as unknown as typeof db;
+  expect((await createContent(racing, { title: "Second" })).number).toBe(18);
+  // Anything else fails at once.
+  let tries = 0;
+  const failing = () => {
+    tries++;
+    return Promise.reject(new Error("D1_ERROR: no such table"));
+  };
+  await expect(numbering(failing)).rejects.toThrow("no such table");
+  expect(tries).toBe(1);
 });

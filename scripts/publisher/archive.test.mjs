@@ -19,7 +19,8 @@ import { memoryArchive, memoryMedia } from "../../src/lib/publisher/memory-archi
 /** The site's archive routes, answered in memory, as the laptop's fetch reaches them. */
 function site() {
   const sqlite = new Database(":memory:");
-  sqlite.exec(readFileSync("migrations/0002_publisher.sql", "utf8"));
+  for (const file of ["0002_publisher.sql", "0012_publisher_content.sql", "0015_publisher_content_number.sql"])
+    sqlite.exec(readFileSync(`migrations/${file}`, "utf8"));
   const db = {
     prepare: (sql) => {
       let values = [];
@@ -61,7 +62,21 @@ function site() {
         .run(crypto.randomUUID(), job, platform, state);
     return job;
   };
-  return { fetcher, archive, requests, post, auth: { origin: "https://post.kualta.dev", token: "token", fetcher } };
+  /** The Pipeline piece numbered `number`, gone out as `job`. */
+  const piece = (number, job) =>
+    sqlite
+      .query(
+        "INSERT INTO publisher_content (id, title, stage, job_id, number, created_at, stage_at) VALUES (?, 'Film', 'posted', ?, ?, 1, 1)",
+      )
+      .run(crypto.randomUUID(), job, number);
+  return {
+    fetcher,
+    archive,
+    requests,
+    post,
+    piece,
+    auth: { origin: "https://post.kualta.dev", token: "token", fetcher },
+  };
 }
 
 async function project(root) {
@@ -208,6 +223,29 @@ test("a film no post went out as stays, unless the owner vouches for it", async 
     expect(vouched.posts).toEqual([]);
     expect(vouched.deleted.map((clip) => clip.name)).toEqual(["clip.mp4"]);
     await expect(stat(dir)).rejects.toThrow();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a film is posted when the piece with its number went out, whatever video its post holds", async () => {
+  const root = await mkdtemp(join(tmpdir(), "archive-"));
+  try {
+    const dir = await project(root);
+    const exported = await exports(root);
+    const { auth, post, piece } = site();
+    // Rendered again after its post went out as a Studio export: no post holds this render.
+    const job = await post("a studio export", { youtube: "succeeded", tiktok: "failed" });
+    // Another number's piece is posted; this film's isn't yet.
+    piece(13, job);
+    const kept = await cleanupProject(dir, { ...auth, exported, dryRun: true });
+    expect(kept.skipped).toBe(
+      "no published or scheduled post has 014-test-film.mp4 as its video, and piece 014 isn't posted",
+    );
+    piece(14, job);
+    const plan = await cleanupProject(dir, { ...auth, exported, dryRun: true });
+    expect(plan.posts).toEqual([expect.objectContaining({ md5: null, number: 14, job, platforms: expect.any(Array) })]);
+    expect(plan.posts[0].platforms).toContainEqual({ platform: "youtube", state: "succeeded" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -27,13 +27,16 @@ export async function historyPage(
     values.push(...kinds);
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  // Each with the number of the Pipeline piece it went out as, found by the post.
   const query = db.prepare(
-    `SELECT id, payload, created_at FROM publisher_jobs ${where} ORDER BY created_at DESC, id DESC LIMIT 21`,
+    `SELECT id, payload, created_at, (SELECT MIN(c.number) FROM publisher_content c WHERE c.job_id = j.id) AS number
+     FROM publisher_jobs j ${where} ORDER BY created_at DESC, id DESC LIMIT 21`,
   );
   const { results: jobs } = await (values.length ? query.bind(...values) : query).all<{
     id: string;
     payload: string;
     created_at: number;
+    number: number | null;
   }>();
   const page = jobs.slice(0, 20).map((job) => ({ ...job, post: JSON.parse(job.payload) as Post }));
   if (!page.length) return { posts: [], next: null };
