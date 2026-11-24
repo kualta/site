@@ -1950,10 +1950,11 @@ try {
     await ledger.locator(".publisher-ledger-thumb img").first().waitFor();
     assert.deepEqual(
       await ledger.getByRole("group", { name: "Show" }).getByRole("button").allTextContents(),
-      ["All 6", "At risk 4", "Not graded 1", "Not on YouTube 2", "Not in the cloud 4"],
+      ["All 6", "Camera 2", "Mac 2", "Cloud 2"],
     );
-    await ledger.getByRole("button", { name: "At risk 4" }).click();
-    assert.equal(await ledger.locator("tbody tr:not(.day)").count(), 4);
+    // Each filter shows the clips whose original is in that place.
+    await ledger.getByRole("button", { name: "Cloud 2" }).click();
+    assert.equal(await ledger.locator("tbody tr:not(.day)").count(), 2);
     await ledger.getByRole("button", { name: "All 6" }).click();
     // The page never scrolls sideways: on a phone the table scrolls in its own box.
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

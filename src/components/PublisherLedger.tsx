@@ -12,7 +12,6 @@ import {
   type LedgerClip,
   ledgerKey,
   lost,
-  needsGrade,
   storage,
   thumbUrl,
 } from "@/lib/publisher/ledger";
@@ -37,12 +36,12 @@ function riskOf(c: LedgerClip) {
   if (atRisk(c)) return "risk";
   return undefined;
 }
+/** The clips whose original is in a place: on the camera, on this Mac, in the cloud. */
 const FILTERS = {
   all: { name: "All", shows: () => true },
-  risk: { name: "At risk", shows: atRisk },
-  ungraded: { name: "Not graded", shows: needsGrade },
-  youtube: { name: "Not on YouTube", shows: (c: LedgerClip) => Boolean(c.graded) && !c.graded?.youtube },
-  cloudflare: { name: "Not in the cloud", shows: (c: LedgerClip) => !c.original.cloudflare },
+  camera: { name: "Camera", shows: (c: LedgerClip) => c.original.camera },
+  mac: { name: "Mac", shows: (c: LedgerClip) => c.original.mac },
+  cloud: { name: "Cloud", shows: (c: LedgerClip) => c.original.cloudflare },
 } as const;
 type Filter = keyof typeof FILTERS;
 const FILTER_KEY = "publisher.footageFilter";
