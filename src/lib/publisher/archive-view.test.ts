@@ -8,6 +8,9 @@ import {
   cueAt,
   defaultLook,
   fileUrl,
+  filmLabel,
+  filmOutputs,
+  filmParts,
   type MacClip,
   macSource,
   nameTime,
@@ -22,16 +25,54 @@ import {
 import type { LedgerClip } from "./ledger";
 
 test("the Footage tab's address holds the clip open, and its day only when one came with it", () => {
-  expect(readFootageView("")).toEqual({ clip: null, day: null });
-  const view = { clip: "DJI_20261108122204_0086_D", day: null };
+  expect(readFootageView("")).toEqual({ clip: null, day: null, project: null });
+  const view = { clip: "DJI_20261108122204_0086_D", day: null, project: null };
   expect(writeFootageView(view)).toBe("?clip=DJI_20261108122204_0086_D");
   expect(readFootageView(writeFootageView(view))).toEqual(view);
   // An Archive tab link names the day the cloud files the clip under; without a clip, a day is nothing to keep.
-  const linked = { clip: "DJI_20261108122204_0086_D", day: "2026-11-08" };
+  const linked = { clip: "DJI_20261108122204_0086_D", day: "2026-11-08", project: null };
   expect(readFootageView("?day=2026-11-08&clip=DJI_20261108122204_0086_D")).toEqual(linked);
   expect(writeFootageView(linked)).toBe("?clip=DJI_20261108122204_0086_D&day=2026-11-08");
   expect(writeFootageView(readFootageView("?day=2026-11-08"))).toBe("");
-  expect(readFootageView("?day=yesterday&clip=IMG_4857")).toEqual({ clip: "IMG_4857", day: null });
+  expect(readFootageView("?day=yesterday&clip=IMG_4857")).toEqual({ clip: "IMG_4857", day: null, project: null });
+});
+
+test("the address holds a film's page open by its name, a clip's player in its place", () => {
+  const view = { clip: null, day: null, project: "013-maybe-later" };
+  expect(writeFootageView(view)).toBe("?project=013-maybe-later");
+  expect(readFootageView("?project=013-maybe-later")).toEqual(view);
+  expect(readFootageView("?project=013-maybe-later&clip=IMG_4857").project).toBeNull();
+  // A shoot day's originals and the grade app's settings are archived as projects, and aren't films.
+  for (const name of ["_settings", "_originals-2026-11-08", "../x", ""])
+    expect(readFootageView(`?project=${encodeURIComponent(name)}`).project).toBeNull();
+});
+
+test("a film's name reads as its number and the rest", () => {
+  expect(filmParts("013-maybe-later")).toEqual({ number: "013", slug: "maybe-later" });
+  expect(filmLabel("013-maybe-later")).toBe("013 · maybe-later");
+  expect(filmLabel("lorax")).toBe("lorax");
+});
+
+test("a film's outputs are the videos beside film.html: its render, then the Chinese one, then any other", () => {
+  const file = (path: string, n: number) => ({ path, sha256: n.toString(16).padStart(64, "0"), size: n * 1000 });
+  const manifest = {
+    archivedAt: "2026-11-20T10:00:00.000Z",
+    files: [
+      file("013-maybe-later-zh.mp4", 2),
+      file("013-maybe-later.mp4", 1),
+      file("assets/DJI_20261108122204_0086_D.mp4", 3),
+      file("zh/assets/DJI_20261108122204_0086_D.mp4", 3),
+      file("film.html", 4),
+      file("cut-for-x.mov", 5),
+      { path: "broken.mp4", sha256: "nope", size: 1 },
+    ],
+  };
+  expect(filmOutputs("013-maybe-later", manifest)).toEqual([
+    { name: "Render", file: "013-maybe-later.mp4", sha256: file("", 1).sha256, size: 1000 },
+    { name: "Chinese", file: "013-maybe-later-zh.mp4", sha256: file("", 2).sha256, size: 2000 },
+    { name: "cut-for-x.mov", file: "cut-for-x.mov", sha256: file("", 5).sha256, size: 5000 },
+  ]);
+  expect(filmOutputs("014-walk", { archivedAt: "", files: [file("assets/a.mp4", 1)] })).toEqual([]);
 });
 
 test("a day's clip is found by its name without the extension, in any case", () => {

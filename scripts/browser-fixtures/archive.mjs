@@ -112,11 +112,42 @@ export async function macAnswer(route, original) {
   return route.fulfill({ headers, contentType: "application/json", body: JSON.stringify(clip) });
 }
 
+/**
+ * A posted film, archived since: its render and its Chinese render beside film.html, its clips' copies and the Chinese
+ * version's folder under it, and Studio's history. The ledger's other film is still on the Mac, and isn't archived.
+ */
+export const FILM = "013-maybe-later";
+export const FILM_OUTPUTS = { render: hash(13_001), zh: hash(13_002) };
+export const filmManifest = {
+  name: FILM,
+  archivedAt: "2026-11-20T10:00:00.000Z",
+  files: [
+    { path: `${FILM}-zh.mp4`, sha256: FILM_OUTPUTS.zh, size: 78_400_000, mtime: 1 },
+    { path: `${FILM}.mp4`, sha256: FILM_OUTPUTS.render, size: 77_100_000, mtime: 1 },
+    { path: "film.html", sha256: hash(13_003), size: 9_000, mtime: 1 },
+    { path: `assets/${OPENED}`, sha256: hash(13_004), size: 410_000_000, mtime: 1 },
+    { path: `zh/assets/${OPENED}`, sha256: hash(13_004), size: 410_000_000, mtime: 1 },
+    { path: "zh/film.html", sha256: hash(13_005), size: 9_100, mtime: 1 },
+    ...Array.from({ length: 40 }, (_, i) => ({
+      path: `.film/history/objects/${String(i).padStart(2, "0")}/x`,
+      sha256: hash(13_100 + i),
+      size: 120,
+      mtime: 1,
+    })),
+  ],
+  folders: [],
+};
+
 /** What the archive routes answer, or null for any other path. */
 export function archiveAnswer(path) {
   const day = /^archive\/days\/(.+)$/.exec(path)?.[1];
   if (day) return Response.json({ day, at: archiveSettings.at, clips: archiveDays[day] ?? [] });
   if (path === "archive/settings") return Response.json(archiveSettings);
+  const project = /^archive\/projects\/(.+)$/.exec(path)?.[1];
+  if (project)
+    return project === FILM
+      ? Response.json(filmManifest)
+      : Response.json({ error: "Not in the archive" }, { status: 404 });
   const file = /^archive\/files\/([0-9a-f]{64})\/(.+)$/.exec(path);
   if (!file) return null;
   if (files[file[1]]) return new Response(files[file[1]].body(), { headers: { "Content-Type": files[file[1]].type } });

@@ -4,22 +4,30 @@ import type { ArchivedClip, ArchivedSettings } from "./archive-tab";
 import type { LedgerClip } from "./ledger";
 
 /**
- * The clip the Footage tab's player has open, kept in its address: by its name without the extension, and the shoot day
- * the cloud files it under when the address says (an Archive tab link does; otherwise the ledger knows).
+ * What the Footage tab has open, kept in its address: the player on a clip, by its name without the extension, and the
+ * shoot day the cloud files it under when the address says (an Archive tab link does; otherwise the ledger knows); or a
+ * film's page, by its name (013-maybe-later).
  */
 export interface FootageView {
   clip: string | null;
   day: string | null;
+  project: string | null;
 }
+const isFilm = (name: string) => /^[\w][\w.-]{0,119}$/.test(name) && !name.startsWith("_");
 export function readFootageView(search: string): FootageView {
   const params = new URLSearchParams(search);
   const clip = params.get("clip") || null;
   const day = params.get("day");
-  return { clip, day: clip && day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null };
+  const project = clip ? null : params.get("project");
+  return {
+    clip,
+    day: clip && day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
+    project: project && isFilm(project) ? project : null,
+  };
 }
-export function writeFootageView({ clip, day }: FootageView): string {
-  if (!clip) return "";
-  return `?clip=${encodeURIComponent(clip)}${day ? `&day=${day}` : ""}`;
+export function writeFootageView({ clip, day, project }: FootageView): string {
+  if (clip) return `?clip=${encodeURIComponent(clip)}${day ? `&day=${day}` : ""}`;
+  return project ? `?project=${encodeURIComponent(project)}` : "";
 }
 
 /** A clip's name without its extension: how the ledger and the transcripts know it. */
@@ -140,6 +148,42 @@ export function unplayable(record: LedgerClip | undefined, missed: Missed): { wh
   if (missed.cloud === "gone") return { why: "It isn't in the cloud.", again: false };
   if (missed.mac === "gone") return { why: "It isn't on the Mac or the camera.", again: true };
   return { why: "No copy of it is left.", again: false };
+}
+
+/** A film's name as OpenFilm projects are named, split: its number and the rest (013-maybe-later → 013, maybe-later). */
+export function filmParts(name: string): { number: string | null; slug: string } {
+  const match = /^(\d+)-(.+)$/.exec(name);
+  return match ? { number: match[1], slug: match[2] } : { number: null, slug: name };
+}
+/** A film's name to read: "013 · maybe-later". */
+export function filmLabel(name: string) {
+  const { number, slug } = filmParts(name);
+  return number ? `${number} · ${slug}` : slug;
+}
+
+/** A film's manifest as the archive keeps it (archive.ts's Manifest), as far as its page reads it. */
+export interface FilmManifest {
+  archivedAt: string;
+  files: { path: string; sha256: string; size: number }[];
+}
+/** A video a film made: its render, its Chinese render, or another exported beside them. */
+export interface FilmOutput {
+  name: string;
+  file: string;
+  sha256: string;
+  size: number;
+}
+/**
+ * The videos a film made, from its manifest: those at the top of its folder, beside film.html, where OpenFilm writes its
+ * render (`<name>.mp4`) and the Chinese render (`<name>-zh.mp4`). The clips it's cut from are in assets/.
+ */
+export function filmOutputs(film: string, manifest: FilmManifest): FilmOutput[] {
+  const named: Record<string, string> = { [`${film}.mp4`]: "Render", [`${film}-zh.mp4`]: "Chinese" };
+  const rank = (file: string) => ({ Render: 0, Chinese: 1 })[named[file]] ?? 2;
+  return manifest.files
+    .filter(({ path, sha256 }) => /^[^/]+\.(mp4|mov|m4v|webm)$/i.test(path) && /^[0-9a-f]{64}$/.test(sha256))
+    .map(({ path, sha256, size }) => ({ name: named[path] ?? path, file: path, sha256, size }))
+    .sort((a, b) => rank(a.file) - rank(b.file) || a.file.localeCompare(b.file));
 }
 
 /** A size as Finder shows it. */

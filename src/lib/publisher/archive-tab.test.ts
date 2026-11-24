@@ -320,3 +320,47 @@ describe("listings", () => {
       expect(await archiveTabResponse(path, get(path), { archive: reader })).toBeNull();
   });
 });
+
+describe("a film's manifest", () => {
+  const now = Date.parse("2026-11-23T12:00:00Z");
+  const film = (files: number) => ({
+    name: "013-maybe-later",
+    archivedAt: "",
+    files: [
+      { path: "013-maybe-later.mp4", sha256: hex(1), size: 77_000_000, mtime: 1 },
+      { path: "013-maybe-later-zh.mp4", sha256: hex(2), size: 78_000_000, mtime: 1 },
+      // Studio's history: thousands of small files.
+      ...Array.from({ length: files }, (_, i) => ({
+        path: `.film/history/objects/${i}`,
+        sha256: hex(10 + i),
+        size: 90,
+        mtime: 1,
+      })),
+    ],
+    folders: [],
+  });
+
+  test("is its latest version, streamed as the archive holds it", async () => {
+    const { reader, put, asked } = archive();
+    put("projects/013-maybe-later/2026-11-01T10:00:00.000Z.json", JSON.stringify(film(1)));
+    const latest = JSON.stringify(film(3000));
+    put("projects/013-maybe-later/2026-11-20T10:00:00.000Z.json", latest);
+    const response = await answer(reader, "archive/projects/013-maybe-later", { now });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/json");
+    expect(response.headers.get("Cache-Control")).toBe("private, max-age=60");
+    expect(await response.text()).toBe(latest);
+    expect(asked.get).toBe(1);
+  });
+
+  test("one never archived is 404; a shoot day, the settings and a bad name aren't films", async () => {
+    const { reader, put } = archive();
+    put("projects/_settings/2026-11-16T01:00:00.000Z.json", "{}");
+    const missing = await answer(reader, "archive/projects/014-walk", { now });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "Not in the archive" });
+    for (const name of ["_settings", "_originals-2026-11-08", "..", "a%2Fb"])
+      expect((await answer(reader, `archive/projects/${name}`, { now })).status).toBe(400);
+    expect(await archiveTabResponse("archive/projects", get("archive/projects"), { archive: reader })).toBeNull();
+  });
+});
