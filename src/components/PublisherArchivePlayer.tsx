@@ -34,7 +34,7 @@ interface Props {
   record: LedgerClip | undefined;
   request: (path: string) => Promise<any>;
   onClose: () => void;
-  /** Opens the clip in the Grade tab, whose Cloudflare list brings it to the Mac. */
+  /** Opens the clip in the Grade tab, whose cloud list brings it to the Mac. */
   onGrade: () => void;
 }
 
@@ -355,12 +355,7 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
             {profile ? PROFILES[profile] : "Profile unknown"}
           </small>
         </h2>
-        <button
-          type="button"
-          className="publisher-archive-bring"
-          title="Opens it in the Grade tab's Cloudflare list, where Bring to Mac takes it"
-          onClick={onGrade}
-        >
+        <button type="button" className="publisher-archive-bring" onClick={onGrade}>
           {here ? "Open in Grade" : "Bring to Mac"}
         </button>
         <button type="button" aria-label="Close" onClick={() => dialog.current?.close()}>

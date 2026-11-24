@@ -672,8 +672,8 @@ export const scenarios = [
             if (turn === 3) return { error: "The archive is unavailable right now" };
             value.updatedAt = new Date().toISOString();
             for (const clip of Object.values(value.clips)) {
+              clip.original.cloudflare = true;
               if (turn > 1) clip.original = { camera: true, mac: true, cloudflare: true };
-              if (clip.graded) clip.graded.cloudflare = "current";
               if (clip.graded && turn > 1) clip.graded.youtube = { video: "abcDEF12345", at: "", current: turn === 4 };
             }
             return value;
@@ -728,12 +728,12 @@ export const scenarios = [
     tab: "footage",
     name: "pauses and starts a switch",
     run: async (page, { still, step }) => {
-      const sending = page.getByRole("group", { name: "Mac → Cloudflare" });
+      const sending = page.getByRole("group", { name: "Mac → Cloud" });
       for (const [button, next] of [
         ["Pause", "starts it again"],
         ["Start", "is done"],
       ]) {
-        await step(`asks to ${button.toLowerCase()} Mac → Cloudflare`);
+        await step(`asks to ${button.toLowerCase()} Mac → Cloud`);
         await sending.getByRole("button", { name: button, exact: true }).click();
         await sleep(1500);
         await still(`the Mac takes it, then ${next}`);

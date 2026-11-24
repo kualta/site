@@ -51,7 +51,7 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     }
     if (!options.length) return [];
     const group = document.createElement("optgroup");
-    group.label = "Cloudflare";
+    group.label = "Cloud";
     group.append(...options);
     return [group];
   }
@@ -87,7 +87,7 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
     refused = "";
     $("cloud-list").replaceChildren();
     if (!open) return;
-    $("empty").textContent = "In Cloudflare, not on this Mac. Bring a clip here to grade it.";
+    $("empty").textContent = "In the cloud, not on this Mac. Bring a clip here to grade it.";
     render();
     await load();
   }

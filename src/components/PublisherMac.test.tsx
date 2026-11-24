@@ -78,10 +78,10 @@ test("each switch says its state, the space where it takes clips from, what's le
     "—",
     "Time left",
     "—",
-    "Mac → Cloudflare",
+    "Mac → Cloud",
   ]);
-  expect(laneOf(lines, "Mac → Cloudflare", 14)).toEqual([
-    "Mac → Cloudflare",
+  expect(laneOf(lines, "Mac → Cloud", 14)).toEqual([
+    "Mac → Cloud",
     "Running",
     "Pause",
     "Mac",
@@ -141,7 +141,7 @@ test("an unplugged camera, and a Mac or switch with nothing left, say so without
     "To copy",
     "—",
   ]);
-  expect(laneOf(lines, "Mac → Cloudflare", 7).slice(5)).toEqual(["To send", "None"]);
+  expect(laneOf(lines, "Mac → Cloud", 7).slice(5)).toEqual(["To send", "None"]);
   expect(lines.slice(lines.indexOf("Kept"))).toEqual(["Kept", "None", "Transcripts", "0 waiting"]);
 });
 
@@ -164,24 +164,24 @@ test("waiting, held, pausing and failed switches say why", () => {
     ),
   );
   expect(lines.find((line) => line.startsWith("Waiting for the camera, tries again "))).toBeTruthy();
-  expect(laneOf(lines, "Mac → Cloudflare", 3)).toEqual(["Mac → Cloudflare", "Held", "Pause"]);
+  expect(laneOf(lines, "Mac → Cloud", 3)).toEqual(["Mac → Cloud", "Held", "Pause"]);
   expect(lines).toContain("Held until a Grade page is open");
   const network = says(
     heard(report({}, { send: lane({ state: "waiting", waiting: { for: "network", why: "fetch failed", until } }) })),
   );
-  expect(network.find((line) => line.startsWith("Can't reach Cloudflare, tries again "))).toBeTruthy();
+  expect(network.find((line) => line.startsWith("Can't reach the cloud, tries again "))).toBeTruthy();
   const stopping = says(heard(report({}, { send: lane({ state: "stopping" }) })));
-  expect(laneOf(stopping, "Mac → Cloudflare", 3)).toEqual(["Mac → Cloudflare", "Pausing", "Start"]);
+  expect(laneOf(stopping, "Mac → Cloud", 3)).toEqual(["Mac → Cloud", "Pausing", "Start"]);
   expect(stopping).toContain("After the clips in flight");
   const failed = says(heard(report({ running: false }, { send: lane({ state: "failed", error: "Pair again" }) })));
-  expect(laneOf(failed, "Mac → Cloudflare", 3)).toEqual(["Mac → Cloudflare", "Failed", "Start"]);
+  expect(laneOf(failed, "Mac → Cloud", 3)).toEqual(["Mac → Cloud", "Failed", "Start"]);
   expect(failed).toContain("Pair again");
 });
 
 test("Pause all holds a switch that's on, which says so, and its button still pauses it", () => {
   const owner = { for: "owner", why: "Paused from the Footage tab", until: null };
   const held = says(heard(report({}, { send: lane({ state: "paused", speed: null, left: null, waiting: owner }) })));
-  expect(laneOf(held, "Mac → Cloudflare", 3)).toEqual(["Mac → Cloudflare", "Held", "Pause"]);
+  expect(laneOf(held, "Mac → Cloud", 3)).toEqual(["Mac → Cloud", "Held", "Pause"]);
   expect(held).toContain("Held by Pause all");
   // Paused while held, it stops once everything goes on and the clips in flight are up.
   const stopping = says(heard(report({}, { send: lane({ state: "stopping", waiting: owner }) })));
@@ -268,5 +268,5 @@ test("a report kept from before the grade app said its space and what it's heard
   } as unknown as MacReport;
   const lines = says(heard(old, 20_000, { send: { want: "pause", at: 3 } }));
   expect(laneOf(lines, "Camera → Mac", 5).slice(3)).toEqual(["Camera", "—"]);
-  expect(laneOf(lines, "Mac → Cloudflare", 3)).toEqual(["Mac → Cloudflare", "Pausing…", "Start"]);
+  expect(laneOf(lines, "Mac → Cloud", 3)).toEqual(["Mac → Cloud", "Pausing…", "Start"]);
 });

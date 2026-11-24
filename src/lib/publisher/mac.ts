@@ -5,10 +5,10 @@
  * the media bucket, checked here field by field and stored as checked, so the tab reads only these fields.
  */
 
-/** The switches the tab shows: Camera → Mac and Mac → Cloudflare. */
+/** The switches the tab shows: Camera → Mac and Mac → Cloud. */
 export const MAC_LANES = ["copy", "send"] as const;
 export type MacLaneName = (typeof MAC_LANES)[number];
-export const LANE_NAMES: Record<MacLaneName, string> = { copy: "Camera → Mac", send: "Mac → Cloudflare" };
+export const LANE_NAMES: Record<MacLaneName, string> = { copy: "Camera → Mac", send: "Mac → Cloud" };
 const STATES = ["idle", "running", "paused", "waiting", "stopping", "done", "stopped", "failed"] as const;
 export type MacLaneState = (typeof STATES)[number];
 

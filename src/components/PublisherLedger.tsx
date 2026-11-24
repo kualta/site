@@ -24,7 +24,7 @@ interface Props {
 }
 
 const PROFILES: Record<string, string> = { dlog2: "D-Log2", dlog: "D-Log", hlg: "HLG", rec709: "Rec.709" };
-/** How a row is marked at its edge: no copy left anywhere, or none off the Mac and the card. */
+/** How a row is marked at its edge: no original left anywhere, or none off the Mac and the card. */
 function riskOf(c: LedgerClip) {
   if (lost(c)) return "lost";
   if (atRisk(c)) return "risk";
@@ -35,7 +35,7 @@ const FILTERS = {
   risk: { name: "At risk", shows: atRisk },
   ungraded: { name: "Not graded", shows: needsGrade },
   youtube: { name: "Not on YouTube", shows: (c: LedgerClip) => Boolean(c.graded) && !c.graded?.youtube },
-  cloudflare: { name: "Not in Cloudflare", shows: (c: LedgerClip) => !c.original.cloudflare && !c.graded?.cloudflare },
+  cloudflare: { name: "Not in the cloud", shows: (c: LedgerClip) => !c.original.cloudflare },
 } as const;
 type Filter = keyof typeof FILTERS;
 const FILTER_KEY = "publisher.footageFilter";
@@ -57,27 +57,10 @@ function gradeText(c: LedgerClip) {
   return c.profile ? "Not graded" : "—";
 }
 
-/** A yes or no in a location column ("current" is a yes); an earlier grade says so. */
-function Mark({
-  value,
-  first = false,
-  title,
-}: {
-  value: boolean | "current" | "earlier" | null | undefined;
-  first?: boolean;
-  title?: string;
-}) {
-  const className = first ? "mark first" : "mark";
-  if (value === "earlier")
-    return (
-      <td className={className}>
-        <span className="old" title="An earlier grade">
-          Earlier
-        </span>
-      </td>
-    );
+/** A yes or no in a location column. */
+function Mark({ value, first = false, title }: { value: boolean; first?: boolean; title?: string }) {
   return (
-    <td className={className}>
+    <td className={first ? "mark first" : "mark"}>
       {value ? (
         <span className="tick" aria-label="Yes" title={title}>
           ✓
@@ -164,9 +147,9 @@ function Films({
 }
 
 /**
- * The footage ledger: every clip the grade app has seen, newest day first, with its grade, where its original and
- * graded copies are, and the films it's in. Read from the archive as the grade app last sent it, and again every 30
- * seconds.
+ * The footage ledger: every clip the grade app has seen, newest day first, with its grade, where its original is,
+ * whether it's on YouTube, and the films it's in. Graded copies aren't kept, so they aren't shown. Read from the archive
+ * as the grade app last sent it, and again every 30 seconds.
  */
 export default function PublisherLedger({ request, uploading, onGrade, statsHref }: Props) {
   const [ledger, setLedger] = useState<Ledger | null>(null);
@@ -260,12 +243,8 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
   const kept = storage(Object.values(ledger.clips));
   const weight = (bytes: number) => (bytes ? fileSize(bytes) : "0 GB");
   // A line each whatever it says, so the figures above keep their places.
-  function copies({ originals, graded }: { originals: number; graded: number }) {
-    const parts: string[] = [];
-    if (originals) parts.push(`${originals} ${originals === 1 ? "original" : "originals"}`);
-    if (graded) parts.push(`${graded} graded`);
-    return parts.join(" · ") || "\u00a0";
-  }
+  const originals = ({ clips }: { clips: number }) =>
+    clips ? `${clips} ${clips === 1 ? "original" : "originals"}` : "\u00a0";
   const cost = archiveCost(kept.cloudflare.bytes);
   let monthly = "\u00a0";
   if (kept.cloudflare.bytes) monthly = cost < 0.005 ? "Under $0.01 a month" : `$${cost.toFixed(2)} a month`;
@@ -287,14 +266,14 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
           <dt>Mac</dt>
           <dd>
             {weight(kept.mac.bytes)}
-            <small>{copies(kept.mac)}</small>
+            <small>{originals(kept.mac)}</small>
           </dd>
         </div>
         <div>
-          <dt>Cloudflare</dt>
+          <dt>Cloud</dt>
           <dd>
             {weight(kept.cloudflare.bytes)}
-            <small>{copies(kept.cloudflare)}</small>
+            <small>{originals(kept.cloudflare)}</small>
             <small title="R2 Infrequent Access: $0.01 a GB-month, no free tier">{monthly}</small>
           </dd>
         </div>
@@ -327,41 +306,29 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
             <col style={{ width: 112 }} />
             <col style={{ width: 76 }} />
             <col style={{ width: 56 }} />
-            <col style={{ width: 102 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 102 }} />
+            <col style={{ width: 64 }} />
             <col style={{ width: 86 }} />
             <col style={{ width: 78 }} />
           </colgroup>
           <thead>
             <tr>
-              <th rowSpan={2}>Recorded</th>
-              <th rowSpan={2}>Clip</th>
-              <th rowSpan={2}>Profile</th>
-              <th rowSpan={2}>Grade</th>
-              <th colSpan={3} scope="colgroup" className="span first">
-                Original
-              </th>
-              <th colSpan={3} scope="colgroup" className="span first">
-                Graded copy
-              </th>
-              <th rowSpan={2}>
-                <span className="publisher-hidden">Open</span>
-              </th>
-            </tr>
-            <tr>
+              <th>Recorded</th>
+              <th>Clip</th>
+              <th>Profile</th>
+              <th>Grade</th>
               <th className="mark first">Camera</th>
               <th className="mark">Mac</th>
-              <th className="mark">Cloudflare</th>
-              <th className="mark first">Mac</th>
-              <th className="mark">Cloudflare</th>
+              <th className="mark">Cloud</th>
               <th className="mark">YouTube</th>
+              <th>
+                <span className="publisher-hidden">Open</span>
+              </th>
             </tr>
           </thead>
           {[...days].map(([day, rows]) => (
             <tbody key={day}>
               <tr className="day">
-                <th colSpan={11} scope="colgroup">
+                <th colSpan={9} scope="colgroup">
                   {day
                     ? new Date(`${day}T12:00:00`).toLocaleDateString([], {
                         weekday: "short",
@@ -374,7 +341,7 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
                 </th>
               </tr>
               {rows.map(([key, c]) => {
-                const bytes = c.size ?? c.graded?.size;
+                const bytes = c.size;
                 const share = uploading && live === key.toLowerCase() ? uploading.share : null;
                 const reachable = c.original.camera || c.original.mac;
                 return (
@@ -392,8 +359,6 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
                     <Mark value={c.original.camera} first title={asOf} />
                     <Mark value={c.original.mac} />
                     <Mark value={c.original.cloudflare} />
-                    <Mark value={c.graded?.mac} first />
-                    <Mark value={c.graded?.cloudflare} />
                     <YouTubeMark record={c} share={share} />
                     <td className="open">
                       <button

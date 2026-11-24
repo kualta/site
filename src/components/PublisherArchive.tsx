@@ -21,7 +21,7 @@ interface Props {
   /** The tab's address query, which holds the day and clip open. */
   search: string;
   onNavigate: (search: string, replace?: boolean) => void;
-  /** Opens a clip in the Grade tab, whose Cloudflare list brings it to the Mac. */
+  /** Opens a clip in the Grade tab, whose cloud list brings it to the Mac. */
   onGrade: (clip: string) => void;
 }
 
@@ -178,9 +178,6 @@ export default function PublisherArchive({ request, search, onNavigate, onGrade 
 
   return (
     <section className="publisher-archive" aria-label="Archive">
-      <p className="publisher-note publisher-archive-intro">
-        The originals offloaded to Cloudflare, by shoot day. Watching one reads it from the archive, about $0.01 a GB.
-      </p>
       <div className="publisher-archive-body">
         <nav ref={daysBar} className="publisher-archive-days" aria-label="Shoot days">
           {days?.map((name) => (
@@ -192,9 +189,7 @@ export default function PublisherArchive({ request, search, onNavigate, onGrade 
         </nav>
         <div className="publisher-archive-day">
           {days && !days.length ? (
-            <p className="publisher-note">
-              Nothing is in the archive yet. The grade app's Mac → Cloudflare offload files each shoot day here.
-            </p>
+            <p className="publisher-note">Nothing in the cloud yet.</p>
           ) : (
             <>
               <div className="publisher-archive-head">

@@ -41,13 +41,15 @@ export interface FootageLink {
   day?: string;
 }
 
-/** A copy off the Mac and the card: in the Cloudflare archive, or on YouTube (re-encoded, but a copy). */
-export const keptAway = (c: LedgerClip) =>
-  c.original.cloudflare || Boolean(c.graded?.cloudflare) || Boolean(c.graded?.youtube);
+/**
+ * Its original is off the Mac and the card, in the Cloudflare archive. Only an original counts as a copy of a clip:
+ * graded copies aren't kept (films render from graded trims made when they're needed), and YouTube's is re-encoded.
+ */
+export const keptAway = (c: LedgerClip) => c.original.cloudflare;
 /** Losing the Mac or the card would lose it. */
 export const atRisk = (c: LedgerClip) => !keptAway(c);
-/** No copy of it left anywhere. */
-export const lost = (c: LedgerClip) => !c.original.camera && !c.original.mac && !c.graded?.mac && !keptAway(c);
+/** No original of it left anywhere. */
+export const lost = (c: LedgerClip) => !c.original.camera && !c.original.mac && !keptAway(c);
 /** Log footage waiting for its grade (Rec.709 is as shot). */
 export const needsGrade = (c: LedgerClip) => c.profile !== "rec709" && !c.graded;
 
@@ -81,28 +83,18 @@ export function footageLine(clips: LedgerClip[]) {
 }
 
 /**
- * How much footage is where: originals on the card, originals and graded copies on the Mac and in the archive, and
- * videos on YouTube (re-encoded, so counted, not weighed). An archived graded copy of an earlier grade counts at the
- * current grade's size.
+ * How much footage is where: originals on the card, on the Mac and in the archive, and videos on YouTube (re-encoded,
+ * so counted, not weighed). Graded copies aren't counted: none are kept, and the few in archived films are the films'.
  */
 export function storage(clips: LedgerClip[]) {
-  const sum = (list: LedgerClip[], size: (c: LedgerClip) => number | null | undefined) =>
-    list.reduce((total, c) => total + (size(c) ?? 0), 0);
-  const originals = (where: keyof LedgerClip["original"]) => clips.filter((c) => c.original[where]);
-  const camera = originals("camera");
-  const place = (where: "mac" | "cloudflare") => {
-    const kept = originals(where);
-    const graded = clips.filter((c) => Boolean(c.graded?.[where]));
-    return {
-      originals: kept.length,
-      graded: graded.length,
-      bytes: sum(kept, (c) => c.size) + sum(graded, (c) => c.graded?.size),
-    };
+  const originals = (where: keyof LedgerClip["original"]) => {
+    const kept = clips.filter((c) => c.original[where]);
+    return { clips: kept.length, bytes: kept.reduce((total, c) => total + (c.size ?? 0), 0) };
   };
   return {
-    camera: { clips: camera.length, bytes: sum(camera, (c) => c.size) },
-    mac: place("mac"),
-    cloudflare: place("cloudflare"),
+    camera: originals("camera"),
+    mac: originals("mac"),
+    cloudflare: originals("cloudflare"),
     youtube: { videos: clips.filter((c) => c.graded?.youtube).length },
   };
 }

@@ -1655,7 +1655,7 @@ try {
     await page.goto("http://127.0.0.1:8797/publisher.html/pipeline");
     const board = page.getByRole("region", { name: "Pipeline" });
     const card = (title) => board.getByRole("listitem").filter({ hasText: title });
-    await card("Square windows").getByText("014-walk · 2 clips · 2 graded · 1 at risk").waitFor();
+    await card("Square windows").getByText("014-walk · 2 clips · 2 graded · 2 at risk").waitFor();
     await card("Night market walk").getByText(/· 1 clip · 1 graded · 1 at risk$/).waitFor();
     await card("Why Bogotá has no seasons").getByRole("button").click();
     const editor = page.getByRole("dialog");
@@ -1798,7 +1798,7 @@ try {
     await page.waitForURL(/\/publisher\.html\/footage$/);
     await titled("43% · footage · kualta");
     const mac = page.getByRole("region", { name: "This Mac" });
-    await mac.getByText("Mac → Cloudflare", { exact: true }).waitFor();
+    await mac.getByText("Mac → Cloud", { exact: true }).waitFor();
     // Scrolled to, as far as the page goes before the ledger under it has loaded.
     await page.waitForFunction(() => {
       const { top, bottom } = document.getElementById("this-mac").getBoundingClientRect();
@@ -1808,7 +1808,7 @@ try {
     await open("History");
     await page.evaluate(() => scrollTo(0, 0));
     await open("Footage");
-    await mac.getByText("Mac → Cloudflare", { exact: true }).waitFor();
+    await mac.getByText("Mac → Cloud", { exact: true }).waitFor();
     await page.waitForTimeout(300);
     assert.equal(await page.evaluate(() => scrollY), 0);
     assert.deepEqual(errors, []);
@@ -1874,21 +1874,38 @@ try {
     await row("IMG_4857").getByText("Not log").waitFor();
     // Each clip names the films it's in; a film whose piece is posted links to the post's numbers.
     await row("0402").getByText("· in 014-walk").waitFor();
-    // How much footage is where: the card's originals; the Mac's and the archive's originals and graded copies.
+    // Where each clip's original is, and its video on YouTube. Graded copies aren't kept, so none are shown: not the
+    // exports on the Mac, nor an old film's copy in the cloud.
+    assert.deepEqual(await ledger.locator("thead th").allTextContents(), [
+      "Recorded",
+      "Clip",
+      "Profile",
+      "Grade",
+      "Camera",
+      "Mac",
+      "Cloud",
+      "YouTube",
+      "Open",
+    ]);
+    assert.deepEqual(await row("0402").locator("td.mark").allTextContents(), ["✓", "–", "–", "↑ 40%"]);
+    assert.deepEqual(await row("0258").locator("td.mark").allTextContents(), ["✓", "–", "✓", "✓"]);
+    assert.deepEqual(await row("0086").locator("td.mark").allTextContents(), ["–", "–", "✓", "–"]);
+    // How much footage is where, by its originals; YouTube's videos are counted.
+    const storage = page.locator(".publisher-ledger-storage > div");
     assert.deepEqual(
-      await page.locator(".publisher-ledger-storage > div").evaluateAll((cells) =>
+      await storage.evaluateAll((cells) =>
         cells.map((cell) => [cell.querySelector("dt").textContent, cell.querySelector("dd").firstChild.textContent]),
       ),
       [
         ["Camera", "6.0 GB"],
-        ["Mac", "9.8 GB"],
-        ["Cloudflare", "2.0 GB"],
+        ["Mac", "6.0 GB"],
+        ["Cloud", "5.9 GB"],
         ["YouTube", "2 videos"],
       ],
     );
-    await page.locator(".publisher-ledger-storage").getByText("2 originals · 3 graded").waitFor();
-    // What keeping the footage in Cloudflare costs: R2 Infrequent Access, $0.01 a GB-month, none of it free.
-    await page.locator(".publisher-ledger-storage").getByText("$0.02 a month", { exact: true }).waitFor();
+    assert.deepEqual(await storage.nth(1).locator("small").allTextContents(), ["2 originals"]);
+    // What keeping the footage in the cloud costs: R2 Infrequent Access, $0.01 a GB-month, none of it free.
+    assert.deepEqual(await storage.nth(2).locator("small").allTextContents(), ["2 originals", "$0.06 a month"]);
     assert.match(
       await row("0258").getByRole("link", { name: "013-maybe-later" }).getAttribute("href"),
       /\/analytics\?post=00000000-0000-4000-8000-000000000008$/,
@@ -1897,10 +1914,10 @@ try {
     await ledger.locator("img.publisher-ledger-thumb").first().waitFor();
     assert.deepEqual(
       await ledger.getByRole("group", { name: "Show" }).getByRole("button").allTextContents(),
-      ["All 6", "At risk 3", "Not graded 1", "Not on YouTube 2", "Not in Cloudflare 4"],
+      ["All 6", "At risk 4", "Not graded 1", "Not on YouTube 2", "Not in the cloud 4"],
     );
-    await ledger.getByRole("button", { name: "At risk 3" }).click();
-    assert.equal(await ledger.locator("tbody tr:not(.day)").count(), 3);
+    await ledger.getByRole("button", { name: "At risk 4" }).click();
+    assert.equal(await ledger.locator("tbody tr:not(.day)").count(), 4);
     await ledger.getByRole("button", { name: "All 6" }).click();
     // The page never scrolls sideways: on a phone the table scrolls in its own box.
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -1989,7 +2006,7 @@ try {
           return [el.tagName, Math.round(x), Math.round(y + scrollY), Math.round(height)].join(" ");
         }),
       );
-    const passed = "Passed over 0399: doesn't read back from Cloudflare as it was sent: it stays on this Mac";
+    const passed = "Passed over 0399: doesn't read back from the cloud as it was sent: it stays on this Mac";
     let first = null;
     for (const [state, status, expected] of [
       [
@@ -1998,7 +2015,7 @@ try {
         {
           lanes: [
             ["Camera → Mac", "Done", "Start", "2.1 of 112 GB · 2%", "None", "—", "—", ""],
-            ["Mac → Cloudflare", "Running", "Pause", "454 of 494 GB · 92%", "160 clips38.7 GB", "7.1 Mbit/s", "12 h 7 min", passed],
+            ["Mac → Cloud", "Running", "Pause", "454 of 494 GB · 92%", "160 clips38.7 GB", "7.1 Mbit/s", "12 h 7 min", passed],
           ],
           figures: ["2 days45 clips", "3 waiting4 to send · 1 failed: uvx isn't installed, so Whisper can't run"],
         },
@@ -2006,7 +2023,7 @@ try {
       [
         "waiting",
         "Updated just now",
-        { send: /^Can't reach Cloudflare, tries again \d/, copy: /^Waiting for the camera, tries again \d/, copySpace: "Not plugged in" },
+        { send: /^Can't reach the cloud, tries again \d/, copy: /^Waiting for the camera, tries again \d/, copySpace: "Not plugged in" },
       ],
       ["paused", "Updated just now", { send: "Held until a Grade page is open", sendState: "Held" }],
       ["stale", "Not heard from for 25 min", {}],
@@ -2050,7 +2067,7 @@ try {
         (w) => window.publisherRequests.some((r) => r.path === "footage/lanes" && r.body?.lane === "send" && r.body?.want === w),
         want,
       );
-    const sending = mac.getByRole("group", { name: "Mac → Cloudflare" });
+    const sending = mac.getByRole("group", { name: "Mac → Cloud" });
     const shows = (state, button) =>
       Promise.all([
         sending.locator(".publisher-mac-lane-head > span").filter({ hasText: new RegExp(`^${state}$`) }).waitFor(),

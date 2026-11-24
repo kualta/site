@@ -30,7 +30,7 @@ export async function checkArchive(browser, { composer, dir, shots }) {
 
   // Nothing archived yet, the archive unreadable, and a day unreadable: each says so where its list would be.
   for (const [answers, where, text] of [
-    [{ "archive/days": { days: [] } }, ".publisher-archive-day", /^Nothing is in the archive yet\./],
+    [{ "archive/days": { days: [] } }, ".publisher-archive-day", "Nothing in the cloud yet."],
     [
       { "archive/days": { error: "The archive is unavailable" } },
       ".publisher-archive-days",
@@ -98,9 +98,9 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     assert.deepEqual(await first.locator(".line").allTextContents(), [
       "040210:15:00",
       "3.00 GB · D-Log2",
-      "Also on camera · graded on Mac",
+      "Also on camera",
     ]);
-    // A clip only in Cloudflare says nothing more: its copies line isn't there.
+    // A clip only in the cloud says nothing more: its copies line isn't there.
     assert.equal(await archive.getByText(/^Only here$|^Transcript$|^No transcript$/).count(), 0);
     await first.locator(".publisher-archive-thumb img").waitFor();
 
@@ -203,8 +203,10 @@ export async function checkArchive(browser, { composer, dir, shots }) {
     assert.ok(at >= 2.4, `seeked to ${at}`);
     if (shots) await page.screenshot({ path: path.join(shots, `archive-player-${name}.png`) });
 
-    // Bring to Mac: the Grade tab's Cloudflare list, on this clip.
-    await player.getByRole("button", { name: "Bring to Mac" }).click();
+    // Bring to Mac: the Grade tab's cloud list, on this clip. It says what it does, with no tooltip to say it again.
+    const bring = player.getByRole("button", { name: "Bring to Mac" });
+    assert.equal(await bring.getAttribute("title"), null);
+    await bring.click();
     await page.waitForURL(/\/publisher\.html\/grade/);
     assert.equal(
       await page.locator('iframe[title="Grade app"]').getAttribute("src"),

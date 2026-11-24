@@ -537,7 +537,7 @@ function macReply() {
         {
           lane: "send",
           name: "DJI_20261120183012_0399_D.MP4",
-          why: "doesn't read back from Cloudflare as it was sent: it stays on this Mac",
+          why: "doesn't read back from the cloud as it was sent: it stays on this Mac",
         },
       ],
       transcripts: { waiting: 3, failed: 1, toSend: 4, error: "uvx isn't installed, so Whisper can't run" },
@@ -547,7 +547,8 @@ function macReply() {
   };
 }
 // The footage ledger as the grade app sends it: the clip going up, one whose YouTube video is an earlier grade, one
-// safe in Cloudflare and on YouTube, one only the archive holds, one with no copy left, and a phone clip on the Mac.
+// safe in the cloud and on YouTube, one only the cloud holds (beside an old film's graded copy, which isn't counted),
+// one with no copy left, and a phone clip on the Mac.
 const original = (camera: boolean, mac: boolean, cloudflare = false) => ({ camera, mac, cloudflare });
 const graded = (extra: Record<string, unknown>) => ({
   look: "Umbra",
@@ -585,12 +586,13 @@ const ledger = {
       graded: graded({ youtube: { video: "earlier1234", at: "2026-11-20T20:00:00Z", current: false } }),
     }),
     DJI_20261111161230_0258_D: ledgerClip("DJI_20261111161230_0258_D.MP4", "2026-11-11T16:12:30", {
-      original: original(true, false),
+      original: original(true, false, true),
       graded: graded({ cloudflare: "current", youtube: { video: "abcDEF12345", at: "2026-11-17T10:00:00Z", current: true } }),
       thumb: true,
     }),
     DJI_20261108122204_0086_D: ledgerClip("DJI_20261108122204_0086_D.mp4", "2026-11-08T12:22:04", {
-      size: null,
+      size: 2_860_000_000,
+      original: original(false, false, true),
       graded: graded({ mac: false, cloudflare: "current" }),
     }),
     DJI_20261101090000_0001_D: ledgerClip("DJI_20261101090000_0001_D.MP4", "2026-11-01T09:00:00", {}),

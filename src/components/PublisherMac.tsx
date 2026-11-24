@@ -95,8 +95,8 @@ function laneLine(name: MacLaneName, lane: MacLane, report: MacReport, trouble: 
   if (waiting) {
     const again = waiting.until ? `, tries again ${formatWhen(Date.parse(waiting.until))}` : "";
     if (waiting.for === "camera") return { text: `Waiting for the camera${again}` };
-    if (waiting.for === "network") return { text: `Can't reach Cloudflare${again}`, title: waiting.why };
-    if (waiting.for === "cloudflare") return { text: "Keeping clips on the camera until Cloudflare has them" };
+    if (waiting.for === "network") return { text: `Can't reach the cloud${again}`, title: waiting.why };
+    if (waiting.for === "cloudflare") return { text: "Keeping clips on the camera until the cloud has them" };
     return { text: `${waiting.why}${again}` };
   }
   const passed = report.skipped.filter((clip) => clip.lane === name);

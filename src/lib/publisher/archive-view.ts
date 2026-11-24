@@ -56,18 +56,16 @@ export function clock(seconds: number) {
 
 export const PROFILES: Record<string, string> = { dlog2: "D-Log2", dlog: "D-Log", hlg: "HLG", rec709: "Rec.709" };
 
-/** Where a clip's other copies are, from the ledger, in a line; nothing when Cloudflare's is the only one. */
+/**
+ * Where else a clip is, from the ledger, in a line: its original on the camera or the Mac, and its graded video on
+ * YouTube; nothing when the cloud's is the only one. Graded copies aren't kept, so any left aren't named.
+ */
 export function otherCopies(clip: LedgerClip | undefined) {
   if (!clip) return "Not in the ledger";
   const original = [clip.original.camera && "camera", clip.original.mac && "Mac"].filter(Boolean);
-  const graded = [
-    clip.graded?.mac && "Mac",
-    clip.graded?.cloudflare && "Cloudflare",
-    clip.graded?.youtube && "YouTube",
-  ].filter(Boolean);
   const parts = [];
   if (original.length) parts.push(`Also on ${original.join(", ")}`);
-  if (graded.length) parts.push(`graded on ${graded.join(", ")}`);
+  if (clip.graded?.youtube) parts.push("graded on YouTube");
   if (!parts.length) return "";
   const line = parts.join(" · ");
   return line[0].toUpperCase() + line.slice(1);
