@@ -445,3 +445,6 @@ export function sweepPostRecords({ api, oauth, fetcher = fetch, log = console.er
     { log, deadline, failed: (message) => `Post records were NOT reconciled: ${message}` },
   );
 }
+
+/** How long until the next sweep: an hour after a clean one, and soon after one that left a record unreconciled. */
+export const sweepWait = (result) => (result === "failed" || result.failed ? 5 : 60) * 60_000;

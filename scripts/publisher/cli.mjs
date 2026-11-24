@@ -24,7 +24,7 @@ import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { DAILY, FOOTAGE, dueClips, readState, uploadFootage, watchFootage } from "./footage.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
-import { reconcilePostRecords, sweepPostRecords, syncPostRecord } from "./post-record.mjs";
+import { reconcilePostRecords, sweepPostRecords, sweepWait, syncPostRecord } from "./post-record.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
 import { archiveStories, crosspostStories, storiesRoot } from "./stories.mjs";
@@ -221,8 +221,7 @@ if (command === "connect") {
         );
         if (delivered && result.state === "succeeded") await syncPostRecord(post.id, { api, oauth });
       } else if (config.platforms.includes("bluesky") && Date.now() >= recordsDue) {
-        recordsDue = Date.now() + 60 * 60_000;
-        await sweepPostRecords({ api, oauth });
+        recordsDue = Date.now() + sweepWait(await sweepPostRecords({ api, oauth }));
       } else if (config.platforms.includes("instagram") && Date.now() >= storiesDue) {
         storiesDue = Date.now() + 60 * 60_000;
         const { saved, removed, total } = await archiveStories({ stateDir });

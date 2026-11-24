@@ -781,7 +781,7 @@ The record never shows what no copy that is up shows. The site decides this
   come off for a deleted photo or video to be gone. Deleting the copy through the publisher takes
   it off at once. Deleting it in the Bluesky app tells the helper nothing, so the helper
   reconciles every record when it starts and once an hour while it runs: `media` comes off
-  within an hour of helper uptime, and until then the record still names the blob and the
+  within an hour of helper uptime (a run that fails is tried again five minutes later), and until then the record still names the blob and the
   repository still serves it. With the helper stopped or the laptop off, that lasts until it next
   runs. A repository that can't be read fails that post's record and leaves it as it is.
 - A post with no Bluesky copy up has no `media`, and `post-records` prints why when it writes

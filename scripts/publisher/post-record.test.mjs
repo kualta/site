@@ -16,6 +16,7 @@ import {
   reconcilePostRecords,
   scopeDenied,
   sweepPostRecords,
+  sweepWait,
   syncPostRecord,
   withMedia,
 } from "./post-record.mjs";
@@ -681,13 +682,21 @@ test("the idle sweep says nothing when nothing changes, and never throws", async
   const calls = [];
   const oauth = { agent: async () => ({ agent: repo(calls), scope, pdsUrl: host }) };
   const api = site([source(), { ...only, id: other }]);
-  expect(await sweepPostRecords({ api, oauth, fetcher: pds(records, posts), log })).toMatchObject({ none: 2 });
+  const clean = await sweepPostRecords({ api, oauth, fetcher: pds(records, posts), log });
+  expect(clean).toMatchObject({ none: 2 });
+  expect(sweepWait(clean)).toBe(60 * 60_000);
   expect(calls).toEqual([]);
   expect(lines).toEqual([]);
   const down = async () => {
     throw new Error("offline");
   };
   expect(await sweepPostRecords({ api, oauth, fetcher: down, log })).toBe("failed");
+  expect(sweepWait("failed")).toBe(5 * 60_000);
+  const unread = async (address) =>
+    new URL(address).searchParams.get("collection") === collection ? pds(records)(address) : json({}, 502);
+  const partial = await sweepPostRecords({ api, oauth, fetcher: unread, log: () => {} });
+  expect(partial).toMatchObject({ failed: 1, none: 1 });
+  expect(sweepWait(partial)).toBe(5 * 60_000);
   expect(lines).toEqual(["Post records were NOT reconciled: offline"]);
   const stalled = { agent: () => new Promise(() => {}) };
   expect(await sweepPostRecords({ api, oauth: stalled, deadline: 30, log })).toBe("failed");
