@@ -24,7 +24,7 @@ import { publish } from "./runner.mjs";
 import { connectAccount } from "./connections.mjs";
 import { DAILY, FOOTAGE, dueClips, readState, uploadFootage, watchFootage } from "./footage.mjs";
 import { createOAuth, ensureClientKey } from "./oauth.mjs";
-import { reconcilePostRecords, syncPostRecord } from "./post-record.mjs";
+import { reconcilePostRecords, sweepPostRecords, sweepWait, syncPostRecord } from "./post-record.mjs";
 import { install, uninstall } from "./service.mjs";
 import { sweepChromeClones } from "./clones.mjs";
 import { archiveStories, crosspostStories, storiesRoot } from "./stories.mjs";
@@ -140,6 +140,7 @@ if (command === "connect") {
   // Instagram's story archive is copied to disk on start, then hourly when nothing else is waiting, so new stories
   // reach Pinkleap while they're still up. The folder goes to the Cloudflare archive on start and after any change.
   let storiesDue = 0;
+  let recordsDue = 0;
   let storiesChanged = true;
   while (true) {
     try {
@@ -219,6 +220,8 @@ if (command === "connect") {
           `${target.platform}: ${result.state}${delivered ? "" : " (receipt not saved; check the platform)"}`,
         );
         if (delivered && result.state === "succeeded") await syncPostRecord(post.id, { api, oauth });
+      } else if (config.platforms.includes("bluesky") && Date.now() >= recordsDue) {
+        recordsDue = Date.now() + sweepWait(await sweepPostRecords({ api, oauth }));
       } else if (config.platforms.includes("instagram") && Date.now() >= storiesDue) {
         storiesDue = Date.now() + 60 * 60_000;
         const { saved, removed, total } = await archiveStories({ stateDir });

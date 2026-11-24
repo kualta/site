@@ -743,6 +743,7 @@ posted; each platform's copy is a syndication link on it.
 | `tags` | the tags the copies that are up carry, without `#` |
 | `createdAt` | when the first copy went up |
 | `thumbnail` | the post's stored thumbnail (JPEG, PNG or WebP, at most 200 KB) |
+| `media` | the post's photos, or its video, as the Bluesky copy that is up holds them |
 | `syndication` | one `{ platform, url, uri?, publishedAt? }` for each public copy that is up now |
 
 `uri` is the copy's own record, for Bluesky and Grain. `platform` uses the publisher's own names
@@ -773,10 +774,32 @@ The record never shows what no copy that is up shows. The site decides this
   is up on a destination that shows the post's cover (YouTube, TikTok, Instagram, Xiaohongshu,
   Lens): a cover shown only on a private YouTube video stays out. The helper refuses to upload
   one that holds EXIF, XMP, IPTC or a comment.
+- `media` is the Bluesky copy's own photos or video. Each item is
+  `{ image, alt?, aspectRatio? }` or `{ video, alt?, aspectRatio? }`, the shape Bluesky's embeds
+  use, and its blob is the one that copy's `app.bsky.feed.post` record already holds
+  (`app.bsky.embed.images`, `app.bsky.embed.gallery` for five photos or more,
+  `app.bsky.embed.video`, or any of them inside a quote post's `recordWithMedia`). A record may point at any blob its repository stores, so nothing is
+  uploaded and nothing is shown that Bluesky doesn't show already, alt text included. The helper
+  reads that record from the repository's public API (`withMedia`), and only for a copy that is
+  up and whose link names the owner's own repository by DID; a copy linked by handle supplies
+  none, and the plan says so.
+- A repository keeps serving a blob for as long as any record points at it, so `media` has to
+  come off for a deleted photo or video to be gone. Deleting the copy through the publisher takes
+  it off at once. Deleting it in the Bluesky app tells the helper nothing, so the helper
+  reconciles every record when it starts and once an hour while it runs: `media` comes off
+  within an hour of helper uptime (a run that fails is tried again five minutes later), and until then the record still names the blob and the
+  repository still serves it. With the helper stopped or the laptop off, that lasts until it next
+  runs. A repository that can't be read fails that post's record and leaves it as it is.
+- A post with no Bluesky copy up has no `media`, and `post-records` prints why when it writes
+  the record. The archive's
+  uploads (`media/<uuid>` in R2) are never sent: they are the camera's files, with whatever
+  EXIF and location they came with, and nothing tells the helper which of them a copy elsewhere
+  shows. Xiaohongshu may carry a different, Chinese video.
 - A link pasted by hand is reduced to the post's own address, without share parameters such as
   `?igsh=`, `?si=` or `xsec_token`.
 
-It never holds capture dates, the tagged place, alt text, the uploads or their ids, the schedule,
+It never holds capture dates, the tagged place, alt text other than what the Bluesky copy shows,
+the archived uploads or their ids, the schedule,
 metrics, failed, unconfirmed or deleted destinations, or anything about the helper and its
 connections. A post with no public copy up reaches the helper as its id alone.
 
@@ -784,7 +807,9 @@ The record's key is a TID derived from the post's id (`recordKey("publisher:post
 derivation articles use), so a post has exactly one record however often it is written. The helper
 reconciles a post's record after a destination succeeds and after a deletion completes: it
 creates the record with the first copy, updates it as copies come and go, and deletes it when no
-public copy is left. A record that can't be written, or a repository that doesn't answer within
+public copy is left. It also reconciles every record when it starts and once an hour while idle
+(`sweepPostRecords`), which repairs a failed write and picks up a copy linked, unlinked or
+deleted elsewhere; that run prints only what it changes. A record that can't be written, or a repository that doesn't answer within
 a minute, never changes a destination's result or holds the queue, since the post is already up;
 the helper log says the record was not written and how to repair it.
 
@@ -792,7 +817,8 @@ the helper log says the record was not written and how to repair it.
 repository and prints what it would create, update or delete. It reads the post list from the
 site with the helper's pairing key and the records from the repository's public API, and writes
 nothing. Add `--write` to do it. Each write is conditional on the version it read, the thumbnail
-is uploaded only when the record doesn't already hold it, and a second run changes nothing, so
+is uploaded only when the record doesn't already hold it, media is never uploaded, and a second
+run changes nothing, so
 the same command is the backfill for posts from before records existed and the repair after a
 failed write. It also picks up what the helper isn't told about: a post marked as published by
 hand, a link added or removed in History, and edited words. Records in the collection that match
