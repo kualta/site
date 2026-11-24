@@ -26,7 +26,9 @@ import {
   comparable,
   goingToYoutube,
   ledgerCloud,
+  localTime,
   mergeLedger,
+  recordedAt,
   unionLedgers,
   youtubeUploads,
 } from "./ledger.mjs";
@@ -1431,6 +1433,76 @@ async function filmRoute(req, res, p, url) {
   return true;
 }
 
+// ---- the composer's player: a clip this app has, streamed from here rather than the cloud ----------------------------
+
+/** The pages that may read footage from here: the composer (post.kualta.dev), and the site run locally. */
+const READ_BY = ["https://post.kualta.dev", "http://localhost:4321"];
+/** A clip as the player asks for it: its file's name, or that without the extension. Never a path. */
+const CLIP_NAME = /^[A-Za-z0-9][\w -]{0,150}(\.[A-Za-z0-9]{1,5})?$/;
+
+/** A clip's transcript (transcripts.mjs keeps them by shoot day): its own day's, else any day's. */
+async function transcriptOf(clip) {
+  const dir = join(DATA, "transcripts");
+  const file = `${stemOf(clip.name)}.vtt`;
+  const days = (await readdir(dir).catch(() => [])).filter((day) => !day.startsWith(".") && day !== clip.src.label);
+  for (const day of [clip.src.label, ...days]) if (await exists(join(dir, day, file))) return join(dir, day, file);
+  return null;
+}
+
+/**
+ * GET /footage/<clip> says what a clip on this Mac or the card is, /footage/<clip>/original streams it (seekable), and
+ * /footage/<clip>/transcript.vtt is its transcript. Read only, and only for the composer's pages: a request has to name
+ * one of their origins, which the answer allows, so the player can draw the clip on its GPU. Anything else (another
+ * site, or a plain <video> or link, which sends no origin) is refused, and only a clip the app lists is ever served.
+ */
+async function footageRoute(req, res, p) {
+  const origin = req.headers.origin;
+  if (!READ_BY.includes(origin)) throw httpError(403, "only the composer reads footage here");
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  if (req.method === "OPTIONS") {
+    // A preflight: the player seeks with Range, and Chrome may ask whether a public page may reach this device.
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD");
+    res.setHeader("Access-Control-Allow-Headers", "Range");
+    res.setHeader("Access-Control-Max-Age", "600");
+    if (req.headers["access-control-request-private-network"] === "true")
+      res.setHeader("Access-Control-Allow-Private-Network", "true");
+    res.writeHead(204);
+    return res.end();
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") throw httpError(405, "footage is read only");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
+  const m = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt))?$/.exec(p);
+  if (!m || !CLIP_NAME.test(m[1])) throw httpError(404, "no such clip");
+  const clip = await locate(m[1]);
+  if (!clip) throw httpError(404, `${m[1]} isn't on this Mac or the camera`);
+  if (m[2] === "original") return serveFile(req, res, clip.path);
+  const transcript = await transcriptOf(clip);
+  if (m[2]) {
+    if (!transcript) throw httpError(404, `${m[1]} has no transcript here`);
+    return serveFile(req, res, transcript);
+  }
+  const [meta, grades, file] = await Promise.all([
+    metas(clip.src, [clip.name]).then((all) => all[clip.name]),
+    readClips(GRADES),
+    stat(clip.path),
+  ]);
+  send(res, 200, {
+    name: clip.name,
+    on: clip.src.kind,
+    day: clip.src.label,
+    size: file.size,
+    recorded: recordedAt(clip.name, localTime(file.mtimeMs)),
+    profile: meta.profile,
+    duration: meta.duration,
+    width: meta.width,
+    height: meta.height,
+    cameraKelvin: meta.cameraKelvin,
+    grade: grades[clip.name] ?? null,
+    transcript: Boolean(transcript),
+  });
+}
+
 // ---- HTTP -----------------------------------------------------------------------------------------------------------
 
 function send(res, status, body, type = "application/json") {
@@ -1449,7 +1521,7 @@ async function body(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
-const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css", ".mp4": "video/mp4", ".mov": "video/quicktime", ".jpg": "image/jpeg", ".svg": "image/svg+xml" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css", ".mp4": "video/mp4", ".mov": "video/quicktime", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".vtt": "text/vtt; charset=utf-8" };
 
 /** A file, with single-range support so the browser can seek video. */
 async function serveFile(req, res, path, cache = "no-cache") {
@@ -1519,6 +1591,8 @@ async function sourcePayload(id) {
 async function route(req, res) {
   const url = new URL(req.url, "http://localhost");
   const p = decodeURIComponent(url.pathname);
+  // Read by the composer's pages, with their own guard.
+  if (p.startsWith("/footage/")) return footageRoute(req, res, p);
   const mutating = req.method !== "GET" && req.method !== "HEAD";
   // A page on another origin cannot send this header without a preflight this server never grants.
   if (mutating && req.headers["x-grade"] !== "1") throw httpError(403, "missing X-Grade header");

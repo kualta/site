@@ -4,15 +4,22 @@ import {
   archivedClip,
   clipNumber,
   clock,
+  cloudSource,
   cueAt,
   defaultLook,
   fileUrl,
+  type MacClip,
+  macSource,
   nameTime,
   ownGrade,
   parseVtt,
+  placesOf,
   readFootageView,
+  unplayable,
+  withMac,
   writeFootageView,
 } from "./archive-view";
+import type { LedgerClip } from "./ledger";
 
 test("the Footage tab's address holds the clip open, and its day only when one came with it", () => {
   expect(readFootageView("")).toEqual({ clip: null, day: null });
@@ -115,4 +122,119 @@ test("its grade is composed from the backed-up grade and look, with the camera's
     ok: true,
     shotK: 5600,
   });
+});
+
+const record = (camera: boolean, mac: boolean, cloudflare: boolean): LedgerClip => ({
+  name: clip.file,
+  recorded: "2026-11-08T12:22:04",
+  profile: "dlog2",
+  duration: 30,
+  size: 10,
+  original: { camera, mac, cloudflare },
+  graded: null,
+  gradePending: false,
+});
+const onMac: MacClip = {
+  name: clip.file,
+  on: "mac",
+  day: "2026-11-08",
+  size: 10,
+  recorded: "2026-11-08T12:22:04",
+  profile: "dlog2",
+  duration: 30,
+  cameraKelvin: 5200,
+  grade: { base: "fujifilm-velvia", kelvin: 4800 },
+  transcript: true,
+};
+
+test("a clip plays from the grade app where the ledger has it on the Mac or the card, else from the cloud", () => {
+  expect(placesOf(record(false, true, true), "2026-11-08")).toEqual({ mac: true, cloud: true });
+  expect(placesOf(record(true, false, false), "")).toEqual({ mac: true, cloud: false });
+  expect(placesOf(record(false, false, true), "2026-11-08")).toEqual({ mac: false, cloud: true });
+  expect(placesOf(record(false, false, false), "2026-11-08")).toEqual({ mac: false, cloud: false });
+  // One the ledger doesn't know is looked for on the Mac, and in the cloud on a day its address names.
+  expect(placesOf(undefined, "")).toEqual({ mac: true, cloud: false });
+  expect(placesOf(undefined, "2026-11-08")).toEqual({ mac: true, cloud: true });
+
+  const stem = "DJI_20261108122204_0086_D";
+  expect(macSource(stem, onMac)).toEqual({
+    from: "mac",
+    file: clip.file,
+    video: `http://127.0.0.1:4777/footage/${stem}/original`,
+    vtt: `http://127.0.0.1:4777/footage/${stem}/transcript.vtt`,
+    size: 10,
+    day: "2026-11-08",
+  });
+  expect(macSource("IMG 4857", { ...onMac, transcript: false })).toMatchObject({
+    video: "http://127.0.0.1:4777/footage/IMG%204857/original",
+    vtt: null,
+  });
+  expect(cloudSource({ ...clip, vtt: "c".repeat(64) }, "2026-11-08")).toEqual({
+    from: "cloud",
+    file: clip.file,
+    video: fileUrl(clip.sha256, clip.file),
+    vtt: fileUrl("c".repeat(64), `${stem}.vtt`),
+    size: 10,
+    day: "2026-11-08",
+  });
+});
+
+test("a clip found nowhere it was looked for says why, and whether looking again could help", () => {
+  const away = {
+    why: "It's on the Mac. Open this page there, and allow local network access if Chrome asks.",
+    again: true,
+  };
+  expect(unplayable(record(false, true, false), { mac: "away" })).toEqual(away);
+  expect(unplayable(record(true, true, false), { mac: "away" })).toEqual(away);
+  expect(unplayable(record(true, false, false), { mac: "away" })).toEqual({
+    why: "It's on the camera. Plug it into the Mac, and open this page there.",
+    again: true,
+  });
+  expect(unplayable(record(true, false, false), { mac: "gone" })).toEqual({
+    why: "It's on the camera, which isn't plugged in.",
+    again: true,
+  });
+  expect(unplayable(record(false, true, false), { mac: "gone" })).toEqual({
+    why: "It isn't on the Mac any more.",
+    again: true,
+  });
+  // The cloud: a listing that couldn't be read is worth reading again; one without the clip isn't.
+  expect(unplayable(record(true, false, true), { mac: "away", cloud: "unread" })).toEqual({
+    why: "Couldn't read it from the archive.",
+    again: true,
+  });
+  expect(unplayable(record(false, false, true), { cloud: "gone" })).toEqual({
+    why: "It isn't in the cloud.",
+    again: false,
+  });
+  expect(unplayable(undefined, { mac: "gone", cloud: "gone" })).toEqual({
+    why: "It isn't in the cloud.",
+    again: false,
+  });
+  expect(unplayable(undefined, { mac: "gone" })).toEqual({ why: "It isn't on the Mac or the camera.", again: true });
+  expect(unplayable(undefined, { mac: "away" })).toMatchObject({ again: true });
+  expect(unplayable(record(false, false, false), {})).toEqual({ why: "No copy of it is left.", again: false });
+});
+
+test("a clip the grade app has is graded by the Mac's own grade and its camera's white balance", () => {
+  const backed = settings(["looks/dlog2/fujifilm-velvia.cube", "looks/dlog2/opendrt-colorful.cube"]);
+  const grades = { [clip.file]: { base: "opendrt-colorful" }, other: { exposure: 1 } };
+  expect(withMac(grades, {}, null)).toEqual({ grades, records: {} });
+  const known = withMac(grades, {}, onMac);
+  expect(known).toEqual({
+    grades: { [clip.file]: onMac.grade as Record<string, unknown>, other: { exposure: 1 } },
+    records: { [clip.file]: { cameraKelvin: 5200 } },
+  });
+  expect(ownGrade(clip.file, "dlog2", backed, known.grades, known.records)).toMatchObject({
+    ok: true,
+    path: "looks/dlog2/fujifilm-velvia.cube",
+    shotK: 5200,
+  });
+  // Ungraded on the Mac, it's ungraded, whatever the backup had; and while the backup is being read, so is its grade.
+  const ungraded = withMac(grades, {}, { ...onMac, grade: null });
+  expect(ownGrade(clip.file, "dlog2", backed, ungraded.grades, ungraded.records)).toEqual({
+    ok: false,
+    why: "It hasn't been graded",
+  });
+  expect(withMac(null, null, onMac).grades).toBeNull();
 });

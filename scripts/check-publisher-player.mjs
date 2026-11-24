@@ -3,7 +3,17 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ffmpeg from "ffmpeg-static";
-import { archiveDays, CAMERA_KELVIN, GRADE, lookCube, OPENED } from "./browser-fixtures/archive.mjs";
+import {
+  archiveDays,
+  CAMERA_KELVIN,
+  GRADE,
+  lookCube,
+  MAC_GRADE,
+  MAC_KELVIN,
+  macAnswer,
+  ON_MAC,
+  OPENED,
+} from "./browser-fixtures/archive.mjs";
 import { composeLut, normalizeGrade, parseCube, sampleTetra } from "./grade/color.mjs";
 
 const svg = (width, height) =>
@@ -16,11 +26,13 @@ const near = (got, want, by, what) =>
 const CLIP = "DJI_20261108122204_0086_D";
 
 /**
- * A clip's player, opened from the Footage tab against the mocked API (scripts/browser-fixtures/archive.mjs): a clip in
- * the cloud opens from its row, its address keeping it open; it's found in its shoot day's listing and plays as it
- * opens where the browser plays HEVC; its transcript, beside it and as captions; the looks, checked on the WebGL canvas
- * against stand-in LUTs whose colours are known; Bring to Mac; and the Archive tab's old address. Playwright's Chromium
- * has no HEVC, so it first says so, and then, told it has, plays a WebM in the original's place.
+ * A clip's player, opened from the Footage tab against the mocked API (scripts/browser-fixtures/archive.mjs): any clip
+ * with an original anywhere opens from its row, its address keeping it open. One in the cloud alone is found in its
+ * shoot day's listing and plays as it opens where the browser plays HEVC; its transcript, beside it and as captions; the
+ * looks, checked on the WebGL canvas against stand-in LUTs whose colours are known; Bring to Mac; and the Archive tab's
+ * old address. One on the Mac plays from the grade app there (stood in for), graded by the Mac's own grade; away from
+ * the Mac it says where it is. Playwright's Chromium has no HEVC, so it first says so, and then, told it has, plays a
+ * WebM in the original's place.
  */
 export async function checkPlayer(browser, { composer, dir, shots }) {
   const file = path.join(dir, "archive-original.webm");
@@ -49,9 +61,16 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
       reads.push(route.request().headers().range ?? "whole");
       return route.fulfill({ contentType: "video/webm", body: original });
     });
-    await page.route("http://127.0.0.1:4777/**", (route) =>
-      route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Grade</title>" }),
-    );
+    // The grade app: its page for the Grade tab, and the clips it has for the player, each asking noted, while it answers.
+    const mac = { reachable: true, asked: [] };
+    await page.route("http://127.0.0.1:4777/**", async (route) => {
+      const asked = new URL(route.request().url()).pathname;
+      if (!asked.startsWith("/footage/"))
+        return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Grade</title>" });
+      mac.asked.push({ path: asked, origin: await route.request().headerValue("origin") });
+      if (!mac.reachable) return route.abort("connectionrefused");
+      return macAnswer(route, { mimeType: "video/webm", buffer: original });
+    });
     const theme = width > 700 ? "dark" : "light";
     await page.goto(`${composer}/footage?theme=${theme}`);
     // The tab bar has no Archive tab: its clips play here.
@@ -62,13 +81,16 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
     const row = (clip) => ledger.getByRole("row").filter({ hasText: clip });
     const player = page.getByRole("dialog", { name: /^Clip 0086/ });
 
-    // Only a clip in the cloud plays: its picture is a button. One on the camera or the Mac has Grade alone.
-    await row("0086").getByRole("button", { name: "Play clip 0086" }).waitFor();
-    await row("0258").getByRole("button", { name: "Play clip 0258" }).waitFor();
-    for (const clip of ["0402", "0399", "IMG_4857"]) {
-      assert.equal(await row(clip).getByRole("button", { name: /^Play/ }).count(), 0);
-      assert.equal(await row(clip).getAttribute("data-plays"), null);
+    // A clip with an original anywhere plays, in the cloud, on the camera or on the Mac: its picture is a button. One
+    // with no copy left doesn't.
+    for (const clip of ["0086", "0258", "0402", "0399", "IMG_4857"]) {
+      await row(clip)
+        .getByRole("button", { name: `Play clip ${clip}` })
+        .waitFor();
+      assert.equal(await row(clip).getAttribute("data-plays"), "true");
     }
+    assert.equal(await row("0001").getByRole("button", { name: /^Play/ }).count(), 0);
+    assert.equal(await row("0001").getAttribute("data-plays"), null);
 
     // A clip opens from anywhere on its row. This browser can't play HEVC: it says so, offers to try, and reads nothing.
     await row("0086").locator("td.dim").last().click();
@@ -105,29 +127,46 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
     await player.waitFor({ state: "detached" });
     assert.equal(await page.getByRole("dialog").count(), 0);
 
-    // A clip its day's listing doesn't have says so, with nothing to try; a listing that can't be read, until it can.
-    const listing = (answer) =>
-      page.evaluate((answer) => {
-        window.publisherAnswer = async (input, init, respond) => {
-          const asked = new URL(String(input), location.href).pathname;
-          if (!answer || asked !== "/api/publisher/archive/days/2026-11-11") return respond(input, init);
-          return Response.json(answer, { status: answer.error ? 503 : 200 });
-        };
-      }, answer);
+    // A clip in the cloud alone that its day's listing doesn't have says so, with nothing to try.
+    const listing = (day, answer) =>
+      page.evaluate(
+        ([day, answer]) => {
+          window.publisherAnswer = async (input, init, respond) => {
+            const asked = new URL(String(input), location.href).pathname;
+            if (!answer || asked !== `/api/publisher/archive/days/${day}`) return respond(input, init);
+            return Response.json(answer, { status: answer.error ? 503 : 200 });
+          };
+        },
+        [day, answer],
+      );
+    await listing("2026-11-08", { day: "2026-11-08", at: null, clips: [] });
+    await row("0086").getByRole("button", { name: "Play clip 0086" }).click();
+    await player.getByText("It isn't in the cloud.").waitFor();
+    assert.equal(await player.locator(".publisher-archive-overlay button").count(), 0);
+    await player.getByRole("button", { name: "Close" }).click();
+    await player.waitFor({ state: "detached" });
+
+    // One on the camera too is asked of the grade app first, which hasn't it with the camera unplugged: the cloud's
+    // copy plays. Where neither has it, the camera is the place to look; a listing that can't be read, until it can.
     const other = page.getByRole("dialog", { name: /^Clip 0258/ });
-    await listing({ day: "2026-11-11", at: null, clips: [] });
+    await listing("2026-11-11", { day: "2026-11-11", at: null, clips: [] });
     await row("0258").getByRole("button", { name: "Play clip 0258" }).click();
-    await other.getByText("It isn't in the cloud.").waitFor();
-    assert.equal(await other.locator(".publisher-archive-overlay button").count(), 0);
+    await other.getByText("It's on the camera, which isn't plugged in.").waitFor();
     await other.getByRole("button", { name: "Close" }).click();
     await other.waitFor({ state: "detached" });
-    await listing({ error: "The archive is unavailable" });
+    await listing("2026-11-11", { error: "The archive is unavailable" });
     await row("0258").getByRole("button", { name: "Play clip 0258" }).click();
     await other.getByText("Couldn't read it from the archive.").waitFor();
-    await listing(null);
+    await listing("2026-11-11", null);
     await other.getByRole("button", { name: "Try again" }).click();
     await other.getByText("This browser can't play HEVC", { exact: false }).waitFor();
+    await other.getByText("or bring it to the Mac.", { exact: false }).waitFor();
     await other.getByText("No transcript is filed for it.").waitFor();
+    await other.getByRole("button", { name: "Open in Grade" }).waitFor();
+    assert.deepEqual(
+      mac.asked.map(({ path }) => path),
+      Array(3).fill("/footage/DJI_20261111161230_0258_D"),
+    );
     await page.keyboard.press("Escape");
     await other.waitFor({ state: "detached" });
 
@@ -226,6 +265,76 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
     await page.waitForURL(/\/footage$/);
     await row("0086").waitFor();
     assert.equal(await page.getByRole("dialog").count(), 0);
+    // A clip in the cloud alone was never asked of the grade app.
+    assert.equal(mac.asked.filter(({ path }) => path.includes(CLIP)).length, 0);
+
+    // A clip on the Mac alone plays from the grade app there, as it opens: the cloud isn't read, and every request
+    // names the composer's origin, which the app allows, so the GPU draws it in the Mac's own grade.
+    const cloudReads = reads.length;
+    mac.asked.length = 0;
+    const onMac = page.getByRole("dialog", { name: /^Clip 0399/ });
+    await row("0399").getByRole("button", { name: "Play clip 0399" }).click();
+    await page.waitForURL(new RegExp(`/footage\\?clip=${ON_MAC}$`));
+    await onMac.getByRole("button", { name: "Pause" }).waitFor();
+    await page.waitForFunction(() => document.querySelector(".publisher-archive-stage video").currentTime > 0.3);
+    await onMac.getByRole("button", { name: "Pause" }).click();
+    assert.equal(reads.length, cloudReads);
+    const macPaths = new Set(mac.asked.map(({ path }) => path));
+    for (const part of ["", "/original", "/transcript.vtt"]) assert.ok(macPaths.has(`/footage/${ON_MAC}${part}`), part);
+    assert.ok(mac.asked.every(({ origin }) => origin === new URL(composer).origin));
+    assert.match(await onMac.locator("h2 small").textContent(), /^20 Nov 2026, 18:30:12 · 3\.00 GB · D-Log2$/);
+    const macTranscript = onMac.getByRole("complementary", { name: "Transcript" });
+    assert.equal(await macTranscript.getByRole("button").count(), 3);
+    // Graded as it's saved on the Mac, which the backup hasn't yet, with the camera's white balance from its file.
+    const macLooks = onMac.getByRole("group", { name: "Look" });
+    await macLooks.getByRole("button", { name: "Its grade", pressed: true }).waitFor();
+    await onMac.getByText("Its grade: Velvia, -0.3 stops, 5000 K.").waitFor();
+    const macGraded = { size: 33, min: [0, 0, 0], max: [1, 1, 1] };
+    macGraded.data = composeLut({
+      profile: "dlog2",
+      grade: normalizeGrade(MAC_GRADE),
+      shotK: MAC_KELVIN,
+      base: velvia,
+      size: 33,
+    });
+    near(
+      await pixel(),
+      sampleTetra(macGraded, ...input.map((v) => v / 255)).map((v) => v * 255),
+      4,
+      "The Mac's grade",
+    );
+    // It's on the Mac already: Grade opens it there.
+    assert.equal(await onMac.getByRole("button", { name: "Bring to Mac" }).count(), 0);
+    await onMac.getByRole("button", { name: "Open in Grade" }).waitFor();
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-player-mac-${name}.png`) });
+    await page.keyboard.press("Escape");
+    await onMac.waitFor({ state: "detached" });
+
+    // Away from the Mac (a phone), the grade app doesn't answer: it says where the clip is, reads nothing, and plays
+    // once the app can be reached.
+    mac.reachable = false;
+    mac.asked.length = 0;
+    await page.goto(`${composer}/footage?clip=${ON_MAC}&theme=${theme}`);
+    await onMac
+      .getByText("It's on the Mac. Open this page there, and allow local network access if Chrome asks.")
+      .waitFor();
+    assert.deepEqual(
+      mac.asked.map(({ path }) => path),
+      [`/footage/${ON_MAC}`],
+    );
+    assert.equal(reads.length, cloudReads);
+    await onMac.getByText("Couldn't read it.").waitFor();
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-player-away-${name}.png`) });
+    mac.reachable = true;
+    await onMac.getByRole("button", { name: "Try again" }).click();
+    await onMac.getByRole("button", { name: "Pause" }).waitFor();
+    await onMac.getByRole("button", { name: "Open in Grade" }).click();
+    await page.waitForURL(/\/publisher\.html\/grade/);
+    assert.equal(
+      await page.locator('iframe[title="Grade app"]').getAttribute("src"),
+      `http://127.0.0.1:4777/?theme=${theme}#clip=${ON_MAC}.MP4`,
+    );
+    assert.equal(reads.length, cloudReads);
     assert.deepEqual(errors, []);
     await context.close();
   }

@@ -1,11 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { GRADE_APP } from "@/lib/publisher/archive-view";
 import { wholePercent } from "@/lib/publisher/title";
 
-/**
- * Where the grade app listens on the Mac. It stays a local app: the frame loads it from there, so it reads the card and
- * ~/Movies itself, previews on this browser's GPU and exports with ffmpeg on the Mac, as it does in a tab of its own.
- */
-export const GRADE_APP = "http://127.0.0.1:4777";
 /** How long the grade app gets to say it's there before the tab says it can't be reached. */
 const PATIENCE = 8000;
 
@@ -23,7 +19,9 @@ interface Props {
 const theme = () => (document.documentElement.classList.contains("dark") ? "dark" : "light");
 
 /**
- * The composer's Grade tab: the grade app on the Mac, in a frame. Chrome asks once to let post.kualta.dev reach this
+ * The composer's Grade tab: the grade app on the Mac, in a frame. It stays a local app: the frame loads it from there, so
+ * it reads the card and ~/Movies itself, previews on this browser's GPU and exports with ffmpeg on the Mac, as it does in
+ * a tab of its own. Chrome asks once to let post.kualta.dev reach this
  * device (the frame is allowed local network access). Away from the Mac, or until that's allowed, it says so.
  */
 export default function PublisherGrade({ open, active, onProgress, onFootage }: Props) {

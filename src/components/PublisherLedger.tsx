@@ -138,7 +138,7 @@ function YouTubeMark({ record, share }: { record: LedgerClip; share: number | nu
 
 /**
  * A clip's picture from the archive, else its YouTube video's, else an empty frame the same size, with its length once
- * it's big enough to read. A clip in the cloud plays from it.
+ * it's big enough to read. A clip with an original anywhere plays from it.
  */
 function Thumb({ clip, record, size, onPlay }: { clip: string; record: LedgerClip; size: Size; onPlay?: () => void }) {
   const [failed, setFailed] = useState(false);
@@ -311,8 +311,8 @@ function Pinned({
 /**
  * The footage ledger: every clip the grade app has seen, newest day first, with its grade, where its original is,
  * whether it's on YouTube, and the films it's in. Graded copies aren't kept, so they aren't shown. Read from the archive
- * as the grade app last sent it, and again every 30 seconds. A clip whose original is in the cloud plays in the
- * archive's player, its address keeping it open.
+ * as the grade app last sent it, and again every 30 seconds. A clip with an original anywhere plays in the player, from
+ * the Mac where it can and else from the cloud, its address keeping it open.
  */
 export default function PublisherLedger({ request, uploading, onGrade, statsHref, search, onNavigate }: Props) {
   const [ledger, setLedger] = useState<Ledger | null>(null);
@@ -395,8 +395,8 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
   const live = uploading?.name.replace(/\.[^.]+$/, "").toLowerCase();
   const films = filmsByClip(ledger);
 
-  // The clip playing, by its address: the ledger's key and record of it, and the day the cloud files it under (none
-  // for a clip the ledger doesn't know and the address gives no day for).
+  // The clip playing, by its address: the ledger's key and record of it, and the day the cloud files it under. A clip
+  // the ledger doesn't know opens only with a day in its address.
   const view = readFootageView(search);
   const go = (clip: string | null, replace = false) => onNavigate(writeFootageView({ clip, day: null }), replace);
   const openKey = view.clip ? ledgerKey(ledger, view.clip) : undefined;
@@ -501,8 +501,9 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
                   const bytes = c.size;
                   const share = uploading && live === key.toLowerCase() ? uploading.share : null;
                   const reachable = c.original.camera || c.original.mac;
-                  // In the cloud, the row plays the clip: its picture as a button, the rest of it for a pointer.
-                  const play = c.original.cloudflare ? () => go(key) : undefined;
+                  // With an original anywhere, the row plays the clip: its picture as a button, the rest of it for a
+                  // pointer.
+                  const play = lost(c) ? undefined : () => go(key);
                   return (
                     <tr
                       key={key}
@@ -549,7 +550,7 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
           {!shown.length && <p className="publisher-note">Nothing here.</p>}
         </div>
       </div>
-      {openStem && openDay && (
+      {openStem && (openRecord || openDay) && (
         <PublisherArchivePlayer
           key={openStem}
           stem={openStem}

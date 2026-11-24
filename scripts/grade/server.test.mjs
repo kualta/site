@@ -457,6 +457,111 @@ test.if(usable)("finds a clip's day by its name, and lets only the composer fram
   );
 });
 
+test.if(usable)("serves the clips it has to the composer's pages alone: seekable, with their transcripts", async () => {
+  const composer = "https://post.kualta.dev";
+  const read = (p, origin = composer, headers = {}) =>
+    fetch(url(p), { headers: { ...(origin ? { Origin: origin } : {}), ...headers } });
+  const stem = name.replace(".MP4", "");
+  const onCard = noStill.replace(".MP4", "");
+  const grades = JSON.parse(readFileSync(join(data, "grades.json"), "utf8")).clips;
+  // A transcript filed under another day than the clip's is found all the same.
+  const transcripts = join(data, "transcripts/2026-01-30");
+  mkdirSync(transcripts, { recursive: true });
+  writeFileSync(join(transcripts, `${stem}.vtt`), "WEBVTT\n\n00:00.000 --> 00:01.000\nHello.\n");
+  try {
+    const about = await read(`/footage/${stem}`);
+    expect(about.status).toBe(200);
+    expect(about.headers.get("access-control-allow-origin")).toBe(composer);
+    expect(about.headers.get("vary")).toBe("Origin");
+    expect(await about.json()).toEqual({
+      name,
+      on: "mac",
+      day: "2026-02-03",
+      size: statSync(join(original, name)).size,
+      recorded: "2026-02-03T10:15:00",
+      profile: "dlog2",
+      duration: expect.any(Number),
+      width: 320,
+      height: 180,
+      cameraKelvin: 5180,
+      grade: grades[name] ?? null,
+      transcript: true,
+    });
+    const vtt = await read(`/footage/${stem}/transcript.vtt`);
+    expect(vtt.status).toBe(200);
+    expect(vtt.headers.get("content-type")).toBe("text/vtt; charset=utf-8");
+    expect(vtt.headers.get("access-control-allow-origin")).toBe(composer);
+    expect(await vtt.text()).toContain("Hello.");
+
+    // Off the card, by its name in any case, a range at a time, from the site run locally too.
+    const local = "http://localhost:4321";
+    expect(await (await read(`/footage/${onCard.toLowerCase()}.mp4`, local)).json()).toMatchObject({
+      name: noStill,
+      on: "camera",
+      day,
+      profile: "dlog2",
+      grade: grades[noStill] ?? null,
+      transcript: false,
+    });
+    const part = await read(`/footage/${onCard}/original`, local, { Range: "bytes=10-109" });
+    expect(part.status).toBe(206);
+    expect(part.headers.get("content-type")).toBe("video/mp4");
+    expect(part.headers.get("access-control-allow-origin")).toBe(local);
+    expect(part.headers.get("content-range")).toBe(`bytes 10-109/${statSync(join(camera, "DJI_001", noStill)).size}`);
+    expect(Buffer.from(await part.arrayBuffer())).toEqual(readFileSync(join(camera, "DJI_001", noStill)).subarray(10, 110));
+    expect((await read(`/footage/${noStill}/transcript.vtt`)).status).toBe(404);
+
+    // Chrome's preflight, for a range and for reaching this device from a public page.
+    const preflight = (origin) =>
+      fetch(url(`/footage/${stem}/original`), {
+        method: "OPTIONS",
+        headers: {
+          Origin: origin,
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "range",
+          "Access-Control-Request-Private-Network": "true",
+        },
+      });
+    const allowed = await preflight(composer);
+    expect(allowed.status).toBe(204);
+    expect(Object.fromEntries(allowed.headers)).toMatchObject({
+      "access-control-allow-origin": composer,
+      "access-control-allow-methods": "GET, HEAD",
+      "access-control-allow-headers": "Range",
+      "access-control-allow-private-network": "true",
+    });
+
+    // Any other page, or a request that names none (a plain <video> or link), is refused, and says nothing of the clip.
+    for (const origin of ["https://evil.example", "http://127.0.0.1:4321", "http://localhost:4777", "null", ""]) {
+      for (const p of [`/footage/${stem}`, `/footage/${stem}/original`, `/footage/${stem}/transcript.vtt`]) {
+        const refused = await read(p, origin);
+        expect([p, origin, refused.status]).toEqual([p, origin, 403]);
+        expect(refused.headers.get("access-control-allow-origin")).toBeNull();
+      }
+      if (origin) expect((await preflight(origin)).status).toBe(403);
+    }
+    // Only what it reads: no writing, and nothing but a clip it lists, by a name that is only a name.
+    expect((await fetch(url(`/footage/${stem}`), { method: "POST", headers: { Origin: composer, "X-Grade": "1" } })).status).toBe(405);
+    for (const p of [
+      "/footage/DJI_20200101000000_0001_D/original",
+      "/footage/grades.json/original",
+      "/footage/..%2F..%2Fdata%2Fgrades.json/original",
+      "/footage/%2E%2E/original",
+      "/footage/.hidden",
+      `/footage/${stem}%00.MP4/original`,
+      `/footage/${stem}/proxy`,
+      `/footage/${stem}/original/more`,
+      `/footage/${"A".repeat(200)}`,
+      "/footage/",
+    ]) {
+      const refused = await read(p);
+      expect([p, refused.status]).toEqual([p, 404]);
+    }
+  } finally {
+    rmSync(transcripts, { recursive: true, force: true });
+  }
+});
+
 test.if(usable)("stops exporting: drops the queue, and the clip in progress leaves nothing behind", async () => {
   expect((await api("/api/export", { method: "POST", body: JSON.stringify({ source: slow, names: slowClips }) })).status).toBe(200);
   await until(async () => (await json("/api/jobs")).export.current?.name === slowClips[0]);
