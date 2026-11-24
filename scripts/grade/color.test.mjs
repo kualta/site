@@ -6,6 +6,7 @@ import {
   composeLut,
   deflickerFrames,
   gradeKey,
+  isGraded,
   normalizeGrade,
   parseCube,
   planckXy,
@@ -174,4 +175,20 @@ test("an ungraded clip starts on OpenDRT Colorful, on ACES where that isn't ther
   // A grade's own look stays, unless its profile doesn't have it.
   expect(resolveGrade({ base: "aces" }, ["aces", "opendrt-colorful"]).base).toBe("aces");
   expect(resolveGrade({ base: "gone" }, ["aces", "opendrt-colorful"]).base).toBe("opendrt-colorful");
+});
+
+test("a clip is graded by a grade made by hand, not by where it starts or the look an offload gives it", () => {
+  const ids = ["none", "aces", "agx-punchy", "opendrt-colorful"];
+  expect(isGraded(undefined, ids)).toBe(false);
+  // Reset, and the look it starts on as an offload gives it.
+  expect(isGraded({ base: null }, ids)).toBe(false);
+  expect(isGraded(normalizeGrade({ base: "opendrt-colorful" }), ids)).toBe(false);
+  expect(isGraded({ base: "agx-punchy" }, ids, "agx-punchy")).toBe(false);
+  // Another look, or anything moved.
+  expect(isGraded({ base: "aces" }, ids)).toBe(true);
+  expect(isGraded({ base: "agx-punchy" }, ids)).toBe(true);
+  expect(isGraded({ base: "agx-punchy", exposure: 0.5 }, ids, "agx-punchy")).toBe(true);
+  expect(isGraded({ base: "opendrt-colorful", deflicker: "light" }, ids)).toBe(true);
+  // Where ACES is where it starts, ACES is no grade.
+  expect(isGraded({ base: "aces" }, ["none", "aces"])).toBe(false);
 });

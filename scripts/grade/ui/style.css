@@ -21,13 +21,8 @@
   --ink-2: light-dark(#4d4d4d, #a3a3a3);
   --ink-3: light-dark(#6b6b6b, #6f6f6f);
   --ink-4: light-dark(#a8a8a8, #4b4b4b);
-  /* The strong fill (the primary button, slider knobs, what's busy), what's written on it, and its hover. */
+  /* The strong fill: slider knobs, focus rings, a progress bar's fill. */
   --mark: light-dark(#1c1c1c, #f4f4f4);
-  --on-mark: light-dark(#ffffff, #141414);
-  --mark-hover: light-dark(#000000, #ffffff);
-  /* A divider and a badge inside a filled button. */
-  --mark-edge: light-dark(rgba(255, 255, 255, 0.22), rgba(0, 0, 0, 0.25));
-  --mark-tint: light-dark(rgba(255, 255, 255, 0.18), rgba(0, 0, 0, 0.14));
   --ok: light-dark(#2e8547, #7cc28e);
   --warn: light-dark(#9e6800, #d9a650);
   --bad: light-dark(#c0392b, #e07a6b);
@@ -81,9 +76,6 @@ svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
 .btn:active:not(:disabled) { background: var(--pressed); }
 .btn:disabled { color: var(--ink-3); cursor: default; }
 .btn svg { width: 14px; height: 14px; }
-.btn.primary { background: var(--mark); color: var(--on-mark); border-color: var(--mark); font-weight: 600; }
-.btn.primary:hover:not(:disabled) { background: var(--mark-hover); border-color: var(--mark-hover); }
-.btn.primary:disabled { background: var(--raised); color: var(--ink-3); border-color: var(--line-2); font-weight: 500; }
 .btn.wide { width: 100%; }
 .link { background: none; border: 0; padding: 2px 4px; color: var(--ink-3); font-size: 12px; cursor: pointer; border-radius: 4px; }
 .link:hover { color: var(--ink); }
@@ -121,28 +113,18 @@ kbd {
 /* A long status line is cut short rather than squeezing what's beside it. */
 .bar > :not(.status) { flex: none; }
 .bar-field .select select { min-width: 170px; }
-/* Export and its menu, joined as one split button at the right of the bar. */
-.split { position: relative; display: flex; flex: none; }
-.split > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-#export-more { width: 28px; padding: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid var(--mark-edge); }
-#export:disabled + #export-more { background: var(--raised); color: var(--ink-2); border-color: var(--line-2); }
-#export:disabled + #export-more:hover { background: var(--hover); }
-.badge { font-size: 11px; font-weight: 600; padding: 0 5px; border-radius: 4px; background: var(--mark-tint); font-variant-numeric: tabular-nums; }
+/* A button and the menu it opens, at the right of the bar: Offload, and Settings (a gear). */
+.menu-at { position: relative; }
+#settings-more { width: var(--h); padding: 0; color: var(--ink-2); }
+#settings-more:hover, #settings-more[aria-expanded="true"] { color: var(--ink); }
 .menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: 264px; padding: 6px; display: grid; gap: 2px;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: var(--menu-shadow);
 }
-.menu-item {
-  display: grid; gap: 2px; padding: 7px 10px; border: 0; border-radius: var(--r); background: transparent; text-align: left;
-  font-size: 12.5px; cursor: pointer;
-}
-.menu-item:hover:not(:disabled) { background: var(--hover); }
-.menu-item:disabled { color: var(--ink-3); cursor: default; }
 .menu-note { margin: 0; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.menu-quality { display: grid; gap: 6px; margin-top: 4px; padding: 10px 10px 6px; border-top: 1px solid var(--line); }
-.menu-foot { margin-top: 4px; padding: 8px 10px 4px; border-top: 1px solid var(--line); line-height: 1.4; }
-#export-menu { width: 380px; max-height: calc(100vh - 70px); overflow: auto; }
-.menu-offload { display: grid; gap: 2px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
+.menu-encode { padding: 6px 10px; }
+#settings-menu { width: 340px; }
+#offload-menu { width: 380px; max-height: calc(100vh - 70px); overflow: auto; }
 .offload-places { display: grid; gap: 6px; padding: 6px 10px 4px; }
 /* A switch: its name, its button, and a line saying how it is. The line and the button keep their room whatever they say. */
 .lane { display: grid; grid-template-columns: minmax(0, 1fr) 78px; align-items: center; column-gap: 10px; padding: 4px 10px; font-size: 12.5px; }
@@ -152,7 +134,7 @@ kbd {
 .menu-check { padding: 6px 10px; }
 .menu-offload input[type="checkbox"], .menu-check input[type="checkbox"] { margin: 0; accent-color: var(--mark); }
 .offload-choice { display: grid; gap: 6px; padding: 6px 10px 4px; font-size: 12.5px; }
-.offload-choice .seg.small, .menu-quality .seg.small { grid-template-columns: 1fr 1fr; }
+.offload-choice .seg.small, .menu-encode .seg.small { grid-template-columns: 1fr 1fr; }
 .offload-days { display: grid; align-content: start; gap: 4px; height: 84px; overflow: auto; }
 .offload-days .menu-note { margin-left: auto; }
 #stop-offload { min-width: 124px; }
@@ -198,10 +180,6 @@ kbd {
 .state { margin: -4px -4px -4px auto; padding: 4px; flex: none; align-self: center; display: inline-flex; }
 .state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink-4); }
 .state.ok::before { background: var(--ok); box-shadow: none; }
-.state.changed::before { background: var(--warn); box-shadow: none; }
-/* Graded but never exported: the ring of "not graded" in the colour of "changed since export". */
-.state.unexported::before { box-shadow: inset 0 0 0 2px var(--warn); }
-.state.busy::before { background: var(--mark); box-shadow: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .progress { position: absolute; left: 8px; right: 8px; bottom: 3px; height: 2px; border-radius: 1px; background: var(--line-2); overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--mark); transition: width .3s; }

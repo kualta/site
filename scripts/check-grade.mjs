@@ -7,12 +7,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegStatic from "ffmpeg-static";
 import { chromium } from "playwright";
-import { gradeKey, writeCube } from "./grade/color.mjs";
+import { writeCube } from "./grade/color.mjs";
 
 // Drives the grade app against a throwaway library: one synthetic D-Log2 clip (a static colour field, so a paused
-// preview and an exported frame show the same picture) and a non-linear stand-in base look. It grades the clip,
-// reads the WebGL preview, exports through the UI, and checks the exported frame matches what the preview showed.
-// Not run in CI (it needs WebGL); run it after changing scripts/grade.
+// preview and a rendered frame show the same picture) and a non-linear stand-in base look. It grades the clip, reads
+// the WebGL preview, has a trim of it made as a film's render does, exports a frame through the UI, and checks both
+// match what the preview showed. Not run in CI (it needs WebGL); run it after changing scripts/grade.
 const ffmpeg = process.env.FFMPEG_PATH || ffmpegStatic;
 const shots = process.env.SCREENSHOT_DIR;
 const port = 8798;
@@ -34,7 +34,7 @@ execFileSync(ffmpeg, [
   "-c:a", "aac", "-metadata", "com.dji.camera.ColorGammaSxS=D-Log2", "-metadata", "com.dji.camera.WhiteBalanceKelvin=5600",
   "-movflags", "use_metadata_tags", path.join(original, name),
 ]);
-// A second, never-graded clip: "Re-export N changed" must leave it alone.
+// A second clip, never graded.
 const other = "DJI_20260101120500_0002_D.MP4";
 execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-i", path.join(original, name), "-c", "copy", "-map_metadata", "0", "-movflags", "use_metadata_tags", path.join(original, other)]);
 
@@ -128,7 +128,7 @@ try {
   await page.getByText("Transcribing 1 of 2", { exact: true }).waitFor({ timeout: 5_000 });
   const places = () =>
     page.evaluate(() =>
-      ["footage-link", "transcribing", "export", "export-more"].map((id) => {
+      ["footage-link", "transcribing", "offload-more", "settings-more", "export-frame"].map((id) => {
         const { x, width } = document.getElementById(id).getBoundingClientRect();
         return [id, x, width];
       }),
@@ -161,7 +161,9 @@ try {
   await setRange("c-kelvin", 4800);
   await setRange("c-saturation", 1.3);
   await page.waitForFunction(() => document.getElementById("n-exposure").value === "+0.75");
-  await row.getByText("Grade not exported").waitFor({ timeout: 5_000 });
+  // A grade made here is what makes a clip graded.
+  await row.getByText("Graded", { exact: true }).waitFor({ timeout: 5_000 });
+  assert.equal(await page.locator("#clip-count").textContent(), "1 of 2 graded");
   await page.waitForTimeout(1500);
   if (shots) await page.screenshot({ path: path.join(shots, "grade-2-graded.png") });
 
@@ -180,17 +182,57 @@ try {
   const grades = JSON.parse(readFileSync(path.join(data, "grades.json"), "utf8"));
   assert.equal(grades.clips[name].exposure, 0.75, "the grade is saved");
 
-  await page.getByRole("button", { name: "Export", exact: true }).click();
-  await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
-  if (shots) await page.screenshot({ path: path.join(shots, "grade-3-exported.png") });
+  /** Waits for `check` to come true, or fails saying `what`. */
+  const soon = async (check, what, ms = 5_000) => {
+    for (const end = Date.now() + ms; !(await check()); await page.waitForTimeout(100)) {
+      if (Date.now() > end) assert.fail(what);
+    }
+  };
 
-  const record = () => JSON.parse(readFileSync(path.join(data, "exports.json"), "utf8")).clips[name];
-  assert.equal(record().key, gradeKey(record().grade), "the record's key matches its grade");
-  assert.equal(record().grade.kelvin, 4800);
-  assert.deepEqual(readdirSync(exported), ["DJI_20260101120000_0001_D.mp4"], "Exported holds the export and nothing else");
+  // What encodes trims and preview copies is chosen in Settings (the gear), the GPU till then, and remembered; so is
+  // remaking a film's preview copies after a regrade.
+  const settings = page.getByRole("button", { name: "Settings", exact: true });
+  await settings.click();
+  assert.equal(await settings.getAttribute("aria-expanded"), "true");
+  const encodeOn = page.getByRole("group", { name: "Encode on" });
+  const pressedEncoder = async () => (await encodeOn.locator('[aria-pressed="true"]').textContent()).trim();
+  assert.equal(await pressedEncoder(), "GPU");
+  await encodeOn.getByRole("button", { name: "CPU" }).click();
+  await encodeOn.locator('[data-encoder="cpu"][aria-pressed="true"]').waitFor({ timeout: 5_000 });
+  assert.deepEqual(JSON.parse(readFileSync(path.join(data, "encoder.json"), "utf8")), { exportEncoder: "cpu" });
+  const remake = page.getByRole("checkbox", { name: "Remake a film's preview copies after a regrade" });
+  const autoRemake = () => page.evaluate(async () => (await (await fetch("/api/jobs")).json()).previews.autoRemake);
+  assert.ok(!(await remake.isChecked()));
+  await remake.check();
+  await soon(autoRemake, "remaking is on");
+  await remake.uncheck();
+  await soon(async () => !(await autoRemake()), "and off again");
+  if (shots) await page.screenshot({ path: path.join(shots, "grade-3-settings.png") });
+  // Escape closes it and gives its button the focus.
+  await page.keyboard.press("Escape");
+  assert.ok(await page.locator("#settings-menu").isHidden());
+  assert.equal(await page.evaluate(() => document.activeElement.id), "settings-more");
+
+  // A trim of the clip, as a film's render asks for: encoded as Settings says, and the picture the preview showed.
+  const trims = (query, init) => fetch(`http://127.0.0.1:${port}/api/trims${query}`, init).then((res) => res.json());
+  const asked = await trims("", {
+    method: "POST",
+    headers: { "X-Grade": "1", "Content-Type": "application/json" },
+    body: JSON.stringify({ trims: [{ name, start: 0.5, end: 1.5 }] }),
+  });
+  let trim = asked.trims[0];
+  for (const end = Date.now() + 120_000; trim.state !== "ready"; trim = (await trims(`?id=${asked.id}`)).trims[0]) {
+    const gone = ["failed", "missing"].includes(trim.state);
+    assert.ok(!gone && Date.now() < end, `the trim is made (${trim.state}: ${trim.error})`);
+    await page.waitForTimeout(300);
+  }
+  const trimRecord = JSON.parse(readFileSync(path.join(data, "trims.json"), "utf8")).clips[path.basename(trim.path)];
+  const { exposure, kelvin } = JSON.parse(trimRecord.key);
+  assert.deepEqual({ exposure, kelvin }, { exposure: 0.75, kelvin: 4800 }, "the trim is made with the grade");
+  assert.equal(trimRecord.encoder, "cpu", "the trim is encoded as Settings says");
 
   const frame = execFileSync(ffmpeg, [
-    "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", path.join(movies, record().file), "-frames:v", "1",
+    "-hide_banner", "-loglevel", "error", "-i", trim.path, "-frames:v", "1",
     // accurate_rnd: swscale's default 8-bit YUV→RGB path reads limited range about 2 levels low.
     "-vf", `scale=${preview.w}:${preview.h}:in_color_matrix=bt709:in_range=tv:flags=accurate_rnd+full_chroma_int,format=rgb24`, "-f", "rawvideo", "-",
   ], { maxBuffer: 64 * 1024 * 1024 });
@@ -217,36 +259,23 @@ try {
     console.log(`preview vs ${label} over ${diffs.length} patch channels: mean ${mean.toFixed(2)}, 95% within ${p95.toFixed(2)}, worst ${diffs.at(-1).toFixed(2)} of 255`);
     assert.ok(mean <= 1.5 && p95 <= 4, `the preview matches the ${label}`);
   };
-  compare("export", frame);
+  compare("trim", frame);
 
-  // Export frame (in the menu): a PNG of the frame on screen, the same picture as the preview.
-  const more = page.getByRole("button", { name: "More ways to export" });
-  await more.click();
-  await page.getByRole("button", { name: /^Export frame/ }).click();
+  // Export frame, a button of its own: a PNG of the frame on screen, the same picture as the preview.
+  await page.getByRole("button", { name: "Export frame", exact: true }).click();
   await page.getByText(/Saved frame/).waitFor({ timeout: 30_000 });
   const frameFile = readdirSync(exported).find((f) => f.startsWith("DJI_20260101120000_0001_D_f"));
   assert.ok(frameFile, "the frame is saved in Exported");
+  assert.deepEqual(readdirSync(exported), [frameFile], "Exported holds the frame and nothing else");
   const still = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", path.join(exported, frameFile), "-vf", "format=rgb24", "-f", "rawvideo", "-"], { maxBuffer: 64 * 1024 * 1024 });
   compare("exported frame", still);
 
-  // Quality below 100% shows on Export and says what the selection would come to.
-  await more.click();
-  await setRange("quality", 50);
-  const note = await page.locator("#quality-size").textContent();
-  assert.match(note, /^≈ \d.* (KB|MB|GB) for this clip$/, `the menu shows the size (${note})`);
-  assert.equal(await page.locator("#export-quality").textContent(), "50%");
-  await setRange("quality", 100);
-  assert.ok(await page.locator("#export-quality").isHidden(), "full quality needs no badge");
-  // What encodes exports is chosen beside it, the GPU till then, and remembered.
-  const encodeOn = page.getByRole("group", { name: "Encode on" });
-  const pressedEncoder = async () => (await encodeOn.locator('[aria-pressed="true"]').textContent()).trim();
-  assert.equal(await pressedEncoder(), "GPU");
-  await encodeOn.getByRole("button", { name: "CPU" }).click();
-  await encodeOn.locator('[data-encoder="cpu"][aria-pressed="true"]').waitFor({ timeout: 5_000 });
-  assert.equal(await pressedEncoder(), "CPU");
-  assert.deepEqual(JSON.parse(readFileSync(path.join(data, "encoder.json"), "utf8")), { exportEncoder: "cpu" });
-  if (shots) await page.screenshot({ path: path.join(shots, "grade-4-menu.png") });
-  // The offload's switches: what each has to do.
+  // The offload's own menu: its switches, and what each has to do.
+  const offloadButton = page.getByRole("button", { name: "Offload", exact: true });
+  await offloadButton.click();
+  assert.equal(await offloadButton.getAttribute("aria-expanded"), "true");
+  await page.waitForFunction(() => document.getElementById("offload-transcripts").textContent, null, { timeout: 5_000 });
+  if (shots) await page.screenshot({ path: path.join(shots, "grade-4-offload-menu.png") });
   assert.equal(await page.locator("#offload-transcripts").textContent(), "Nothing to send");
   assert.equal(await page.locator("#offload-camera").textContent(), "Not plugged in");
   assert.match(await page.locator("#offload-mac").textContent(), /^2 clips · .* to send$/);
@@ -264,31 +293,25 @@ try {
   await page.getByRole("button", { name: "Once in the cloud" }).click();
   await page.waitForFunction(() => document.querySelector('[data-clear-after="sent"]').getAttribute("aria-pressed") === "true");
   assert.deepEqual(JSON.parse(readFileSync(path.join(data, "offload.json"), "utf8")), { clearCardAfter: "sent" });
+  // One menu at a time; Escape closes it and gives its button the focus.
+  await settings.click();
+  assert.ok(await page.locator("#offload-menu").isHidden(), "Settings closes Offload");
+  await offloadButton.click();
+  assert.ok(await page.locator("#settings-menu").isHidden(), "and Offload closes Settings");
+  await page.keyboard.press("Escape");
+  assert.ok(await page.locator("#offload-menu").isHidden());
+  assert.equal(await offloadButton.getAttribute("aria-expanded"), "false");
+  assert.equal(await page.evaluate(() => document.activeElement.id), "offload-more");
 
-  // Change the exported clip's grade: the menu's re-export takes that one clip and nothing else.
-  await setRange("c-exposure", 0.5);
-  await page.getByRole("button", { name: "Re-export 1 changed" }).waitFor({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Re-export 1 changed" }).click();
-  const queued = await page.evaluate(async () => {
-    const j = (await (await fetch("/api/jobs")).json()).export;
-    return [j.current?.name, ...j.queue.map((q) => q.name)].filter(Boolean);
-  });
-  assert.deepEqual(queued.length ? queued : [name], [name], `only the changed clip is re-exported (queued: ${queued.join(", ")})`);
-  await row.getByText("Graded", { exact: true }).waitFor({ timeout: 120_000 });
-  assert.ok(!existsSync(path.join(exported, "DJI_20260101120500_0002_D.mp4")), "the never-graded clip was left alone");
-  assert.equal(record().grade.exposure, 0.5);
-  assert.equal(record().encoder, "cpu", "the re-export is encoded as chosen");
-
-  // Deflicker: Off, Light or Strong, saved with the grade and counted in its key; the panel says it's export only.
+  // Deflicker: Off, Light or Strong, saved with the grade and counted in its key; the panel says renders do it.
   const deflicker = page.getByRole("group", { name: "Deflicker" });
   const level = (text) => deflicker.getByRole("button", { name: text, exact: true });
   const pressed = async () => (await deflicker.locator('[aria-pressed="true"]').textContent()).trim();
   const saved = (n = name) => JSON.parse(readFileSync(path.join(data, "grades.json"), "utf8")).clips[n] ?? {};
   const savedSoon = (check, what) => page.waitForTimeout(700).then(() => assert.ok(check(), what));
   assert.equal(await pressed(), "Off");
-  await page.getByText("Applies on export; the preview doesn't show it.").waitFor();
+  await page.getByText("Applies in renders; the preview doesn't show it.").waitFor();
   await level("Light").click();
-  await row.getByText("Changed since export").waitFor({ timeout: 5_000 });
   await savedSoon(() => saved().deflicker === "light", "Light is saved with the grade");
   if (shots) await page.screenshot({ path: path.join(shots, "grade-5-deflicker.png") });
   // Arrows step through the choices, as on a slider.
@@ -298,20 +321,30 @@ try {
   await page.keyboard.press("ArrowLeft");
   assert.equal(await pressed(), "Off");
   await savedSoon(() => !("deflicker" in saved()), "Off leaves no deflicker in the grade");
-  // Back off, the grade is the exported one again.
-  await row.getByText("Graded", { exact: true }).waitFor({ timeout: 5_000 });
   // Several clips: the panel shows the primary's and says Mixed; a choice sets it on all, the group's Reset clears it.
   await level("Light").click();
-  await page.getByRole("button", { name: /0002/ }).click({ modifiers: ["Shift"] });
+  const otherRow = page.getByRole("button", { name: /0002/ });
+  await otherRow.getByText("Not graded").waitFor({ timeout: 5_000 });
+  await otherRow.click({ modifiers: ["Shift"] });
   const mixed = page.locator('.ctl[data-field="deflicker"] .mixed');
   await mixed.waitFor({ state: "visible", timeout: 5_000 });
   assert.equal(await pressed(), "Off", "the panel shows the primary clip's");
   await level("Strong").click();
   await mixed.waitFor({ state: "hidden", timeout: 5_000 });
   await savedSoon(() => saved().deflicker === "strong" && saved(other).deflicker === "strong", "Strong is set on both clips");
+  // Deflicker alone is a grade, and with it gone the clip is back where it started: not graded.
+  await otherRow.getByText("Graded", { exact: true }).waitFor({ timeout: 5_000 });
   await page.locator('[data-reset-group="light"]').click();
   assert.equal(await pressed(), "Off");
   await savedSoon(() => !("deflicker" in saved()) && !("deflicker" in saved(other)), "the Light group's Reset turns it off");
+  await otherRow.getByText("Not graded").waitFor({ timeout: 5_000 });
+  // The picker counts the day's clips the same way, once it reads the library again.
+  const dayLabel = "2026-01-01 · 2 clips · 1 graded";
+  await page.waitForFunction(
+    (text) => document.querySelector('#shoot option[value="mac:2026-01-01"]')?.textContent === text,
+    dayLabel,
+    { timeout: 10_000 },
+  );
 
   // Cloudflare: the picker lists the day whose clips are there and not here; its clips come back one at a time, into
   // their own day, with the grade they had, and nothing in the list or the bar moves as they do.
@@ -329,13 +362,13 @@ try {
   assert.match(await page.locator("#cloud-original").textContent(), /^227 · /);
   assert.equal(await page.locator(".cloud-file").count(), 227, "a row has its original, and nothing else");
   assert.ok(await page.locator("#clip-list").isHidden(), "the clip list makes way");
-  assert.ok(await page.locator("#export").isDisabled(), "nothing here to export");
+  assert.ok(await page.locator("#export-frame").isDisabled(), "nothing here to export");
   assert.equal(await cloudRow(gone).locator(".when").textContent(), "10:01 · transcript");
   // Where things are, the rows from the top of their list, however it's scrolled.
   const cloudPlaces = () =>
     page.evaluate(() => {
       const list = document.getElementById("cloud-list").getBoundingClientRect();
-      return [...document.querySelectorAll("#cloud-head > *, .cloud-clip, .cloud-file button, #export, #shoot, .frame")].map((el) => {
+      return [...document.querySelectorAll("#cloud-head > *, .cloud-clip, .cloud-file button, #export-frame, #shoot, .frame")].map((el) => {
         const { x, y, width, height } = el.getBoundingClientRect();
         return [el.id || el.className, x, el.closest("#cloud-list") ? y - list.y : y, width, height].join(" ");
       });
@@ -458,8 +491,9 @@ try {
   await says("nothing going", null, null);
   work = { export: { current: { id: "original", name, progress: 0.07 } } };
   await says("an export", null, 0.07);
-  work = { export: { current: { ...work.export.current, encoder: "cpu", fallback: "no VideoToolbox" } } };
-  // The frame is too narrow to show the whole line; its tooltip has it.
+  // A trim the GPU couldn't encode says so in the status line. The frame is too narrow to show it whole; its tooltip has it.
+  const cutting = { name, progress: 0.07, encoder: "cpu", fallback: "no VideoToolbox" };
+  work = { ...work, trims: { current: cutting, queued: [], failed: [], waiting: false } };
   const said = composer.frameLocator("iframe").locator(`#status[title$="on the CPU, the GPU couldn't: no VideoToolbox · 7%"]`);
   await said.waitFor({ state: "attached", timeout: 5_000 });
   work = { ...work, offload: offload() };
@@ -535,7 +569,7 @@ try {
     });
     await menu.goto(`http://127.0.0.1:${port}/`);
     await menu.locator(".clip").first().waitFor({ timeout: 30_000 });
-    await menu.getByRole("button", { name: "More ways to export" }).click();
+    await menu.getByRole("button", { name: "Offload", exact: true }).click();
     const said = (id) => menu.locator(`#offload-${id}`);
     const saysNow = (id, text) =>
       menu
@@ -545,7 +579,7 @@ try {
     await saysNow("mac", "4 clips · 1.1 GB to send");
     const spots = () =>
       menu.evaluate(() =>
-        [...document.querySelectorAll("#export-menu, #export-menu .lane, #export-menu .lane button, #export-menu .menu-row, #export-menu label, #export, #export-more, #footage-link")].map((el) => {
+        [...document.querySelectorAll("#offload-menu, #offload-menu .lane, #offload-menu .lane button, #offload-menu .menu-row, #offload-menu label, #offload-more, #settings-more, #export-frame, #footage-link")].map((el) => {
           const { x, y, width, height } = el.getBoundingClientRect();
           return [el.id || el.className, x, y, width, height];
         }),
@@ -606,7 +640,7 @@ try {
     await stop.click();
     await menu.waitForTimeout(300);
     assert.deepEqual(asked.splice(0), [["/stop", {}]]);
-    await menu.getByRole("button", { name: "More ways to export" }).click();
+    await menu.getByRole("button", { name: "Offload", exact: true }).click();
 
     // Done, with a clip passed over, and the next run asks again whether it goes on alone.
     run = going({ running: false, finished: "done", copy: { ...off, current: null, onCamera: 0 }, send: { ...off, skipped: [{ name: "DJI_1.MP4", why: "doesn't read back" }] } });
