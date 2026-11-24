@@ -69,6 +69,7 @@ import {
   updateContent,
 } from "@/lib/publisher/content";
 import { footageResponse } from "@/lib/publisher/footage";
+import { readSignedOut, saveSignedOut, signedOutOf } from "@/lib/publisher/sessions";
 import { archiveTabResponse, type ResponseCache } from "@/lib/publisher/archive-tab";
 import { translateForXiaohongshu } from "@/lib/publisher/translate";
 import { isTag } from "@/lib/publisher/variants";
@@ -258,14 +259,20 @@ export const ALL: APIRoute = async ({ request, params }) => {
       return new Response(thumbnail.data, { headers });
     }
     if (path === "status" && request.method === "GET") {
-      const helper = await db.prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1").first();
-      const connections = await db
-        .prepare(
-          "SELECT id, platform, action, state, confirmed, message FROM publisher_connections ORDER BY created_at DESC LIMIT 10",
-        )
-        .all();
-      return json({ helper, connections: connections.results });
+      const [helper, connections, signedOut] = await Promise.all([
+        db.prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1").first(),
+        db
+          .prepare(
+            "SELECT id, platform, action, state, confirmed, message FROM publisher_connections ORDER BY created_at DESC LIMIT 10",
+          )
+          .all(),
+        readSignedOut(media),
+      ]);
+      return json({ helper, connections: connections.results, signedOut });
     }
+    // Which connected browser accounts the laptop found signed out, sent when that changes.
+    if (path === "helper/sessions" && request.method === "POST")
+      return json({ signedOut: await saveSignedOut(media, await request.json().catch(() => null)) });
     if (path === "accounts" && request.method === "POST") {
       const data = (await request.json()) as {
         platform: Account;
@@ -526,6 +533,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
     if (path === "helper/claim" && request.method === "POST") {
       const input = (await request.json()) as {
         platforms?: unknown;
+        /** Connected browser accounts whose profile has lost its sign-in: their posts wait, as a disconnected one's do. */
+        signedOut?: unknown;
         deletePublications?: boolean;
         analytics?: boolean;
         /** The helper publishes photo posts to TikTok and YouTube, and mixed posts to Farcaster and Lens. */
@@ -533,7 +542,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       };
       const connected = accounts.filter((a) => Array.isArray(input.platforms) && input.platforms.includes(a));
       // Posts go only to destinations; the archive accounts are listed as connected, for the composer to show.
-      const supported = platforms.filter((p) => connected.includes(p));
+      const signedOut = signedOutOf(input.signedOut);
+      const supported = platforms.filter((p) => connected.includes(p) && !signedOut.includes(p));
       await db
         .prepare("UPDATE publisher_helper SET last_seen = ?, platforms = ? WHERE id = 1")
         .bind(Date.now(), JSON.stringify(connected))

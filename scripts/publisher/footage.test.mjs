@@ -698,7 +698,7 @@ test("a round that can't start, the channel signed out, tells the tab why, and t
   const root = await mkdtemp(join(tmpdir(), "footage-"));
   try {
     const { stateDir, exported, exportsFile } = await footage(root);
-    const gone = "The footage channel's session is gone: connect the YouTube footage archive again";
+    const gone = "The footage channel is signed out. Sign in again from Accounts.";
     const statuses = [];
     const ask = async (status) => {
       statuses.push(status);
@@ -723,7 +723,7 @@ test("a round that can't start, the channel signed out, tells the tab why, and t
     const failed = statuses.filter((status) => status.state === "failed");
     expect(failed.length).toBeGreaterThan(0);
     for (const status of failed) expect(status).toMatchObject({ error: gone, totals: { due: 2 } });
-    expect(lines.filter((line) => line.includes("session is gone"))).toHaveLength(1);
+    expect(lines.filter((line) => line.includes("signed out"))).toHaveLength(1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

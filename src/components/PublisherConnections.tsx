@@ -20,6 +20,8 @@ export interface Connection {
 interface Props {
   online: boolean;
   connected: Account[];
+  /** Connected browser accounts whose profile on the laptop has lost its sign-in. */
+  signedOut: Account[];
   connections: Connection[];
   request: (path: string, body?: unknown) => Promise<unknown>;
   refresh: () => Promise<void>;
@@ -49,7 +51,15 @@ function HelperMessage({ text }: { text: string }) {
     </p>
   );
 }
-export default function PublisherConnections({ online, connected, connections, request, refresh, onError }: Props) {
+export default function PublisherConnections({
+  online,
+  connected,
+  signedOut,
+  connections,
+  request,
+  refresh,
+  onError,
+}: Props) {
   const [busy, setBusy] = useState(false);
   const active = connections.find((c) => c.state === "queued" || c.state === "working");
   async function send(path: string, body: unknown) {
@@ -72,18 +82,26 @@ export default function PublisherConnections({ online, connected, connections, r
       {[...platforms.filter((p) => p !== "bluesky"), ...archiveAccounts].map((platform: Account) => {
         const label = labelOf(platform);
         const ready = connected.includes(platform);
+        // Its profile on the laptop lost the sign-in. Sign in opens the same window as Connect without disconnecting,
+        // so its queued posts stay queued.
+        const lost = ready && signedOut.includes(platform);
         const latest = connections.find(
           (c) => c.platform === platform || (platform === "grain" && c.platform === "bluesky"),
         );
         const current =
           active && (active.platform === platform || (platform === "grain" && active.platform === "bluesky"));
         let status = ready ? "Connected" : "Not connected";
-        let tone: "ok" | "busy" | undefined = ready ? "ok" : undefined;
+        let tone: "ok" | "busy" | "bad" | undefined = ready ? "ok" : undefined;
+        if (lost) {
+          status = "Signed out";
+          tone = "bad";
+        }
         if (current) {
           status = "Connecting…";
           tone = "busy";
           if (active.state === "queued") status = "Waiting for laptop…";
           else if (active.action === "disconnect") status = "Disconnecting…";
+          else if (lost) status = "Signing in…";
         }
         const connecting = current && active.state === "working" && active.action === "connect";
         const problem = !current && latest?.state === "failed" ? latest.message : null;
@@ -91,7 +109,9 @@ export default function PublisherConnections({ online, connected, connections, r
           <div className="publisher-account" key={platform}>
             <div className="publisher-account-row">
               <div>
-                <span>{label}</span>
+                <span className="publisher-account-name" title={label}>
+                  {label}
+                </span>
                 {/* Its state, and why it couldn't connect, on a line that's always there; a long one opens. */}
                 {problem ? (
                   <details className="publisher-account-problem">
@@ -107,6 +127,15 @@ export default function PublisherConnections({ online, connected, connections, r
                   </span>
                 )}
               </div>
+              {lost && (
+                <button
+                  type="button"
+                  disabled={!online || busy || !!active}
+                  onClick={() => void send("accounts", { platform, action: "connect" })}
+                >
+                  Sign in
+                </button>
+              )}
               <button
                 disabled={!online || busy || !!active}
                 onClick={() => {

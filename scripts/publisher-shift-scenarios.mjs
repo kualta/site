@@ -26,6 +26,18 @@ const preset = (active, change = {}) => ({
     })),
   }),
 });
+/** Every account connected, as the server says it before the page asks (publisher-shifts.mjs). */
+const connectedAll = [
+  "grain",
+  "instagram",
+  "bluesky",
+  "twitter",
+  "youtube",
+  "tiktok",
+  "xiaohongshu",
+  "lens",
+  "youtube-footage",
+];
 const tabs = ["compose", "pipeline", "history", "calendar", "analytics", "footage", "grade", "accounts"];
 const tabNames = tabs.map((tab) => tab[0].toUpperCase() + tab.slice(1));
 /** Text of a length, in words. */
@@ -937,5 +949,66 @@ export const scenarios = [
         await sleep(1300);
       }
     },
+  },
+  {
+    tab: "accounts",
+    name: "loads with accounts signed out",
+    query: { signedOut: "instagram,youtube-footage" },
+    props: { initialHelper: { online: true, platforms: connectedAll, signedOut: ["instagram", "youtube-footage"] } },
+  },
+  {
+    tab: "accounts",
+    name: "an account signs out and in again",
+    run: async (page, { still }) => {
+      await still("accounts sign out, sign in again and are signed in");
+      const both = ["instagram", "youtube-footage"];
+      for (const [signedOut, connection] of [
+        [both, null],
+        [both, { state: "queued" }],
+        [both, { state: "working" }],
+        [
+          both,
+          {
+            state: "failed",
+            message: "No signed-in session found. Try again, and finish signing in before confirming.",
+          },
+        ],
+        [both, { state: "working" }],
+        [["youtube-footage"], { state: "succeeded" }],
+        [[], null],
+      ]) {
+        await page.evaluate(
+          ([signedOut, connection]) => {
+            window.publisherFixture.change = (path, value) =>
+              path === "status"
+                ? {
+                    ...value,
+                    signedOut,
+                    connections: connection
+                      ? [
+                          {
+                            id: "c",
+                            platform: "instagram",
+                            action: "connect",
+                            confirmed: 0,
+                            message: null,
+                            ...connection,
+                          },
+                        ]
+                      : [],
+                  }
+                : value;
+          },
+          [signedOut, connection],
+        );
+        await sleep(1300);
+      }
+    },
+  },
+  {
+    tab: "footage",
+    name: "loads with the channel signed out",
+    query: { signedOut: "youtube-footage" },
+    props: { initialHelper: { online: true, platforms: connectedAll, signedOut: ["youtube-footage"] } },
   },
 ];
