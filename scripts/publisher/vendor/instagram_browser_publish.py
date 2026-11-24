@@ -570,10 +570,8 @@ def run_publish(context, args):
     if not is_logged_in(context):
         return {
             "ok": False,
-            "message": (
-                "This Instagram profile is not logged in. Click Log in to Instagram in Settings, "
-                "finish signing in, then publish again."
-            ),
+            "signedOut": True,
+            "message": "Instagram is signed out. Sign in again from Accounts, then retry.",
         }
 
     dismiss_optional_dialog(page)

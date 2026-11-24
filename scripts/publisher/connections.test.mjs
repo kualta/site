@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connectAccount, hasSession } from "./connections.mjs";
+import { connectAccount } from "./connections.mjs";
+import { hasSession } from "./sessions.mjs";
 
 function browserFixture(cookies) {
   let closed = false,

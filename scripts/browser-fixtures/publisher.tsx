@@ -8,6 +8,8 @@ const requests: { path: string; method: string; body: any; query: string }[] = [
 Object.assign(window, { publisherRequests: requests });
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 const connecting = new URLSearchParams(location.search).get("connecting");
+// Connected accounts the laptop found signed out, e.g. ?signedOut=instagram,youtube-footage.
+const signedOut = new URLSearchParams(location.search).get("signedOut")?.split(",") ?? [];
 const minutes = (count: number) => Date.now() - count * 60_000;
 const target = (platform: string, state: string, extra: Record<string, unknown> = {}) => ({
   id: `${platform}-${state}-${Math.random()}`,
@@ -643,6 +645,7 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === `drafts/${chineseDraft.id}`) return json(chineseDraft);
   if (path.startsWith("drafts/")) return json({ error: "This draft has expired or was already posted" }, 404);
   if (path === "session") return json({ allowed: true, signedIn: true });
+  if (path === "accounts" && method === "POST") return json({ id: "00000000-0000-4000-8000-00000000c045" }, 201);
   if (path === "status")
     return json({
       helper: {
@@ -664,6 +667,7 @@ const respond = async (input: RequestInfo | URL, init: RequestInit = {}) => {
             },
           ]
         : [],
+      signedOut,
     });
   if (path === "footage" || path === "footage/watch") {
     if (method === "DELETE") return json({ watching: false });

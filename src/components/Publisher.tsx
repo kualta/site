@@ -175,7 +175,8 @@ type Access = "loading" | "owner" | "signin" | "denied";
 /** What the page already knows from rendering on the server; without it the composer asks from the browser. */
 interface Props {
   initialAccess?: Access;
-  initialHelper?: { online: boolean; platforms: Account[] };
+  /** `signedOut`: connected browser accounts whose profile on the laptop has lost its sign-in. */
+  initialHelper?: { online: boolean; platforms: Account[]; signedOut?: Account[] };
   /** The tab and query the server rendered, from the address; the browser reads them itself. */
   initialTab?: Tab;
   initialSearch?: string;
@@ -309,6 +310,7 @@ export default function Publisher({
   const [token, setToken] = useState("");
   const [helperOnline, setHelperOnline] = useState(initialHelper?.online ?? false);
   const [connectedPlatforms, setConnectedPlatforms] = useState<Account[]>(initialHelper?.platforms ?? []);
+  const [signedOut, setSignedOut] = useState<Account[]>(initialHelper?.signedOut ?? []);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [dragging, setDragging] = useState(false);
   const submission = useRef<{
@@ -541,6 +543,7 @@ export default function Publisher({
     const data = await api("status");
     setHelperOnline(Boolean(data.helper?.last_seen && Date.now() - data.helper.last_seen < 90_000));
     setConnectedPlatforms(JSON.parse(data.helper?.platforms || "[]"));
+    setSignedOut(data.signedOut ?? []);
     setConnections(data.connections || []);
   }
   useEffect(() => {
@@ -1141,7 +1144,10 @@ export default function Publisher({
   // shown once those are read.
   const settled = ready && (!openingDraft || pendingDraft !== undefined);
   let publishLabel = `Publish to ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
-  const missingPlatforms = destinations.filter((platform) => !connectedPlatforms.includes(platform));
+  // A signed-out account's posts wait for it to sign in again, as a disconnected one's wait to connect.
+  const missingPlatforms = destinations.filter(
+    (platform) => !connectedPlatforms.includes(platform) || signedOut.includes(platform),
+  );
   if (!helperOnline || missingPlatforms.length) publishLabel = "Queue post";
   if (when !== "now")
     publishLabel = `Schedule for ${destinations.length} ${destinations.length === 1 ? "place" : "places"}`;
@@ -1156,7 +1162,7 @@ export default function Publisher({
   if (newVideo) draftNote = "Save draft to keep the new video";
   if (!openDraftId || openingDraft) draftNote = "";
   const waiting = missingPlatforms.length
-    ? `Waiting for ${missingPlatforms.map((platform) => platformNames[platform]).join(", ")} sign-in.`
+    ? `Waiting for ${missingPlatforms.map((platform) => platformNames[platform]).join(", ")}: sign in from Accounts.`
     : "";
   if (busy && openingDraft) {
     const percent = draftLoad?.total ? ` ${Math.floor((draftLoad.loaded / draftLoad.total) * 100)}%` : "";
@@ -1258,6 +1264,7 @@ export default function Publisher({
               request={api}
               online={helperOnline}
               connected={connectedPlatforms.includes("youtube-footage")}
+              signedOut={signedOut.includes("youtube-footage")}
               onAccounts={() => openTab("accounts")}
               onGrade={(clip) => {
                 setGradeClip({ clip, n: Date.now() });
@@ -1289,6 +1296,7 @@ export default function Publisher({
               <PublisherConnections
                 online={helperOnline}
                 connected={connectedPlatforms}
+                signedOut={signedOut}
                 connections={connections}
                 request={api}
                 refresh={refresh}

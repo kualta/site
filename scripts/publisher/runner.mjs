@@ -6,6 +6,7 @@ import { publishAtproto } from "./atproto.mjs";
 import { publishBrowser } from "./browser.mjs";
 import { publishFarcaster } from "./farcaster.mjs";
 import { publishLens } from "./lens.mjs";
+import { rejected } from "./protocol.mjs";
 
 // The platforms a video's chosen cover goes to: coverPlatforms in src/lib/publisher/server.ts.
 const takesCover = ["youtube", "tiktok", "instagram", "xiaohongshu", "lens"];
@@ -128,6 +129,8 @@ export async function publish(
         ],
         signal,
       ));
+      // Signed out, it stopped before posting anything.
+      if (!result.ok && result.signedOut) throw rejected(result.message);
       if (!result.ok)
         result = {
           uncertain: true,

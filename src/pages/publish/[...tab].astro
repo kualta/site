@@ -7,6 +7,7 @@ import { env } from "cloudflare:workers";
 import { publisherSession } from "@/lib/publisher/auth";
 import { accounts, type Account } from "@/lib/publisher/presets";
 import { readPath, TAB_PATHS } from "@/lib/publisher/route";
+import { readSignedOut } from "@/lib/publisher/sessions";
 import { tabTitle } from "@/lib/publisher/title";
 import "@/styles/globals.css";
 export const prerender = false;
@@ -17,21 +18,25 @@ const initialTab = readPath(`/${tab ?? ""}`).tab;
 Astro.response.headers.set("Cache-Control", "no-store");
 // Check access while rendering, so the page opens straight into the composer or the sign-in prompt.
 let access: "owner" | "signin" | "denied" | undefined;
-let helper: { online: boolean; platforms: Account[] } | undefined;
+let helper: { online: boolean; platforms: Account[]; signedOut: Account[] } | undefined;
 try {
   const { session, allowed } = await publisherSession(Astro.request);
   // A refresh rotates the session, so its cookies must reach the browser.
   for (const cookie of session.setCookies) Astro.response.headers.append("Set-Cookie", cookie);
   access = allowed ? "owner" : session.state ? "denied" : "signin";
   if (allowed && env.NEWSLETTER_DB) {
-    const row = await env.NEWSLETTER_DB.prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1").first<{
-      last_seen: number | null;
-      platforms: string | null;
-    }>();
+    const [row, signedOut] = await Promise.all([
+      env.NEWSLETTER_DB.prepare("SELECT last_seen, platforms FROM publisher_helper WHERE id = 1").first<{
+        last_seen: number | null;
+        platforms: string | null;
+      }>(),
+      env.PUBLISHER_MEDIA ? readSignedOut(env.PUBLISHER_MEDIA) : [],
+    ]);
     const connected: unknown = JSON.parse(row?.platforms || "[]");
     helper = {
       online: Boolean(row?.last_seen && Date.now() - row.last_seen < 90_000),
       platforms: accounts.filter((a) => Array.isArray(connected) && connected.includes(a)),
+      signedOut,
     };
   }
 } catch {

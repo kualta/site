@@ -329,10 +329,8 @@ def run_publish(context, args):
     if not is_logged_in(context):
         return {
             "ok": False,
-            "message": (
-                "This X profile is not logged in. Click Log in to X in Settings, finish "
-                "signing in, then publish again."
-            ),
+            "signedOut": True,
+            "message": "X is signed out. Sign in again from Accounts, then retry.",
         }
 
     box = open_composer(page)

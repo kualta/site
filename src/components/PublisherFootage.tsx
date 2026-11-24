@@ -50,6 +50,8 @@ interface Props {
   online: boolean;
   /** Whether the YouTube footage archive is connected in Accounts. */
   connected: boolean;
+  /** Whether the laptop found its profile signed out, which Accounts signs in again. */
+  signedOut: boolean;
   onAccounts: () => void;
   /** Opens a clip in the Grade tab. */
   onGrade: (clip: string) => void;
@@ -94,10 +96,17 @@ export function failedText({
 
 /** What's holding the uploads, or what they're doing, in a line; null while a clip goes up and the bar says it. */
 function noticeFor(
-  { connected, online, reply, failed }: { connected: boolean; online: boolean; reply: Reply | null; failed: boolean },
+  {
+    connected,
+    signedOut,
+    online,
+    reply,
+    failed,
+  }: { connected: boolean; signedOut: boolean; online: boolean; reply: Reply | null; failed: boolean },
   fresh: boolean,
 ): { text: string; tone?: "ok" | "bad"; accounts?: boolean } | null {
   if (!connected) return { text: "Not connected.", accounts: true };
+  if (signedOut) return { text: "Signed out.", tone: "bad", accounts: true };
   if (reply?.paused) return { text: pausedText(reply.paused) };
   if (!online) return { text: "Laptop offline." };
   if (!reply) return failed ? { text: "Couldn't load. Retrying…" } : { text: "Reading…" };
@@ -109,7 +118,7 @@ function noticeFor(
     case "failed": {
       const error = status.error ?? "Can't upload.";
       // The channel signed out is fixed in Accounts.
-      return { text: error, tone: "bad", accounts: /session is gone|connect/i.test(error) };
+      return { text: error, tone: "bad", accounts: /signed out|session is gone|connect/i.test(error) };
     }
     case "limit":
       return { text: "Daily limit reached. More tomorrow." };
@@ -135,6 +144,7 @@ export default function PublisherFootage({
   request,
   online,
   connected,
+  signedOut,
   onAccounts,
   onGrade,
   statsHref,
@@ -211,7 +221,7 @@ export default function PublisherFootage({
 
   const status = reply?.status ?? null;
   const fresh = status !== null && typeof reply?.age === "number" && reply.age < FRESH;
-  const notice = noticeFor({ connected, online, reply, failed }, fresh);
+  const notice = noticeFor({ connected, signedOut, online, reply, failed }, fresh);
   const current = fresh && online ? status?.current : null;
   const speed = status?.speed ?? null;
   const share = current?.size ? Math.min(100, Math.floor((current.sent / current.size) * 100)) : 0;

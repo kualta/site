@@ -55,7 +55,7 @@ export async function manualLogin(
       }
       await wait(1000);
     }
-    throw new Error("Sign-in timed out. Connect again to continue.");
+    throw new Error("Sign-in timed out. Try again.");
   } finally {
     // Release the dedicated profile before Playwright reads the saved session.
     // Never terminate the user's regular Chrome process or force-kill a profile.

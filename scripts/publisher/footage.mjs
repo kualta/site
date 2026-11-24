@@ -232,7 +232,7 @@ export async function footageSession({ stateDir, config, open = openProfile, sig
   } finally {
     await context.close();
   }
-  if (!cookie) throw new Error("The footage channel's session is gone: connect the YouTube footage archive again");
+  if (!cookie) throw new Error("The footage channel is signed out. Sign in again from Accounts.");
   return youtubeSession(cookie, config.footage?.pageId, signal);
 }
 

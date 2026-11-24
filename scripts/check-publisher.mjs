@@ -888,6 +888,42 @@ try {
   if (shots) await page.screenshot({ path: path.join(shots, "accounts-320.png"), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
 
+  // A connected account whose profile on the laptop lost its sign-in says so, and signs in again without disconnecting.
+  await page.goto("http://127.0.0.1:8797/publisher.html/accounts?signedOut=instagram,youtube-footage");
+  const account = (name) => accounts.locator(".publisher-account", { hasText: name });
+  for (const name of ["Instagram", "YouTube footage archive"]) {
+    await account(name).locator('.publisher-account-status[data-tone="bad"]', { hasText: "Signed out" }).waitFor();
+    await account(name).getByRole("button", { name: "Disconnect" }).waitFor();
+  }
+  await account("X / Twitter").getByText("Connected", { exact: true }).waitFor();
+  assert.equal(await accounts.getByRole("button", { name: "Sign in", exact: true }).count(), 2);
+  // Every button turns on once the laptop is heard from, then fades in.
+  await page.waitForFunction(() => ![...document.querySelectorAll(".publisher-account button")].some((b) => b.disabled));
+  await page.waitForTimeout(300);
+  if (shots) await page.screenshot({ path: path.join(shots, "accounts-signed-out.png"), fullPage: true });
+  await page.evaluate(() => window.publisherRequests.splice(0));
+  await account("Instagram").getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.waitForFunction(() => window.publisherRequests.some((r) => r.path === "accounts"));
+  assert.deepEqual(
+    await page.evaluate(() => window.publisherRequests.filter((r) => r.path === "accounts").map((r) => r.body)),
+    [{ platform: "instagram", action: "connect" }],
+  );
+  // On a phone, Sign in comes beside Disconnect and the page still fits.
+  await page.setViewportSize({ width: 320, height: 900 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.waitForTimeout(300);
+  if (shots) await page.screenshot({ path: path.join(shots, "accounts-signed-out-320.png"), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // The footage card sends the owner to Accounts, and a post waits for its signed-out destination.
+  await page.goto("http://127.0.0.1:8797/publisher.html/footage?signedOut=youtube-footage");
+  const signedOutNotice = page.locator(".publisher-archive-notice", { hasText: "Signed out." });
+  await signedOutNotice.getByRole("button", { name: "Open Accounts" }).waitFor();
+  await page.goto("http://127.0.0.1:8797/publisher.html?signedOut=twitter");
+  await page.getByRole("navigation", { name: "Presets" }).getByRole("button", { name: "Text post", exact: true }).click();
+  await page.getByRole("textbox", { name: "Post" }).fill("Waiting for X");
+  await page.getByText("Waiting for X / Twitter: sign in from Accounts.").waitFor();
+  await page.getByRole("button", { name: "Queue post" }).waitFor();
+
   await page.goto("http://127.0.0.1:8797/publisher.html");
   const destination = (name) => page.locator(".publisher-destinations label", { hasText: name });
   await page.getByRole("navigation", { name: "Presets" }).getByRole("button", { name: "Text post", exact: true }).click();
@@ -895,7 +931,7 @@ try {
   await destination("Lens").locator("input").check();
   await page.getByRole("textbox", { name: "Post" }).fill("Hello from the protocols");
   await page.getByRole("textbox", { name: "Tags" }).fill("#film");
-  await page.getByText("Waiting for Farcaster, Lens sign-in.").waitFor();
+  await page.getByText("Waiting for Farcaster, Lens: sign in from Accounts.").waitFor();
   const threePhotos = Array.from({ length: 3 }, (_, i) => ({ name: `p${i}.png`, mimeType: "image/png", buffer: png }));
   await page.locator('input[type="file"][accept="image/*"]').setInputFiles(threePhotos);
   assert.equal(await destination("Farcaster").getAttribute("title"), "takes up to 2 photos");
