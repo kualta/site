@@ -14,7 +14,7 @@ import { basename, dirname, extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { laneAsks } from "./asks.mjs";
 import { archiveDays, bringer, clearParts, cloudId, dayClips, pickClips, summarise, withHere } from "./bring.mjs";
-import { composeLut, DEFAULT_LOOKS, gradeKey, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
+import { composeLut, DEFAULT_LOOKS, gradeKey, isGraded, normalizeGrade, parseCube, PROFILES, resolveGrade, writeCube } from "./color.mjs";
 import { filmAssets } from "./film.mjs";
 import { dayManifests, LANES, startOffload, wakeLock } from "./offload.mjs";
 import { keepList } from "./keep.mjs";
@@ -253,16 +253,42 @@ async function exportedStems() {
   return new Set(files.filter((f) => f.endsWith(".mp4") && !f.startsWith(".")).map(stemOf));
 }
 
-/** Everything the picker lists: the camera's days, then the days in Movies/Original, each with how many are graded. */
+/**
+ * Which clips have a grade made by hand (color.mjs isGraded), by name: each judged by its profile's looks, or by every
+ * look there is while it hasn't been probed.
+ */
+async function gradedClips() {
+  const [grades, looks, known] = await Promise.all([readClips(GRADES), bases(), readClips(join(CACHE, "meta.json"))]);
+  const profiles = new Map(Object.entries(known).map(([path, { meta }]) => [basename(path), meta?.profile]));
+  const ids = (list) => list.map((b) => b.id);
+  const every = [...new Set(ids(Object.values(looks).flat()))];
+  return (name) => {
+    if (!grades[name]) return false;
+    const own = ids(looks[profiles.get(name)] ?? []);
+    return isGraded(grades[name], own.length ? own : every, DEFAULT_LOOK);
+  };
+}
+
+/**
+ * Everything the picker lists: the camera's days, then the days in Movies/Original, each with how many are graded;
+ * and the look an offload gives, so the clip list counts as this does.
+ */
 async function library() {
-  const exported = await exportedStems();
+  const graded = await gradedClips();
   const listed = (prefix, days) =>
     [...days]
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([day, list]) => ({ id: `${prefix}:${day}`, label: day, clips: list.length, graded: list.filter((c) => exported.has(stemOf(c.name))).length }));
+      .map(([day, list]) => ({ id: `${prefix}:${day}`, label: day, clips: list.length, graded: list.filter((c) => graded(c.name)).length }));
   const days = await card();
   const camera = { name: CAMERA_NAME, path: CAMERA, mounted: Boolean(days), days: listed("camera", days ?? new Map()) };
-  return { original: ORIGINAL, exported: EXPORTED, luts: LUTS, camera, folders: listed("mac", await originalDays()) };
+  return {
+    original: ORIGINAL,
+    exported: EXPORTED,
+    luts: LUTS,
+    defaultLook: DEFAULT_LOOK,
+    camera,
+    folders: listed("mac", await originalDays()),
+  };
 }
 
 /**

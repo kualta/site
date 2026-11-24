@@ -1,4 +1,4 @@
-// Offloading in the app: the foot of the Export menu, with a switch each for Camera → Mac and Mac → Cloudflare, what's
+// Offloading in the app: the Offload menu, with a switch each for Camera → Mac and Mac → Cloudflare, what's
 // kept out of it, and how it goes; the status line while it does; and Stop in the bar.
 
 const $ = (id) => document.getElementById(id);

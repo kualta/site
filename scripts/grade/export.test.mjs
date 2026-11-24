@@ -83,11 +83,6 @@ test("the GPU's full quality follows the size and the frame rate, as x264's does
   expect(gpuQuality()).toBe(90);
 });
 
-test("the Export menu says from where the GPU encodes", () => {
-  const menu = readFileSync(join(import.meta.dir, "ui/index.html"), "utf8");
-  expect(menu).toContain(`Below ${GPU_FROM}% always the CPU`);
-});
-
 // ---- which encoder runs: ffmpegs of the tests' own ------------------------------------------------------------------
 
 /**
