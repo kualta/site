@@ -44,8 +44,14 @@ const described = ({ alt, aspectRatio }) => ({
 /** The photos or video a Bluesky post's embed holds, as `media` items pointing at the same blobs. */
 export function embedMedia(embed) {
   const held = embed?.$type === "app.bsky.embed.recordWithMedia" ? embed.media : embed;
-  if (held?.$type === "app.bsky.embed.images")
-    return held.images
+  const images =
+    held?.$type === "app.bsky.embed.images"
+      ? held.images
+      : held?.$type === "app.bsky.embed.gallery"
+        ? held.items.filter((item) => item.$type === "app.bsky.embed.gallery#image")
+        : undefined;
+  if (images)
+    return images
       .filter((item) => blob(item.image))
       .map((item) => ({ $type: `${collection}#image`, image: item.image, ...described(item) }));
   if (held?.$type === "app.bsky.embed.video" && blob(held.video))
@@ -53,6 +59,7 @@ export function embedMedia(embed) {
   return [];
 }
 
+const GONE = "the Bluesky copy is gone from the repository";
 /**
  * A post with the media its record may hold, or with `noMedia` saying why it holds none. A record can point at any
  * blob its repository stores, so the photos or video of the Bluesky copy that is up are reused as they are: nothing is
@@ -67,6 +74,8 @@ export async function withMedia({ media: _, ...source }, pds, fetcher = fetch) {
     .map((target) => recordUri(target.platform, target.url))
     .filter((uri) => uri?.startsWith(prefix))
     .map((uri) => uri.slice(prefix.length));
+  if (!posts.length && live.some((target) => target.platform === "bluesky"))
+    return { ...source, noMedia: "the Bluesky link doesn't name the owner's repository by DID" };
   if (!posts.length)
     return {
       ...source,
@@ -81,10 +90,7 @@ export async function withMedia({ media: _, ...source }, pds, fetcher = fetch) {
     if (media.length) return { ...source, media };
     found ||= !!post;
   }
-  return {
-    ...source,
-    noMedia: found ? "the Bluesky copy holds no photos or video" : "the Bluesky copy is gone from the repository",
-  };
+  return { ...source, noMedia: found ? "the Bluesky copy holds no photos or video" : GONE };
 }
 
 /**
@@ -284,6 +290,17 @@ const where = (source) =>
     .join(", ");
 
 /**
+ * Why a record that is changing has no media. A copy deleted on Bluesky itself has its own line: nothing else says
+ * that the record held its media until now.
+ */
+function mediaLine(source, existing, plan) {
+  if (!source.noMedia || plan.action === "none") return;
+  return source.noMedia === GONE && existing?.value.media
+    ? `Bluesky copy of ${plan.rkey} ${source.id} is gone from the repository; media taken off`
+    : `no media for ${plan.rkey} ${source.id} ${label(source)}: ${source.noMedia}`;
+}
+
+/**
  * Brings every post's record, or one post's, in step with what is published. Without `authorization` nothing is
  * written and each line says what would be. Running it again does nothing more, so it is also the backfill for posts
  * from before records existed and the repair after a failed write.
@@ -320,12 +337,13 @@ export async function reconcilePostRecords({ api, job, authorization, fetcher = 
       log(`FAILED ${rkey} ${bare.id}: ${error.message}`);
       continue;
     }
-    if (source.noMedia) log(`no media for ${rkey} ${source.id} ${label(source)}: ${source.noMedia}`);
     const plan = planPostRecord(source, held);
     if (plan.action === "none") {
       counts.none++;
       continue;
     }
+    const why = mediaLine(source, held, plan);
+    if (why) log(why);
     const line = plan.record
       ? `${plan.action} ${plan.rkey} ${source.id} ${label(source)} → ${where(source)}`
       : `${plan.action} ${plan.rkey} ${source.id}`;
@@ -355,11 +373,10 @@ export async function reconcilePostRecords({ api, job, authorization, fetcher = 
 
 let relinkShown = false;
 /**
- * Reconciles one post's record after a copy of it went up or came down. It never throws and never reports the
- * platform's own result differently: the copy is already up, or gone, whatever happens to the record. The queue waits
- * on it, so a repository that doesn't answer is given up on.
+ * Runs record work the queue waits on. It never throws, and gives up on a repository that doesn't answer; a sign-in
+ * without the scope is reported once, and anything else as `failed(message)` words it.
  */
-export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = console.error, deadline = 60_000 }) {
+async function attempt(work, { log, deadline, failed }) {
   let timer;
   const late = new Promise((_, reject) => {
     timer = setTimeout(
@@ -367,25 +384,13 @@ export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = c
       deadline,
     );
   });
-  const work = (async () => {
-    const { job: bare } = await (await api(`post-records/${job}`)).json();
-    if (!bare) return "none";
-    const authorization = await oauth.agent();
-    const source = await withMedia(bare, authorization.pdsUrl, fetcher);
-    const plan = planPostRecord(source, await readPostRecord(authorization.pdsUrl, postRecordKey(job), fetcher));
-    await applyPostRecord(plan, source, { authorization, api });
-    if (plan.action !== "none") log(`Post record ${plan.rkey}: ${plan.action}`);
-    return plan.action;
-  })();
+  const running = work();
   // Given up on, it may still fail later with nobody waiting.
-  work.catch(() => {});
+  running.catch(() => {});
   try {
-    return await Promise.race([work, late]);
+    return await Promise.race([running, late]);
   } catch (error) {
-    if (!(error instanceof ScopeError))
-      log(
-        `Post record for ${job} was NOT written: ${error.message}. Repair it with: bun run publisher post-records --write`,
-      );
+    if (!(error instanceof ScopeError)) log(failed(error.message));
     else if (!relinkShown) {
       relinkShown = true;
       log(`Post records are NOT being written. ${RELINK}`);
@@ -394,4 +399,49 @@ export async function syncPostRecord(job, { api, oauth, fetcher = fetch, log = c
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Reconciles one post's record after a copy of it went up or came down. It never reports the platform's own result
+ * differently: the copy is already up, or gone, whatever happens to the record.
+ */
+export function syncPostRecord(job, { api, oauth, fetcher = fetch, log = console.error, deadline = 60_000 }) {
+  return attempt(
+    async () => {
+      const { job: bare } = await (await api(`post-records/${job}`)).json();
+      if (!bare) return "none";
+      const authorization = await oauth.agent();
+      const source = await withMedia(bare, authorization.pdsUrl, fetcher);
+      const existing = await readPostRecord(authorization.pdsUrl, postRecordKey(job), fetcher);
+      const plan = planPostRecord(source, existing);
+      const why = mediaLine(source, existing, plan);
+      if (why) log(why);
+      await applyPostRecord(plan, source, { authorization, api });
+      if (plan.action !== "none") log(`Post record ${plan.rkey}: ${plan.action}`);
+      return plan.action;
+    },
+    {
+      log,
+      deadline,
+      failed: (message) =>
+        `Post record for ${job} was NOT written: ${message}. Repair it with: bun run publisher post-records --write`,
+    },
+  );
+}
+
+/**
+ * Reconciles every post's record while the helper idles. Nothing tells the helper when a copy is deleted on Bluesky
+ * itself, and until its record lets go of the media the repository keeps serving it, so this is what bounds that.
+ */
+export function sweepPostRecords({ api, oauth, fetcher = fetch, log = console.error, deadline = 5 * 60_000 }) {
+  return attempt(
+    async () =>
+      reconcilePostRecords({
+        api,
+        authorization: await oauth.agent(),
+        fetcher,
+        log: (line) => log(`Post records: ${line}`),
+      }),
+    { log, deadline, failed: (message) => `Post records were NOT reconciled: ${message}` },
+  );
 }

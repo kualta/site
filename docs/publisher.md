@@ -771,14 +771,21 @@ The record never shows what no copy that is up shows. The site decides this
 - `media` is the Bluesky copy's own photos or video. Each item is
   `{ image, alt?, aspectRatio? }` or `{ video, alt?, aspectRatio? }`, the shape Bluesky's embeds
   use, and its blob is the one that copy's `app.bsky.feed.post` record already holds
-  (`app.bsky.embed.images`, `app.bsky.embed.video`, or either inside a quote post's
-  `recordWithMedia`). A record may point at any blob its repository stores, so nothing is
+  (`app.bsky.embed.images`, `app.bsky.embed.gallery` for five photos or more,
+  `app.bsky.embed.video`, or any of them inside a quote post's `recordWithMedia`). A record may point at any blob its repository stores, so nothing is
   uploaded and nothing is shown that Bluesky doesn't show already, alt text included. The helper
   reads that record from the repository's public API (`withMedia`), and only for a copy that is
-  up and whose link names the owner's own repository. When the copy is deleted, in the publisher
-  or on Bluesky itself, the next reconcile takes `media` off; a repository that can't be read
-  fails that post's record and leaves it as it is.
-- A post with no Bluesky copy up has no `media`, and `post-records` prints why. The archive's
+  up and whose link names the owner's own repository by DID; a copy linked by handle supplies
+  none, and the plan says so.
+- A repository keeps serving a blob for as long as any record points at it, so `media` has to
+  come off for a deleted photo or video to be gone. Deleting the copy through the publisher takes
+  it off at once. Deleting it in the Bluesky app tells the helper nothing, so the helper
+  reconciles every record when it starts and once an hour while it runs: `media` comes off
+  within an hour of helper uptime, and until then the record still names the blob and the
+  repository still serves it. With the helper stopped or the laptop off, that lasts until it next
+  runs. A repository that can't be read fails that post's record and leaves it as it is.
+- A post with no Bluesky copy up has no `media`, and `post-records` prints why when it writes
+  the record. The archive's
   uploads (`media/<uuid>` in R2) are never sent: they are the camera's files, with whatever
   EXIF and location they came with, and nothing tells the helper which of them a copy elsewhere
   shows. Xiaohongshu may carry a different, Chinese video.
@@ -794,7 +801,9 @@ The record's key is a TID derived from the post's id (`recordKey("publisher:post
 derivation articles use), so a post has exactly one record however often it is written. The helper
 reconciles a post's record after a destination succeeds and after a deletion completes: it
 creates the record with the first copy, updates it as copies come and go, and deletes it when no
-public copy is left. A record that can't be written, or a repository that doesn't answer within
+public copy is left. It also reconciles every record when it starts and once an hour while idle
+(`sweepPostRecords`), which repairs a failed write and picks up a copy linked, unlinked or
+deleted elsewhere; that run prints only what it changes. A record that can't be written, or a repository that doesn't answer within
 a minute, never changes a destination's result or holds the queue, since the post is already up;
 the helper log says the record was not written and how to repair it.
 

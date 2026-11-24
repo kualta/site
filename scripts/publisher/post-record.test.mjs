@@ -15,6 +15,7 @@ import {
   postRecordKey,
   reconcilePostRecords,
   scopeDenied,
+  sweepPostRecords,
   syncPostRecord,
   withMedia,
 } from "./post-record.mjs";
@@ -426,7 +427,8 @@ test("a record that can't be written after publishing is reported, never thrown 
   const oauth = (agent, granted = scope) => ({
     agent: async () => ({ agent, scope: granted, pdsUrl: new URL("https://pds.test") }),
   });
-  const options = { api: site([source()]), fetcher: pds({}), log: (line) => lines.push(line) };
+  const fetcher = pds({}, { "3kabcdefghijk": feedPost(images) });
+  const options = { api: site([source()]), fetcher, log: (line) => lines.push(line) };
   expect(await syncPostRecord(job, { ...options, oauth: oauth(repo([])) })).toBe("create");
   expect(lines).toEqual([`Post record ${postRecordKey(job)}: create`]);
   lines.length = 0;
@@ -503,6 +505,15 @@ test("media points at the blobs the Bluesky copy's embed holds, whichever embed 
   const quote = { $type: "app.bsky.embed.record", record: { uri: "at://did:plc:x/app.bsky.feed.post/3k", cid: "b" } };
   expect(embedMedia({ $type: "app.bsky.embed.recordWithMedia", record: quote, media: images })).toEqual(pictures);
   expect(embedMedia({ $type: "app.bsky.embed.recordWithMedia", record: quote, media: video })).toEqual(film);
+  const gallery = {
+    $type: "app.bsky.embed.gallery",
+    items: [
+      ...images.images.map((image) => ({ $type: "app.bsky.embed.gallery#image", ...image })),
+      { $type: "app.bsky.embed.gallery#later", image: blob("unknown") },
+    ],
+  };
+  expect(embedMedia(gallery)).toEqual(pictures);
+  expect(embedMedia({ $type: "app.bsky.embed.recordWithMedia", record: quote, media: gallery })).toEqual(pictures);
   expect(embedMedia(quote)).toEqual([]);
   expect(
     embedMedia({ $type: "app.bsky.embed.external", external: { uri: "https://kualta.dev", thumb: blob("b") } }),
@@ -617,6 +628,10 @@ test("media comes only from a public copy in the owner's own repository", async 
   const byHandle = { ...bluesky, url: "https://bsky.app/profile/kualta.dev/post/3kabcdefghijk" };
   for (const targets of [[elsewhere], [byHandle], [instagram], []])
     expect((await withMedia(source({ targets }), host, refuse)).media).toBeUndefined();
+  for (const target of [elsewhere, byHandle])
+    expect((await withMedia(source({ targets: [target, instagram] }), host, refuse)).noMedia).toBe(
+      "the Bluesky link doesn't name the owner's repository by DID",
+    );
   // The site sends no media; whatever arrives under that name is dropped, never written.
   const smuggled = await withMedia(source({ targets: [instagram], media: pictures }), host, refuse);
   expect(planPostRecord(smuggled, null).record).not.toHaveProperty("media");
@@ -630,4 +645,51 @@ test("the helper's record after publishing carries the Bluesky copy's media", as
   const fetcher = pds({}, { "3kabcdefghijk": feedPost(video) });
   expect(await syncPostRecord(job, { api: site([source()]), oauth, fetcher, log: () => {} })).toBe("create");
   expect(calls.at(-1)[1].record.media).toEqual(film);
+});
+
+test("the idle sweep takes media off a record whose copy was deleted on Bluesky itself", async () => {
+  const calls = [];
+  const lines = [];
+  const held = stored(buildPostRecord({ ...source(), media: film }));
+  const oauth = (granted) => ({ agent: async () => ({ agent: repo(calls), scope: granted, pdsUrl: host }) });
+  // The site still lists the copy as up; only the repository knows it is gone.
+  const options = {
+    api: site([source()]),
+    fetcher: pds({ [postRecordKey(job)]: held }),
+    log: (line) => lines.push(line),
+  };
+  expect(await sweepPostRecords({ ...options, oauth: oauth(scope) })).toMatchObject({ update: 1, failed: 0 });
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject(["putRecord", { rkey: postRecordKey(job), swapRecord: "bafyrecord" }]);
+  expect(calls[0][1].record).not.toHaveProperty("media");
+  expect(calls[0][1].record.thumbnail).toEqual(held.value.thumbnail);
+  expect(lines).toEqual([
+    `Post records: Bluesky copy of ${postRecordKey(job)} ${job} is gone from the repository; media taken off`,
+    `Post records: update ${postRecordKey(job)} ${job} "Bogotá" → bluesky, instagram`,
+  ]);
+});
+
+test("the idle sweep says nothing when nothing changes, and never throws", async () => {
+  const lines = [];
+  const log = (line) => lines.push(line);
+  const posts = { "3kabcdefghijk": feedPost(video) };
+  const only = source({ targets: [instagram] });
+  const records = {
+    [postRecordKey(job)]: stored(buildPostRecord({ ...source(), media: film })),
+    [postRecordKey(other)]: stored(buildPostRecord(only)),
+  };
+  const calls = [];
+  const oauth = { agent: async () => ({ agent: repo(calls), scope, pdsUrl: host }) };
+  const api = site([source(), { ...only, id: other }]);
+  expect(await sweepPostRecords({ api, oauth, fetcher: pds(records, posts), log })).toMatchObject({ none: 2 });
+  expect(calls).toEqual([]);
+  expect(lines).toEqual([]);
+  const down = async () => {
+    throw new Error("offline");
+  };
+  expect(await sweepPostRecords({ api, oauth, fetcher: down, log })).toBe("failed");
+  expect(lines).toEqual(["Post records were NOT reconciled: offline"]);
+  const stalled = { agent: () => new Promise(() => {}) };
+  expect(await sweepPostRecords({ api, oauth: stalled, deadline: 30, log })).toBe("failed");
+  expect(lines[1]).toContain("no answer within 0.03 s");
 });
