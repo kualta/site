@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { AtpAgent } from "@atproto/api";
 import { prepareMusic, verifyMusicAssets, publishMusic } from "./lib/music-publish.mjs";
 import { syncMusicArtwork } from "./lib/music-artwork.mjs";
-import { prepareCompanions, publishCompanions } from "./lib/music-companion.mjs";
+import { prepareCompanions, publishCompanions, sniffedScoreType } from "./lib/music-companion.mjs";
 
 const args = process.argv.slice(2);
 if (args.some((arg) => !["--dry-run", "--verify"].includes(arg))) throw new Error("Use --dry-run or --verify");
@@ -17,7 +17,10 @@ if (args.includes("--dry-run")) {
     console.log(
       `${slug}: ${[
         record.lyrics && `${Buffer.byteLength(record.lyrics.text)} ${record.lyrics.format} lyrics bytes`,
-        record.score && `${record.score.size} score bytes (${record.score.mimeType})`,
+        record.score &&
+          `${record.score.size} score bytes (${record.score.mimeType}, stored as ${sniffedScoreType(
+            record.score.mimeType,
+          )})`,
       ]
         .filter(Boolean)
         .join(", ")} -> ${uri}`,

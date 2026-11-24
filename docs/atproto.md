@@ -67,7 +67,8 @@ The links record holds the contact list in display order and the armored PGP pub
 key, so it can be read without the website.
 
 They are synced by their own deployment step, `bun run atproto:publish:profile`,
-after the articles and music, so a problem here does not hold those back. These
+after the articles and music, so a problem here does not hold those back. It runs
+even when an earlier step failed, so a music stop does not hold these back either. These
 records are part of the generated manifest, so `bun run atproto:preview`
 lists them, `bun run atproto:verify` compares them with the PDS, and they are synced
 only once the deployed site serves the same snapshot. They follow the article

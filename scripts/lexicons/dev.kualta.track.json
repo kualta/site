@@ -33,10 +33,11 @@
             "accept": [
               "application/vnd.recordare.musicxml",
               "application/vnd.recordare.musicxml+xml",
-              "application/zip"
+              "application/zip",
+              "application/xml"
             ],
             "maxSize": 2000000,
-            "description": "Sheet music as MusicXML: compressed (.mxl, application/vnd.recordare.musicxml) or plain (application/vnd.recordare.musicxml+xml). A compressed score is a ZIP container, and a server that names blobs by their content reports it as application/zip."
+            "description": "Sheet music as MusicXML: compressed (.mxl, application/vnd.recordare.musicxml) or plain (application/vnd.recordare.musicxml+xml). A server that names blobs by their content reports a compressed score, a ZIP container, as application/zip and a plain one as application/xml."
           }
         }
       }

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { jsonToLex } from "@atproto/lexicon";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -71,12 +72,12 @@ function fakeAgent(items, { storedMimeType } = {}) {
   const calls = { puts: [], uploads: [] };
   const repo = {
     async listRecords({ collection }) {
-      return { data: { records: structuredClone(collections[collection]) } };
+      return { data: { records: jsonToLex(structuredClone(collections[collection])) } };
     },
     async uploadBlob(bytes, { encoding }) {
       calls.uploads.push(encoding);
       const blob = await coverBlob({ base64: Buffer.from(bytes).toString("base64"), mimeType: encoding });
-      return { data: { blob: { ...blob, mimeType: storedMimeType ?? encoding } } };
+      return { data: { blob: jsonToLex({ ...blob, mimeType: storedMimeType ?? encoding }) } };
     },
     async putRecord({ collection, rkey, record, swapRecord }) {
       const uri = `at://${did}/${collection}/${rkey}`;
@@ -90,7 +91,7 @@ function fakeAgent(items, { storedMimeType } = {}) {
     },
     async getRecord({ collection, rkey }) {
       const entry = collections[collection].find((item) => item.uri === `at://${did}/${collection}/${rkey}`);
-      return { data: { value: structuredClone(entry.value) } };
+      return { data: { value: jsonToLex(structuredClone(entry.value)) } };
     },
   };
   return { did, com: { atproto: { repo } }, collections, calls };
@@ -132,8 +133,13 @@ describe("track companions", () => {
 
   test("untimed lyrics are plain, and a score outside the scores directory is refused", () =>
     fixture(async ({ root }) => {
-      const [plainLyrics] = await prepareCompanions([{ ...sung, lyrics: "first line\nsecond line" }], did, root);
-      expect(plainLyrics.record.lyrics.format).toBe("plain");
+      for (const lyrics of ["first line\nsecond line", "[1:30 in the morning\nsecond line"]) {
+        const [untimed] = await prepareCompanions([{ ...sung, lyrics }], did, root);
+        expect(untimed.record.lyrics.format).toBe("plain");
+      }
+      await writeFile(join(root, "music/scores/scored.mxl"), Buffer.alloc(2_000_001));
+      await expect(prepareCompanions([scored], did, root)).rejects.toThrow("Score exceeds 2000000 bytes: scored");
+      await writeFile(join(root, "music/scores/scored.mxl"), "PK score");
       for (const score of ["/music/scores/../../outside.mxl", "/music/scored.mp3", "/music/scores/scored.pdf"])
         await expect(prepareCompanions([{ ...scored, score }], did, root)).rejects.toThrow("Invalid score path");
     }));
@@ -184,11 +190,25 @@ describe("track companions", () => {
       const agent = fakeAgent(items, { storedMimeType: "application/zip" });
       await publishCompanions(companions, items, agent, did, quiet);
       expect(agent.collections["dev.kualta.track"][1].value.score.mimeType).toBe("application/zip");
+      await publishCompanions(companions, items, agent, did, quiet);
       await publishCompanions(companions, items, agent, did, { ...quiet, verifyOnly: true });
       expect(agent.calls.uploads).toHaveLength(1);
+      expect(agent.calls.puts).toHaveLength(2);
       const mangling = fakeAgent(items, { storedMimeType: "text/plain" });
       await expect(publishCompanions(companions, items, mangling, did, quiet)).rejects.toThrow("Score upload mismatch");
       expect(mangling.collections["dev.kualta.track"].map((entry) => entry.uri)).toEqual([companions[0].uri]);
+    }));
+
+  test("a plain MusicXML score stored as application/xml publishes and is reused", () =>
+    fixture(async ({ items, root }) => {
+      await writeFile(join(root, "music/scores/scored.musicxml"), "<?xml score");
+      const companions = await prepareCompanions([{ ...scored, score: "/music/scores/scored.musicxml" }], did, root);
+      const agent = fakeAgent(items, { storedMimeType: "application/xml" });
+      await publishCompanions(companions, items, agent, did, quiet);
+      expect(agent.calls.uploads).toEqual(["application/vnd.recordare.musicxml+xml"]);
+      expect(agent.collections["dev.kualta.track"][0].value.score.mimeType).toBe("application/xml");
+      await publishCompanions(companions, items, agent, did, { ...quiet, verifyOnly: true });
+      expect(agent.calls.puts).toHaveLength(1);
     }));
 
   test("a removed track, score or lyrics stops with the stale URI and deletes nothing", () =>
@@ -204,13 +224,13 @@ describe("track companions", () => {
       const staleUris = [companions[1].uri, companions[1].uri, companions[0].uri];
       for (const [index, next] of removed.entries())
         await expect(publishCompanions(next, items, agent, did, quiet)).rejects.toThrow(
-          `Explicitly remove their AT records before retrying: ${staleUris[index]}`,
+          `gets a new record on that run: ${staleUris[index]}`,
         );
       expect(agent.calls.puts).toHaveLength(puts);
       expect(agent.collections["dev.kualta.track"]).toHaveLength(2);
     }));
 
-  test("verify, a wrong identity, a missing track record and a reused key cannot write", () =>
+  test("verify, a wrong identity and a missing track record cannot write, and a replaced track is followed", () =>
     fixture(async ({ items, companions }) => {
       const agent = fakeAgent(items);
       await expect(publishCompanions(companions, items, agent, did, { verifyOnly: true })).rejects.toThrow("differs");
@@ -224,9 +244,9 @@ describe("track companions", () => {
       agent.collections["fm.plyr.track"] = tracks;
       await publishCompanions(companions, items, agent, did, quiet);
       tracks[0].uri = `at://${did}/fm.plyr.track/3m2zzzzzzzzzzz`;
-      await expect(publishCompanions(companions, items, agent, did, quiet)).rejects.toThrow(
-        "Record key belongs to different content",
-      );
-      expect(agent.calls.puts).toHaveLength(2);
+      await publishCompanions(companions, items, agent, did, quiet);
+      expect(agent.collections["dev.kualta.track"][0].value.track.uri).toBe(tracks[0].uri);
+      expect(agent.calls.puts).toHaveLength(3);
+      expect(agent.calls.uploads).toHaveLength(1);
     }));
 });

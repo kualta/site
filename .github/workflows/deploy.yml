@@ -68,7 +68,10 @@ jobs:
           PLYR_TOKEN: ${{ secrets.PLYR_TOKEN }}
 
       # Last, so a removed project or lexicon stops here without skipping the steps above.
+      # Runs after a failed step too: a music stop must not hold these back, and the
+      # sync itself refuses to write unless the deployed site serves this snapshot.
       - name: Publish and verify projects, links and lexicons on ATProto
+        if: ${{ !cancelled() }}
         run: bun run atproto:publish:profile
         env:
           ATP_APP_PASSWORD: ${{ secrets.ATP_APP_PASSWORD }}

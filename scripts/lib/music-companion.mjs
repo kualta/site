@@ -13,8 +13,15 @@ const SCORE_TYPES = {
   ".musicxml": "application/vnd.recordare.musicxml+xml",
   ".xml": "application/vnd.recordare.musicxml+xml",
 };
-// A PDS that sniffs blob content stores a compressed score under its ZIP container type.
-const STORED_SCORE_TYPES = new Set([...Object.values(SCORE_TYPES), "application/zip"]);
+// The PDS names a blob by its sniffed content before the uploader's type: a compressed score is a ZIP container.
+const SNIFFED_SCORE_TYPES = {
+  "application/vnd.recordare.musicxml": "application/zip",
+  "application/vnd.recordare.musicxml+xml": "application/xml",
+};
+const STORED_SCORE_TYPES = new Set(Object.entries(SNIFFED_SCORE_TYPES).flat());
+const MAX_SCORE_BYTES = 2_000_000;
+
+export const sniffedScoreType = (mimeType) => SNIFFED_SCORE_TYPES[mimeType];
 
 export const companionUri = (did, slug) => `at://${did}/${COMPANION}/${recordKey(`${COMPANION}:${slug}`)}`;
 
@@ -35,12 +42,13 @@ export async function prepareCompanions(tracks, did, publicDirectory = "public")
       },
     };
     if (track.lyrics)
-      item.record.lyrics = { format: /^\[\d+:\d+/m.test(track.lyrics) ? "lrc" : "plain", text: track.lyrics };
+      item.record.lyrics = { format: /^\[\d+:\d+(\.\d+)?\]/m.test(track.lyrics) ? "lrc" : "plain", text: track.lyrics };
     if (track.score) {
       const mimeType = SCORE_TYPES[extname(track.score)];
       const absolute = resolve(publicDirectory, `.${track.score}`);
       if (!mimeType || !absolute.startsWith(`${scores}${sep}`)) throw new Error(`Invalid score path: ${track.slug}`);
       item.score = await readFile(absolute);
+      if (item.score.length > MAX_SCORE_BYTES) throw new Error(`Score exceeds ${MAX_SCORE_BYTES} bytes: ${track.slug}`);
       item.record.score = await coverBlob({ base64: item.score.toString("base64"), mimeType });
     }
     items.push(item);
@@ -68,7 +76,7 @@ export async function publishCompanions(companions, items, agent, did, { verifyO
   ];
   if (stale.length)
     throw new Error(
-      `Previously published ${COMPANION} records have lost their track, lyrics or score in the site data. Explicitly remove their AT records before retrying: ${stale.join(
+      `Previously published ${COMPANION} records have lost their track, lyrics or score in the site data. Explicitly remove their AT records before retrying; a track that still has lyrics or a score gets a new record on that run: ${stale.join(
         ", ",
       )}`,
     );
@@ -78,11 +86,11 @@ export async function publishCompanions(companions, items, agent, did, { verifyO
       items.find((item) => item.slug === companion.slug),
     );
     if (!published) throw new Error(`No published ${TRACK} record to reference: ${companion.slug}`);
-    if (previous && previous.value.track?.uri !== published.uri)
-      throw new Error(`Record key belongs to different content: ${companion.uri}`);
     const record = { ...companion.record, track: { uri: published.uri, cid: published.cid } };
-    const reusable = record.score && sameBytes(previous?.value.score, record.score);
-    if (reusable) record.score = previous.value.score;
+    // Listed blobs arrive as BlobRef instances, which neither compare nor validate as plain blob JSON.
+    const previousScore = previous?.value.score && plain(previous.value.score);
+    const reusable = record.score && sameBytes(previousScore, record.score);
+    if (reusable) record.score = previousScore;
     validateRecord(record);
     if (isDeepStrictEqual(plain(previous?.value ?? null), plain(record))) {
       log(`Unchanged ${companion.slug}: ${companion.uri}`);
