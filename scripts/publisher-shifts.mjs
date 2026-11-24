@@ -148,7 +148,8 @@ export function record({ speed }) {
   // Not laid out on the page: what a chart draws, and what isn't drawn at all.
   const unplaced = ".publisher-chart-marks, svg *, script, style, option, optgroup, datalist";
   // Held in the window, so the page scrolling under it moves it nowhere.
-  const held = ".publisher-grade, .publisher-corners, .publisher-toasts, dialog, dialog form > :last-child";
+  const held =
+    ".publisher-grade, .publisher-corners, .publisher-toasts, dialog, dialog form > :last-child, .publisher-ledger-pin";
   let before = new Map();
   let texts = new Map();
   const scan = () => {
@@ -256,7 +257,7 @@ async function measure(browser, base, scenario, { width, theme, media }) {
         if (!localStorage.length) for (const [key, value] of Object.entries(storage)) localStorage.setItem(key, value);
         // Each kind of request takes its own time, so they come back one after another.
         const order = ["status", "footage/watch", "footage", "history", "content", "drafts", "footage/links"];
-        order.push("footage/ledger", "calendar", "analytics", "analytics/overview", "archive/days", "archive/settings");
+        order.push("footage/ledger", "calendar", "analytics", "analytics/overview", "archive/settings");
         window.publisherFixture.delay = (path) =>
           200 + 130 * Math.max(0, order.indexOf(path)) + (/^analytics\/[0-9a-f-]{36}/.test(path) ? 700 : 0);
       },

@@ -1,7 +1,8 @@
 ---
-// post.kualta.dev/archive is the composer's Archive tab: the middleware rewrites it to /publish/archive before this
-// renders. It needs a page of its own because a path no page matches is answered with the prerendered 404, which never
-// reaches the middleware. On any other host there's nothing here.
+// post.kualta.dev/archive was the composer's Archive tab, whose clips play in the Footage tab now: the middleware
+// rewrites it to /publish/archive before this renders, which opens the Footage tab on the same clip. It needs a page of
+// its own because a path no page matches is answered with the prerendered 404, which never reaches the middleware. On
+// any other host there's nothing here.
 export const prerender = false;
 return new Response("Not found", { status: 404 });
 ---

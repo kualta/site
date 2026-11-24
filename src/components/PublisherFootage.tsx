@@ -57,6 +57,9 @@ interface Props {
   onProgress: (percent: number | null) => void;
   /** When the Grade tab asked for This Mac, which is then brought into view. */
   showMac: number | null;
+  /** The tab's address query, which holds the clip playing. */
+  search: string;
+  onNavigate: (search: string, replace?: boolean) => void;
 }
 
 /** The laptop reports every 5 seconds during an upload and every 10 otherwise; older than this, it hasn't started. */
@@ -116,7 +119,8 @@ function noticeFor(
 
 /**
  * The composer's Footage tab: the graded footage going up to the footage archive's YouTube channel, then how the grade
- * app's offload on the Mac stands (This Mac), then the footage ledger (every clip, its grade, where its copies are). The
+ * app's offload on the Mac stands (This Mac), then the footage ledger (every clip, its grade, where its copies are, and
+ * the player for one in the cloud). The
  * laptop uploads only while this tab is open, so it says so on opening and every 30 seconds, and says it closed on
  * leaving.
  */
@@ -129,6 +133,8 @@ export default function PublisherFootage({
   statsHref,
   onProgress,
   showMac,
+  search,
+  onNavigate,
 }: Props) {
   const [reply, setReply] = useState<Reply | null>(null);
   const [failed, setFailed] = useState(false);
@@ -319,6 +325,8 @@ export default function PublisherFootage({
         uploading={current ? { name: current.name, share } : null}
         onGrade={onGrade}
         statsHref={statsHref}
+        search={search}
+        onNavigate={onNavigate}
       />
     </section>
   );

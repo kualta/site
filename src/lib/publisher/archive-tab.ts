@@ -1,7 +1,7 @@
 import { isClipName, isHash } from "./archive";
 
 /*
- * The Archive tab: the footage the grade app offloaded to the archive, a shoot day at a time, to look through and watch.
+ * The footage the grade app offloaded to the archive, for the Footage tab's player to find a clip in and watch it.
  *
  * Each day's originals are a project of their own, `_originals-<day>`, its clips as `assets/<file>` and their transcripts
  * as `transcripts/<clip>.vtt` (and `.json`). The manifest is saved again after every clip, so a day has hundreds of
@@ -13,11 +13,10 @@ import { isClipName, isHash } from "./archive";
  * runs to several gigabytes, and the Worker has 10 ms of CPU a request. A Range is passed on to R2, so a player seeks.
  */
 
-/** What the tab reads of the archive bucket: the real binding has all of it. */
+/** What the player's routes read of the archive bucket: the real binding has all of it. */
 export interface ArchiveReader {
-  list(options: { prefix: string; cursor?: string; delimiter?: string; startAfter?: string }): Promise<{
+  list(options: { prefix: string; cursor?: string; startAfter?: string }): Promise<{
     objects: { key: string }[];
-    delimitedPrefixes?: string[];
     truncated: boolean;
     cursor?: string;
   }>;
@@ -33,7 +32,7 @@ export interface ResponseCache {
   put(key: string, response: Response): Promise<void>;
 }
 
-/** A clip of a shoot day as the tab lists it: its file, its hash and size, and its transcript's hash if it has one. */
+/** A clip of a shoot day as its listing has it: its file, its hash and size, and its transcript's hash if it has one. */
 export interface ArchivedClip {
   file: string;
   sha256: string;
@@ -55,20 +54,17 @@ export interface ArchivedSettings {
 const DAY = 86_400_000;
 /** How long a listing is kept in the Worker's cache. A clip offloaded meanwhile shows up after at most this long. */
 export const LISTING_TTL = 300;
-const DAYS_PREFIX = "projects/_originals-";
 export const isDay = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-async function listing(archive: ArchiveReader, options: { prefix: string; delimiter?: string; startAfter?: string }) {
+async function listing(archive: ArchiveReader, options: { prefix: string; startAfter?: string }) {
   const keys: string[] = [];
-  const prefixes: string[] = [];
   let cursor: string | undefined;
   do {
     const page = await archive.list({ ...options, cursor });
     keys.push(...page.objects.map((o) => o.key));
-    prefixes.push(...(page.delimitedPrefixes ?? []));
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
-  return { keys, prefixes };
+  return keys;
 }
 
 /**
@@ -80,7 +76,7 @@ export async function latestVersion(archive: ArchiveReader, project: string, now
   const prefix = `projects/${project}/`;
   for (const back of [DAY, 7 * DAY, 30 * DAY, 365 * DAY, null]) {
     const startAfter = back === null ? undefined : `${prefix}${new Date(now - back).toISOString()}`;
-    const { keys } = await listing(archive, { prefix, startAfter });
+    const keys = await listing(archive, { prefix, startAfter });
     const latest = keys
       .filter((key) => key.endsWith(".json"))
       .sort()
@@ -96,16 +92,6 @@ async function readVersion(archive: ArchiveReader, key: string) {
   if (!object) return [];
   const { files } = (await new Response(object.body).json()) as { files?: ManifestFile[] };
   return Array.isArray(files) ? files : [];
-}
-
-/** The shoot days in the archive, newest first, from the names of their projects alone. */
-export async function archivedDays(archive: ArchiveReader): Promise<string[]> {
-  const { prefixes } = await listing(archive, { prefix: DAYS_PREFIX, delimiter: "/" });
-  return prefixes
-    .map((prefix) => prefix.slice(DAYS_PREFIX.length).replace(/\/$/, ""))
-    .filter(isDay)
-    .sort()
-    .reverse();
 }
 
 /** A day's clips as its latest manifest lists them, in the order they were shot, each with its transcript if filed. */
@@ -235,9 +221,8 @@ async function fileResponse(archive: ArchiveReader, request: Request, hash: stri
 }
 
 /**
- * The Archive tab's routes, the caller already checked as the owner; anything else is null.
+ * The player's routes, the caller already checked as the owner; anything else is null.
  *
- *   GET archive/days               { days: ["YYYY-MM-DD"] }, newest first
  *   GET archive/days/<day>         the day's clips (ArchivedDay)
  *   GET archive/settings           the grade app's backed-up settings (ArchivedSettings)
  *   GET archive/files/<sha256>/<name>  a file, typed by its name's extension, with Range (HEAD too)
@@ -257,8 +242,6 @@ export async function archiveTabResponse(
     return fileResponse(archive, request, file[1], file[2]);
   }
   if (method !== "GET") return null;
-  if (path === "archive/days")
-    return cachedListing(cache, origin, "days", async () => ({ days: await archivedDays(archive) }));
   const day = /^archive\/days\/([^/]+)$/.exec(path)?.[1];
   if (day !== undefined) {
     if (!isDay(day))

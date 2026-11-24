@@ -10,8 +10,9 @@ import {
 } from "@/components/icons";
 import { composeLut, parseCube } from "../../scripts/grade/color.mjs";
 import { Viewer } from "../../scripts/grade/ui/viewer.mjs";
-import type { ArchivedClip, ArchivedSettings } from "@/lib/publisher/archive-tab";
+import type { ArchivedClip, ArchivedDay, ArchivedSettings } from "@/lib/publisher/archive-tab";
 import {
+  archivedClip,
   clipNumber,
   clock,
   type Cue,
@@ -27,15 +28,18 @@ import {
   stemOf,
 } from "@/lib/publisher/archive-view";
 import { type LedgerClip, thumbUrl } from "@/lib/publisher/ledger";
+import "@/styles/publisher-archive.css";
 
 interface Props {
-  clip: ArchivedClip;
+  /** The clip, by its name without the extension, as the ledger keys it. */
+  stem: string;
+  /** The shoot day the cloud files it under. */
   day: string;
   record: LedgerClip | undefined;
   request: (path: string) => Promise<any>;
   onClose: () => void;
-  /** Opens the clip in the Grade tab, whose cloud list brings it to the Mac. */
-  onGrade: () => void;
+  /** Opens the clip in the Grade tab by its file's name, whose cloud list brings it to the Mac. */
+  onGrade: (file: string) => void;
 }
 
 type LookChoice = "log" | "default" | "grade";
@@ -103,11 +107,11 @@ function gradeWords(name: string, grade: Record<string, any>) {
 }
 
 /**
- * A clip of the archive, in a player that streams the original from Cloudflare and plays as it opens, with its
- * transcript beside it and as captions, and a Look: as shot, the default look, or its own grade, applied live on this
- * browser's GPU from the small LUTs the grade app backs up, the way its own preview does.
+ * A clip of the archive, in a player that finds it in its shoot day's listing, streams the original from Cloudflare and
+ * plays as it opens, with its transcript beside it and as captions, and a Look: as shot, the default look, or its own
+ * grade, applied live on this browser's GPU from the small LUTs the grade app backs up, the way its own preview does.
  */
-export default function PublisherArchivePlayer({ clip, day, record, request, onClose, onGrade }: Props) {
+export default function PublisherArchivePlayer({ stem, day, record, request, onClose, onGrade }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -142,13 +146,16 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
     }
   });
   const [lookNote, setLookNote] = useState<{ text: string; problem?: boolean }>({ text: "" });
+  // The clip as its day's listing has it (its file, hash and transcript), or why it couldn't be found there.
+  const [clip, setClip] = useState<ArchivedClip | null>(null);
+  const [missing, setMissing] = useState<{ why: string; again: boolean } | null>(null);
+  const [lookups, setLookups] = useState(0);
   const profile = record?.profile ?? null;
-  const vttUrl = clip.vtt ? fileUrl(clip.vtt, `${stemOf(clip.file)}.vtt`) : null;
+  const file = clip?.file ?? record?.name ?? stem;
+  const vttUrl = clip?.vtt ? fileUrl(clip.vtt, `${stemOf(clip.file)}.vtt`) : null;
 
   useEffect(() => {
     dialog.current?.showModal();
-    const plays = playsHevc(clip.file);
-    setHevc(plays);
     const element = video.current;
     try {
       viewer.current = new Viewer(canvas.current);
@@ -159,8 +166,6 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
     }
     const fullscreen = () => setFull(document.fullscreenElement === screen.current);
     document.addEventListener("fullscreenchange", fullscreen);
-    // It plays as it opens, as a preview does. A browser that can't play HEVC says so instead, and reads nothing.
-    if (plays) watch();
     return () => {
       document.removeEventListener("fullscreenchange", fullscreen);
       // Stop reading the clip at once: every byte read from the archive is paid for.
@@ -174,11 +179,35 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
         viewer.current.gl.getExtension("WEBGL_lose_context")?.loseContext();
       }
     };
-  }, [clip.file]);
+  }, []);
+
+  // Where the original is: its day's listing, which the Worker keeps a few minutes, has its hash and its transcript's.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new lookup is the trigger to read again
+  useEffect(() => {
+    let active = true;
+    request(`archive/days/${day}`)
+      .then((listing: ArchivedDay) => {
+        if (!active) return;
+        const found = archivedClip(listing.clips, stem);
+        if (found) setClip(found);
+        else setMissing({ why: "It isn't in the cloud.", again: false });
+      })
+      .catch(() => active && setMissing({ why: "Couldn't read it from the archive.", again: true }));
+    return () => {
+      active = false;
+    };
+  }, [request, day, stem, lookups]);
+  // It plays as it's found, as a preview does. A browser that can't play HEVC says so instead, and reads nothing.
+  useEffect(() => {
+    if (!clip) return;
+    const plays = playsHevc(clip.file);
+    setHevc(plays);
+    if (plays) watch();
+  }, [clip]);
 
   // The transcript, as filed beside the clip.
   useEffect(() => {
-    if (!clip.vtt) return;
+    if (!clip?.vtt) return;
     let active = true;
     readFile(clip.vtt, `${stemOf(clip.file)}.vtt`, async (response) => parseVtt(await response.text()))
       .then((read: Cue[]) => active && setCues(read))
@@ -186,7 +215,7 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
     return () => {
       active = false;
     };
-  }, [clip.vtt, clip.file]);
+  }, [clip]);
   // The captions track shows through the player's own line, over the picture whichever look it has.
   useEffect(() => {
     const text = track.current?.track;
@@ -223,7 +252,7 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
   const available: Record<LookChoice, Look> = {
     log: { ok: true, path: null, grade: null, shotK: null, name: "log" },
     default: webgl ? defaultLook(profile, settings) : noWebgl,
-    grade: webgl ? ownGrade(clip, profile, settings, grades, exportsRead) : noWebgl,
+    grade: webgl ? ownGrade(file, profile, settings, grades, exportsRead) : noWebgl,
   };
   // A look that can't be shown for this clip gives way to the next: its grade to the default look, that to the clip as
   // shot. It says why.
@@ -279,7 +308,7 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
 
   function watch() {
     const element = video.current;
-    if (!element) return;
+    if (!element || !clip) return;
     setState("loading");
     setFailure("");
     element.src = `${fileUrl(clip.sha256, clip.file)}${startAt ? `#t=${startAt}` : ""}`;
@@ -319,19 +348,31 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
       list.scrollTop = Math.max(0, top - list.clientHeight / 3);
   }, [active]);
 
-  const recorded = record?.recorded ? record.recorded.slice(11, 19) : nameTime(clip.file);
+  const recorded = record?.recorded ? record.recorded.slice(11, 19) : nameTime(file);
+  const size = record?.size ?? clip?.size;
   const here = Boolean(record?.original.mac || record?.original.camera);
   const ready = state === "ready";
-  // What keeps it from playing, when something does: it failed, or this browser can't play HEVC.
+  // What keeps it from playing, when something does: it isn't found, it failed, or this browser can't play HEVC.
   let held: string | null = null;
-  if (state === "failed") held = failure;
-  else if (state === "idle" && !hevc)
-    held =
-      "This browser can't play HEVC, which the camera records. Safari, or Chrome or Edge on a Mac, plays it; or bring it to the Mac.";
+  let retry: (() => void) | null = watch;
   let watchLabel = state === "failed" ? "Try again" : "Try anyway";
   if (startAt) watchLabel += ` from ${clock(startAt)}`;
+  if (missing) {
+    held = missing.why;
+    watchLabel = "Try again";
+    retry = missing.again
+      ? () => {
+          setMissing(null);
+          setLookups((n) => n + 1);
+        }
+      : null;
+  } else if (state === "failed") held = failure;
+  else if (state === "idle" && clip && !hevc)
+    held =
+      "This browser can't play HEVC, which the camera records. Safari, or Chrome or Edge on a Mac, plays it; or bring it to the Mac.";
   let transcriptNote = "Reading…";
-  if (!clip.vtt) transcriptNote = "No transcript is filed for it.";
+  if (missing) transcriptNote = missing.again ? "Couldn't read it." : "No transcript is filed for it.";
+  else if (clip && !clip.vtt) transcriptNote = "No transcript is filed for it.";
   else if (cuesError) transcriptNote = `Couldn't read it: ${cuesError}`;
   else if (cues) transcriptNote = "Nobody speaks in it.";
 
@@ -344,18 +385,18 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
     >
       <div className="publisher-archive-player-head">
         <h2 id="publisher-archive-player-title">
-          Clip {clipNumber(clip.file)}
+          Clip {clipNumber(file)}
           <small>
             {new Date(`${day}T12:00:00`).toLocaleDateString("en-GB", {
               day: "numeric",
               month: "short",
               year: "numeric",
             })}
-            {recorded ? `, ${recorded}` : ""} · {fileSize(clip.size)} ·{" "}
-            {profile ? PROFILES[profile] : "Profile unknown"}
+            {recorded ? `, ${recorded}` : ""}
+            {size ? ` · ${fileSize(size)}` : ""} · {profile ? PROFILES[profile] : "Profile unknown"}
           </small>
         </h2>
-        <button type="button" className="publisher-archive-bring" onClick={onGrade}>
+        <button type="button" className="publisher-archive-bring" onClick={() => onGrade(file)}>
           {here ? "Open in Grade" : "Bring to Mac"}
         </button>
         <button type="button" aria-label="Close" onClick={() => dialog.current?.close()}>
@@ -366,7 +407,7 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
         <div className="publisher-archive-watch">
           <div ref={screen} className="publisher-archive-screen">
             <div className="publisher-archive-stage">
-              {record?.thumb && !framed && <img src={thumbUrl(stemOf(clip.file), record.thumb)} alt="" />}
+              {record?.thumb && !framed && <img src={thumbUrl(stem, record.thumb)} alt="" />}
               <canvas ref={canvas} hidden={!webgl} aria-label="Picture" />
               {/* biome-ignore lint/a11y/useMediaCaption: its transcript is its captions track, when one is filed */}
               <video
@@ -402,10 +443,12 @@ export default function PublisherArchivePlayer({ clip, day, record, request, onC
                   ) : (
                     <>
                       <p>{held}</p>
-                      <button type="button" onClick={watch}>
-                        <PlayIcon size={16} />
-                        {watchLabel}
-                      </button>
+                      {retry && (
+                        <button type="button" onClick={retry}>
+                          <PlayIcon size={16} />
+                          {watchLabel}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

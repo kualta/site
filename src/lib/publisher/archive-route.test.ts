@@ -1,7 +1,7 @@
 import { expect, mock, test } from "bun:test";
 
-// The publisher's API as the site runs it, with the owner's sign-in and the Worker's bindings stood in for: the Archive
-// tab's files are the owner's alone, and the laptop's pairing doesn't reach them.
+// The publisher's API as the site runs it, with the owner's sign-in and the Worker's bindings stood in for: the
+// archive's files are the owner's alone, and the laptop's pairing doesn't reach them.
 const owner = { allowed: false };
 const sha = "a".repeat(64);
 const blob = new Uint8Array(100).map((_, i) => i);
@@ -15,7 +15,7 @@ const archive = {
     return { body: new Response(blob.slice(offset, offset + length)).body, size: blob.byteLength };
   },
   async list() {
-    return { objects: [], delimitedPrefixes: [], truncated: false };
+    return { objects: [], truncated: false };
   },
 };
 mock.module("cloudflare:workers", () => ({
@@ -47,7 +47,7 @@ test("the archive's files are streamed to the owner alone, a range at a time", a
   const path = `archive/files/${sha}/DJI_20261108122204_0086_D.MP4`;
   owner.allowed = false;
   expect((await call(path, { Range: "bytes=0-9" })).status).toBe(403);
-  expect((await call("archive/days")).status).toBe(403);
+  expect((await call("archive/settings")).status).toBe(403);
   // The laptop's pairing token opens helper/ routes only, and this isn't one.
   expect((await call(path, { Authorization: `Bearer ${"f".repeat(64)}` })).status).toBe(403);
   expect((await call(`helper/${path}`, { Authorization: `Bearer ${"f".repeat(64)}` })).status).toBe(401);
@@ -60,5 +60,5 @@ test("the archive's files are streamed to the owner alone, a range at a time", a
   expect(new Uint8Array(await part.arrayBuffer())).toEqual(blob.slice(10, 20));
   expect((await call(path, { Range: "bytes=100-" })).status).toBe(416);
   expect((await call(`archive/files/${"b".repeat(64)}/DJI_x.MP4`)).status).toBe(404);
-  expect(await (await call("archive/days")).json()).toEqual({ days: [] });
+  expect(await (await call("archive/settings")).json()).toEqual({ at: null, files: {} });
 });

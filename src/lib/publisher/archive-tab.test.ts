@@ -11,29 +11,21 @@ import {
 const url = "https://post.kualta.dev/api/publisher/";
 const hex = (n: number) => n.toString(16).padStart(64, "0");
 
-/** The archive bucket as R2 answers the tab: prefixes, delimiters, startAfter and ranges, counting what it's asked. */
+/** The archive bucket as R2 answers the player's routes: prefixes, startAfter and ranges, counting what it's asked. */
 function archive(objects = new Map<string, Uint8Array>()) {
   const asked = { list: 0, get: 0, head: 0, listed: 0, read: 0 };
   const reader: ArchiveReader = {
-    async list({ prefix, delimiter, startAfter, cursor }) {
+    async list({ prefix, startAfter, cursor }) {
       asked.list++;
-      const keys = [...objects.keys()]
+      const listed = [...objects.keys()]
         .filter((key) => key.startsWith(prefix) && (!startAfter || key > startAfter))
         .sort();
-      const prefixes = new Set<string>();
-      const listed: string[] = [];
-      for (const key of keys) {
-        const cut = delimiter ? key.indexOf(delimiter, prefix.length) : -1;
-        if (cut >= 0) prefixes.add(key.slice(0, cut + 1));
-        else listed.push(key);
-      }
       // A page at a time, as R2 does, so a long listing takes several.
       const from = Number(cursor ?? 0);
       const page = listed.slice(from, from + 1000);
       asked.listed += page.length;
       return {
         objects: page.map((key) => ({ key })),
-        delimitedPrefixes: from ? [] : [...prefixes],
         truncated: from + 1000 < listed.length,
         cursor: String(from + 1000),
       };
@@ -235,21 +227,6 @@ describe("listings", () => {
   const manifestKey = (day: string, at: string) => `projects/_originals-${day}/${at}.json`;
   const now = Date.parse("2026-11-23T12:00:00Z");
 
-  test("the days are read from the projects' names alone, newest first", async () => {
-    const { reader, put, asked } = archive();
-    put(manifestKey("2026-11-08", "2026-11-16T01:00:00.000Z"), JSON.stringify(shootDay(2)));
-    put(manifestKey("2026-11-08", "2026-11-16T02:00:00.000Z"), JSON.stringify(shootDay(3)));
-    put(manifestKey("2026-11-11", "2026-11-17T02:00:00.000Z"), JSON.stringify(shootDay(1)));
-    put("projects/_graded-2026-11-11/2026-11-17T02:00:00.000Z.json", "{}");
-    put("projects/_settings/2026-11-17T02:00:00.000Z.json", "{}");
-    put("projects/013-maybe-later/2026-11-17T02:00:00.000Z.json", "{}");
-    const response = await answer(reader, "archive/days");
-    expect(await response.json()).toEqual({ days: ["2026-11-11", "2026-11-08"] });
-    // No manifest was listed or read to say so.
-    expect(asked.listed).toBe(0);
-    expect(asked.get).toBe(0);
-  });
-
   test("a day lists its latest manifest's clips, with their transcripts, compactly", async () => {
     const { reader, put } = archive();
     put(manifestKey("2026-11-08", "2026-11-16T01:00:00.000Z"), JSON.stringify(shootDay(2)));
@@ -311,7 +288,7 @@ describe("listings", () => {
       expect(response.headers.get("Cache-Control")).toBe("private, max-age=60");
       return response.json();
     };
-    for (const path of ["archive/days", "archive/days/2026-11-08", "archive/settings"]) {
+    for (const path of ["archive/days/2026-11-08", "archive/settings"]) {
       const first = await read(path);
       const before = { ...asked };
       expect(await read(path)).toEqual(first);
@@ -338,6 +315,8 @@ describe("listings", () => {
     });
     expect((await answer(reader, "archive/days/yesterday")).status).toBe(400);
     expect(await (await answer(reader, "archive/settings", { now })).json()).toEqual({ at: null, files: {} });
-    expect(await archiveTabResponse("archive/elsewhere", get("archive/elsewhere"), { archive: reader })).toBeNull();
+    // The days themselves aren't listed: a clip's player knows its day from the ledger.
+    for (const path of ["archive/days", "archive/elsewhere"])
+      expect(await archiveTabResponse(path, get(path), { archive: reader })).toBeNull();
   });
 });

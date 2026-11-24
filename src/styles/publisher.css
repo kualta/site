@@ -386,18 +386,26 @@
 .publisher-ledger-storage dt { color:var(--publisher-muted); font-size:13px; }
 .publisher-ledger-storage dd { margin:2px 0 0; font-size:20px; font-variant-numeric:tabular-nums; }
 .publisher .publisher-ledger-storage dd small { display:block; margin-top:2px; color:var(--publisher-muted); font-size:12px; }
-.publisher-ledger-head { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px 24px; margin-bottom:12px; }
-.publisher .publisher-ledger-head > .publisher-note { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.publisher-ledger-filters { display:flex; flex-wrap:wrap; gap:6px; }
+.publisher-ledger-head { display:grid; grid-template-columns:minmax(0,1fr) auto auto; grid-template-areas:"note filters sizes"; align-items:center; gap:12px 24px; margin-bottom:12px; }
+.publisher .publisher-ledger-head > .publisher-note { grid-area:note; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.publisher-ledger-filters { grid-area:filters; display:flex; flex-wrap:wrap; gap:6px; }
 .publisher .publisher-ledger-filters button { padding:5px 12px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; color:var(--publisher-muted); font-size:13px; }
 .publisher .publisher-ledger-filters button span { margin-left:4px; font-variant-numeric:tabular-nums; text-align:left; }
 .publisher .publisher-ledger-filters button[aria-pressed="true"] { border-color:var(--publisher-ink); background:var(--publisher-ink); color:var(--publisher-on-ink); }
-@media(max-width:1000px) { .publisher-ledger-head { grid-template-columns:minmax(0,1fr); } }
+/* The pictures' size, its three choices joined, as tall as a filter. */
+.publisher-ledger-sizes { grid-area:sizes; display:flex; justify-self:end; padding:1px; border:1px solid var(--publisher-line); border-radius:999px; }
+.publisher .publisher-ledger-sizes button { padding:4px 11px; border:0; border-radius:999px; background:transparent; color:var(--publisher-muted); font-size:13px; }
+.publisher .publisher-ledger-sizes button[aria-pressed="false"]:hover:not(:disabled) { background:transparent; color:var(--publisher-ink); }
+.publisher .publisher-ledger-sizes button[aria-pressed="true"] { background:var(--publisher-ink); color:var(--publisher-on-ink); }
+@media(max-width:1000px) { .publisher-ledger-head { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"note sizes" "filters filters"; } }
 /* Wider than a phone: the table scrolls sideways in its own box, never the page; positioned, so labels for screen
    readers only (absolutely placed) stay in it too. */
 .publisher-ledger-scroll { position:relative; overflow-x:auto; }
-/* Its columns keep their widths as what's in them changes; a clip's films are cut short, and named on hover. */
-.publisher-ledger-table { width:100%; min-width:892px; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
+/* Its columns keep their widths as what's in them changes; a clip's films are cut short, and named on hover. The clip
+   column grows with the pictures, and at its largest still fits the page's 1104px on a desktop. */
+.publisher-ledger-table { --thumb:32px; width:100%; min-width:max(892px, calc(816px + var(--thumb))); table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:13px; font-variant-numeric:tabular-nums; }
+.publisher-ledger-table[data-thumbs="medium"] { --thumb:128px; }
+.publisher-ledger-table[data-thumbs="large"] { --thumb:min(288px, calc(100vw - 140px)); }
 .publisher-ledger-table th, .publisher-ledger-table td { padding:6px 10px; text-align:left; white-space:nowrap; border-bottom:1px solid var(--publisher-line); }
 .publisher-ledger-table thead th { color:var(--publisher-muted); font-size:11px; font-weight:400; letter-spacing:.04em; text-transform:uppercase; }
 .publisher-ledger-table .mark { text-align:center; }
@@ -405,6 +413,16 @@
 .publisher-ledger-table td.clip { overflow:hidden; text-overflow:ellipsis; }
 .publisher-ledger-table .first { border-left:1px solid var(--publisher-line); }
 .publisher-ledger-table tr.day th { padding-top:18px; color:var(--publisher-ink); font-size:13px; font-weight:400; }
+/* A day's heading stays at the left of the box as the table scrolls sideways under it. */
+.publisher-ledger-day { position:sticky; left:10px; display:inline-block; }
+/* The heads and the day at the top while the rows scroll under them: a copy held at the top of the window, out of the
+   sideways box, which a heading in it could only stick to (PublisherLedger's Pinned). */
+.publisher-ledger-pin { position:sticky; top:0; z-index:3; height:0; }
+.publisher-ledger-pin-heads { overflow:hidden; background:var(--publisher-page); }
+.publisher-ledger-table.publisher-ledger-pin-day { min-width:0; background:var(--publisher-page); }
+/* A clip in the cloud plays from anywhere on its row. */
+.publisher-ledger-table tr[data-plays] { cursor:pointer; }
+.publisher-ledger-table tr[data-plays]:hover > td { background:var(--publisher-wash); }
 .publisher-ledger-table tr[data-risk] td:first-child { box-shadow:inset 2px 0 0 var(--publisher-warning); }
 .publisher-ledger-table tr[data-risk="lost"] td:first-child { box-shadow:inset 2px 0 0 var(--publisher-danger); }
 .publisher-ledger-table .dim, .publisher-ledger-table .no, .publisher-ledger-table small { color:var(--publisher-muted); }
@@ -418,8 +436,15 @@
 .publisher .publisher-ledger-table td.mark a { text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--publisher-edge); }
 /* The tick is the system's: the faces that have one load late, each with its own width. */
 .publisher-ledger-table .tick { font-family:system-ui, -apple-system, sans-serif; }
-/* As tall as its line of text, its margins pulled in, so a picture never makes a row taller. */
-.publisher-ledger-thumb { display:inline-block; width:32px; height:18px; margin:-2px 10px -2px 0; vertical-align:middle; border-radius:3px; object-fit:cover; background:var(--publisher-surface); }
+/* Small, as tall as its line of text, its margins pulled in, so a picture never makes a row taller; larger, the row
+   grows around it. Its size is set before it loads, so nothing moves as it comes in. */
+.publisher .publisher-ledger-thumb { position:relative; display:inline-block; width:var(--thumb); aspect-ratio:16 / 9; margin:-2px 10px -2px 0; padding:0; overflow:hidden; border:0; border-radius:3px; vertical-align:middle; background:var(--publisher-surface); }
+.publisher .publisher-ledger-table:not([data-thumbs="small"]) .publisher-ledger-thumb { margin:0 12px 0 0; border-radius:8px; }
+.publisher .publisher-ledger-table button.publisher-ledger-thumb:hover:not(:disabled) { background:var(--publisher-surface); }
+.publisher-ledger-table tr[data-plays]:hover .publisher-ledger-thumb { box-shadow:0 0 0 1px var(--publisher-edge); }
+.publisher-ledger-thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.publisher .publisher-ledger-thumb .length { position:absolute; right:5px; bottom:5px; padding:0 5px; border-radius:6px; background:rgb(0 0 0 / 55%); color:#fff; font-size:11px; line-height:16px; }
+.publisher-ledger-table[data-thumbs="small"] .publisher-ledger-thumb .length { display:none; }
 .publisher .publisher-ledger-table td.open button { padding:2px 10px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; font-size:12px; }
 .publisher .publisher-ledger-table td.open button:disabled { opacity:.4; }
 
@@ -583,7 +608,6 @@ html:has(.publisher-grade-tab:not([hidden])), html:has(.publisher-grade-tab:not(
   .publisher-grade { top:var(--grade-top, 137px); }
   .publisher-archive-current { padding:16px; }
   .publisher-archive-figures, .publisher-archive-totals { grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
-  .publisher-ledger-head { grid-template-columns:minmax(0,1fr); }
   .publisher .publisher-ledger-head > .publisher-note { height:3em; white-space:normal; }
   .publisher .publisher-ledger-storage dd small { min-height:3em; }
   .publisher-stage, .publisher-previews[data-single-video] { --stage:300px; }
