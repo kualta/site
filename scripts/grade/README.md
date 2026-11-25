@@ -141,11 +141,12 @@ otherwise from Cloudflare, if it's there; otherwise the player says where it is 
 there…"). `GET /footage/<clip>` says what the clip is (its file, on the Mac or the camera, its day, size, recorded time,
 profile, duration, the camera's white balance, its grade as saved here, and whether its transcript is here);
 `/footage/<clip>/original` streams it, seekable; `/footage/<clip>/transcript.vtt` is its transcript from
-`transcripts/`, and `/footage/<clip>/transcript.json` that with every word's time (below). `<clip>` is a file's name, with or without its extension and in any case, and only a clip the app lists
-(`Original/`, `Preexp/`, the card) is served. It's read only, and only for the composer: a request has to carry
-`Origin: https://post.kualta.dev` (or `http://localhost:4321`), which the answer allows by CORS so the player can draw
-the clip on its GPU. Any other origin, or none (a plain `<video>` or link on some other page), gets a 403. A preflight is
-answered for `Range`, and for Chrome's private network ask.
+`transcripts/`, and `/footage/<clip>/transcript.json` that with every word's time (below). `<clip>` is a file's name,
+with or without its extension and in any case, and only a clip the app lists (`Original/`, `Preexp/`, the card) is
+served. It's read only, and only for the composer: a request has to carry `Origin: https://post.kualta.dev` (or
+`http://localhost:4321`), which the answer allows by CORS so the player can draw the clip on its GPU. Any other origin,
+or none (a plain `<video>` or link on some other page), gets a 403. A preflight is answered for `Range`, and for
+Chrome's private network ask.
 
 **The offload in the Footage tab.** The status line says the offload short, "Offloading 7 / 167 · 12.1 h left" (the
 clips sent of those to send, or with only Camera → Mac on, copied of those to copy; then the time left, or what holds
@@ -272,8 +273,8 @@ lets a run go on without. Camera → Mac doesn't pause for this; only for **Paus
 extension), are kept on this Mac. Camera → Mac copies them like any other and deletes each from the card once its copy
 here is checked, with **Once in Cloudflare** too, as they never go there; they count among those to copy, and once
 copied they're done. Mac → Cloudflare never sends them, never deletes them, even ones the archive has, and doesn't
-count them. They're transcribed like any other, and their transcripts stay on this Mac. A day with some of its clips kept shows a dash, and a click lets those go. While
-`keep.json` can't be read nothing is taken or deleted.
+count them. They're transcribed like any other, and their transcripts stay on this Mac. A day with some of its clips
+kept shows a dash, and a click lets those go. While `keep.json` can't be read nothing is taken or deleted.
 
 `offloaded.json` (beside `grades.json`) records each clip's hash, size and day, and for one read off the card the time
 its file had there (`card`). Started by hand or by a script:
@@ -335,8 +336,9 @@ every 10 minutes and once a run is over; `_originals-*` aren't films. To bring a
 ```
 
 `<stem>` is the clip's file name without its extension, as it is on disk (`DJI_20261121143012_0042_D`, `IMG_4857`), and
-`<day>` its shoot day as the app files it: the date in a DJI name, else the file's modification date, in local time. To find a
-clip's by name, look for `transcripts/*/<stem>.json`; the same name on two days is two clips, each the `day` it says.
+`<day>` its shoot day as the app files it: the date in a DJI name, else the file's modification date, in local time.
+To find a clip's by name, look for `transcripts/*/<stem>.json`; the same name on two days is two clips, each the `day`
+it says.
 Each file is written whole and then moved into place, so one that's there is complete. A `.json` is Whisper's answer
 with four fields first:
 
