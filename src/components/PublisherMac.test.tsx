@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
-import type { LaneAsks, MacLane, MacReport } from "@/lib/publisher/mac";
+import { formatWhen, type LaneAsks, type MacLane, type MacReport } from "@/lib/publisher/mac";
 import { goingShare, laneControl, MacSection, type MacReply, spaceText } from "./PublisherMac";
 
 const now = Date.parse("2026-11-23T12:00:00Z");
@@ -15,6 +15,7 @@ const lane = (change: Partial<MacLane> = {}): MacLane => ({
 const report = (change: Partial<MacReport> = {}, lanes: Partial<MacReport["lanes"]> = {}): MacReport => ({
   version: 1,
   at: new Date(now - 20_000).toISOString(),
+  every: 30_000,
   running: true,
   lanes: {
     copy: lane({ state: "done", speed: null, left: null }),
@@ -237,15 +238,27 @@ test("a Start or Pause on its way says so until the Mac has taken it, and can be
   );
 });
 
-test("a run whose Mac has gone quiet reads as stale; an idle Mac's numbers simply say when", () => {
-  const stale = says(heard(report(), 25 * 60_000), { age: 25 * 60_000 });
-  expect(stale[1]).toBe("Not heard from for 25 min");
-  const html = renderToString(<MacSection reply={heard(report(), 1)} now={now} heardAt={now - 25 * 60_000} />);
+test("a report older than the Mac's pace allows reads as stale, saying when it was last heard from", () => {
+  const status = (change: Partial<MacReport>, age: number) => says(heard(report(change), age), { age })[1];
+  const since = (age: number) => formatWhen(now - age);
+  // In a run the Mac says how things stand every 30 seconds: past 45, its numbers aren't taken for live ones.
+  expect(status({}, 44_000)).toBe("Updated just now");
+  expect(status({}, 46_000)).toBe(`Not heard from for 46 s · since ${since(46_000)}`);
+  expect(status({}, 25 * 60_000)).toBe(`Not heard from for 25 min · since ${since(25 * 60_000)}`);
+  const html = renderToString(<MacSection reply={heard(report(), 1)} now={now} heardAt={now - 46_000} />);
   expect(html).toContain('data-stale="true"');
   expect(html).toContain('data-tone="bad"');
-  // Not running, the same age is only how old its numbers are.
-  const idle = says(heard(report({ running: false }), 3 * 3_600_000), { age: 3 * 3_600_000 });
-  expect(idle[1]).toBe("Updated 3 h ago");
+  expect(renderToString(<MacSection reply={heard(report(), 1)} now={now} heardAt={now - 20_000} />)).not.toContain(
+    "data-stale",
+  );
+  // With no run, every 10 minutes: stale past 20.
+  const idle = { running: false, every: 10 * 60_000 };
+  expect(status(idle, 19 * 60_000)).toBe("Updated 19 min ago");
+  expect(status(idle, 21 * 60_000)).toBe(`Not heard from for 21 min · since ${since(21 * 60_000)}`);
+  // A Mac from before it said its pace: 2 minutes between reports in a run, and nothing unchanged otherwise.
+  expect(status({ every: null }, 3 * 60_000)).toBe("Updated 3 min ago");
+  expect(status({ every: null }, 5 * 60_000)).toMatch(/^Not heard from for 5 min · since /);
+  expect(status({ every: null, running: false }, 3 * 3_600_000)).toBe("Updated 3 h ago");
 });
 
 test("before the Mac has said anything, and before the tab has heard, every slot holds a dash", () => {

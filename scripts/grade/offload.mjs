@@ -324,9 +324,10 @@ export function wakeLock({ command = "caffeinate", pid = process.pid, log = () =
  * sending, reading back or filing) and `stayAwake()` says to, and only after `look` of none being so, or once every
  * switch is off. `sleeps` notices the Mac sleeping (lane.mjs), a watch of its own unless it's given.
  *
- * Says `{ state, start, stop, poke, done }`: `state` is read as it goes; `start(lane)` turns another switch on while the
- * run goes; `stop(lanes, { now })` turns them off (lane.mjs); `poke()` says something may have changed, like a transcript
- * made or a page opened; `done` settles once every switch is off.
+ * Says `{ state, start, stop, poke, plugged, done }`: `state` is read as it goes; `start(lane)` turns another switch on
+ * while the run goes; `stop(lanes, { now })` turns them off (lane.mjs); `poke()` says something may have changed, like a
+ * transcript made or a page opened; `plugged()` that the card's back, so Camera → Mac tries it now rather than when its
+ * wait is up; `done` settles once every switch is off.
  */
 export function startOffload({
   lanes: wanted = ["copy", "send"],
@@ -1035,5 +1036,5 @@ export function startOffload({
     notify();
   }
   for (const name of wanted) start(name);
-  return { state, start, stop, poke: notify, done };
+  return { state, start, stop, poke: notify, plugged: () => copy.wake("camera"), done };
 }

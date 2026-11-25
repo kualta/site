@@ -118,8 +118,8 @@ async function readLinks(archive: Pick<ArchiveBucket, "get">): Promise<Record<st
  * goes), `helper/footage/mac` (POST: how the grade app's offload stands, which `footage/mac` reads),
  * `footage/pause` (POST pauses everything, DELETE goes on; the tab's and the laptops' answers say `paused`), and
  * `footage/lanes` (POST `{ lane, want }`: Start or Pause a switch; `footage/mac` says them, and the grade app hears them
- * from `helper/footage/lanes`, which it asks instead of `helper/footage`, and in its report's answer). Anything else is
- * null.
+ * from `helper/footage/lanes`, which it asks instead of `helper/footage`, and in its report's answer, both of which say
+ * `watching` too, so it reports and asks more often while the tab is open). Anything else is null.
  */
 export async function footageResponse(
   path: string,
@@ -214,17 +214,19 @@ export async function footageResponse(
     if ("error" in sent) return json({ error: sent.error }, sent.status);
     const report = readMacReport(sent.sent);
     if (!report) return json({ error: "The offload report isn't one the Footage tab can read" }, 400);
-    const [paused, lanes] = await Promise.all([
+    const [paused, lanes, watching] = await Promise.all([
       readPaused(media),
       readLanes(media),
+      isWatched(media, now),
       media.put(MAC, JSON.stringify(report), { httpMetadata: { contentType: "application/json" } }),
     ]);
-    return json({ ok: true, paused, lanes });
+    return json({ ok: true, paused, lanes, watching });
   }
-  // What the grade app asks between reports: whether everything's paused, and each switch's Start or Pause.
+  // What the grade app asks between reports: whether everything's paused, each switch's Start or Pause, and whether the
+  // tab is open (it reports and asks more often while it is).
   if (path === "helper/footage/lanes" && request.method === "GET") {
-    const [paused, lanes] = await Promise.all([readPaused(media), readLanes(media)]);
-    return json({ paused, lanes });
+    const [paused, lanes, watching] = await Promise.all([readPaused(media), readLanes(media), isWatched(media, now)]);
+    return json({ paused, lanes, watching });
   }
   if (path === "footage/mac" && request.method === "GET") {
     const [{ text, age }, lanes] = await Promise.all([readObject(media, MAC, now), readLanes(media)]);

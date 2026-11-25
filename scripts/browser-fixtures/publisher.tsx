@@ -538,6 +538,8 @@ function macReply() {
     report: {
       version: 1,
       at: new Date(Date.now() - 20_000).toISOString(),
+      // Said at least every 30 seconds while a run goes, every 10 minutes otherwise: ?mac=stale is long past that.
+      every: ended ? 10 * 60_000 : 30_000,
       running: !ended,
       lanes: { copy, send },
       camera:

@@ -45,6 +45,11 @@ export interface MacReport {
   version: 1;
   /** When the Mac made it. */
   at: string;
+  /**
+   * The longest the Mac lets go by before it says how things stand again, even unchanged, in ms: null from a Mac from
+   * before it said so.
+   */
+  every: number | null;
   running: boolean;
   lanes: Record<MacLaneName, MacLane>;
   /** The card: plugged in or not, its clips to copy, and its space while it's plugged in. */
@@ -147,6 +152,7 @@ export function readMacReport(value: unknown): MacReport | null {
     return {
       version: 1,
       at: time(r.at),
+      every: optional(r.every, (value) => amount(value, 86_400_000, true)),
       running: flag(r.running),
       lanes: { copy: lane(lanes.copy), send: lane(lanes.send) },
       camera: {
@@ -195,10 +201,15 @@ export function readLaneAsks(value: unknown): LaneAsks {
 }
 
 /**
- * While it offloads the Mac says how it's going at least every 2 minutes, so a report saying a run goes that's older
- * than this is from a Mac that's asleep, off or offline.
+ * How old a report gets before its numbers are stale, from a Mac that's asleep, off or offline: the Mac says how long it
+ * lets go by between reports (30 seconds while a run goes, 10 minutes while none does), and it's stale half as long
+ * again after that in a run (45 seconds), twice that otherwise (20 minutes). A Mac from before it said so went 2 minutes
+ * between reports in a run, and otherwise sent nothing unless something changed.
  */
-export const MAC_STALE = 4 * 60_000;
+export function macStaleAfter({ running, every }: { running: boolean; every?: number | null }) {
+  if (!every) return running ? 4 * 60_000 : Number.POSITIVE_INFINITY;
+  return running ? every * 1.5 : every * 2;
+}
 
 /** Network speed in the unit an internet plan states it in. */
 export function formatRate(bytesPerSecond: number) {
