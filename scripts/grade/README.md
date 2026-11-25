@@ -62,7 +62,7 @@ offload gives log clips nobody graded. Exports don't count.
   encoder.json                            what trims and preview copies are encoded on, as chosen (below)
   ledger.json                             the footage ledger (below), also kept in the site's archive
   offloaded.json                          what each offloaded clip was (below)
-  keep.json, offload.json                 what's kept out of offload, and when the card's copies go (below)
+  keep.json, offload.json                 what's kept on this Mac, and when the card's copies go (below)
   asked.json                              the Footage tab's Start and Pause of each switch done here (below)
   backup.json                             which of the settings above the archive has
   transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each offloaded clip (below)
@@ -155,7 +155,7 @@ post.kualta.dev/footage#this-mac in another. After a run, what went wrong stays 
 
 What This Mac shows comes from `report.mjs`: what `GET /api/offload` knows (each switch's state, speed, time left and
 what it waits for; the clips on the card to copy and in `Original/` to send; the clips passed over and why; the
-transcripts waiting, failed and to send; the days kept out), the space on the card while it's plugged in (used of its
+transcripts waiting, failed and to send; the days kept), the space on the card while it's plugged in (used of its
 size, by `statfs` of `GRADE_CAMERA`, in tenths of a GB) and on the Mac's volume that holds `~/Movies` (in whole GB), and
 which of the tab's Start and Pause it has taken (below), sent to `helper/footage/mac` on the helper's pairing. Nothing in
 it counts from when a run started: the app runs on, so it says how things stand. The site keeps it as one small object.
@@ -173,7 +173,8 @@ the app wasn't running is done when it starts. The last ask wins, from wherever:
 before.
 
 - **Start** turns the switch on as the owner runs it: `{"unattended": true, "clearCardAfter": "sent", "youtube":
-  false}`, the kept days and clips kept out as ever. Asked of a switch still stopping, it starts once that one has.
+  false}`, the kept days and clips kept on this Mac as ever. Asked of a switch still stopping, it starts once that one
+  has.
 - **Pause** is the switch's **Stop**: what's in flight is finished (the clip being copied, the two being sent, with their
   manifest saves and deletions) and nothing more begun. Asked again, it changes nothing: it never cuts what's in flight.
 - With **Pause all** on, a switch that's on holds ("Held by Pause all") and goes on when everything does. Start and
@@ -203,9 +204,9 @@ go: exports stay in `Exported/`.
 - **Camera → Mac** copies the card's clips, a clip at a time, oldest first, while this Mac has room for the next with
   `GRADE_KEEP_FREE` (5 GB) to spare: into `Original/` (as a hidden `.part` until it's checked), hashed (SHA-256) as
   it's read, read back and checked against that, and given the card's time. Then the card's clip is deleted with its
-  `.LRF`: **Once on this Mac**, or **Once in Cloudflare**, as chosen below the switches (remembered). A clip that's in
-  `Original/` already is checked against the card instead of copied; one of its name that isn't it is never written
-  over. Nothing is sent.
+  `.LRF`: **Once on this Mac**, or **Once in Cloudflare**, as chosen below the switches (remembered); a kept clip
+  (below) once it's on this Mac either way. A clip that's in `Original/` already is checked against the card instead
+  of copied; one of its name that isn't it is never written over. Nothing is sent.
 - **Mac → Cloudflare** sends what's in `Original/`, two clips at a time: each unless the archive already holds those
   bytes (whole up to 16 MiB, else 16 MiB a request, so each lands well inside a request's ten minutes on a slow uplink;
   through `helper/archive` on the helper's pairing), filed in its shoot day's manifest in the archive,
@@ -257,8 +258,11 @@ for a minute, and go on when one does; the switch says so. **Keep going when thi
 lets a run go on without. Camera → Mac doesn't pause for this; only for **Pause all** (above).
 
 **Kept.** Shoot days ticked in the menu, and clips named in `keep.json` (those brought back, above all; by name without
-extension), stay on the card and on this Mac: they're never copied, sent or deleted, aren't counted, and get no
-transcript. A day with some of its clips kept shows a dash, and a click lets those go. While `keep.json` can't be read nothing is taken or deleted.
+extension), are kept on this Mac. Camera → Mac copies them like any other and deletes each from the card once its copy
+here is checked, with **Once in Cloudflare** too, as they never go there; they count among those to copy, and once
+copied they're done. Mac → Cloudflare never sends them, never deletes them, even ones the archive has, and doesn't
+count them; they get no transcript. A day with some of its clips kept shows a dash, and a click lets those go. While
+`keep.json` can't be read nothing is taken or deleted.
 
 `offloaded.json` (beside `grades.json`) records each clip's hash, size and day, and for one read off the card the time
 its file had there (`card`). Started by hand or by a script:
@@ -325,7 +329,7 @@ It starts only if `GRADE_KEEP_FREE` (5 GB) stays free after all that's asked for
 offload's copy off the card has still to write (an export is counted at its original's size, times its quality). That's
 looked at again before each clip and every few seconds during one: when room runs short the clip gives way, saying why.
 
-A clip brought here is kept out of offload (**Kept**, above) from just before it takes its name, so one that's on
+A clip brought here is kept on this Mac (**Kept**, above) from just before it takes its name, so an offload that's on
 doesn't take it off again: it stays until its day is let go in the Offload menu.
 
 ## Grading

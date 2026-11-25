@@ -827,7 +827,7 @@ test.if(usable)(
     expect(await json(`/api/find?clip=${name}`)).toEqual({ source: folder, name });
     const { days } = await json("/api/cloud");
     expect(days.find((one) => one.day === clipDay)).toMatchObject({ clips: 1, missing: { clips: 0 } });
-    // It's kept out of offload from now on.
+    // It's kept on this Mac from now on.
     expect(await json("/api/offload/keep")).toEqual({ days: [], clips: [name] });
     expect(await json("/api/offload")).toMatchObject({ mac: { clips: 0 }, kept: { count: 1 } });
 
