@@ -65,12 +65,13 @@ offload gives log clips nobody graded. Exports don't count.
   keep.json, offload.json                 what's kept on this Mac, and when the card's copies go (below)
   asked.json                              the Footage tab's Start and Pause of each switch done here (below)
   backup.json                             which of the settings above the archive has
-  transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each offloaded clip (below)
+  transcripts/<day>/                      <clip>.vtt and <clip>.json: what's said in each clip on this Mac or
+                                          offloaded from it (below)
   transcripts.json                        which clips have one, and which of those are in the archive
   previews.json, trims.json               what each of a film's preview copies and trims was made from (below)
   luts/                                   GRADE_LUTS: base looks (below)
 ~/Library/Caches/Grade/                   GRADE_CACHE: metadata, thumbnails, previews; safe to delete, but for
-  audio/<day>/                              the sound of offloaded clips not transcribed yet
+  audio/<day>/                              the sound of clips not transcribed yet
   previews/<clip>.mp4                     a film's preview copies, and its trims (below): made again when asked
   trims/<clip>-<start ms>-<end ms>-<grade hash>.mp4
 ```
@@ -140,7 +141,7 @@ otherwise from Cloudflare, if it's there; otherwise the player says where it is 
 there…"). `GET /footage/<clip>` says what the clip is (its file, on the Mac or the camera, its day, size, recorded time,
 profile, duration, the camera's white balance, its grade as saved here, and whether its transcript is here);
 `/footage/<clip>/original` streams it, seekable; `/footage/<clip>/transcript.vtt` is its transcript from
-`transcripts/`. `<clip>` is a file's name, with or without its extension and in any case, and only a clip the app lists
+`transcripts/`, and `/footage/<clip>/transcript.json` that with every word's time (below). `<clip>` is a file's name, with or without its extension and in any case, and only a clip the app lists
 (`Original/`, `Preexp/`, the card) is served. It's read only, and only for the composer: a request has to carry
 `Origin: https://post.kualta.dev` (or `http://localhost:4321`), which the answer allows by CORS so the player can draw
 the clip on its GPU. Any other origin, or none (a plain `<video>` or link on some other page), gets a 403. A preflight is
@@ -261,7 +262,7 @@ lets a run go on without. Camera → Mac doesn't pause for this; only for **Paus
 extension), are kept on this Mac. Camera → Mac copies them like any other and deletes each from the card once its copy
 here is checked, with **Once in Cloudflare** too, as they never go there; they count among those to copy, and once
 copied they're done. Mac → Cloudflare never sends them, never deletes them, even ones the archive has, and doesn't
-count them; they get no transcript. A day with some of its clips kept shows a dash, and a click lets those go. While
+count them. They're transcribed like any other, and their transcripts stay on this Mac. A day with some of its clips kept shows a dash, and a click lets those go. While
 `keep.json` can't be read nothing is taken or deleted.
 
 `offloaded.json` (beside `grades.json`) records each clip's hash, size and day, and for one read off the card the time
@@ -276,15 +277,25 @@ curl -X POST http://127.0.0.1:4777/api/offload -H 'X-Grade: 1' -H 'Content-Type:
 how the run goes, and any other is refused. `POST /api/offload/stop` takes `lanes` too, and `now`; `GET` and `POST
 /api/offload/keep` read and set `{ "days": [], "clips": [] }`; `GET /api/offload` says how it all stands.
 
-**Transcripts.** As soon as a clip is on the Mac its sound is taken out of it (copied, a second or two) into the cache;
-its Mac copy waits for that and nothing more. Whisper (`mlx-community/whisper-large-v3-turbo` on the GPU, the language
-its own guess) then transcribes the sound in the background, one clip at a time, half a minute or so for ten minutes of
-it, starting none while an export runs. The bar says "Transcribing 3 of 12". Each transcript is kept here as a `.vtt`
-(read it, search it) and a `.json` (Whisper's segments with every word's time), and its sound is deleted. While Mac →
-Cloudflare is on, finished transcripts are sent up and filed beside their clips in the day's manifest, as
-`transcripts/<clip>.vtt` and `.json`; ones finished after it ended go the next time, which it starts for even if they're
-all there is to send. The ledger marks a clip `transcript` once its transcript is in the archive, and counts neither
-file as footage.
+**Transcripts.** Every clip on this Mac gets one, so a film can start from the words: each the app lists in `Original/`
+and `Preexp/` (a camera's clips and an iPhone's alike), kept or not, and each offloaded from there. A clip only on the
+card or only in Cloudflare gets none here; one brought back does, once it's on the Mac. At start and every minute
+(`GRADE_TRANSCRIBE_EVERY`, in ms; 0 never) the app looks over this Mac's clips and queues those without a transcript.
+Whisper (`mlx-community/whisper-large-v3-turbo` on the GPU, the language its own guess) transcribes them in the
+background, one clip at a time, the newest shoot day's first (that's what gets edited), half a minute or so for ten
+minutes of sound. None is started while an export, a film's preview copy or trim, or a clip's preview is being made or
+waits to be, or while everything's paused; a clip still being written (changed in the last two minutes) waits for a
+later look. A queued clip's sound is taken out of it (copied, a second or two) into the cache when its turn comes. A
+clip going to Cloudflare has it taken as soon as it's on the Mac, as before, and its Mac copy waits for that and nothing
+more: sound the queue is taking already is waited for rather than taken twice, which never holds a deletion up longer
+or changes one. The bar says "Transcribing 3 of 12", and This Mac in the Footage tab how many wait. Each transcript is
+kept here as a `.vtt` (read it, search it) and a `.json` (Whisper's segments with every word's time), and its sound is
+deleted. A clip transcribed isn't transcribed again, unless its transcript's files go or the clip changes size.
+
+A kept clip's transcript stays on this Mac. Those of clips sent to Cloudflare are sent up while Mac → Cloudflare is on,
+and filed beside their clips in the day's manifest, as `transcripts/<clip>.vtt` and `.json`; ones finished after it
+ended go the next time, which it starts for even if they're all there is to send. The ledger marks a clip `transcript`
+once its transcript is in the archive, and counts neither file as footage.
 
 Whisper's word times run 0.15-0.5 s early on street audio: the transcript is for reading and searching, and cuts still
 need forced alignment.
@@ -292,9 +303,9 @@ need forced alignment.
 It runs `uvx --offline --from mlx-whisper mlx_whisper` (uvx by its path, `GRADE_UVX` names another) and downloads
 nothing, so both have to be in their caches already. If it's missing or fails, the bar says how many clips aren't
 transcribed, with why in its tooltip (and once in the log), and their sound is kept: it's tried again when Mac →
-Cloudflare next starts and when the server does, which is also when sound left by a restart is picked up. A clip with no
-sound has no transcript, one nobody speaks in an empty one, and one whose sound can't be taken goes on without: its
-video is in the archive all the same.
+Cloudflare next starts and when the server does, which is also when sound left by a restart is picked up; the looks
+every minute leave them till then. A clip with no sound has no transcript, one nobody speaks in an empty one, and one
+whose sound can't be taken goes on without: its video is in the archive all the same.
 
 While anything is being sent, and not paused, the grade app keeps the composer counted as watching the footage uploads
 (`helper/footage/watch`), so the helper puts graded clips up to YouTube meanwhile, as it does while the Footage tab is
@@ -303,6 +314,48 @@ settings first (`GRADE_DEFAULT_LOOK`, OpenDRT Colorful), to change before any re
 as in Cloudflare (an archived file the original's size) as they go, and reads the archive's own list of them at most
 every 10 minutes and once a run is over; `_originals-*` aren't films. To bring a day back, transcripts and all:
 `bun run publisher restore _originals-<day> <folder>`.
+
+**Transcripts on disk, for tools.** Local tools (the `/openfilm` skill) read the files directly, the app running or not:
+
+```
+~/Library/Application Support/Grade/       GRADE_DATA
+  transcripts/<day>/<stem>.vtt             WebVTT, a cue per segment from its first word to its last
+  transcripts/<day>/<stem>.json            the same, with every word's time
+  transcripts.json                         what's known of each clip's, by "<day>/<file>"
+```
+
+`<stem>` is the clip's file name without its extension, as it is on disk (`DJI_20261121143012_0042_D`, `IMG_4857`), and
+`<day>` its shoot day as the app files it: the date in a DJI name, else the file's modification date, in local time. To find a
+clip's by name, look for `transcripts/*/<stem>.json`; the same name on two days is two clips, each the `day` it says.
+Each file is written whole and then moved into place, so one that's there is complete. A `.json` is Whisper's answer
+with four fields first:
+
+```json
+{
+  "clip": "DJI_20261121143012_0042_D.MP4",
+  "day": "2026-11-21",
+  "model": "mlx-community/whisper-large-v3-turbo",
+  "transcribedAt": "2026-11-25T10:02:11.042Z",
+  "text": " What's said, all of it.",
+  "language": "en",
+  "segments": [
+    {
+      "id": 0, "seek": 0, "start": 0.56, "end": 5.76, "text": " What's said,",
+      "tokens": [50365, 708], "temperature": 0, "avg_logprob": -0.21, "compression_ratio": 0.89, "no_speech_prob": 0.01,
+      "words": [
+        { "word": " What's", "start": 0.56, "end": 0.92, "probability": 0.94 },
+        { "word": " said,", "start": 0.92, "end": 1.3, "probability": 0.88 }
+      ]
+    }
+  ]
+}
+```
+
+Times are seconds from the clip's start, and run early (above); a word keeps its leading space, and a number Whisper
+couldn't give (NaN) is `null`. A clip nobody speaks in has no segments. In `transcripts.json` (`{ "version": 1,
+"clips": { … } }`) each clip has its `size`; once transcribed, `made` (when), `language` and `words` (how many); once
+filed in the archive, `sent` (a kept clip's never is); and `silent` if it has no sound, so no transcript. Over HTTP,
+`GET /footage/<clip>/transcript.json` and `.vtt` serve them to the composer's pages alone (above).
 
 ## Bring to Mac: from Cloudflare back here
 

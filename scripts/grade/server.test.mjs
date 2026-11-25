@@ -202,7 +202,8 @@ fi
 exec "${ffmpeg}" "$@"
 `;
 
-async function startServer() {
+/** Starts the server, with `env` over the tests' own. Only a test that says so has this Mac's clips looked over for transcripts. */
+async function startServer(env = {}) {
   server = spawn(process.execPath, [join(import.meta.dir, "server.mjs")], {
     env: {
       ...process.env,
@@ -223,6 +224,8 @@ async function startServer() {
       GRADE_REPORT_EVERY: "300",
       GRADE_PAUSE_EVERY: "300",
       GRADE_UVX: uvx,
+      GRADE_TRANSCRIBE_EVERY: "0",
+      ...env,
     },
     stdio: ["ignore", "pipe", "inherit"],
   });
@@ -904,6 +907,89 @@ test.if(usable)("transcribes the offloaded clips meanwhile, through a restart, a
   expect(ledger.clips[stem].original).toEqual({ camera: false, mac: false, cloudflare: true });
   expect(ledger.clips[stem].graded).toEqual(unsent.clips[stem].graded);
   expect(ledger.projects).toEqual(unsent.projects);
+}, 120_000);
+
+/** Stops the server as a crash would, and starts it again with `env`. */
+async function restart(env) {
+  const exited = new Promise((resolve) => server.once("exit", resolve));
+  server.kill("SIGKILL");
+  await exited;
+  await startServer(env);
+}
+
+test.if(usable)("transcribes every clip on this Mac, kept or not, the newest day's first, and keeps a kept one's transcript here", async () => {
+  const composer = "https://post.kualta.dev";
+  // An iPhone clip, kept, of the day its file says; and a camera's clip of a day before, to go to the archive.
+  const iphone = "IMG_5001.MOV";
+  const older = "DJI_20260209100000_0003_D.MP4";
+  const [stem, olderStem] = [iphone, older].map((file) => file.slice(0, -4));
+  clip(join(original, iphone), "Rec.709");
+  const shot = new Date(2026, 1, 12, 9, 30);
+  utimesSync(join(original, iphone), shot, shot);
+  clip(join(original, older), "D-Log2");
+  await post("/api/offload/keep", { clips: [iphone] });
+  rmSync(go);
+  await restart({ GRADE_TRANSCRIBE_EVERY: "300" });
+  const first = await until(async () => {
+    const { transcripts } = await json("/api/jobs");
+    return transcripts.current && transcripts.waiting === 1 && transcripts;
+  });
+  expect(first).toMatchObject({ current: iphone, done: 0, total: 2, failed: 0 });
+  // Only the one being transcribed has its sound taken yet.
+  const taken = await until(() => audioLeft().includes(`${iphone}.m4a`) && audioLeft());
+  expect(taken).toEqual([`${iphone}.m4a`]);
+  writeFileSync(go, "");
+  const made = await until(async () => {
+    const { transcripts } = await json("/api/offload");
+    return !transcripts.current && !transcripts.waiting && transcripts;
+  });
+  expect(made).toMatchObject({ done: 2, total: 2, failed: 0, error: null, toSend: 0 });
+  const transcribed = (on) => readdirSync(join(data, "transcripts", on)).sort();
+  expect(transcribed("2026-02-12")).toEqual([`${stem}.json`, `${stem}.vtt`]);
+  expect(transcribed("2026-02-09")).toEqual([`${olderStem}.json`, `${olderStem}.vtt`]);
+  expect(audioLeft()).toEqual([]);
+  expect(readdirSync(original).sort()).toEqual([older, iphone]);
+
+  // The composer reads the word times by the clip's name, as it reads the transcript.
+  const words = await fetch(url(`/footage/${stem}/transcript.json`), { headers: { Origin: composer } });
+  expect(words.status).toBe(200);
+  expect(words.headers.get("content-type")).toBe("application/json; charset=utf-8");
+  expect(words.headers.get("access-control-allow-origin")).toBe(composer);
+  expect(await words.json()).toMatchObject({
+    clip: iphone,
+    day: "2026-02-12",
+    language: "en",
+    segments: [{ text: ` ${iphone}`, words: [{ word: " x", start: 0.2, end: 0.9 }] }],
+  });
+  expect((await fetch(url(`/footage/${stem}/transcript.json`))).status).toBe(403);
+  expect((await fetch(url(`/footage/${stem}/transcript.json`), { headers: { Origin: "https://evil.example" } })).status).toBe(403);
+
+  // Sent, the older clip takes its transcript with it; the kept one's stays here, as the clip does.
+  expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
+  const after = await ended();
+  expect(after.run).toMatchObject({ finished: "done", error: null, send: { done: 1 }, transcripts: { sent: 1, error: null } });
+  expect(after.transcripts).toMatchObject({ toSend: 0, failed: 0, waiting: 0 });
+  expect(paths(site.manifests.get("_originals-2026-02-09"))).toEqual([
+    `assets/${older}`,
+    `transcripts/${olderStem}.json`,
+    `transcripts/${olderStem}.vtt`,
+  ]);
+  expect([...site.manifests.values()].flatMap(paths).filter((path) => path.includes(stem))).toEqual([]);
+  expect(readdirSync(original)).toEqual([iphone]);
+
+  // Through a restart, neither is transcribed again.
+  const madeAt = () => JSON.parse(readFileSync(join(data, "transcripts/2026-02-12", `${stem}.json`), "utf8")).transcribedAt;
+  const before = madeAt();
+  await restart({ GRADE_TRANSCRIBE_EVERY: "300" });
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  expect((await json("/api/jobs")).transcripts).toMatchObject({ total: 0, current: null, waiting: 0, failed: 0 });
+  expect(madeAt()).toBe(before);
+  expect((await json("/api/offload")).transcripts.toSend).toBe(0);
+
+  // Let go and gone, for the tests after this one.
+  await post("/api/offload/keep", { clips: [] });
+  rmSync(join(original, iphone));
+  await restart();
 }, 120_000);
 
 // After the offload's counts of this Mac's originals: a clip of its own whose light flickers.

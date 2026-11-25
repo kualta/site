@@ -1,7 +1,9 @@
-// What's said in each offloaded clip, transcribed here by Whisper (large-v3-turbo, on this Mac's GPU) so an edit can start
-// from the words. A clip's sound is taken from its Mac copy before that goes, and kept in the cache until it's transcribed:
-// one clip at a time, in the background, none started while an export runs. Audio left by a restart, or by a Whisper that
-// failed, is picked up later. Nothing is ever downloaded: uvx and the model run offline, from their caches.
+// What's said in each clip on this Mac, transcribed here by Whisper (large-v3-turbo, on this Mac's GPU) so an edit can start
+// from the words: every clip in Movies/Original and Preexp, kept or not, and every clip offloaded from them. A clip going
+// to the archive has its sound taken from its Mac copy before that goes; one staying has it taken when its turn comes. The
+// sound is kept in the cache until it's transcribed: one clip at a time, in the background, the newest shoot day's first,
+// none started while an export or a film's preview copy or trim is being made. Audio left by a restart, or by a Whisper
+// that failed, is picked up later. Nothing is ever downloaded: uvx and the model run offline, from their caches.
 //
 // A transcript is two files, named for the clip: a .vtt to read and search, and a .json with Whisper's segments and every
 // word's time. Whisper's times run early on street audio, so cuts still need forced alignment.
@@ -98,6 +100,17 @@ export function toVtt(segments) {
   return ["WEBVTT\n", ...cues].join("\n");
 }
 
+/** `promise`, unless `signal` is aborted first: then why it was. */
+function whileOn(promise, signal) {
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    const stop = () => reject(signal.reason);
+    if (signal.aborted) return stop();
+    signal.addEventListener("abort", stop, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
+  });
+}
+
 async function writeWhole(path, text) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(`${path}.part`, text);
@@ -114,8 +127,7 @@ async function writeWhole(path, text) {
  *   made      when it was transcribed, with its `language` and how many `words`
  *   sent      when its transcript was filed in the archive
  *
- * `busy()` says when not to start on another clip, and `skip(clip)` which clips to leave: their audio stays as it is.
- * `made()` hears each transcript made.
+ * `busy()` says when not to start on another clip. `made()` hears each transcript made.
  */
 export function transcriber({
   audio,
@@ -124,7 +136,6 @@ export function transcriber({
   records,
   uvx = null,
   busy = () => false,
-  skip = async () => false,
   pause = 2000,
   extract = extractAudio,
   log = console.error,
@@ -135,9 +146,17 @@ export function transcriber({
   let working = false;
   /** Of the clips queued since the last time none were: how far it is, for "Transcribing 3 of 12". */
   const batch = { done: 0, total: 0 };
-  /** Clips without a transcript, and why: `key` → `{ job, why }`, with no job when there's no audio to try again. */
+  /**
+   * Clips without a transcript, and why: `key` → `{ job, why }`, with no job when there's nothing to try again with: no
+   * audio, and no clip on this Mac to take it from.
+   */
   const failed = new Map();
   const logged = new Set();
+  /**
+   * Clips' sound being taken, by `key`: whoever else wants it waits for that, rather than taking it a second time. Each
+   * says whether the clip has sound, or null if it couldn't be taken.
+   */
+  const takings = new Map();
 
   const jobOf = (day, name) => ({ key: `${day}/${name}`, day, name });
   const jobAt = (key) => jobOf(key.slice(0, key.indexOf("/")), key.slice(key.indexOf("/") + 1));
@@ -147,7 +166,8 @@ export function transcriber({
       path: `transcripts/${stemOf(name)}.${ext}`,
       abs: join(dir, day, `${stemOf(name)}.${ext}`),
     }));
-  const kept = async (job) => (await Promise.all(files(job).map(({ abs }) => exists(abs)))).every(Boolean);
+  const transcribed = async (job) => (await Promise.all(files(job).map(({ abs }) => exists(abs)))).every(Boolean);
+  const queued = (key) => current?.key === key || queue.some((job) => job.key === key);
 
   /** Keeps what went wrong, and logs it once however many clips it happens to. */
   function fail(job, why, audioKept) {
@@ -158,7 +178,7 @@ export function transcriber({
   }
 
   function add(job) {
-    if (current?.key === job.key || queue.some(({ key }) => key === job.key)) return;
+    if (queued(job.key)) return;
     failed.delete(job.key);
     if (!current && !queue.length) Object.assign(batch, { done: 0, total: 0 });
     queue.push(job);
@@ -174,7 +194,7 @@ export function transcriber({
         await wait(pause);
         continue;
       }
-      current = queue.shift();
+      current = next();
       try {
         await transcribe(current);
       } catch (error) {
@@ -186,13 +206,55 @@ export function transcriber({
     working = false;
   }
 
+  /** The clip to do next: the newest shoot day's, as that's the one being edited; a day's in the order they came. */
+  function next() {
+    let at = 0;
+    for (let i = 1; i < queue.length; i++) if (queue[i].day > queue[at].day) at = i;
+    return queue.splice(at, 1)[0];
+  }
+
+  /**
+   * Takes a clip's sound from its Mac copy into the cache, and notes that it has none if so; says whether it has any.
+   * Sound being taken already is waited for instead, and taken again here only if that couldn't be. Only `signal`, or
+   * the time it may take, cuts short what's begun here: anyone waiting for it as well takes it themselves.
+   */
+  async function takeSound(job, clip, signal = null) {
+    for (let theirs = takings.get(job.key); theirs; theirs = takings.get(job.key)) {
+      const sound = await whileOn(theirs, signal);
+      if (sound !== null) return sound;
+    }
+    const limit = AbortSignal.timeout(AUDIO_LIMIT);
+    const taking = (async () => {
+      const sound = await extract(clip.path, audioFile(job), {
+        signal: signal ? AbortSignal.any([signal, limit]) : limit,
+      });
+      await records.update((all) => {
+        all[job.key] = sound ? { size: clip.size } : { size: clip.size, silent: true };
+      });
+      return sound;
+    })();
+    // What the others wait for: whether it has sound, or null if it couldn't be taken.
+    const shared = taking.catch(() => null);
+    takings.set(job.key, shared);
+    void shared.then(() => takings.get(job.key) === shared && takings.delete(job.key));
+    return taking;
+  }
+
   async function transcribe(job) {
     const sound = audioFile(job);
-    // The cache was cleared.
-    if (!(await exists(sound))) return;
-    if (await skip(job)) return;
+    // The cache was cleared; a clip on this Mac has its sound taken now, below.
+    if (!job.from && !(await exists(sound))) return;
     const tool = await findUvx(uvx);
     if (!tool) throw new Error("uvx isn't installed, so Whisper can't run");
+    if (!(await exists(sound))) {
+      // Gone from this Mac since, with no sound taken to transcribe.
+      const there = await stat(job.from).catch(() => null);
+      if (!there) return;
+      const taken = await takeSound(job, { path: job.from, size: there.size }).catch((error) => {
+        throw new Error(`its sound couldn't be taken: ${error.message}`);
+      });
+      if (!taken) return;
+    }
     // A folder of its own: should a Whisper outlive the server that started it, what it writes lands in no other clip's.
     await mkdir(scratch, { recursive: true });
     const out = await mkdtemp(join(scratch, "whisper-"));
@@ -225,17 +287,10 @@ export function transcriber({
       try {
         const known = (await records.read())[job.key];
         if (known?.size === clip.size) {
-          if (known.silent || (known.made && (await kept(job)))) return;
+          if (known.silent || (known.made && (await transcribed(job)))) return;
           if (!known.made && (await exists(audioFile(job)))) return add(job);
         }
-        const limit = AbortSignal.timeout(AUDIO_LIMIT);
-        const sound = await extract(clip.path, audioFile(job), {
-          signal: signal ? AbortSignal.any([signal, limit]) : limit,
-        });
-        await records.update((all) => {
-          all[job.key] = sound ? { size: clip.size } : { size: clip.size, silent: true };
-        });
-        if (sound) add(job);
+        if (await takeSound(job, clip, signal)) add(job);
       } catch (error) {
         if (signal?.aborted) throw error;
         fail(job, `its sound couldn't be taken: ${error.message}`, false);
@@ -251,13 +306,32 @@ export function transcriber({
           if (!file.endsWith(".m4a")) continue;
           const job = jobOf(day, file.slice(0, -".m4a".length));
           // Cut short as it was being taken, or transcribed already.
-          const over = file.startsWith(".") || (all[job.key]?.made && (await kept(job)));
+          const over = file.startsWith(".") || (all[job.key]?.made && (await transcribed(job)));
           if (over) await rm(join(audio, day, file), { force: true });
           else add(job);
         }
     },
 
-    /** Tries again the clips that failed and whose audio is still here. */
+    /**
+     * Queues the clips on this Mac (`{ name, day, path, size, settles }`) that have no transcript, kept or not: each has
+     * its sound taken when its turn comes. One that may still be being written waits for the next look, one that has no
+     * sound or failed (till `retry()`) isn't queued again.
+     */
+    async catchUp(clips) {
+      const all = await records.read();
+      // The first is begun on as it's queued: the newest day's, as next() would have it.
+      const newestFirst = [...clips].sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
+      for (const clip of newestFirst) {
+        const job = jobOf(clip.day, clip.name);
+        if ((clip.settles ?? 0) > Date.now() || queued(job.key) || failed.has(job.key)) continue;
+        const known = all[job.key];
+        if (known?.size === clip.size && (known.silent || (known.made && (await transcribed(job))))) continue;
+        // `from`: where it is on this Mac, to take its sound from.
+        add({ ...job, from: clip.path });
+      }
+    },
+
+    /** Tries again the clips that failed and whose audio is still here, or that are on this Mac. */
     retry() {
       logged.clear();
       for (const { job } of [...failed.values()]) if (job) add(job);

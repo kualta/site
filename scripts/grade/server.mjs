@@ -82,8 +82,10 @@ const WATCHED_FOR = Number(process.env.GRADE_WATCHED_FOR || 60_000);
 const SETTLE = Number(process.env.GRADE_SETTLE ?? 2 * 60_000);
 /** How long an offload waits before its first try again. */
 const RETRY_FIRST = Number(process.env.GRADE_RETRY_FIRST || 30_000);
-/** What's known of each offloaded clip's transcript (transcripts.mjs); the transcripts themselves are in transcripts/. */
+/** What's known of each clip's transcript (transcripts.mjs); the transcripts themselves are in transcripts/. */
 const TRANSCRIPTS = join(DATA, "transcripts.json");
+/** How often the clips on this Mac are looked over for any without a transcript; 0, never. */
+const TRANSCRIBE_EVERY = Number(process.env.GRADE_TRANSCRIBE_EVERY ?? 60_000);
 /** The look an offloaded log clip without a grade gets, as settings, until it's graded by hand. */
 const DEFAULT_LOOK = process.env.GRADE_DEFAULT_LOOK || DEFAULT_LOOKS[0];
 /** Clips come off the card only while this much stays free on the Mac, for exports and the system. */
@@ -906,17 +908,40 @@ const pause = pauseFlag({
     film.pump();
   },
 });
-/** Makes the transcripts. An export has the GPU first, and nothing starts while everything's paused. */
+/** Whether a film's preview copy or trim is being made, or waits to be. */
+function filming() {
+  const { previews, trims } = film.state();
+  return Boolean(previews.current || trims.current || previews.queued.length || trims.queued.length);
+}
+/**
+ * Makes the transcripts, of every clip on this Mac and every one offloaded from it. Exports, a film's preview copies and
+ * trims, and the clips' previews have the machine first, and nothing starts while everything's paused.
+ */
 const transcripts = transcriber({
   audio: join(CACHE, "audio"),
   dir: join(DATA, "transcripts"),
   scratch: join(CACHE, "transcribing"),
   records: { read: () => readClips(TRANSCRIPTS), update: (change) => updateClips(TRANSCRIPTS, change) },
   uvx: process.env.GRADE_UVX,
-  busy: () => Boolean(jobs.export.current || jobs.export.queue.length || pause.held()),
-  skip: async (clip) => (await keep.keeping())(clip),
+  busy: () =>
+    Boolean(
+      jobs.export.current || jobs.export.queue.length || jobs.proxy.current || jobs.proxy.queue.length || filming() || pause.held(),
+    ),
   made: () => offloading?.poke(),
 });
+/** Queues the clips on this Mac (Original and Preexp) without a transcript, kept or not: none off the card or the archive. */
+let catchingUp = false;
+async function transcribeMac() {
+  if (catchingUp) return;
+  catchingUp = true;
+  try {
+    await transcripts.catchUp(await macClips());
+  } catch (e) {
+    console.error("grade: transcripts:", e.message);
+  } finally {
+    catchingUp = false;
+  }
+}
 /** The transcripts waiting to be sent: made, and their clips in the archive and not kept on this Mac since. */
 async function transcriptsToSend() {
   await updating.get(OFFLOADED);
@@ -1441,20 +1466,21 @@ const READ_BY = ["https://post.kualta.dev", "http://localhost:4321"];
 /** A clip as the player asks for it: its file's name, or that without the extension. Never a path. */
 const CLIP_NAME = /^[A-Za-z0-9][\w -]{0,150}(\.[A-Za-z0-9]{1,5})?$/;
 
-/** A clip's transcript (transcripts.mjs keeps them by shoot day): its own day's, else any day's. */
-async function transcriptOf(clip) {
+/** A clip's transcript, `.vtt` or `.json` (transcripts.mjs keeps them by shoot day): its own day's, else any day's. */
+async function transcriptOf(clip, ext = "vtt") {
   const dir = join(DATA, "transcripts");
-  const file = `${stemOf(clip.name)}.vtt`;
+  const file = `${stemOf(clip.name)}.${ext}`;
   const days = (await readdir(dir).catch(() => [])).filter((day) => !day.startsWith(".") && day !== clip.src.label);
   for (const day of [clip.src.label, ...days]) if (await exists(join(dir, day, file))) return join(dir, day, file);
   return null;
 }
 
 /**
- * GET /footage/<clip> says what a clip on this Mac or the card is, /footage/<clip>/original streams it (seekable), and
- * /footage/<clip>/transcript.vtt is its transcript. Read only, and only for the composer's pages: a request has to name
- * one of their origins, which the answer allows, so the player can draw the clip on its GPU. Anything else (another
- * site, or a plain <video> or link, which sends no origin) is refused, and only a clip the app lists is ever served.
+ * GET /footage/<clip> says what a clip on this Mac or the card is, /footage/<clip>/original streams it (seekable),
+ * /footage/<clip>/transcript.vtt is its transcript and /footage/<clip>/transcript.json that with every word's time. Read
+ * only, and only for the composer's pages: a request has to name one of their origins, which the answer allows, so the
+ * player can draw the clip on its GPU. Anything else (another site, or a plain <video> or link, which sends no origin) is
+ * refused, and only a clip the app lists is ever served.
  */
 async function footageRoute(req, res, p) {
   const origin = req.headers.origin;
@@ -1473,12 +1499,12 @@ async function footageRoute(req, res, p) {
   }
   if (req.method !== "GET" && req.method !== "HEAD") throw httpError(405, "footage is read only");
   res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
-  const m = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt))?$/.exec(p);
+  const m = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt|transcript\.json))?$/.exec(p);
   if (!m || !CLIP_NAME.test(m[1])) throw httpError(404, "no such clip");
   const clip = await locate(m[1]);
   if (!clip) throw httpError(404, `${m[1]} isn't on this Mac or the camera`);
   if (m[2] === "original") return serveFile(req, res, clip.path);
-  const transcript = await transcriptOf(clip);
+  const transcript = await transcriptOf(clip, m[2] === "transcript.json" ? "json" : "vtt");
   if (m[2]) {
     if (!transcript) throw httpError(404, `${m[1]} has no transcript here`);
     return serveFile(req, res, transcript);
@@ -1522,7 +1548,7 @@ async function body(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
-const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css", ".mp4": "video/mp4", ".mov": "video/quicktime", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".vtt": "text/vtt; charset=utf-8" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css", ".mp4": "video/mp4", ".mov": "video/quicktime", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".vtt": "text/vtt; charset=utf-8", ".json": "application/json; charset=utf-8" };
 
 /** A file, with single-range support so the browser can seek video. */
 async function serveFile(req, res, path, cache = "no-cache") {
@@ -1787,6 +1813,11 @@ if (ENCODERS.includes(chosen)) exportEncoder = chosen;
 // Paused before a restart, it's still paused: asked before Whisper picks up where it was, unless the site is slow to say.
 await Promise.race([pause.check(), new Promise((resolve) => setTimeout(resolve, 5000))]);
 await transcripts.resume().catch((e) => console.error("grade: transcripts:", e.message));
+// Then every clip on this Mac without a transcript, and those that turn up.
+if (TRANSCRIBE_EVERY > 0) {
+  void transcribeMac();
+  setInterval(transcribeMac, TRANSCRIBE_EVERY);
+}
 await film.start().catch((e) => console.error("grade: film:", e.message));
 server.listen(PORT, "127.0.0.1", () => {
   const address = `http://127.0.0.1:${PORT}`;

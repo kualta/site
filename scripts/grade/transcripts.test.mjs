@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { FFMPEG } from "./media.mjs";
 import { parseWhisper, toVtt, transcriber } from "./transcripts.mjs";
 
@@ -316,19 +316,195 @@ test("a clip nobody speaks in gets an empty transcript", async () => {
   expect(list("audio", day)).toEqual([]);
 });
 
-test("a clip kept since its sound was taken isn't transcribed, and its sound waits for when it isn't", async () => {
-  const kept = new Set([A]);
-  const t = start({ skip: async ({ name }) => kept.has(name) });
-  for (const name of [A, B]) await t.take(clip(name));
+// ---- every clip on this Mac: queued as it's found, its sound taken when its turn comes ------------------------------
+
+/** A clip on this Mac, as the server lists it: a file of its own, shot on `on`. */
+function onMac(name, on, extra = {}) {
+  mkdirSync(join(root, "mac"), { recursive: true });
+  writeFileSync(join(root, "mac", name), `the clip ${name}`);
+  return { name, day: on, path: join(root, "mac", name), size: `the clip ${name}`.length, settles: 0, ...extra };
+}
+/** An extract that notes each clip it takes the sound of. */
+function noting(taken) {
+  return async (src, dst) => {
+    taken.push(basename(src));
+    mkdirSync(dirname(dst), { recursive: true });
+    writeFileSync(dst, `sound of ${src}`);
+    return true;
+  };
+}
+const started = () => lines("log").flatMap((line) => (line.startsWith("start ") ? [line.slice(6)] : []));
+const [D17, D18, D19, D20] = ["17", "18", "19", "20"].map((d) => `DJI_202611${d}100000_0001_D.MP4`);
+const IMG = "IMG_4857.MOV";
+
+test("every clip on this Mac without a transcript is queued, the newest shoot day's first, its sound taken in its turn", async () => {
+  close("go");
+  const taken = [];
+  const t = start({ extract: noting(taken) });
+  // As the server lists them, by name: an iPhone clip's day is its file's.
+  await t.catchUp([
+    onMac(D17, "2026-11-17"),
+    onMac(D18, "2026-11-18"),
+    onMac(D19, "2026-11-19"),
+    onMac(IMG, "2026-11-18"),
+  ]);
+  await until(() => started().length === 1);
+  expect(started()).toEqual([D19]);
+  // Only the clip being transcribed has its sound in the cache: the rest wait on the Mac.
+  expect(taken).toEqual([D19]);
+  expect(list("audio", "2026-11-19")).toEqual([`${D19}.m4a`]);
+  expect(t.summary()).toMatchObject({ current: D19, waiting: 3, done: 0, total: 4 });
+  // A day shot since goes before the older ones still waiting.
+  await t.catchUp([onMac(D20, "2026-11-20")]);
+  open("go");
   await idle(t);
-  expect(list("kept", day)).toEqual([`${B.slice(0, -4)}.json`, `${B.slice(0, -4)}.vtt`]);
-  expect(list("audio", day)).toEqual([`${A}.m4a`]);
-  expect(t.summary()).toMatchObject({ failed: 0, waiting: 0 });
-  kept.clear();
-  await t.resume();
+  expect(started()).toEqual([D19, D20, D18, IMG, D17]);
+  expect(taken).toEqual(started());
+  expect(t.summary()).toMatchObject({ done: 5, total: 5, failed: 0, error: null });
+  expect(list("kept", "2026-11-18")).toEqual([
+    "DJI_20261118100000_0001_D.json",
+    "DJI_20261118100000_0001_D.vtt",
+    "IMG_4857.json",
+    "IMG_4857.vtt",
+  ]);
+  expect(JSON.parse(read("kept", "2026-11-18", "IMG_4857.json"))).toMatchObject({ clip: IMG, day: "2026-11-18" });
+  expect(at.records[`2026-11-18/${IMG}`]).toMatchObject({ size: onMac(IMG, "2026-11-18").size, words: 2 });
+  expect(list("audio").flatMap((on) => list("audio", on))).toEqual([]);
+  // None of them is in the archive, so there's none to send.
+  expect(await t.ready({})).toEqual([]);
+});
+
+test("a clip transcribed already, with no sound, or that failed isn't done again, nor one still being written", async () => {
+  const taken = [];
+  const t = start({ extract: noting(taken) });
+  // Transcribed as it went to the archive, by the offload.
+  await t.take(onMac(D17, "2026-11-17"));
   await idle(t);
-  expect(list("kept", day)).toHaveLength(4);
-  expect(list("audio", day)).toEqual([]);
+  expect(taken).toEqual([D17]);
+  const quiet = onMac(D18, "2026-11-18");
+  at.records[`2026-11-18/${D18}`] = { size: quiet.size, silent: true };
+  open("fail", "Skipping x due to RuntimeError: Failed to load audio\n");
+  const broken = onMac(D19, "2026-11-19");
+  const copying = onMac(D20, "2026-11-20", { settles: Date.now() + 60_000 });
+  const clips = [onMac(D17, "2026-11-17"), quiet, broken, copying];
+  await t.catchUp(clips);
+  await idle(t);
+  expect(t.summary()).toMatchObject({ failed: 1, total: 1, error: "RuntimeError: Failed to load audio" });
+  expect(taken).toEqual([D17, D19]);
+  // Looked over again and again, nothing more is done, and what failed waits with its sound.
+  for (let n = 0; n < 3; n++) await t.catchUp(clips);
+  await idle(t);
+  expect(lines("calls")).toHaveLength(2);
+  expect(taken).toEqual([D17, D19]);
+  expect(list("audio", "2026-11-19")).toEqual([`${D19}.m4a`]);
+  // Tried again, it's transcribed from the sound kept; once still, the clip being written is too.
+  close("fail");
+  t.retry();
+  await t.catchUp([...clips.slice(0, 3), { ...copying, settles: Date.now() - 1 }]);
+  await idle(t);
+  expect(taken).toEqual([D17, D19, D20]);
+  expect(t.summary()).toMatchObject({ failed: 0 });
+  expect(list("kept", "2026-11-19")).toHaveLength(2);
+  // A transcript gone from the disk is made again; its record alone doesn't count.
+  rmSync(join(root, "kept", "2026-11-17"), { recursive: true });
+  await t.catchUp(clips);
+  await idle(t);
+  expect(taken).toEqual([D17, D19, D20, D17]);
+});
+
+test("none is started while an export, a trim or a preview copy is being made, not even its sound taken", async () => {
+  close("go");
+  at.busy = true;
+  const taken = [];
+  const t = start({ extract: noting(taken) });
+  await t.catchUp([onMac(D17, "2026-11-17"), onMac(D18, "2026-11-18")]);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(lines("log")).toEqual([]);
+  expect(taken).toEqual([]);
+  expect(t.summary()).toMatchObject({ current: null, waiting: 2, total: 2 });
+  at.busy = false;
+  await until(() => started().length === 1);
+  // Busy again while one is transcribed: that one is finished, the next waits.
+  at.busy = true;
+  open("go");
+  await until(() => !t.summary().current);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(started()).toEqual([D18]);
+  expect(taken).toEqual([D18]);
+  at.busy = false;
+  await idle(t);
+  expect(started()).toEqual([D18, D17]);
+});
+
+test("a clip gone from this Mac before its turn is passed over, unless its sound was taken as it went", async () => {
+  close("go");
+  const taken = [];
+  const t = start({ extract: noting(taken) });
+  const [first, trashed, offloaded] = [onMac(D19, "2026-11-19"), onMac(D18, "2026-11-18"), onMac(D17, "2026-11-17")];
+  await t.catchUp([first, trashed, offloaded]);
+  await until(() => started().length === 1);
+  // One moved to the Trash; one offloaded, its sound taken before its Mac copy went.
+  rmSync(trashed.path);
+  await t.take(offloaded);
+  rmSync(offloaded.path);
+  open("go");
+  await idle(t);
+  expect(started()).toEqual([D19, D17]);
+  expect(taken).toEqual([D19, D17]);
+  expect(t.summary()).toMatchObject({ failed: 0, done: 3, total: 3 });
+  expect(list("kept", "2026-11-18")).toEqual([]);
+});
+
+test("sound the queue is taking isn't taken twice for the offload, which waits for it only as long as it's let", async () => {
+  const gate = Promise.withResolvers();
+  let taking = 0;
+  const extract = async (_src, dst) => {
+    taking++;
+    await gate.promise;
+    mkdirSync(dirname(dst), { recursive: true });
+    writeFileSync(dst, "sound");
+    return true;
+  };
+  const t = start({ extract });
+  const clip = onMac(D17, "2026-11-17");
+  await t.catchUp([clip]);
+  await until(() => taking === 1);
+  // The offload, sending it meanwhile: told to stop, it stops waiting, and the queue's goes on.
+  const stopping = new AbortController();
+  const cut = t.take(clip, stopping.signal);
+  stopping.abort();
+  await expect(cut).rejects.toThrow();
+  const sending = t.take(clip);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(taking).toBe(1);
+  gate.resolve();
+  await sending;
+  await idle(t);
+  expect(taking).toBe(1);
+  expect(lines("calls")).toHaveLength(1);
+  expect(t.summary()).toMatchObject({ done: 1, total: 1, failed: 0 });
+
+  // The other way round: the offload's taken first, and the queue waits for it.
+  const again = Promise.withResolvers();
+  let taken = 0;
+  const second = start({
+    extract: async (_src, dst) => {
+      taken++;
+      await again.promise;
+      mkdirSync(dirname(dst), { recursive: true });
+      writeFileSync(dst, "sound");
+      return true;
+    },
+  });
+  const other = onMac(D18, "2026-11-18");
+  const offloading = second.take(other);
+  await until(() => taken === 1);
+  await second.catchUp([other]);
+  again.resolve();
+  await offloading;
+  await idle(second);
+  expect(taken).toBe(1);
+  expect(lines("calls")).toHaveLength(2);
 });
 
 test("clips of one name on two days keep their own transcripts", async () => {
