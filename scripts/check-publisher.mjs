@@ -2235,7 +2235,7 @@ try {
         { send: /^Can't reach the cloud, tries again \d/, copy: /^Waiting for the camera, tries again \d/, copySpace: "Not plugged in" },
       ],
       ["paused", "Updated just now", { send: "Held until a Grade page is open", sendState: "Held" }],
-      ["stale", "Not heard from for 25 min", {}],
+      ["stale", /^Not heard from for 25 min · since \d/, { stale: true }],
       ["done", "Updated just now", { send: passed, sendState: "Done", sendLeft: "None", sendButton: "Start" }],
       ["failed", "Updated just now", { send: "Cloudflare refused the pairing (401): pair the crossposter helper again", sendState: "Failed" }],
       ["none", "No report from the Mac yet", { empty: true }],
@@ -2263,6 +2263,9 @@ try {
         assert.deepEqual(files, [["\u00a0\u00a0"], ["008659%", "008727%"]]);
       }
       if (expected.figures) assert.deepEqual(await figures(), expected.figures);
+      // A report older than the Mac's pace allows greys its numbers, so they never pass for live ones.
+      const stale = await mac.locator(".publisher-mac-body").getAttribute("data-stale");
+      assert.equal(stale, expected.stale ? "true" : null, `This Mac's staleness in the ${state} state`);
       if (expected.copy) assert.match(copy.at(-1), expected.copy);
       if (expected.copySpace) assert.equal(copy[3], expected.copySpace);
       if (typeof expected.send === "string") assert.equal(send.at(-1), expected.send);
@@ -2305,9 +2308,11 @@ try {
     await sending.getByRole("button", { name: "Pause", exact: true }).click();
     await asked("pause");
     await shows("Pausing…", "Start");
+    // Taken by the Mac, the tab says so at its next read, within 3 seconds, without being asked to.
     await page.evaluate(() => window.publisherMac.take());
-    await readAgain();
+    const taken = Date.now();
     await shows("Paused", "Start");
+    assert.ok(Date.now() - taken < 4_500, `"Pausing…" stayed ${Date.now() - taken} ms after the Mac took it`);
     assert.deepEqual(await places(), before, "This Mac moved as a switch paused");
     await sending.getByRole("button", { name: "Start", exact: true }).click();
     await asked("start");

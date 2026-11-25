@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1297,4 +1297,25 @@ test.if(usable)("tells the site how the offload stands as it changes, in reports
   const count = site.reports.length;
   await new Promise((resolve) => setTimeout(resolve, 1500));
   expect(site.reports.length).toBe(count);
+});
+
+test.if(usable)("says the card plugged in or pulled out at once, though an idle Mac's next report is 10 minutes off", async () => {
+  await until(() => site.reports.at(-1)?.report.running === false);
+  expect(site.reports.at(-1).report.camera.mounted).toBe(true);
+  const card = join(root, "card");
+  const away = join(root, "card-pulled");
+  // As a volume is unmounted, its folder in /Volumes goes; it comes back as it's mounted.
+  const pulled = Date.now();
+  renameSync(card, away);
+  try {
+    const gone = await until(() => site.reports.find(({ at, report }) => at > pulled && !report.camera.mounted), 5_000);
+    expect(gone.at - pulled).toBeLessThan(4_000);
+    expect(gone.report.camera).toEqual({ mounted: false, clips: 0, bytes: 0, space: null });
+  } finally {
+    renameSync(away, card);
+  }
+  const plugged = Date.now();
+  const back = await until(() => site.reports.find(({ at, report }) => at > plugged && report.camera.mounted), 5_000);
+  expect(back.at - plugged).toBeLessThan(4_000);
+  expect(back.report.camera.space).toEqual(expect.objectContaining({ total: expect.any(Number) }));
 });
