@@ -1,5 +1,5 @@
 // Offloading in the app: the Offload menu, with a switch each for Camera → Mac and Mac → Cloudflare, what's
-// kept out of it, and how it goes; the status line while it does; and Stop in the bar.
+// kept on this Mac, and how it goes; the status line while it does; and Stop in the bar.
 
 const $ = (id) => document.getElementById(id);
 const LANES = ["copy", "send"];

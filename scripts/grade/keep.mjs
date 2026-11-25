@@ -1,7 +1,7 @@
-// What the owner is keeping out of offload: whole shoot days, and clips by name, among them those brought back from the
-// archive to work on. They stay on the card and on the Mac: never copied, never sent, never deleted. The list is a file,
-// read each time it's asked, so a clip kept a moment before it would have been deleted stays; a file that can't be read
-// keeps everything.
+// What the owner is keeping on this Mac: whole shoot days, and clips by name, among them those brought back from the
+// archive to work on. The offload copies them off the card like any other, but never sends them and never deletes them
+// from the Mac. The list is a file, read each time it's asked, so a clip kept a moment before it would have been
+// deleted from the Mac stays; a file that can't be read keeps everything.
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { stemOf } from "./ledger.mjs";

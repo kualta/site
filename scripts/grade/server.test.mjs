@@ -733,10 +733,10 @@ const ended = () =>
   });
 const daysFiled = () => [...site.manifests.keys()].filter((project) => project !== "_settings").sort();
 
-test.if(usable)("keeps days and clips out of offload: counted apart, and nothing it doesn't understand is kept", async () => {
+test.if(usable)("keeps days and clips on this Mac: counted apart, and nothing it doesn't understand is kept", async () => {
   expect(await json("/api/offload/keep")).toEqual({ days: [], clips: [] });
   const before = await json("/api/offload");
-  expect(before).toMatchObject({ mac: { clips: 3 }, kept: { days: [], clips: [], count: 0 } });
+  expect(before).toMatchObject({ camera: { clips: 1 }, mac: { clips: 3 }, kept: { days: [], clips: [], count: 0 } });
   expect(before.days.map((d) => [d.day, d.clips, d.kept])).toEqual([
     ["2026-02-13", 1, false],
     ["2026-02-07", 1, false],
@@ -748,7 +748,8 @@ test.if(usable)("keeps days and clips out of offload: counted apart, and nothing
   expect((await fetch(url("/api/offload/keep"), { method: "POST", body: "{}" })).status).toBe(403);
   const kept = await post("/api/offload/keep", { days: [day], clips: [name] });
   expect(await kept.json()).toEqual({ days: [day], clips: [name] });
-  expect(await json("/api/offload")).toMatchObject({ camera: { clips: 0 }, mac: { clips: 2 }, kept: { count: 2 } });
+  // The card's kept clip is still to copy; the Mac's isn't to send.
+  expect(await json("/api/offload")).toMatchObject({ camera: { clips: 1 }, mac: { clips: 2 }, kept: { count: 2 } });
   // What isn't given stays.
   expect(await (await post("/api/offload/keep", { days: [] })).json()).toEqual({ days: [], clips: [name] });
   expect(JSON.parse(readFileSync(join(data, "keep.json"), "utf8"))).toMatchObject({ days: [], clips: [name] });

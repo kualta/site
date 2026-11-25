@@ -72,7 +72,7 @@ const BACKUP_EVERY = Number(process.env.GRADE_BACKUP_EVERY || 10 * 60_000);
 const FRAMED_BY = ["https://post.kualta.dev", "http://localhost:4321", "http://127.0.0.1:4321"];
 /** What each clip offloaded to the archive was, by file name: its SHA-256, size and shoot day. */
 const OFFLOADED = join(DATA, "offloaded.json");
-/** What's kept out of offload (keep.mjs), and what's been chosen for it: when the card's copies go. */
+/** What's kept on this Mac (keep.mjs), and what's been chosen for the offload: when the card's copies go. */
 const KEEP = join(DATA, "keep.json");
 const OFFLOAD = join(DATA, "offload.json");
 /** The Footage tab's Start and Pause of each switch that have been done (asks.mjs), by when each was asked. */
@@ -876,7 +876,7 @@ const awake = wakeLock({ log: (line) => console.error(`grade: offload: ${line}`)
 let clearCardAfter = "copied";
 /** When a page last asked how things are going. */
 let polledAt = 0;
-/** What the owner keeps out of it all. */
+/** What the owner keeps on this Mac: never sent, never deleted from it. */
 const keep = keepList(KEEP);
 /** The shoot days' manifests: every run's saves go through the one. */
 const fileInDay = dayManifests();
@@ -919,7 +919,7 @@ const transcripts = transcriber({
   skip: async (clip) => (await keep.keeping())(clip),
   made: () => offloading?.poke(),
 });
-/** The transcripts waiting to be sent: made, and their clips in the archive and not kept out of it since. */
+/** The transcripts waiting to be sent: made, and their clips in the archive and not kept on this Mac since. */
 async function transcriptsToSend() {
   await updating.get(OFFLOADED);
   const keeps = await keep.keeping();
@@ -1029,10 +1029,10 @@ async function offloadSummary() {
   const here = [...(onCard ?? []), ...onMac];
   const counted = new Set(here.filter(keeps).map((clip) => stemOf(clip.name).toLowerCase()));
   // What's left to copy: a card clip this Mac already has whole, or that's filed in Cloudflare, stays on the card only
-  // until it can be cleared.
+  // until it can be cleared. A kept one is copied here whatever Cloudflare has.
   const macHas = new Map(onMac.map((clip) => [clip.name, clip.size]));
   const camera = (onCard ?? []).filter(
-    (clip) => !keeps(clip) && macHas.get(clip.name) !== clip.size && record[clip.name]?.size !== clip.size,
+    (clip) => macHas.get(clip.name) !== clip.size && (keeps(clip) || record[clip.name]?.size !== clip.size),
   );
   /** The clips of a place to send, and how many are only there still to be deleted. */
   const toSend = (clips, sent) => {
@@ -1179,8 +1179,8 @@ async function startOffloading(asked) {
 }
 /**
  * How a switch started from the Footage tab goes, as the owner runs it: on with no page open, and nothing put up to
- * YouTube meanwhile. The card's copies go when last chosen (each once it's on this Mac, by default), and what's kept
- * stays out of it, as ever.
+ * YouTube meanwhile. The card's copies go when last chosen (each once it's on this Mac, by default; a kept one always
+ * then), and what's kept stays on this Mac, as ever.
  */
 const ASKED_RUN = { flags: { unattended: true, youtube: false } };
 /**
@@ -1215,11 +1215,12 @@ async function beginOffload({ lanes, flags, after }) {
   if (!wanted.length) return;
 
   await mkdir(ORIGINAL, { recursive: true });
-  // Before any clip moves: the look goes by name, the probing by where each clip is now.
+  // Before any clip moves: the look goes by name, the probing by where each clip is now. Every card clip moves, kept
+  // ones too; the Mac's kept ones stay as they are.
   const taking = [];
   if (wanted.includes("copy")) taking.push(...((await cardClips()) ?? []));
-  if (wanted.includes("send")) taking.push(...(await macClips()));
-  await withDefaultLook(taking.filter((clip) => !keeps(clip)));
+  if (wanted.includes("send")) taking.push(...(await macClips()).filter((clip) => !keeps(clip)));
+  await withDefaultLook(taking);
   if (wanted.includes("send")) transcripts.retry();
   if (offloading?.state.running) for (const lane of wanted) offloading.start(lane);
   else runOffload(wanted, cloud, flags);
@@ -1294,7 +1295,7 @@ const bringing = bringer({
   room: roomOnMac,
   keepFree: KEEP_FREE,
   claims: stillToWrite,
-  // Kept out of offload, or the next one would find it in the archive and take it off again.
+  // Kept on this Mac, or the next offload would find it in the archive and take it off again.
   placing: (clip) => keep.add(clip.name),
   landed: () => scheduleLedger(2000),
   pausedAll: pause.held,
