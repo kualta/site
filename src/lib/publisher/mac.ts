@@ -54,7 +54,7 @@ export interface MacReport {
   skipped: { lane: MacLaneName; name: string; why: string }[];
   /** Clips waiting for a transcript, those that failed (and the last one's why), and those made but not yet sent. */
   transcripts: { waiting: number; failed: number; toSend: number; error: string | null };
-  /** Shoot days kept out of offload, and how many clips here are kept. */
+  /** Shoot days kept on this Mac (never sent), and how many clips here are kept. */
   kept: { days: string[]; clips: number };
   heard: Record<MacLaneName, Heard | null>;
 }

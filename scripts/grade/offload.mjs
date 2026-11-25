@@ -11,6 +11,10 @@
 // both on, each clip gone from the Mac makes room for the next off the card. Only originals go: graded copies are made
 // again when they're wanted.
 //
+// A kept clip (keep.mjs) is kept on this Mac: Camera → Mac copies it like any other and deletes it from the card once
+// its copy here is checked, even while the card's copies otherwise wait for Cloudflare, as it never goes there. Mac →
+// Cloudflare never sends it and never deletes it, whatever the archive holds.
+//
 // Each shoot day is a manifest of its own in the archive, `_originals-<day>`, holding its clips as `assets/<file>`, saved
 // again after every clip so a clip is safe the moment it's in. The ledger counts an archived file the original's size as
 // the original in Cloudflare; the leading `_` keeps these out of the films.
@@ -307,8 +311,9 @@ export function wakeLock({ command = "caffeinate", pid = process.pid, log = () =
  * `add(clip, sha256, { card })` is done once it's on disk, as `drop(sha256)` is, which forgets a hash. A clip there that
  * the archive still holds is only deleted. `card` is the time the card's file had when the hash was read off it.
  *
- * Nothing is deleted that's kept or in use: `keeping()` says which clips are kept out of all this (`(clip) => boolean`),
- * asked again at each deletion, and one `removable(clip)` says no to (being exported, say) stays where it is.
+ * `keeping()` says which clips are kept on this Mac (`(clip) => boolean`), asked again at each deletion: copied off the
+ * card and deleted from it once their copy here is checked, never sent and never deleted from the Mac. One
+ * `removable(clip)` says no to (being exported, say) stays where it is.
  *
  * `paused()` says why uploads wait, if they do: they wait between parts. `pausedAll()` says why everything waits, if it
  * does (paused from the Footage tab, pause.mjs): uploads between parts and the card between clips, waiting for "owner".
@@ -416,18 +421,21 @@ export function startOffload({
     while (state.samples.length > 2 && now - state.samples[0][0] > 60_000) state.samples.shift();
   };
 
-  /** Whether a clip may go: not one that's kept or in use. */
+  /** Whether a clip may go from the Mac, or from the card on the archive's word: not one that's kept or in use. */
   const mayGo = async (clip) => !(await keeping())(clip) && (await removable(clip));
   /**
    * Deletes a clip, unless it's to stay, was written to since it was listed, or `safe()` says what it was to be deleted on
    * the strength of doesn't hold any more. That's all looked at and the clip deleted in one go, so nothing here can come
-   * in between.
+   * in between. A kept clip is kept on this Mac: never deleted from it, and from the card only once its copy here is
+   * checked, whatever `safe()` says.
    */
   async function remove(clip, where, safe) {
-    if (!(await mayGo(clip))) return;
+    const kept = (await keeping())(clip);
+    if ((kept && where !== "camera") || !(await removable(clip))) return;
     // A camera that's going might take its time to answer: it's asked without waiting on it first.
     if (where === "camera" && !(await unchanged(clip))) return;
-    if (!safe() || !unchangedNow(clip)) return;
+    const sure = kept ? copiedStill(clip) : safe();
+    if (!sure || !unchangedNow(clip)) return;
     unlinkSync(clip.path);
     const sidecar = where === "camera" ? lrfOf(clip.path) : clip.sidecar;
     if (sidecar) await rm(sidecar, { force: true });
@@ -474,8 +482,12 @@ export function startOffload({
 
   // ---- Camera → Mac ------------------------------------------------------------------------------------------------
 
-  /** The card's clips left to copy, as last seen, and whether there are any or it isn't known yet. */
+  /**
+   * The card's clips left to copy, as last seen, and those of them that are kept; and whether any are to go on to the
+   * archive, or it isn't known yet.
+   */
   let cardLeft = [];
+  let keptLeft = new Set();
   let bringing = true;
   /** Clips whose record says they're in the archive, and aren't: copied and sent again. */
   const strange = new Set();
@@ -488,7 +500,9 @@ export function startOffload({
     Object.assign(copy.state, { total: done + cardLeft.length, bytes: doneBytes + sum(cardLeft) });
     const { state: s } = originals.lane;
     if (!s.on) return;
-    const coming = copy.state.on ? [...originals.left, ...cardLeft] : originals.left;
+    const coming = copy.state.on
+      ? [...originals.left, ...cardLeft.filter((clip) => !keptLeft.has(clip))]
+      : originals.left;
     Object.assign(s, { total: s.done + coming.length, bytes: s.doneBytes + sum(coming) });
   }
 
@@ -507,6 +521,7 @@ export function startOffload({
     const mine = readOffCard(clip);
     return Boolean(mine) && originals.landed.get(clip.name) === mine;
   }
+  /** Whether a card clip may go, as `clearCardAfter()` says: `remove()` holds a kept one to its copy here instead. */
   const isCleared = (clip) => landedAs(clip) || (clearCardAfter() === "copied" && copiedStill(clip));
 
   /** Whether the card's file is what's in the archive under `known`'s hash, read off the card if nothing else says so. */
@@ -567,9 +582,9 @@ export function startOffload({
   }
 
   /**
-   * Goes over the card: what's in the archive, or (as it's set) on the Mac, is deleted from it. Says the next clip to copy,
-   * how many wait on the card for the archive to have them, how long until one that failed is tried again, and the error if
-   * the archive couldn't be asked about some.
+   * Goes over the card: what's in the archive, or (as it's set) on the Mac, is deleted from it, and what's kept once
+   * it's on the Mac. Says the next clip to copy, how many wait on the card for the archive to have them, how long until
+   * one that failed is tried again, and the error if the archive couldn't be asked about some.
    */
   async function lookOver(card) {
     const keeps = await keeping();
@@ -584,10 +599,14 @@ export function startOffload({
       if (ms) later = Math.min(later ?? ms, ms);
       return ms > 0;
     };
+    const kept = [];
     for (const clip of card) {
-      if (keeps(clip) || copy.passes(clip)) continue;
+      if (copy.passes(clip)) continue;
       const known = record[clip.name];
-      if (landedAs(clip)) clear.push(clip);
+      // Kept on this Mac: copied, and off the card once it's here, whatever the archive has and the card waits for.
+      if (keeps(clip) && copiedStill(clip)) clear.push(clip);
+      else if (keeps(clip)) kept.push(clip);
+      else if (landedAs(clip)) clear.push(clip);
       else if (known?.size === clip.size && !strange.has(idOf(clip))) recorded.push({ clip, known });
       else if (!copiedStill(clip)) left.push(clip);
       else if (clearCardAfter() === "copied") clear.push(clip);
@@ -601,8 +620,10 @@ export function startOffload({
     }
     const seen = recorded.filter(({ clip }) => !mustWait(clip));
     const { again, unasked } = await clearRecorded(seen);
-    left.push(...again);
+    // The kept come last: they take their room on the Mac for good.
+    left.push(...again, ...kept);
     cardLeft = left;
+    keptLeft = new Set(kept);
     copy.state.onCamera = awaiting;
     totals();
     const next = left.find((clip) => !mustWait(clip));
@@ -611,7 +632,10 @@ export function startOffload({
     return { next, awaiting, later, unasked, unsure };
   }
 
-  /** Copies a clip to the Mac, if there's room, and deletes it from the card if that's all it waits for. */
+  /**
+   * Copies a clip to the Mac, if there's room, and deletes it from the card if that's all it waits for, as a kept one's
+   * always is.
+   */
   async function takeOffCard(clip) {
     const began = copy.mark();
     const path = join(dir, clip.name);
@@ -632,6 +656,7 @@ export function startOffload({
         },
       });
       const here = { ...clip, path, mtime: Math.round((await stat(path)).mtimeMs) };
+      const kept = keptLeft.has(clip);
       offCard.set(clip.name, { id: idOf(clip), mtime: clip.mtime, sha256 });
       copied.set(idOf(clip), here);
       copy.state.done++;
@@ -639,10 +664,12 @@ export function startOffload({
       cardLeft = cardLeft.filter((other) => other !== clip);
       copy.fine();
       totals();
-      void takeSound(here, copy);
+      // Its sound is for its transcript in the archive, where a kept one doesn't go.
+      if (!kept) void takeSound(here, copy);
       onCopied(here);
       notify();
-      if (clearCardAfter() === "copied") await remove(clip, "camera", () => isCleared(clip));
+      // A kept one goes from the card now, even while the card's copies wait to be sent: it never will be.
+      if (kept || clearCardAfter() === "copied") await remove(clip, "camera", () => isCleared(clip));
     } catch (error) {
       if (copy.signal.aborted) return;
       if (!(await statOf(clip.path))) await recoverCamera(began);
@@ -685,7 +712,7 @@ export function startOffload({
         // A card being pulled can look like an empty one: it's not taken for that until it's looked at again.
         const sure = fresh;
         fresh = !next;
-        bringing = cardLeft.length > 0 || unsure || !sure;
+        bringing = cardLeft.some((clip) => !keptLeft.has(clip)) || unsure || !sure;
         if (!bringing) notify();
         if (next) await copy.at(() => takeOffCard(next));
         else if (!sure) continue;

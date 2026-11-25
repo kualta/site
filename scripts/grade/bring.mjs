@@ -206,7 +206,7 @@ async function fetchClip(request, clip, path, { signal, onBytes }) {
  * Brings one clip into `dir`. Says "landed", or "skipped" when that very clip is there already; throws, leaving nothing of
  * it behind, when another file has its name, what comes isn't what its manifest lists, or `signal` cuts it short.
  * `ready` is called before anything is fetched, and can refuse by throwing; `placing(clip)` before it takes its name, so
- * that it's kept out of any offload going on by the time there's a file to take, and can say how to undo that.
+ * that it's kept on this Mac by any offload going on by the time there's a file to take, and can say how to undo that.
  */
 export async function bringClip(
   request,

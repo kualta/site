@@ -282,7 +282,7 @@ try {
   assert.equal(await page.locator(".lane").count(), 2, "only originals are offloaded");
   assert.ok(await page.getByRole("button", { name: "Start Camera → Mac" }).isDisabled(), "nothing to take off no camera");
   // A shoot day is kept, and let go again.
-  const days = page.getByRole("group", { name: "Days kept on the camera and this Mac" });
+  const days = page.getByRole("group", { name: "Days kept on this Mac" });
   await days.getByRole("checkbox", { name: /2026-01-01/ }).check();
   await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "2 clips", null, { timeout: 5_000 });
   assert.equal(await page.locator("#offload-mac").textContent(), "Nothing to send");
@@ -418,7 +418,7 @@ try {
   assert.ok(!existsSync(path.join(exported, gone.replace(".MP4", ".mp4"))), "its graded copy stays in Cloudflare");
   await unmoved("a clip come");
   const keptNow = () => page.evaluate(async () => (await (await fetch("/api/offload/keep")).json()).clips);
-  assert.deepEqual(await keptNow(), [gone], "what's brought back is kept out of offload");
+  assert.deepEqual(await keptNow(), [gone], "what's brought back is kept on this Mac");
   await copy(gone).click();
   const broughtRow = page.locator(`.clip[data-name="${gone}"]`);
   await broughtRow.waitFor({ timeout: 10_000 });
