@@ -144,6 +144,7 @@ const withoutCurrent = ({ current: _current, ...lane }: Record<string, unknown>)
 const macReport = () => ({
   version: 1,
   at: "2026-11-23T12:00:00.000Z",
+  every: 30_000,
   running: true,
   lanes: {
     copy: {
@@ -180,7 +181,7 @@ test("the grade app's offload reaches the tab as checked, with how long ago it c
   expect(await read()).toEqual({ age: null, report: null, lanes: {} });
   const sent = await answer(bucket, "helper/footage/mac", "POST", { ...macReport(), extra: "x".repeat(100) });
   expect(sent.status).toBe(200);
-  expect(await sent.json()).toEqual({ ok: true, paused: null, lanes: {} });
+  expect(await sent.json()).toEqual({ ok: true, paused: null, lanes: {}, watching: false });
   const { age, report } = (await read(Date.now() + 3_000)) as { age: number; report: unknown };
   // Only what the tab reads is kept.
   expect(report).toEqual(macReport());
@@ -193,7 +194,7 @@ test("the grade app's offload reaches the tab as checked, with how long ago it c
 
 test("a report from a grade app that hasn't been restarted since is read without what it doesn't say", async () => {
   const { bucket } = memoryMedia();
-  const { camera, mac, transcripts, heard: _, ...rest } = macReport();
+  const { camera, mac, transcripts, heard: _, every: _every, ...rest } = macReport();
   const older = {
     ...rest,
     startedAt: "2026-11-23T11:00:00.000Z",
@@ -212,6 +213,8 @@ test("a report from a grade app that hasn't been restarted since is read without
   const { report } = (await (await answer(bucket, "footage/mac")).json()) as { report: unknown };
   expect(report).toEqual({
     ...macReport(),
+    // Nor how long it lets go by between reports: the tab goes by what it used to.
+    every: null,
     lanes: {
       copy: { ...macReport().lanes.copy, current: [] },
       send: { ...macReport().lanes.send, current: [] },
@@ -232,6 +235,9 @@ test("an offload report that's malformed or too big is refused, and the last one
     { ...report, version: 2 },
     { ...report, running: "yes" },
     { ...report, at: "yesterday" },
+    { ...report, every: -1 },
+    { ...report, every: 2.5 },
+    { ...report, every: "often" },
     { ...report, lanes: { copy: report.lanes.copy } },
     { ...report, lanes: { ...report.lanes, send: { ...report.lanes.send, state: "flying" } } },
     { ...report, lanes: { ...report.lanes, send: { ...report.lanes.send, left: -1 } } },
@@ -271,7 +277,7 @@ test("each switch's Start or Pause is the tab's to ask, and the grade app hears 
   const now = Date.parse("2026-11-23T10:42:00Z");
   const body = async (path: string, method = "GET", sent?: unknown, at = now) =>
     (await (await answer(bucket, path, method, sent, at)).json()) as Record<string, unknown>;
-  expect(await body("helper/footage/lanes")).toEqual({ paused: null, lanes: {} });
+  expect(await body("helper/footage/lanes")).toEqual({ paused: null, lanes: {}, watching: false });
   expect(await body("footage/lanes", "POST", { lane: "copy", want: "start" })).toEqual({
     lanes: { copy: { want: "start", at: now } },
   });
@@ -279,18 +285,41 @@ test("each switch's Start or Pause is the tab's to ask, and the grade app hears 
   await body("footage/lanes", "POST", { lane: "copy", want: "pause" });
   await body("footage/lanes", "POST", { lane: "send", want: "start" }, now + 5_000);
   const lanes = { copy: { want: "pause", at: now + 1 }, send: { want: "start", at: now + 5_000 } };
-  expect(await body("helper/footage/lanes")).toEqual({ paused: null, lanes });
-  expect(await body("helper/footage/mac", "POST", macReport())).toEqual({ ok: true, paused: null, lanes });
+  expect(await body("helper/footage/lanes")).toEqual({ paused: null, lanes, watching: false });
+  expect(await body("helper/footage/mac", "POST", macReport())).toEqual({
+    ok: true,
+    paused: null,
+    lanes,
+    watching: false,
+  });
   expect((await body("footage/mac")).lanes).toEqual(lanes);
   // With everything paused, it says that too.
   await body("footage/pause", "POST", {});
-  expect(await body("helper/footage/lanes")).toEqual({ paused: { since: now }, lanes });
+  expect(await body("helper/footage/lanes")).toEqual({ paused: { since: now }, lanes, watching: false });
   for (const wrong of [{}, { lane: "exports", want: "start" }, { lane: "copy", want: "stop" }, "not json"])
     expect((await answer(bucket, "footage/lanes", "POST", wrong)).status).toBe(400);
-  expect(await body("helper/footage/lanes")).toEqual({ paused: { since: now }, lanes });
+  expect(await body("helper/footage/lanes")).toEqual({ paused: { since: now }, lanes, watching: false });
   // The laptops can only hear them.
   const asLaptop = footageResponse("helper/footage/lanes", call("helper/footage/lanes", "POST", {}), { media: bucket });
   expect(await asLaptop).toBeNull();
+});
+
+test("the grade app hears whether the tab is open in both its answers, so it reports and asks more often then", async () => {
+  const { bucket } = memoryMedia();
+  const now = Date.parse("2026-11-25T10:00:00Z");
+  const heard = async (at: number) => {
+    const asked = await (await answer(bucket, "helper/footage/lanes", "GET", undefined, at)).json();
+    const told = await (await answer(bucket, "helper/footage/mac", "POST", macReport(), at)).json();
+    return [(asked as { watching: boolean }).watching, (told as { watching: boolean }).watching];
+  };
+  expect(await heard(now)).toEqual([false, false]);
+  await answer(bucket, "footage/watch", "POST", {}, now);
+  expect(await heard(now + 1_000)).toEqual([true, true]);
+  // Closed, it's heard at the next answer; left without a word, once the marker lapses.
+  await answer(bucket, "footage/watch", "DELETE", undefined, now);
+  expect(await heard(now + 2_000)).toEqual([false, false]);
+  await answer(bucket, "footage/watch", "POST", {}, now);
+  expect(await heard(now + WATCH_TTL + 1)).toEqual([false, false]);
 });
 
 test("pausing everything is the tab's to set, and every answer the laptops and the tab get says so", async () => {
@@ -306,7 +335,12 @@ test("pausing everything is the tab's to set, and every answer the laptops and t
   // The helper asking and sending its status, the grade app sending its report, and the tab reading and saying it's open.
   expect(await body("helper/footage")).toEqual({ watching: false, paused });
   expect(await body("helper/footage", "POST", { state: "held" })).toEqual({ watching: false, paused });
-  expect(await body("helper/footage/mac", "POST", macReport())).toEqual({ ok: true, paused, lanes: {} });
+  expect(await body("helper/footage/mac", "POST", macReport())).toEqual({
+    ok: true,
+    paused,
+    lanes: {},
+    watching: false,
+  });
   expect((await body("footage")).paused).toEqual(paused);
   expect((await body("footage/watch", "POST", {})).paused).toEqual(paused);
   expect(await body("footage/pause", "DELETE")).toEqual({ paused: null });

@@ -399,6 +399,23 @@ test("switched on with the camera unplugged, Camera → Mac waits for it", async
   expect(run.state).toMatchObject({ finished: "done", send: { done: 1 } });
 });
 
+test("told the card's plugged back in, Camera → Mac tries it at once rather than when its wait is up", async () => {
+  const at = await given([[one, "a clip", day]]);
+  at.unplug();
+  const run = begin(at, { lanes: ["copy"], request: site(), retry: { first: 60_000, most: 60_000, tries: 5 } });
+  await until(() => run.state.copy.waiting?.for === "camera");
+  // Told of anything else, or while it waits for something else, it keeps waiting.
+  run.poke();
+  at.plug();
+  await sleep(100);
+  expect(run.state.copy).toMatchObject({ done: 0, waiting: { for: "camera" } });
+  run.plugged();
+  await until(() => run.state.copy.done === 1, 2_000);
+  run.stop();
+  await run.done;
+  expect(files(at.original)).toEqual([one]);
+});
+
 test("an empty card is looked at again before it's taken for done: it may be going", async () => {
   const at = await given([[one, "a clip", day]]);
   let looks = 0;

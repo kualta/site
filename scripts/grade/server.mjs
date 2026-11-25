@@ -6,7 +6,7 @@
 // metadata, thumbnails and previews it can remake in Caches. Clips are known by file name, so a clip graded off the
 // card and the same clip copied into Original share one grade and one export. Listens on 127.0.0.1 only.
 import { execFile } from "node:child_process";
-import { createReadStream } from "node:fs";
+import { createReadStream, statSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, stat, statfs, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
@@ -19,8 +19,9 @@ import { filmAssets } from "./film.mjs";
 import { dayManifests, LANES, startOffload, wakeLock } from "./offload.mjs";
 import { keepList } from "./keep.mjs";
 import { RETRY } from "./lane.mjs";
+import { mountWatch } from "./mount.mjs";
 import { pauseFlag } from "./pause.mjs";
-import { macReporter, pairedSite, REPORT_EVERY } from "./report.mjs";
+import { macReporter, pairedSite, REPORT_EVERY, runShape } from "./report.mjs";
 import {
   archivedFootage,
   comparable,
@@ -901,6 +902,7 @@ const pause = pauseFlag({
     return answer;
   },
   every: Number(process.env.GRADE_PAUSE_EVERY || 30_000),
+  watchedEvery: Number(process.env.GRADE_WATCHED_EVERY || 4_000),
   changed: (held) => {
     offloading?.poke();
     if (held) return;
@@ -1075,7 +1077,12 @@ async function offloadSummary() {
   };
 }
 
-/** Tells the composer's Footage tab how the offload stands, when it changes (report.mjs); the answer says if it's paused. */
+/** When the list of what's kept last changed, by hand or not: a change is said at once. */
+const keptAt = () => statSync(KEEP, { throwIfNoEntry: false })?.mtimeMs ?? 0;
+/**
+ * Tells the composer's Footage tab how the offload stands, as it changes (report.mjs); the answer says if it's paused,
+ * each switch's Start or Pause, and whether the tab is open. Between reports, the same looks ask for those (pause.mjs).
+ */
 const REPORT_PACE = Number(process.env.GRADE_REPORT_EVERY || REPORT_EVERY.running);
 const reporting = macReporter({
   // With the space on the card while it's plugged in, and on the Mac's volume that holds Movies.
@@ -1085,16 +1092,43 @@ const reporting = macReporter({
     return { ...summary, camera: { ...summary.camera, space: card }, mac: { ...summary.mac, space: mac } };
   },
   running: () => Boolean(offloading?.state.running),
+  // What the tab shows but the numbers that only move, from what's in memory: the run, the transcripts, the kept list.
+  shape: () => {
+    const { waiting, current, failed, error } = transcripts.summary();
+    return JSON.stringify([runShape(offloading?.state), waiting + (current ? 1 : 0), failed, error, keptAt()]);
+  },
+  watched: () => pause.watched,
+  between: () => pause.check(),
   heard: () => asks.heard(),
   post: async (report) => {
     const answer = await site("footage/mac", report);
     if (answer) {
-      pause.learn(answer.paused ?? null);
+      pause.learn(answer.paused ?? null, answer.watching);
       asks.learn(answer.lanes);
     }
     return answer;
   },
-  every: { ...REPORT_EVERY, running: REPORT_PACE, alive: 4 * REPORT_PACE },
+  // Quicker all round when the pace is (tests).
+  every: {
+    running: REPORT_PACE,
+    watched: Math.min(REPORT_EVERY.watched, REPORT_PACE),
+    least: Math.min(REPORT_EVERY.least, REPORT_PACE),
+  },
+});
+/**
+ * The card plugged in or pulled out (mount.mjs): listed afresh, said at once and again once it's settled, and Camera →
+ * Mac, if it's waiting for it, tries it now.
+ */
+function cardChanged() {
+  cardCache = null;
+  reporting.soon();
+}
+const cardMount = mountWatch(CAMERA, {
+  changed: (mounted) => {
+    if (mounted) offloading?.plugged();
+    cardChanged();
+    setTimeout(cardChanged, 2_000);
+  },
 });
 
 /**
@@ -1824,7 +1858,7 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`grade: ${address}  (movies ${MOVIES}, camera ${CAMERA}, data ${DATA}, LUTs ${LUTS})`);
   if (process.argv.includes("--open")) execFile("open", [address], () => {});
   scheduleLedger(Math.min(2000, LEDGER_EVERY));
-  pause.start();
+  cardMount.start();
   reporting.start();
   // A Start or Pause asked while the app wasn't running is done now.
   void asks.start();

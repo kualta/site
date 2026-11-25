@@ -207,6 +207,11 @@ export function makeLane(shape = {}, { retry = RETRY, log = () => {}, sleeps = A
       failures = 0;
     },
 
+    /** Ends a wait for `what` (`camera`, say, once it's plugged in) now: what it waits for is tried at once. */
+    wake(what) {
+      if (state.waiting?.for === what) for (const end of [...resting]) end();
+    },
+
     /**
      * Waits until `works()` goes through, longer between tries each time: one wait for the whole lane, whoever asks. Says
      * whether there was an outage, `works` having failed meanwhile, or it was only whatever was being tried. `from` is

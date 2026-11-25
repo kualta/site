@@ -9,11 +9,11 @@ import {
   type LaneAsks,
   type LaneWant,
   MAC_LANES,
-  MAC_STALE,
   type MacLane,
   type MacLaneName,
   type MacLaneState,
   type MacReport,
+  macStaleAfter,
   type Space,
 } from "@/lib/publisher/mac";
 
@@ -62,8 +62,9 @@ const clips = (count: number) => `${count} ${count === 1 ? "clip" : "clips"}`;
 const clipNumber = (name: string) => /^DJI_\d{14}_(\d+)/.exec(name)?.[1] ?? name;
 /** The rows kept for clips in flight, as many as each switch has at once, so one starting or ending moves nothing. */
 const IN_FLIGHT_ROWS: Record<MacLaneName, string[]> = { copy: ["first"], send: ["first", "second"] };
-/** How long a time is, roughly: 25 min, 3 h, 2 days. */
+/** How long a time is, roughly: 50 s, 25 min, 3 h, 2 days. */
 function howLong(ms: number) {
+  if (ms < 60_000) return `${Math.floor(ms / 1000)} s`;
   const minutes = Math.floor(ms / 60_000);
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
@@ -224,12 +225,20 @@ function Lane({
   );
 }
 
-/** How the Mac's word stands, beside the heading: how old it is, or that it isn't there. */
-function statusFor(reply: MacReply | null, failed: boolean, heardAgo: number | null): { text: string; bad?: boolean } {
+/**
+ * How the Mac's word stands, beside the heading: how old it is, or that it isn't there. Older than the Mac's own pace
+ * allows (macStaleAfter), it's stale: it says when the Mac was last heard from, and the numbers under it are greyed.
+ */
+function statusFor(
+  reply: MacReply | null,
+  failed: boolean,
+  heardAt: number | null,
+  heardAgo: number | null,
+): { text: string; bad?: boolean } {
   if (!reply) return { text: failed ? "Couldn't load. Retrying…" : "Reading…" };
   if (!reply.report) return { text: "No report from the Mac yet" };
-  if (reply.report.running && heardAgo !== null && heardAgo > MAC_STALE)
-    return { text: `Not heard from for ${howLong(heardAgo)}`, bad: true };
+  if (heardAt !== null && heardAgo !== null && heardAgo > macStaleAfter(reply.report))
+    return { text: `Not heard from for ${howLong(heardAgo)} · since ${formatWhen(heardAt)}`, bad: true };
   return { text: heardAgo !== null ? `Updated ${ago(heardAgo)}` : "" };
 }
 
@@ -255,7 +264,7 @@ export function MacSection({
 }) {
   const report = reply?.report ?? null;
   const heardAgo = report && heardAt !== null ? Math.max(0, now - heardAt) : null;
-  const status = statusFor(reply, failed, heardAgo);
+  const status = statusFor(reply, failed, heardAt, heardAgo);
   const kept = report?.kept;
   let keptDays = "—";
   if (kept) keptDays = kept.days.length ? `${kept.days.length} ${kept.days.length === 1 ? "day" : "days"}` : "None";
@@ -309,10 +318,14 @@ export function MacSection({
   );
 }
 
+/** How often the section reads the Mac's report again while it's shown: an R2 read, and nothing at all while hidden. */
+const READ_EVERY = 3_000;
+
 /**
- * The Footage tab's This Mac: how the grade app's offload stands, as the Mac last said, read again every 15 seconds
- * while the tab is shown, and every 5 while a Start or Pause is on its way. The Mac says so when it changes, so how
- * long ago that was tells a Mac that's asleep or off. Each switch's Start and Pause go to the site, which the Mac hears.
+ * The Footage tab's This Mac: how the grade app's offload stands, as the Mac last said, read again every 3 seconds
+ * while the tab is shown. The Mac says so as soon as what's shown changes, and at a pace it states, so how long ago that
+ * was tells a Mac that's asleep or off. Each switch's Start and Pause go to the site, which the Mac hears within seconds
+ * while this tab is open.
  */
 export default function PublisherMac({ request, shown }: Props) {
   const box = useRef<HTMLElement>(null);
@@ -322,36 +335,41 @@ export default function PublisherMac({ request, shown }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [trouble, setTrouble] = useState<Partial<Record<MacLaneName, string>>>({});
-  // Whether a Start or Pause is still on its way to the Mac: read more often meanwhile, for the 2 minutes it takes a Mac
-  // that's awake to take it.
-  const waiting = useRef(false);
-  waiting.current = MAC_LANES.some((name) => {
-    const ask = reply?.lanes[name];
-    const { asked } = laneControl(reply?.report?.lanes[name], ask, reply?.report?.heard?.[name]);
-    return asked !== null && ask !== undefined && Date.now() - ask.at < 120_000;
-  });
   useEffect(() => {
     let active = true;
-    let readAt = 0;
+    let reading = false;
+    let again = false;
+    // One read at a time; shown again meanwhile, it reads once more after.
     const read = async () => {
       if (document.hidden) return;
-      readAt = Date.now();
-      try {
-        const next = (await request("footage/mac")) as MacReply;
-        if (!active) return;
-        const at = Date.now();
-        setReply({ ...next, lanes: next.lanes ?? {} });
-        setHeardAt(next.age === null ? null : at - next.age);
-        setNow(at);
-        setFailed(false);
-      } catch {
-        if (active) setFailed(true);
+      if (reading) {
+        again = true;
+        return;
       }
+      reading = true;
+      do {
+        again = false;
+        try {
+          const next = (await request("footage/mac")) as MacReply;
+          if (!active) break;
+          const at = Date.now();
+          setReply({ ...next, lanes: next.lanes ?? {} });
+          setHeardAt(next.age === null ? null : at - next.age);
+          setNow(at);
+          setFailed(false);
+        } catch {
+          // Unread, the report only gets older: it's said to be stale once it's older than the Mac's pace.
+          if (!active) break;
+          setFailed(true);
+          setNow(Date.now());
+        }
+      } while (again && active);
+      reading = false;
     };
     void read();
     const timer = window.setInterval(() => {
-      if (waiting.current || Date.now() - readAt >= 15_000) void read();
-    }, 5_000);
+      if (!reading) void read();
+    }, READ_EVERY);
     document.addEventListener("visibilitychange", read);
     return () => {
       active = false;

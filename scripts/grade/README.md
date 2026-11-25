@@ -160,15 +160,22 @@ transcripts waiting, failed and to send; the days kept), the space on the card w
 size, by `statfs` of `GRADE_CAMERA`, in tenths of a GB) and on the Mac's volume that holds `~/Movies` (in whole GB), and
 which of the tab's Start and Pause it has taken (below), sent to `helper/footage/mac` on the helper's pairing. Nothing in
 it counts from when a run started: the app runs on, so it says how things stand. The site keeps it as one small object.
-It goes only when it changed: at most every 30 seconds while a run goes (`GRADE_REPORT_EVERY`), every 10 minutes
-otherwise, and while a run goes and nothing changes, again every 2 minutes, so the tab can tell a Mac that's asleep from
-one that's waiting; a Start or Pause just taken goes at the next look (5 seconds). Camera → Mac's speed is measured
-between two looks. An idle Mac whose numbers stay put sends nothing.
+It goes as soon as what the tab shows changes: the card plugged in or pulled out (`mount.mjs` watches the folder volumes
+appear in, `/Volumes`, and looks every 3 seconds besides; Camera → Mac, if it's waiting for the card, tries it at once),
+a switch starting, stopping, finishing or waiting, a clip starting or done, a transcript made, the kept list, a Start or
+Pause taken; at most one every 2 seconds. Numbers that only move (bytes, speed, time left, space) go every 4 seconds
+while a run goes and the Footage tab is open (which the site's answers say), and otherwise every 30 seconds while a run
+goes (`GRADE_REPORT_EVERY`) and every 10 minutes while none does. At those paces it's said again even unchanged, and each
+report says its pace (`every`), so the tab greys a report older than half as long again in a run (45 seconds) or twice
+it otherwise (20 minutes), with when it last heard from the Mac. One that doesn't get there is tried again in 5 seconds,
+then twice as long each time up to a minute: the log says why once, and when it gets through again. Camera → Mac's speed
+is measured over the last 30 seconds' looks.
 
 **Start and Pause.** Each switch in This Mac has its own **Start** and **Pause**, from any device (`asks.mjs`). The site
 keeps the last ask of each switch with when it was asked (`footage/lanes.json` in the media bucket, never D1); this app
 hears them with Pause all (below) and in the answers to its reports, and does each once, by when it was asked: so within
-30 seconds, and the tab says "Starting…" or "Pausing…" until the report says it's been taken (and why, if it couldn't
+4 seconds while the Footage tab is open (30 otherwise), and the tab says "Starting…" or "Pausing…" until the report,
+sent as soon as it's taken and read by the tab every 3 seconds, says it's been taken (and why, if it couldn't
 be). What's been done is kept in `asked.json` beside `grades.json`, so a restart does none again, and one asked while
 the app wasn't running is done when it starts. The last ask wins, from wherever: the Offload menu's switches work as
 before.
@@ -183,7 +190,10 @@ before.
 
 **Pause all.** The Footage tab's **Pause all** holds every job here, and **Resume all** lets them go on (`pause.mjs`). The
 site keeps the flag; this app hears it in the answer to its report, and asks `helper/footage/lanes` for it (with each
-switch's Start or Pause) at start (before Whisper picks up where it was) and every 30 seconds (`GRADE_PAUSE_EVERY`).
+switch's Start or Pause, and whether the tab is open) at start (before Whisper picks up where it was) and every 30
+seconds (`GRADE_PAUSE_EVERY`), every 4 while the Footage tab is open (`GRADE_WATCHED_EVERY`): on the reporter's looks,
+and only when no report's answer has said it in that time. Each request costs the site a D1 row read (the pairing's):
+at most about 21,600 a day with the tab open all day, about 3,000 otherwise.
 `pause.held()` is the one check (passed on as `pausedAll`), and whatever starts work in the background should honour it
 too:
 
