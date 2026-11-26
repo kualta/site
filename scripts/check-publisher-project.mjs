@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ffmpeg from "ffmpeg-static";
-import { FILM, FILM_OUTPUTS } from "./browser-fixtures/archive.mjs";
+import { FILM, FILM_OUTPUTS, shownDay } from "./browser-fixtures/archive.mjs";
 
 const svg = (width, height) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="#8a8f99"/></svg>`;
@@ -52,7 +52,10 @@ export async function checkProject(browser, { composer, dir, shots }) {
     await page.waitForURL(new RegExp(`/footage\\?project=${FILM}$`));
     await film.waitFor();
     assert.equal(await page.getByRole("dialog").count(), 1);
-    await film.locator("h2 small").filter({ hasText: "Archived 20 Nov 2026" }).waitFor();
+    await film
+      .locator("h2 small")
+      .filter({ hasText: `Archived ${shownDay("2026-11-20", "20 Nov")}` })
+      .waitFor();
 
     // What it made, from its manifest: the render, then the Chinese render, each with its size and, once read, its
     // length, and a download named as the file was.
@@ -102,8 +105,8 @@ export async function checkProject(browser, { composer, dir, shots }) {
     // The clips it's cut from.
     const clips = film.getByRole("region", { name: /^Clips/ });
     assert.deepEqual(await clips.getByRole("button").allTextContents(), [
-      "00868 Nov, 12:22 · 0:30",
-      "025811 Nov, 16:12 · 0:30",
+      `0086${shownDay("2026-11-08", "8 Nov")}, 12:22 · 0:30`,
+      `0258${shownDay("2026-11-11", "11 Nov")}, 16:12 · 0:30`,
     ]);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     if (shots) await page.screenshot({ path: path.join(shots, `footage-project-${name}.png`) });

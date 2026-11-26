@@ -112,7 +112,9 @@ kbd {
 .bar-field { display: flex; align-items: center; gap: 8px; }
 /* A long status line is cut short rather than squeezing what's beside it. */
 .bar > :not(.status) { flex: none; }
-.bar-field .select select { min-width: 170px; }
+/* As wide whatever its days say ("24 Nov 2025 · 30 clips · 12 graded"), so a day coming or going, or a count changing,
+   moves nothing in the bar. */
+.bar-field .select select { width: 250px; }
 /* A button and the menu it opens, at the right of the bar: Offload, and Settings (a gear). */
 .menu-at { position: relative; }
 #settings-more { width: var(--h); padding: 0; color: var(--ink-2); }
@@ -251,6 +253,9 @@ kbd {
 /* ---- grade panel ------------------------------------------------------------------------------------------ */
 /* Its sections are set apart by space, not lines. */
 .panel-head { display: grid; gap: 5px; padding: 16px 16px 8px; }
+/* What's selected, and Open in Finder at the end of its line. */
+.panel-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panel-row .link { margin-right: -4px; }
 .panel-head h2 { margin: 0; font-family: var(--mono); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .meta { display: flex; flex-wrap: wrap; gap: 4px; }
 .meta span { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--ink-2); font-variant-numeric: tabular-nums; }

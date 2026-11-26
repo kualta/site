@@ -37,7 +37,9 @@ import {
   unplayable,
   withMac,
 } from "@/lib/publisher/archive-view";
+import { dayLabel } from "@/lib/publisher/dates";
 import { type LedgerClip, thumbUrl } from "@/lib/publisher/ledger";
+import PublisherFinder from "./PublisherFinder";
 import "@/styles/publisher-archive.css";
 
 interface Props {
@@ -457,17 +459,12 @@ export default function PublisherArchivePlayer({ stem, day, record, request, onC
         <h2 id="publisher-archive-player-title">
           Clip {clipNumber(file)}
           <small>
-            {shotOn
-              ? new Date(`${shotOn}T12:00:00`).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })
-              : "Date unknown"}
+            {shotOn ? dayLabel(shotOn) : "Date unknown"}
             {recorded ? `, ${recorded}` : ""}
             {size ? ` · ${fileSize(size)}` : ""} · {profile ? PROFILES[profile] : "Profile unknown"}
           </small>
         </h2>
+        {here && <PublisherFinder stem={stem} labelled />}
         <button type="button" className="publisher-archive-bring" onClick={() => onGrade(file)}>
           {here ? "Open in Grade" : "Bring to Mac"}
         </button>

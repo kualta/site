@@ -4,6 +4,7 @@
  * over, the transcripts and what's kept; and which of the tab's Start and Pause it has taken. It's one small object in
  * the media bucket, checked here field by field and stored as checked, so the tab reads only these fields.
  */
+import { momentLabel } from "./dates";
 
 /** The switches the tab shows: Camera → Mac and Mac → Cloud. */
 export const MAC_LANES = ["copy", "send"] as const;
@@ -230,11 +231,5 @@ export interface Paused {
 /** That, in a line. */
 export const pausedText = ({ since }: Paused) => `Paused by you · since ${formatWhen(since)}`;
 
-/** A time by the clock, with its day when it isn't today. */
-export function formatWhen(ms: number) {
-  const date = new Date(ms);
-  const sameDay = date.toDateString() === new Date().toDateString();
-  return sameDay
-    ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
+/** A time by the clock, with its day when it isn't today: "14:05", "21 Nov, 14:05". */
+export const formatWhen = (ms: number) => momentLabel(ms, { today: true });

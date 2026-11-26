@@ -888,6 +888,28 @@ export const scenarios = [
       await sleep(1500);
     },
   },
+  // Open in Finder away from the Mac, from a row and from a clip's player: it says so beside the button for a moment.
+  {
+    tab: "footage",
+    name: "can't reach the Mac to open a clip in Finder",
+    grade: false,
+    run: async (page, { opens, still, step }) => {
+      const finder = (within) => within.getByRole("button", { name: "Open in Finder" });
+      await step("asks from a row");
+      await finder(page.getByRole("row").filter({ hasText: "0399" })).click();
+      await sleep(600);
+      await still("says it can't from the row, then stops saying it");
+      await sleep(1500);
+      await opens("opens the clip");
+      await page.getByRole("button", { name: "Play clip 0399" }).click();
+      await sleep(1500);
+      await step("asks from its player");
+      await finder(page.getByRole("dialog")).click();
+      await sleep(600);
+      await still("says it can't from the player, then stops saying it");
+      await sleep(1500);
+    },
+  },
   // The table's Project column as the films its clips are in change: a clip joins a second film, one with a long name,
   // and leaves them.
   {

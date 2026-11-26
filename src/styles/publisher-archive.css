@@ -6,6 +6,9 @@
 .publisher .publisher-archive-player-head h2 { flex:1; min-width:0; margin:0; font-size:18px; font-weight:400; line-height:24px; }
 .publisher .publisher-archive-player-head h2 small { display:block; overflow:hidden; font-size:13px; line-height:18px; text-overflow:ellipsis; white-space:nowrap; }
 .publisher .publisher-archive-player-head button[aria-label="Close"] { padding:8px; border-color:transparent; background:transparent; }
+/* Open in Finder, in words like Open in Grade beside it; on a phone, its icon. Why it couldn't shows under it. */
+.publisher-archive-player-head .publisher-finder svg { display:none; }
+.publisher-archive-player-head .publisher-finder-note { top:calc(100% + 6px); right:0; }
 .publisher-archive-player-body { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:24px; }
 
 .publisher-archive-stage { position:relative; aspect-ratio:16 / 9; overflow:hidden; border-radius:12px; background:#000; }
@@ -86,6 +89,9 @@
   .publisher-archive-player-body { grid-template-columns:minmax(0,1fr); gap:16px; }
   .publisher-archive-transcript { height:34vh; min-height:200px; }
   .publisher .publisher-archive-player-head .publisher-archive-bring { padding:6px 10px; font-size:13px; }
+  .publisher .publisher-archive-player-head .publisher-finder > button { width:calc(1.4em + 14px); height:calc(1.4em + 14px); padding:0; justify-content:center; font-size:13px; }
+  .publisher-archive-player-head .publisher-finder svg { display:block; }
+  .publisher-archive-player-head .publisher-finder > button > span { display:none; }
   /* A film's outputs side by side still, the next peeking in from the edge, to swipe to. */
   .publisher-project-body { --screen:min(56vh, 440px); grid-template-columns:minmax(0,1fr); gap:20px; }
   .publisher-project-outputs { overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; }

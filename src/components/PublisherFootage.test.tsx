@@ -25,13 +25,13 @@ test("an upload cut off says the connection dropped, which clip, when, and when 
     "socket hang up",
   ])
     expect(failed(message)).toMatch(
-      /^Upload of 2026-11-21 10:15:00 · clip 0402 cut off at .*12:12.*: the connection dropped; trying again at .*12:42/,
+      /^Upload of 21 Nov(?: 2026)?, 10:15:00 · clip 0402 cut off at .*12:12.*: the connection dropped; trying again at .*12:42/,
     );
 });
 
 test("any other failure is said as it is, and a clip the status doesn't list goes by its name", () => {
   expect(failed("YouTube refused part of the upload (503)")).toMatch(
-    /^Upload of 2026-11-21 10:15:00 · clip 0402 failed at .*12:12.*: YouTube refused part of the upload \(503\); trying again at .*12:42/,
+    /^Upload of 21 Nov(?: 2026)?, 10:15:00 · clip 0402 failed at .*12:12.*: YouTube refused part of the upload \(503\); trying again at .*12:42/,
   );
   // Its own full stop gives way to the next clause.
   expect(failed("YouTube says the channel reached its daily upload limit.", "DJI_0001.mp4", "")).toMatch(

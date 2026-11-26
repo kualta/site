@@ -460,8 +460,17 @@
 .publisher-ledger-thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .publisher .publisher-ledger-thumb .length { position:absolute; right:5px; bottom:5px; padding:0 5px; border-radius:6px; background:rgb(0 0 0 / 55%); color:#fff; font-size:11px; line-height:16px; }
 .publisher-ledger-table[data-thumbs="small"] .publisher-ledger-thumb .length { display:none; }
-.publisher .publisher-ledger-table td.open button { padding:2px 10px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; font-size:12px; }
+/* Open in Finder (PublisherFinder): why it couldn't shows beside it for a moment, over what's there, so nothing moves. */
+.publisher-finder { position:relative; display:inline-flex; }
+.publisher .publisher-finder-note { position:absolute; z-index:4; padding:3px 8px; border-radius:8px; background:var(--publisher-ink); color:var(--publisher-on-ink); font-size:12px; line-height:18px; white-space:nowrap; pointer-events:none; }
+/* Grade, and Open in Finder beside it as a round icon of the same height. Close to the YouTube column, whose marks are
+   centred, so both fit. */
+.publisher-ledger-table td.open { padding-left:2px; }
+.publisher-ledger-table td.open > span { display:flex; align-items:center; gap:3px; }
+.publisher .publisher-ledger-table td.open button { padding:2px 9px; border:1px solid var(--publisher-line); border-radius:999px; background:transparent; font-size:12px; }
+.publisher .publisher-ledger-table td.open .publisher-finder > button { width:calc(1.4em + 6px); height:calc(1.4em + 6px); padding:0; justify-content:center; }
 .publisher .publisher-ledger-table td.open button:disabled { opacity:.4; }
+.publisher-ledger-table .publisher-finder-note { top:50%; right:calc(100% + 6px); transform:translateY(-50%); }
 
 /* --- grade: the grade app on the Mac, framed, filling the window below the tabs edge to edge. The header and tabs
    stay where every tab has them; the page under the app doesn't scroll. --- */

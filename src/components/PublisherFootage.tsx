@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { clipTitle } from "@/lib/publisher/dates";
 import {
   formatDuration as duration,
   formatRate as rate,
@@ -73,6 +74,9 @@ const size = (bytes: number) =>
   bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${Math.max(0, Math.round(bytes / 1e6))} MB`;
 const clipsOf = (count: number, bytes: number) => `${count} ${count === 1 ? "clip" : "clips"} · ${size(bytes)}`;
 
+/** A clip as the tab says it: a camera clip by when it was shot ("21 Nov, 10:15:00 · clip 0402"), else its title. */
+const titleOf = (clip: { name: string; title: string }) => clipTitle(clip.name) ?? clip.title;
+
 /** What the network says when a connection is cut: undici's "terminated", a reset, a timeout, a socket hung up. */
 const DROPPED = /\b(terminated|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up)\b/i;
 
@@ -87,7 +91,8 @@ export function failedText({
 }: Pick<FootageStatus, "lastError" | "pausedUntil" | "clips">) {
   const again = `trying again at ${when(pausedUntil ?? Date.now())}`;
   if (!lastError) return `Paused: ${again}`;
-  const clip = clips.find((one) => one.name === lastError.clip)?.title ?? lastError.clip;
+  const listed = clips.find((one) => one.name === lastError.clip);
+  const clip = listed ? titleOf(listed) : lastError.clip;
   const at = Date.parse(lastError.at);
   const time = Number.isFinite(at) ? ` at ${when(at)}` : "";
   if (DROPPED.test(lastError.message)) return `Upload of ${clip} cut off${time}: the connection dropped; ${again}`;
@@ -283,14 +288,14 @@ export default function PublisherFootage({
               )}
             </p>
           )}
-          {!notice && current && <h2>{current.title}</h2>}
+          {!notice && current && <h2>{titleOf(current)}</h2>}
           <span>{current ? `${share}%` : ""}</span>
         </div>
         {current ? (
           <div
             className="publisher-archive-bar"
             role="progressbar"
-            aria-label={`Uploading ${current.title}`}
+            aria-label={`Uploading ${titleOf(current)}`}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={share}

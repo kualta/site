@@ -10,6 +10,7 @@ import {
   type PiecePost,
   type Stage,
 } from "@/lib/publisher/content";
+import { dayLabel } from "@/lib/publisher/dates";
 import { dayOf, type FootageLink, footageLine, type Ledger, linkedClips, pieceFootage } from "@/lib/publisher/ledger";
 import { combined, metricValue, type Metric } from "@/lib/publisher/metrics";
 import { platformNames } from "@/lib/publisher/presets";
@@ -36,7 +37,7 @@ function since(at: number, now = Date.now()) {
   if (days <= 0) return "Today";
   if (days === 1) return "Yesterday";
   if (days < 14) return `${days} days ago`;
-  return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return dayLabel(at, { now });
 }
 const newestFirst = (items: Content[]) => [...items].sort((a, b) => b.stage_at - a.stage_at);
 const count = new Intl.NumberFormat();
@@ -59,8 +60,7 @@ function footageOf(link: FootageLink | undefined, ledger: Ledger | null): [strin
   if (clips === null) return link.project ? [link.project, "not seen yet"] : null;
   return [link.project ?? dayName(link.day ?? ""), footageLine(clips)];
 }
-const dayName = (day: string) =>
-  new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+const dayName = (day: string) => dayLabel(day, { weekday: true });
 /** The value of the editor's Footage choice for a link, and back. */
 const choiceOf = (link: FootageLink | undefined) => {
   if (link?.project) return `project:${link.project}`;

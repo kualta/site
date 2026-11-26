@@ -7,6 +7,12 @@ import { writeCube } from "../grade/color.mjs";
  * moves each channel its own way.
  */
 export const hash = (n) => n.toString(16).padStart(64, "0");
+/**
+ * A day as the composer shows it (src/lib/publisher/dates.ts): `text` ("8 Nov", "Sat 21 Nov"), and the year of `iso`
+ * after it when that isn't this one, so a check holds next year too.
+ */
+export const shownDay = (iso, text) =>
+  iso.startsWith(String(new Date().getFullYear())) ? text : `${text} ${iso.slice(0, 4)}`;
 export const LOOKS = {
   "opendrt-colorful": (r, g, b) => [1 - r, 1 - g, 1 - b],
   "fujifilm-velvia": (r, g, b) => [Math.sqrt(r), g * g, 1 - b * 0.5],
@@ -96,17 +102,21 @@ const macClips = {
 /**
  * What the grade app on the Mac answers the composer's player (scripts/grade/server.mjs), to a Playwright route: what a
  * clip it has is, its original (`original`, a { mimeType, buffer } to play) and its transcript, allowed to the page
- * asking. As the app does, it refuses a request that names no origin, and says it hasn't any other clip.
+ * asking; and Open in Finder, a POST that shows nothing here. As the app does, it refuses a request that names no
+ * origin, and says it hasn't any other clip.
  */
 export async function macAnswer(route, original) {
   const request = route.request();
   const origin = await request.headerValue("origin");
   if (!origin) return route.fulfill({ status: 403, contentType: "application/json", body: '{"error":"no origin"}' });
   const headers = { "Access-Control-Allow-Origin": origin, Vary: "Origin" };
-  const asked = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt))?$/.exec(new URL(request.url()).pathname);
+  const asked = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt|reveal))?$/.exec(new URL(request.url()).pathname);
   const clip = asked && macClips[decodeURIComponent(asked[1])];
   if (!clip)
     return route.fulfill({ status: 404, headers, contentType: "application/json", body: '{"error":"not here"}' });
+  if ((asked[2] === "reveal") !== (request.method() === "POST"))
+    return route.fulfill({ status: 405, headers, contentType: "application/json", body: '{"error":"no"}' });
+  if (asked[2] === "reveal") return route.fulfill({ status: 204, headers });
   if (asked[2] === "original") return route.fulfill({ headers, contentType: original.mimeType, body: original.buffer });
   if (asked[2]) return route.fulfill({ headers, contentType: "text/vtt", body: VTT });
   return route.fulfill({ headers, contentType: "application/json", body: JSON.stringify(clip) });

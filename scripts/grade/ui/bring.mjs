@@ -1,6 +1,8 @@
 // Bring to Mac: the picker's Cloudflare days, the ones with clips the archive has and this Mac doesn't. An open day lists
 // those clips, originals all, with a Bring button for each and one for all of them; a clip brought back is in its day
 // under "On this Mac" again.
+import { dayLabel } from "./dates.mjs";
+
 const $ = (id) => document.getElementById(id);
 const PREFIX = "cloud:";
 /** How often the list is looked at again: this Mac's files change under it. The server keeps what the archive said. */
@@ -42,8 +44,8 @@ export function bringView({ api, fileSize, label, openClip, say, poll, changed }
   /** The picker's group, if there's anything to list: the open day stays listed once all of it is here. */
   function groups() {
     const days = (list?.days ?? []).filter((d) => d.missing.clips || d.day === open);
-    const options = days.map((d) => new Option(`${d.day} · ${plural(d.missing.clips, "clip")}`, d.id));
-    if (open && !days.some((d) => d.day === open)) options.push(new Option(open, PREFIX + open));
+    const options = days.map((d) => new Option(`${dayLabel(d.day)} · ${plural(d.missing.clips, "clip")}`, d.id));
+    if (open && !days.some((d) => d.day === open)) options.push(new Option(dayLabel(open), PREFIX + open));
     if (!options.length && list?.error) {
       options.push(new Option("Can't be read", ""));
       options[0].disabled = true;

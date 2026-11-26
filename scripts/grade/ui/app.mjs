@@ -1,5 +1,6 @@
 import { blockMeans, composeLut, inputCurves, isGraded, resolveGrade, sampleTetra } from "/color.mjs";
 import { bringView, isCloud } from "/ui/bring.mjs";
+import { dayLabel } from "/ui/dates.mjs";
 import { offloadLine, offloadMenu, offloadMoves, offloadShare } from "/ui/offload.mjs";
 import { Viewer } from "/ui/viewer.mjs";
 
@@ -291,7 +292,8 @@ async function drawThumb(clip) {
 /** Every source the picker can open: the camera's days (when it's plugged in), then the days in Movies/Original. */
 const allSources = () => [...(state.library?.camera.days ?? []), ...(state.library?.folders ?? [])];
 const sourceInfo = (id) => allSources().find((s) => s.id === id);
-const sourceLabel = (s) => `${s.label} · ${s.clips} clip${s.clips === 1 ? "" : "s"}${s.graded ? ` · ${s.graded} graded` : ""}`;
+const sourceLabel = (s) =>
+  `${dayLabel(s.label)} · ${s.clips} clip${s.clips === 1 ? "" : "s"}${s.graded ? ` · ${s.graded} graded` : ""}`;
 
 /** The picker's Cloudflare days, and bringing their clips to this Mac. */
 const bring = bringView({
@@ -325,7 +327,7 @@ function renderPicker() {
     const og = group(`${camera.name} · not connected`, []);
     const o = document.createElement("option");
     o.value = state.source;
-    o.textContent = state.source.slice("camera:".length);
+    o.textContent = dayLabel(state.source.slice("camera:".length));
     og.append(o);
     groups.push(og);
   }
@@ -490,6 +492,8 @@ function updateRows() {
   for (const b of document.querySelectorAll("#filter button")) b.setAttribute("aria-pressed", String(b.dataset.filter === state.filter));
   const reachable = !state.source?.startsWith("camera:") || state.library?.camera.mounted !== false;
   $("export-frame").disabled = !primaryClip() || !reachable;
+  // A clip on the card or this Mac; a day in the cloud has none here, and an unplugged camera's aren't anywhere.
+  $("reveal").hidden = !primaryClip() || !reachable;
 }
 
 $("clip-list").addEventListener("click", (e) => {
@@ -994,6 +998,17 @@ async function exportFrame() {
 }
 
 $("export-frame").addEventListener("click", exportFrame);
+
+/** Open in Finder: the clip on screen, selected in a Finder window. */
+$("reveal").addEventListener("click", async () => {
+  const clip = primaryClip();
+  if (!clip || !state.source) return;
+  try {
+    await api("/api/reveal", { method: "POST", json: { source: state.source, name: clip.name } });
+  } catch (e) {
+    showError(e);
+  }
+});
 
 const encoderButtons = document.querySelectorAll("[data-encoder]");
 /** The settings as the server keeps them: what encodes trims and preview copies, and remaking those after a regrade. */

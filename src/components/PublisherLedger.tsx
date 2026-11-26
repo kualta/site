@@ -1,5 +1,6 @@
 import { Fragment, type MouseEvent, type RefObject, useEffect, useRef, useState } from "react";
 import PublisherArchivePlayer from "./PublisherArchivePlayer";
+import PublisherFinder from "./PublisherFinder";
 import PublisherProject from "./PublisherProject";
 import {
   clipNumber,
@@ -11,6 +12,7 @@ import {
   writeFootageView,
 } from "@/lib/publisher/archive-view";
 import type { Content, PiecePost } from "@/lib/publisher/content";
+import { dayLabel, momentLabel } from "@/lib/publisher/dates";
 import {
   archiveCost,
   atRisk,
@@ -82,18 +84,10 @@ function fileSize(bytes: number) {
   if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }
-const when = (iso: string) =>
-  new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-/** A shoot day's heading: "Sun, 8 Nov 2026 · 30 clips". */
+const when = (iso: string) => momentLabel(Date.parse(iso));
+/** A shoot day's heading: "Sun 8 Nov · 30 clips", with its year when it isn't this one. */
 function dayText(day: string, count: number) {
-  const date = day
-    ? new Date(`${day}T12:00:00`).toLocaleDateString([], {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "Date unknown";
+  const date = day ? dayLabel(day, { weekday: true }) : "Date unknown";
   return `${date} · ${count} ${count === 1 ? "clip" : "clips"}`;
 }
 
@@ -213,14 +207,14 @@ function Columns() {
     <colgroup>
       <col style={{ width: 76 }} />
       <col />
-      <col style={{ width: 128 }} />
-      <col style={{ width: 72 }} />
-      <col style={{ width: 104 }} />
+      <col style={{ width: 123 }} />
+      <col style={{ width: 67 }} />
+      <col style={{ width: 100 }} />
       <col style={{ width: 68 }} />
       <col style={{ width: 48 }} />
       <col style={{ width: 60 }} />
       <col style={{ width: 76 }} />
-      <col style={{ width: 78 }} />
+      <col style={{ width: 92 }} />
     </colgroup>
   );
 }
@@ -558,14 +552,19 @@ export default function PublisherLedger({ request, uploading, onGrade, statsHref
                       <Mark value={c.original.cloudflare} />
                       <YouTubeMark record={c} share={share} />
                       <td className="open">
-                        <button
-                          type="button"
-                          disabled={!reachable}
-                          title={reachable ? "Open it in the grade app" : "Its original isn't on the camera or the Mac"}
-                          onClick={() => onGrade(c.name)}
-                        >
-                          Grade
-                        </button>
+                        <span>
+                          <button
+                            type="button"
+                            disabled={!reachable}
+                            title={
+                              reachable ? "Open it in the grade app" : "Its original isn't on the camera or the Mac"
+                            }
+                            onClick={() => onGrade(c.name)}
+                          >
+                            Grade
+                          </button>
+                          <PublisherFinder stem={key} disabled={!reachable} />
+                        </span>
                       </td>
                     </tr>
                   );

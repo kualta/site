@@ -89,6 +89,10 @@ export const TrashIcon = icon(
   "TrashIcon",
   <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10.5 11v5M13.5 11v5" />,
 );
+export const FolderIcon = icon(
+  "FolderIcon",
+  <path d="M2.5 8a3.5 3.5 0 0 1 3.5-3.5h2.6a2 2 0 0 1 1.5.7l1.3 1.6a2 2 0 0 0 1.5.7H18a3.5 3.5 0 0 1 3.5 3.5V16a3.5 3.5 0 0 1-3.5 3.5H6A3.5 3.5 0 0 1 2.5 16z" />,
+);
 export const ArchiveIcon = icon(
   "ArchiveIcon",
   <>

@@ -182,6 +182,19 @@ const patch = (f) =>
 const jpegPatch = (jpeg) =>
   execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-i", "-", "-vf", "crop=16:16:40:40,scale=1:1:flags=area+accurate_rnd+full_chroma_int:in_color_matrix=bt601:in_range=pc,format=rgb24", "-f", "rawvideo", "-"], { input: jpeg });
 
+// A stand-in for open(1): Open in Finder notes what it was given, a line each, and opens nothing.
+const revealer = join(root, "open");
+const revealed = join(root, "revealed");
+const REVEALER = `#!/bin/sh\nprintf '%s\\n' "$@" >> "${revealed}"\n`;
+/** What Open in Finder was given since last asked, each time its arguments. */
+const reveals = () => {
+  const lines = existsSync(revealed) ? readFileSync(revealed, "utf8").split("\n").slice(0, -1) : [];
+  rmSync(revealed, { force: true });
+  const calls = [];
+  for (let i = 0; i < lines.length; i += 2) calls.push(lines.slice(i, i + 2));
+  return calls;
+};
+
 // A stand-in for uvx and the Whisper it runs: it waits for `go`, then says the name of the clip it was given.
 const uvx = join(root, "uvx");
 const go = join(root, "go");
@@ -225,6 +238,7 @@ async function startServer(env = {}) {
       GRADE_PAUSE_EVERY: "300",
       GRADE_UVX: uvx,
       GRADE_TRANSCRIBE_EVERY: "0",
+      GRADE_REVEAL: revealer,
       ...env,
     },
     stdio: ["ignore", "pipe", "inherit"],
@@ -262,6 +276,7 @@ beforeAll(async () => {
   const uploads = { [withStill.replace(".MP4", ".mp4")]: [{ video: "vid1", size: 123, uploadedAt: "2026-02-06T10:00:00Z" }] };
   writeFileSync(join(publisher, "footage.json"), JSON.stringify({ clips: uploads, days: {} }));
   writeFileSync(uvx, STAND_IN, { mode: 0o755 });
+  writeFileSync(revealer, REVEALER, { mode: 0o755 });
   writeFileSync(serverFfmpeg, WITHOUT_GPU, { mode: 0o755 });
   await startServer();
 }, 120_000);
@@ -563,6 +578,90 @@ test.if(usable)("serves the clips it has to the composer's pages alone: seekable
   } finally {
     rmSync(transcripts, { recursive: true, force: true });
   }
+});
+
+test.if(usable)("opens a clip it lists in Finder, for the composer's pages and its own alone", async () => {
+  const composer = "https://post.kualta.dev";
+  const stem = name.replace(".MP4", "");
+  const onCard = join(camera, "DJI_001", noStill);
+  const ask = (p, { origin = composer, method = "POST" } = {}) =>
+    fetch(url(p), { method, headers: origin ? { Origin: origin } : {} });
+  const preflight = (origin) =>
+    fetch(url(`/footage/${stem}/reveal`), {
+      method: "OPTIONS",
+      headers: {
+        Origin: origin,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Private-Network": "true",
+      },
+    });
+  reveals();
+
+  // From the Footage tab, by its name: a clip on this Mac, and one on the card in any case, from the site run locally.
+  const shown = await ask(`/footage/${stem}/reveal`);
+  expect(shown.status).toBe(204);
+  expect(shown.headers.get("access-control-allow-origin")).toBe(composer);
+  expect((await ask(`/footage/${noStill.toLowerCase()}/reveal`, { origin: "http://localhost:4321" })).status).toBe(204);
+  expect(reveals()).toEqual([
+    ["-R", join(original, name)],
+    ["-R", onCard],
+  ]);
+  // Chrome's preflight, for a POST to this device from a public page.
+  const allowed = await preflight(composer);
+  expect(allowed.status).toBe(204);
+  expect(Object.fromEntries(allowed.headers)).toMatchObject({
+    "access-control-allow-origin": composer,
+    "access-control-allow-methods": "POST",
+    "access-control-allow-private-network": "true",
+  });
+
+  // Any other page, or none, is refused; so is anything but a POST, and anything but a clip it lists by its name.
+  for (const origin of ["https://evil.example", "http://127.0.0.1:4321", "http://localhost:4777", "null", ""]) {
+    const refused = await ask(`/footage/${stem}/reveal`, { origin });
+    expect([origin, refused.status]).toEqual([origin, 403]);
+    expect(refused.headers.get("access-control-allow-origin")).toBeNull();
+    if (origin) expect([origin, (await preflight(origin)).status]).toEqual([origin, 403]);
+  }
+  for (const method of ["GET", "HEAD", "PUT", "DELETE"])
+    expect([method, (await ask(`/footage/${stem}/reveal`, { method })).status]).toEqual([method, 405]);
+  for (const p of [
+    "/footage/DJI_20200101000000_0001_D/reveal",
+    "/footage/grades.json/reveal",
+    "/footage/..%2F..%2Fdata%2Fgrades.json/reveal",
+    `/footage/${encodeURIComponent(join(original, name))}/reveal`,
+    "/footage/.hidden/reveal",
+    `/footage/${stem}%00.MP4/reveal`,
+    `/footage/${stem}/reveal/more`,
+  ])
+    expect([p, (await ask(p)).status]).toEqual([p, 404]);
+  // Out of /footage/ altogether, it's a request of the app's own, which a page elsewhere can't make.
+  expect((await ask("/footage/%2E%2E/reveal")).status).toBe(403);
+  expect(reveals()).toEqual([]);
+
+  // From the app's own page: the clip on screen, by its day and name.
+  const reveal = (asked, headers) => api("/api/reveal", { method: "POST", body: JSON.stringify(asked), headers });
+  expect((await reveal({ source: camId, name: noStill })).status).toBe(204);
+  expect((await reveal({ source: folder, name })).status).toBe(204);
+  expect(reveals()).toEqual([
+    ["-R", onCard],
+    ["-R", join(original, name)],
+  ]);
+  // Another page can't say it's the app's; and only a clip of the day named, by its name, is shown.
+  const plain = await fetch(url("/api/reveal"), { method: "POST", body: JSON.stringify({ source: folder, name }) });
+  expect(plain.status).toBe(403);
+  for (const [asked, status] of [
+    [{ source: folder, name: "DJI_20200101000000_0001_D.MP4" }, 400],
+    [{ source: folder, name: noStill }, 400],
+    [{ source: folder, name: join(original, name) }, 400],
+    [{ source: folder, name: `../Original/${name}` }, 400],
+    [{ source: folder, name: [name] }, 400],
+    [{ source: folder }, 400],
+    [{ source: "/Users", name }, 400],
+    [{ source: "mac:2020-01-01", name }, 404],
+  ])
+    expect([asked, (await reveal(asked)).status]).toEqual([asked, status]);
+  expect((await fetch(url("/api/reveal"))).status).toBe(404);
+  expect(reveals()).toEqual([]);
 });
 
 test.if(usable)("stops exporting: drops the queue, and the clip in progress leaves nothing behind", async () => {
