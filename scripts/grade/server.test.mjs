@@ -1284,47 +1284,15 @@ test.if(usable)("backs up the settings with a ledger that's sent, when they've c
   });
 }, 60_000);
 
-test.if(usable)("offloads what's been moved into Movies/Preexp as Original's, its .LRF with it, and not what's kept", async () => {
-  const preexp = join(movies, "Preexp");
-  mkdirSync(preexp, { recursive: true });
-  const moved = "DJI_20260220100000_0009_D.MP4";
-  clip(join(preexp, moved), "D-Log2");
-  const lrf = moved.replace(".MP4", ".LRF");
-  writeFileSync(join(preexp, lrf), "low-res");
-  const preexpDay = "2026-02-20";
-  // It's a clip of its shoot day like any other.
-  const library = await until(async () => {
-    const found = (await json("/api/library")).folders.find((f) => f.label === preexpDay);
-    return found && found;
-  });
-  expect(library.clips).toBe(1);
-
-  // Kept, it's not touched.
-  await post("/api/offload/keep", { days: [preexpDay] });
-  expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
-  await ended();
-  expect(readdirSync(preexp).sort()).toEqual([lrf, moved].sort());
-
-  // Not kept, it goes up like Original's and takes its .LRF with it.
-  await post("/api/offload/keep", { days: [] });
-  const sent = site.manifests.has(`_originals-${preexpDay}`);
-  expect(sent).toBe(false);
-  expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
-  const after = await ended();
-  expect(after.run).toMatchObject({ finished: "done", error: null });
-  expect(readdirSync(preexp)).toEqual([]);
-  expect(site.manifests.get(`_originals-${preexpDay}`).files.map((f) => f.path)).toEqual([`assets/${moved}`]);
-}, 120_000);
-
 // macOS only, where the grade app runs: there a file's change time is exact to the millisecond. On CI's Linux runner it
 // isn't fine enough for a 300 ms window, and the clip looked still while being written. The app's own window is 2 minutes.
-test.if(usable && process.platform === "darwin")("leaves a clip being copied into Preexp alone until it's been still for a while", async () => {
-  const preexp = join(movies, "Preexp");
+test.if(usable && process.platform === "darwin")("leaves a clip being copied into Original by hand alone until it's been still for a while", async () => {
+  const folder = original;
   // A day of its own: what other tests file under theirs says nothing about this clip.
   const copying = "DJI_20260223100000_0010_D.MP4";
-  clip(join(preexp, copying), "D-Log2");
+  clip(join(folder, copying), "D-Log2");
   // Old by its own time, as a card's clip is: what changes it is what's looked at.
-  utimesSync(join(preexp, copying), new Date("2026-01-01"), new Date("2026-01-01"));
+  utimesSync(join(folder, copying), new Date("2026-01-01"), new Date("2026-01-01"));
   // It counts as still being written until 300 ms after it was last changed. The writer puts the old time back after each
   // write, as a copy that keeps the file's dates does, so only the change time says it's being written. It's one process
   // of its own writing every 20 ms, starting nothing per write: a timer here would wait on this test's awaits, and a
@@ -1332,7 +1300,7 @@ test.if(usable && process.platform === "darwin")("leaves a clip being copied int
   const writer =
     'while (1) { open(my $f, ">>", $ENV{CLIP}) or die; print $f "x"; close $f; utime(1767225600, 1767225600, $ENV{CLIP}); select(undef, undef, undef, 0.02) }';
   const grow = spawn("perl", ["-e", writer], {
-    env: { ...process.env, CLIP: join(preexp, copying) },
+    env: { ...process.env, CLIP: join(folder, copying) },
     stdio: "ignore",
   });
   const started = Date.now();
@@ -1342,7 +1310,7 @@ test.if(usable && process.platform === "darwin")("leaves a clip being copied int
     expect(summary.mac.clips).toBeGreaterThanOrEqual(1);
     expect((await post("/api/offload", { lanes: ["send"], unattended: true, youtube: false })).status).toBe(200);
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    expect(readdirSync(preexp)).toContain(copying);
+    expect(readdirSync(folder)).toContain(copying);
     // Nor did any of it go up: a half-copied clip in Cloudflare would pass for the clip.
     expect(site.manifests.has("_originals-2026-02-23")).toBe(false);
     expect(Date.now() - started).toBeGreaterThan(1000);
@@ -1380,7 +1348,7 @@ test.if(usable)("holds everything while it's paused from the Footage tab, and go
   // Going on, both carry on from there.
   site.paused = null;
   const after = await ended();
-  // With whatever an earlier test left in Preexp.
+  // With whatever an earlier test left in Original.
   expect(after.run.send).toMatchObject({ error: null, skipped: [], done: after.run.send.total });
   expect(site.manifests.get(`_originals-${day}`).files.map((f) => f.path)).toEqual([`assets/${held}`]);
   await until(() => records()[held]?.key, 120_000);

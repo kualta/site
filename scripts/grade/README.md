@@ -37,8 +37,7 @@ GRADE_PORT=4778 GRADE_ROOT=/tmp/grade/movies GRADE_DATA=/tmp/grade/data GRADE_CA
   (below). Thumbnails come from the still each DJI file carries; a clip's preview is made from the card when you
   select it.
 - **On this Mac**: the video in `~/Movies/Original/`, for clips that aren't on the camera, by the date in a DJI name
-  or else the file's own date; and in `~/Movies/Preexp/`, clips moved off the camera by hand, listed and offloaded
-  like Original's, each with its `.LRF`.
+  or else the file's own date.
 
 **Cloudflare**, the last group, lists the days with clips that were offloaded and aren't on this Mac, to bring back
 (below).
@@ -142,7 +141,7 @@ there…"). `GET /footage/<clip>` says what the clip is (its file, on the Mac or
 profile, duration, the camera's white balance, its grade as saved here, and whether its transcript is here);
 `/footage/<clip>/original` streams it, seekable; `/footage/<clip>/transcript.vtt` is its transcript from
 `transcripts/`, and `/footage/<clip>/transcript.json` that with every word's time (below). `<clip>` is a file's name,
-with or without its extension and in any case, and only a clip the app lists (`Original/`, `Preexp/`, the card) is
+with or without its extension and in any case, and only a clip the app lists (`Original/`, the card) is
 served. It's read only, and only for the composer: a request has to carry `Origin: https://post.kualta.dev` (or
 `http://localhost:4321`), which the answer allows by CORS so the player can draw the clip on its GPU. Any other origin,
 or none (a plain `<video>` or link on some other page), gets a 403. A preflight is answered for `Range`, and for
@@ -289,7 +288,7 @@ how the run goes, and any other is refused. `POST /api/offload/stop` takes `lane
 /api/offload/keep` read and set `{ "days": [], "clips": [] }`; `GET /api/offload` says how it all stands.
 
 **Transcripts.** Every clip on this Mac gets one, so a film can start from the words: each the app lists in `Original/`
-and `Preexp/` (a camera's clips and an iPhone's alike), kept or not, and each offloaded from there. A clip only on the
+(a camera's clips and an iPhone's alike), kept or not, and each offloaded from there. A clip only on the
 card or only in Cloudflare gets none here; one brought back does, once it's on the Mac. At start and every minute
 (`GRADE_TRANSCRIBE_EVERY`, in ms; 0 never) the app looks over this Mac's clips and queues those without a transcript.
 Whisper (`mlx-community/whisper-large-v3-turbo` on the GPU, the language its own guess) transcribes them in the
@@ -528,7 +527,7 @@ records in `exports.json`, which the ledger still reads.
 A whole clip's export at full quality is several times the original's size (H.264 at 100%: 277 Mbit/s on the CPU and
 418 on the GPU for 4K60, against the camera's 127). A film needs neither all of it nor all of that while it's being
 made, so it can ask for less. Both kinds live in the cache, never in `Movies/Exported/`, and are found by the clip's
-name (any case, with or without its extension) wherever the clip is: `Original/` or `Preexp/`, else the card. A clip
+name (any case, with or without its extension) wherever the clip is: `Original/`, else the card. A clip
 on neither, only in Cloudflare, isn't fetched: it's `missing`, and its `error` says to bring it back with Bring to Mac.
 
 **Preview copies** are whole clips through their saved grade, deflicker and all, made small: 1920 on the long side

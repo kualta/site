@@ -44,7 +44,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const MOVIES = process.env.GRADE_ROOT || join(homedir(), "Movies");
 const ORIGINAL = join(MOVIES, "Original");
 /** Clips moved off the camera by hand, waiting to be offloaded like Original's: theirs go with their .LRF. */
-const PREEXP = process.env.GRADE_PREEXP || join(MOVIES, "Preexp");
 const EXPORTED = join(MOVIES, "Exported");
 const DATA = process.env.GRADE_DATA || join(homedir(), "Library/Application Support/Grade");
 const CACHE = process.env.GRADE_CACHE || join(homedir(), "Library/Caches/Grade");
@@ -202,23 +201,16 @@ const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
 /** The recording date in a DJI name, or null. */
 const djiDay = (name) => /^DJI_(\d{4})(\d{2})(\d{2})\d{6}_/.exec(name)?.slice(1, 4).join("-") ?? null;
 
-/**
- * The clips in Movies/Original and Movies/Preexp by shoot day: the recording date in a DJI name, or else the file's own
- * date. A name in both is Original's.
- */
+/** The clips in Movies/Original by shoot day: the recording date in a DJI name, or else the file's own date. */
 async function originalDays() {
   const days = new Map();
-  const seen = new Set();
-  for (const dir of [ORIGINAL, PREEXP])
-    for (const name of (await readdir(dir).catch(() => [])).filter(isVideo).sort()) {
-      if (seen.has(name)) continue;
-      seen.add(name);
-      const path = join(dir, name);
-      const day = djiDay(name) ?? (await stat(path).then((s) => localDay(s.mtime), () => null));
-      if (!day) continue;
-      if (!days.has(day)) days.set(day, []);
-      days.get(day).push({ name, path });
-    }
+  for (const name of (await readdir(ORIGINAL).catch(() => [])).filter(isVideo).sort()) {
+    const path = join(ORIGINAL, name);
+    const day = djiDay(name) ?? (await stat(path).then((s) => localDay(s.mtime), () => null));
+    if (!day) continue;
+    if (!days.has(day)) days.set(day, []);
+    days.get(day).push({ name, path });
+  }
   return days;
 }
 
@@ -947,7 +939,7 @@ const transcripts = transcriber({
     ),
   made: () => offloading?.poke(),
 });
-/** Queues the clips on this Mac (Original and Preexp) without a transcript, kept or not: none off the card or the archive. */
+/** Queues the clips on this Mac (Original) without a transcript, kept or not: none off the card or the archive. */
 let catchingUp = false;
 async function transcribeMac() {
   if (catchingUp) return;
@@ -990,18 +982,12 @@ async function clipsOf(days, { byChange = false } = {}) {
   for (const [day, list] of days)
     for (const clip of list) {
       const s = await stat(clip.path).catch(() => null);
-      // A file moved in by hand keeps its old time: what changed it last says if it's still being written.
+      // A file copied in by hand keeps its old time: what changed it last says if it's still being written.
       if (s) clips.push({ name: clip.name, path: clip.path, ...fileFacts(s, byChange ? s.ctimeMs : 0), day });
     }
   return clips.sort((a, b) => a.name.localeCompare(b.name));
 }
-async function macClips() {
-  const clips = await clipsOf(await originalDays(), { byChange: true });
-  // Preexp holds what the camera gave: its low-res copies go with the clips.
-  for (const clip of clips)
-    if (dirname(clip.path) === PREEXP) clip.sidecar = clip.path.replace(/\.mp4$/i, ".LRF");
-  return clips;
-}
+const macClips = async () => clipsOf(await originalDays(), { byChange: true });
 /** The card's clips; null while it's unplugged, or as it is: what it lists can't all be found. */
 async function cardClips({ fresh = false } = {}) {
   if (fresh) cardCache = null;
@@ -1424,7 +1410,7 @@ async function cloudRoute(req, res, p, url) {
 // ---- a film's assets: preview copies while it's made, trims when it's rendered (film.mjs) -----------------------------
 
 /**
- * A clip by its name (any case, with or without its extension) wherever it is: in Original or Preexp, quicker to read,
+ * A clip by its name (any case, with or without its extension) wherever it is: in Original, quicker to read,
  * else on the card. The very name before another with only its stem in common.
  */
 async function locate(asked) {

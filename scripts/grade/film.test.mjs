@@ -21,7 +21,6 @@ const url = (p) => `http://127.0.0.1:${port}${p}`;
 const root = mkdtempSync(join(tmpdir(), "grade-film-test-"));
 const movies = join(root, "Movies");
 const original = join(movies, "Original");
-const preexp = join(movies, "Preexp");
 const exported = join(movies, "Exported");
 const data = join(root, "data");
 const cache = join(root, "cache");
@@ -92,9 +91,9 @@ const allReady = (id) => until(async () => (await trimsOf(id)).every((t) => t.st
 
 beforeAll(async () => {
   if (!usable) return;
-  for (const dir of [original, preexp, join(data, "luts"), join(root, "publisher")]) mkdirSync(dir, { recursive: true });
+  for (const dir of [original, join(data, "luts"), join(root, "publisher")]) mkdirSync(dir, { recursive: true });
   make(join(original, clip));
-  make(join(preexp, moved), { seconds: 1 });
+  make(join(original, moved), { seconds: 1 });
   make(join(original, slow), { busy: "1280x720", seconds: 30 });
   // An inverting stand-in for the D-Log2 ACES conversion, easy to recognise in a frame.
   const cube = new Float32Array(2 ** 3 * 3);
