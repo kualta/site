@@ -1,0 +1,224 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Kinetic captions: each phrase is a stacked block of words in two faces and several sizes, placed clear of the
+     speaker's face. captions.json (written by the build from the subtitle VTT's word times) says each phrase's place,
+     its lines, each word's size, which words are the emphasis, and when every word is spoken. This page only lays the
+     blocks out and moves them. -->
+<style>
+  @font-face { font-family: "Caption Sans"; src: url("caption-sans.woff2") format("woff2"); font-weight: 900; font-display: block; }
+  @font-face { font-family: "Caption Serif"; src: url("caption-serif-italic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: block; }
+  :root { --ink: #ffffff; --mark: #ffd400; --outline: 14px; }   /* one outline for every size (half of it shows: it is painted under the letters) */
+  /* every px here and in captions.json is one of a 1080-wide frame: the body is laid out at that width and scaled up
+     to the film's own frame (×1.6 on 1728 × 3072), so the same captions fit any frame size */
+  html { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  body { margin: 0; width: 1080px; height: 1920px; background: transparent; transform-origin: 0 0; }
+  .block { position: absolute; display: flex; flex-direction: column; visibility: hidden; }
+  .block.left { align-items: flex-start; } .block.center { align-items: center; } .block.right { align-items: flex-end; }
+  .row { display: flex; align-items: baseline; }
+  .mark { display: inline-block; width: 0; height: 0; }
+  .w {
+    display: inline-block; line-height: 0.9; white-space: nowrap; transform-origin: 50% 80%;
+    color: var(--ink);
+    font-family: "Caption Sans", sans-serif; font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em;
+    -webkit-text-stroke: var(--outline) rgba(0, 0, 0, 0.75); paint-order: stroke fill;
+    text-shadow: 0 0.03em 0.06em rgba(0, 0, 0, 0.55), 0 0.06em 0.45em rgba(0, 0, 0, 0.5);
+  }
+  .w.em {
+    color: var(--mark);
+    font-family: "Caption Serif", serif; font-style: italic; font-weight: 700; text-transform: none; letter-spacing: 0;
+    -webkit-text-stroke: var(--outline) rgba(0, 0, 0, 0.75);
+    padding-right: 0.06em;   /* the italic leans past its box */
+  }
+  /* punctuation is its own box beside its word, so it can come in on its own beat */
+  .w.p { padding-right: 0; transform-origin: 50% 85%; }
+  .w.p.trail { margin-left: 0.02em; }
+  /* after an italic word the mark takes the place its font gives it: no lean allowance, no extra gap */
+  .w.em.marked { padding-right: 0; } .w.em.p.trail { margin-left: 0; }
+  /* Chinese (<html lang="zh">): a heavy sans and, for the emphasis, a heavy Song serif (no italic, no capitals) */
+  :root:lang(zh) .w { font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  :root:lang(zh) .w.em { font-family: "Songti SC", "STSong", "Noto Serif SC", serif; font-weight: 900; font-style: normal; padding-right: 0; }
+  /* Chinese sits on a strict square grid: every character is its em box, rows (or columns) a set gutter apart */
+  :root:lang(zh) .w { line-height: 1; } :root:lang(zh) .row { align-items: flex-end; } :root:lang(zh) .w.p.trail { margin-left: 0; }
+  /* a vertical phrase: columns top to bottom, read right to left */
+  .block.vertical { writing-mode: vertical-rl; align-items: flex-start; }   /* every column starts at the top */ .block.vertical .row { align-items: center; } .block.vertical .w { text-orientation: upright; }
+</style>
+</head>
+<body>
+<script type="module">
+const clamp = (x) => Math.min(1, Math.max(0, x));
+const easeOutCubic = (x) => 1 - (1 - x) ** 3;
+const easeInQuad = (x) => x * x;
+/* critically damped: leaves quickly, settles without overshoot (normalised to reach 1 at x = 1) */
+const settle = (x) => { const k = 8; return (1 - (1 + k * x) * Math.exp(-k * x)) / (1 - (1 + k) * Math.exp(-k)); };
+
+const RISE = 0.2, SHOW = 0.1, FOCUS = 0.08;   // the snappy word entrance
+const MARK_POP = 0.18, MARK_SHOW = 0.08, MARK_STEP = 0.06;   // a mark pops in as its word ends; dots of "..." one by one
+const LEAD = /^[“"‘(¿¡「『（]+/u, TRAIL = /[.,!?…:;—–"”)，。！？、：；」』）]+$/u;
+const ZH = document.documentElement.lang.startsWith('zh');
+const GUTTER = 18;   // Chinese: the one gap between rows or columns of the grid, px at full size
+const FACE = ZH ? { sans: '600 {}px "PingFang SC"', serif: '900 {}px "Songti SC"' }
+                : { sans: '900 {}px "Caption Sans"', serif: 'italic 700 {}px "Caption Serif"' };
+const EM_RISE = 0.28;                           // the emphasis word grows in from 0.8 a little longer
+const LEAVE = 0.12;                             // a finished phrase lifts and fades as the next one begins
+const SAFE = 80;                                // px kept clear of the frame's edges
+
+let phrases = [];
+
+/* the film's frame, in 1080-wide px: S is how much bigger it really is, H its height */
+const DESIGN = 1080;
+let S = 1, H = 1920;
+function fit() {
+  const s = (innerWidth || DESIGN) / DESIGN;
+  if (s === S && document.body.style.transform) return;
+  S = s; H = (innerHeight || 1920) / S;
+  document.body.style.height = `${H}px`;
+  document.body.style.transform = `scale(${S})`;
+}
+
+const OUTLINE = 14;   // --outline: half of it shows on every side of a letter
+const WORD_GAP = 0.12, LINE_GAP = 0.12;   // the space between words and between lines, as a share of their size
+
+/* How far a word's letters really reach above and below its baseline (a font's line box says nothing of an italic
+   p's tail or a cap-only word's flat top). */
+const pen = document.createElement('canvas').getContext('2d');
+function ink(w, size) {
+  pen.font = (w.em ? FACE.serif : FACE.sans).replace('{}', size);
+  const m = pen.measureText(w.em || ZH ? w.text : w.text.toUpperCase());
+  return { up: m.actualBoundingBoxAscent, down: m.actualBoundingBoxDescent };
+}
+
+/* Lay a phrase out at `k` times its sizes: between two words, a space that follows their sizes plus both outlines;
+   between two lines, the lower one's letters start a set gap (plus both outlines) below the upper one's lowest ink. */
+function lay(p, k) {
+  if (ZH) {   // the grid: characters touch along a line, lines a gutter apart; no ink measuring for square glyphs
+    for (const row of p.rows) {
+      for (const w of row.words) { w.px = w.size * k; for (const e of w.all) { e.style.fontSize = `${w.px.toFixed(2)}px`; e.style.marginLeft = '0px'; } }
+      row.el.style.marginTop = '0px';
+    }
+    p.block.style.gap = `${(GUTTER * k).toFixed(2)}px`;
+    return;
+  }
+  for (const row of p.rows) {
+    row.words.forEach((w, i) => {
+      w.px = w.size * k;
+      for (const e of w.all) e.style.fontSize = `${w.px.toFixed(2)}px`;
+      /* Chinese runs on without spaces: chunks of a line only keep their outlines apart */
+      const gap = ZH ? 0.03 * (row.words[i - 1]?.px + w.px) / 2 + OUTLINE / 2 : WORD_GAP * (row.words[i - 1]?.px + w.px) / 2 + OUTLINE;
+      w.all[0].style.marginLeft = i ? `${gap.toFixed(2)}px` : '0px';
+    });
+    row.big = Math.max(...row.words.map((w) => w.px));
+    row.up = Math.max(...row.words.map((w) => ink(w, w.px).up));
+    row.down = Math.max(...row.words.map((w) => ink(w, w.px).down));
+    row.el.style.marginTop = '0px';
+  }
+  const baseline = (row) => row.mark.getBoundingClientRect().bottom / S;   // measured on screen, back in 1080-wide px
+  for (let i = 1; i < p.rows.length; i++) {
+    const a = p.rows[i - 1], b = p.rows[i];
+    const want = baseline(a) + a.down + OUTLINE + LINE_GAP * Math.min(a.big, b.big) + b.up;
+    b.el.style.marginTop = `${(want - baseline(b)).toFixed(2)}px`;
+  }
+}
+
+function build(data) {
+  fit();
+  phrases = data.map((p) => {
+    const block = document.createElement('div');
+    block.className = `block ${p.align}${p.vertical ? ' vertical' : ''}`;
+    for (const k of ['left', 'right', 'top', 'bottom']) if (p[k] != null) block.style[k] = `${p[k]}px`;
+    const words = [], rows = [];
+    for (const line of p.lines) {
+      const el = document.createElement('div'); el.className = 'row';
+      const row = { el, words: [] };
+      for (const w of line) {
+        /* "space," is the word and its comma: two boxes side by side, the comma on its own beat */
+        /* a vertical phrase goes without punctuation: marks in a column read wrong */
+        const text = p.vertical ? w.text.replace(/\p{P}/gu, '') || w.text : w.text;
+        const lead = text.match(LEAD)?.[0] ?? '', trail = text.slice(lead.length).match(TRAIL)?.[0] ?? '';
+        const core = text.slice(lead.length, text.length - trail.length) || text;
+        const span = (text, cls) => { const e = document.createElement('span'); e.className = cls; e.textContent = text; el.append(e); return e; };
+        const kind = w.em ? 'w em' : 'w';
+        const heads = lead && core !== text ? [span(lead, `${kind} p`)] : [];
+        const s = span(core, core !== text && trail ? `${kind} marked` : kind);
+        const marks = core !== text ? [...trail].map((c) => ({ el: span(c, `${kind} p trail`) })) : [];
+        const x = { ...w, el: s, heads, marks, all: [...heads, s, ...marks.map((m) => m.el)] };
+        words.push(x); row.words.push(x);
+      }
+      /* an empty box sits on the row's baseline: where the letters stand */
+      row.mark = document.createElement('span'); row.mark.className = 'mark'; el.append(row.mark);
+      block.append(el); rows.push(row);
+    }
+    document.body.append(block);
+    /* a mark comes in as its word ends (just before the next word, at the latest) */
+    words.forEach((w, j) => {
+      const next = j + 1 < words.length ? words[j + 1].t : p.end;
+      const at = Math.min(Math.max(w.end ?? w.t + 0.3, w.t + 0.12), next - 0.03);
+      w.marks.forEach((m, i) => { m.t = at + i * MARK_STEP; });
+    });
+    return { ...p, block, words, rows };
+  });
+  /* a block too wide for the room it has shrinks whole, so its proportions stay */
+  for (const p of phrases) {
+    const room = p.align === 'center' ? DESIGN - 2 * SAFE
+      : DESIGN - SAFE - (p.align === 'left' ? p.left ?? SAFE : p.right ?? SAFE);
+    /* a vertical phrase may also run out of height: it keeps clear of the bottom 300 px (the apps' own buttons) */
+    const tall = H - 300 - (p.top ?? SAFE);
+    let k = 1;
+    lay(p, k);
+    for (let n = 0; n < 4; n++) {
+      const r = p.block.getBoundingClientRect();
+      const over = Math.max(r.width / S / room, p.vertical ? r.height / S / tall : 0);
+      if (over <= 1) break;
+      k /= over; lay(p, k);
+    }
+    if (p.align === 'center') { p.block.style.left = '50%'; p.block.style.transform = 'translateX(-50%)'; }
+  }
+}
+
+function paint(p, t, fade, lift) {
+  p.block.style.visibility = 'visible';
+  p.block.style.opacity = String(fade);
+  p.block.style.translate = `0 ${(-lift).toFixed(2)}px`;
+  for (const w of p.words) {
+    const age = t - w.t;
+    for (const s of [...w.heads, w.el]) {
+      if (age < 0) { s.style.opacity = '0'; s.style.transform = ''; s.style.filter = ''; continue; }
+      const rise = settle(clamp(age / RISE));
+      const grow = w.em ? 0.8 + 0.2 * settle(clamp(age / EM_RISE)) : 0.92 + 0.08 * rise;
+      s.style.opacity = String(easeOutCubic(clamp(age / SHOW)));
+      s.style.transform = `translateY(${(0.2 * (1 - rise)).toFixed(4)}em) scale(${grow.toFixed(4)})`;
+      const blur = 3 * (1 - easeOutCubic(clamp(age / FOCUS)));
+      s.style.filter = blur > 0.01 ? `blur(${blur.toFixed(2)}px)` : '';
+    }
+    /* each mark drops in from just above and grows out of a point */
+    for (const m of w.marks) {
+      const s = m.el, a = t - m.t;
+      if (a < 0) { s.style.opacity = '0'; s.style.transform = ''; continue; }
+      const pop = settle(clamp(a / MARK_POP));
+      s.style.opacity = String(easeOutCubic(clamp(a / MARK_SHOW)));
+      s.style.transform = `translateY(${(-0.12 * (1 - pop)).toFixed(4)}em) scale(${(0.3 + 0.7 * pop).toFixed(4)})`;
+    }
+  }
+}
+
+window.film = {
+  ready: Promise.all([
+    fetch('captions.json').then((r) => r.json()),
+    document.fonts.load(FACE.sans.replace('{}', 54)),
+    document.fonts.load(FACE.serif.replace('{}', 54)),
+  ]).then(([data]) => build(data)),
+  frame(t) {
+    fit();
+    for (const p of phrases) {
+      if (t >= p.start && t < p.end) paint(p, t, 1, 0);
+      else if (t >= p.end && t < p.end + LEAVE) {
+        const k = clamp((t - p.end) / LEAVE);
+        paint(p, t, 1 - easeInQuad(k), 14 * easeOutCubic(k));
+      } else p.block.style.visibility = 'hidden';
+    }
+  },
+};
+</script>
+</body>
+</html>
