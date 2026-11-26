@@ -43,3 +43,6 @@ dist/**
 # Laptop publisher credentials, sessions and temporary files
 .publisher/
 __pycache__/
+
+# python bytecode (skill helpers)
+__pycache__/

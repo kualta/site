@@ -1,0 +1,484 @@
+[
+ {
+  "left": 80,
+  "top": 1100,
+  "align": "left",
+  "start": 0.155,
+  "lines": [
+   [
+    {
+     "text": "if",
+     "t": 0.155,
+     "end": 0.195,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "you",
+     "t": 0.276,
+     "end": 0.396,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "live",
+     "t": 0.771,
+     "size": 115,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "in",
+     "t": 1.078,
+     "end": 1.118,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "a",
+     "t": 1.239,
+     "end": 1.259,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "boring",
+     "t": 1.359,
+     "end": 1.7,
+     "size": 215,
+     "em": true
+    }
+   ],
+   [
+    {
+     "text": "space,",
+     "t": 1.78,
+     "end": 2.222,
+     "size": 165,
+     "em": true
+    }
+   ]
+  ],
+  "end": 2.683
+ },
+ {
+  "right": 110,
+  "top": 830,
+  "align": "right",
+  "start": 2.683,
+  "lines": [
+   [
+    {
+     "text": "you",
+     "t": 2.683,
+     "end": 2.784,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "will",
+     "t": 2.844,
+     "end": 3.025,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "be",
+     "t": 3.065,
+     "end": 3.125,
+     "size": 68,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "boring",
+     "t": 3.326,
+     "end": 3.707,
+     "size": 215,
+     "em": true
+    }
+   ],
+   [
+    {
+     "text": "most",
+     "t": 3.968,
+     "end": 4.228,
+     "size": 115,
+     "em": false
+    },
+    {
+     "text": "of",
+     "t": 4.329,
+     "end": 4.369,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "the",
+     "t": 4.449,
+     "end": 4.509,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "time.",
+     "t": 4.59,
+     "end": 4.911,
+     "size": 115,
+     "em": false
+    }
+   ]
+  ],
+  "end": 5.193
+ },
+ {
+  "top": 1180,
+  "align": "center",
+  "start": 5.193,
+  "lines": [
+   [
+    {
+     "text": "so",
+     "t": 5.193,
+     "end": 5.293,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "that's",
+     "t": 5.413,
+     "end": 5.613,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "why",
+     "t": 5.653,
+     "end": 5.754,
+     "size": 68,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "architecture",
+     "t": 5.934,
+     "end": 6.555,
+     "size": 115,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "is",
+     "t": 6.575,
+     "end": 6.615,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "important",
+     "t": 6.695,
+     "end": 7.156,
+     "size": 165,
+     "em": true
+    }
+   ]
+  ],
+  "end": 7.365
+ },
+ {
+  "left": 80,
+  "top": 960,
+  "align": "left",
+  "start": 7.365,
+  "lines": [
+   [
+    {
+     "text": "and",
+     "t": 7.365,
+     "end": 7.425,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "that's",
+     "t": 7.505,
+     "end": 7.765,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "the",
+     "t": 7.886,
+     "end": 7.986,
+     "size": 68,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "problem",
+     "t": 8.086,
+     "end": 8.507,
+     "size": 215,
+     "em": true
+    }
+   ],
+   [
+    {
+     "text": "with",
+     "t": 8.567,
+     "end": 8.827,
+     "size": 115,
+     "em": false
+    }
+   ]
+  ],
+  "end": 8.935
+ },
+ {
+  "right": 110,
+  "bottom": 360,
+  "align": "right",
+  "start": 8.935,
+  "lines": [
+   [
+    {
+     "text": "being",
+     "t": 8.935,
+     "end": 9.155,
+     "size": 115,
+     "em": false
+    },
+    {
+     "text": "only",
+     "t": 9.255,
+     "end": 9.436,
+     "size": 115,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "like",
+     "t": 9.516,
+     "end": 9.696,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "an",
+     "t": 9.796,
+     "end": 9.857,
+     "size": 68,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "engineering",
+     "t": 10.056,
+     "size": 165,
+     "em": true
+    },
+    {
+     "text": "and",
+     "t": 11.026,
+     "size": 68,
+     "em": false
+    }
+   ]
+  ],
+  "end": 11.384
+ },
+ {
+  "left": 80,
+  "top": 1060,
+  "align": "left",
+  "start": 11.384,
+  "lines": [
+   [
+    {
+     "text": "do",
+     "t": 11.384,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "boring",
+     "t": 11.584,
+     "size": 215,
+     "em": true
+    }
+   ],
+   [
+    {
+     "text": "designs",
+     "t": 11.944,
+     "size": 165,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "the",
+     "t": 12.124,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "whole",
+     "t": 12.364,
+     "size": 115,
+     "em": false
+    },
+    {
+     "text": "time.",
+     "t": 12.684,
+     "size": 115,
+     "em": false
+    }
+   ]
+  ],
+  "end": 13.194
+ },
+ {
+  "right": 110,
+  "top": 900,
+  "align": "right",
+  "start": 13.194,
+  "lines": [
+   [
+    {
+     "text": "that's",
+     "t": 13.194,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "the",
+     "t": 13.554,
+     "size": 68,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "big",
+     "t": 13.924,
+     "size": 165,
+     "em": false
+    },
+    {
+     "text": "issue.",
+     "t": 14.034,
+     "size": 215,
+     "em": true
+    }
+   ]
+  ],
+  "end": 14.659
+ },
+ {
+  "left": 80,
+  "top": 230,
+  "align": "left",
+  "start": 14.659,
+  "lines": [
+   [
+    {
+     "text": "architecture",
+     "t": 14.659,
+     "end": 15.22,
+     "size": 115,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "is",
+     "t": 15.32,
+     "end": 15.401,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "about",
+     "t": 15.521,
+     "end": 15.762,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "how",
+     "t": 15.762,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "to",
+     "t": 15.862,
+     "end": 16.002,
+     "size": 68,
+     "em": false
+    }
+   ]
+  ],
+  "end": 16.05
+ },
+ {
+  "right": 110,
+  "top": 1150,
+  "align": "right",
+  "start": 16.351,
+  "lines": [
+   [
+    {
+     "text": "improve",
+     "t": 16.351,
+     "end": 16.873,
+     "size": 215,
+     "em": true
+    }
+   ]
+  ],
+  "end": 17.098
+ },
+ {
+  "left": 80,
+  "top": 1120,
+  "align": "left",
+  "start": 17.098,
+  "lines": [
+   [
+    {
+     "text": "how",
+     "t": 17.098,
+     "end": 17.238,
+     "size": 68,
+     "em": false
+    },
+    {
+     "text": "people",
+     "t": 17.358,
+     "end": 17.719,
+     "size": 165,
+     "em": false
+    }
+   ],
+   [
+    {
+     "text": "live.",
+     "t": 17.82,
+     "end": 18.06,
+     "size": 215,
+     "em": true
+    }
+   ]
+  ],
+  "end": 18.19
+ }
+]
