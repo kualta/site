@@ -1,5 +1,5 @@
 // What's said in each clip on this Mac, transcribed here by Whisper (large-v3-turbo, on this Mac's GPU) so an edit can start
-// from the words: every clip in Movies/Original and Preexp, kept or not, and every clip offloaded from them. A clip going
+// from the words: every clip in Movies/Original, kept or not, and every clip offloaded from them. A clip going
 // to the archive has its sound taken from its Mac copy before that goes; one staying has it taken when its turn comes. The
 // sound is kept in the cache until it's transcribed: one clip at a time, in the background, the newest shoot day's first,
 // none started while an export or a film's preview copy or trim is being made. Audio left by a restart, or by a Whisper
