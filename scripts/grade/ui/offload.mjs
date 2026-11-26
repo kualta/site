@@ -1,5 +1,6 @@
 // Offloading in the app: the Offload menu, with a switch each for Camera → Mac and Mac → Cloudflare, what's
 // kept on this Mac, and how it goes; the status line while it does; and Stop in the bar.
+import { dayLabel } from "./dates.mjs";
 
 const $ = (id) => document.getElementById(id);
 const LANES = ["copy", "send"];
@@ -162,7 +163,7 @@ export function offloadMenu({ api, fileSize, showError, poll }) {
       box.indeterminate = !kept && keptClips.length > 0;
       box.dataset.day = day;
       const name = document.createElement("span");
-      name.textContent = day || "Others";
+      name.textContent = day ? dayLabel(day) : "Others";
       const size = document.createElement("span");
       size.className = "menu-note";
       size.textContent = box.indeterminate ? `${clips(keptClips.length)} kept` : clipsAndSize(count, bytes);

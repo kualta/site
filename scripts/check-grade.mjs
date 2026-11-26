@@ -8,6 +8,7 @@ import path from "node:path";
 import ffmpegStatic from "ffmpeg-static";
 import { chromium } from "playwright";
 import { writeCube } from "./grade/color.mjs";
+import { dayLabel } from "./grade/ui/dates.mjs";
 
 // Drives the grade app against a throwaway library: one synthetic D-Log2 clip (a static colour field, so a paused
 // preview and a rendered frame show the same picture) and a non-linear stand-in base look. It grades the clip, reads
@@ -101,8 +102,13 @@ mkdirSync(path.join(root, "publisher"));
 writeFileSync(path.join(root, "publisher/config.json"), JSON.stringify({ origin: `http://127.0.0.1:${archive.address().port}`, token: "t" }));
 writeFileSync(path.join(data, "grades.json"), JSON.stringify({ version: 1, clips: { [gone]: { base: "aces", exposure: 0.4, kelvin: null, tint: 0, contrast: 1, saturation: 1 } } }));
 
+// A stand-in for open(1): Open in Finder notes what it was given, and no Finder window opens.
+const revealer = path.join(root, "open");
+const revealed = path.join(root, "revealed");
+writeFileSync(revealer, `#!/bin/sh\nprintf '%s\\n' "$@" >> "${revealed}"\n`, { mode: 0o755 });
+
 const server = spawn(process.execPath, ["scripts/grade/server.mjs"], {
-  env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: cache, GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port), GRADE_UVX: uvx, GRADE_PUBLISHER: path.join(root, "publisher"), GRADE_KEEP_FREE: "1000000" },
+  env: { ...process.env, GRADE_ROOT: movies, GRADE_DATA: data, GRADE_CACHE: cache, GRADE_CAMERA: path.join(root, "no-camera"), GRADE_PORT: String(port), GRADE_UVX: uvx, GRADE_PUBLISHER: path.join(root, "publisher"), GRADE_KEEP_FREE: "1000000", GRADE_REVEAL: revealer },
   stdio: ["ignore", "pipe", "inherit"],
 });
 await new Promise((resolve, reject) => {
@@ -270,6 +276,18 @@ try {
   const still = execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-i", path.join(exported, frameFile), "-vf", "format=rgb24", "-f", "rawvideo", "-"], { maxBuffer: 64 * 1024 * 1024 });
   compare("exported frame", still);
 
+  // Open in Finder, at the end of the panel's first line: the clip on screen, selected in Finder.
+  const finder = page.getByRole("button", { name: "Open in Finder" });
+  const finderAt = await finder.evaluate((el) => {
+    const row = el.parentElement.getBoundingClientRect();
+    const { right } = el.getBoundingClientRect();
+    return Math.round(row.right - right);
+  });
+  assert.ok(finderAt <= 4, `Open in Finder ends its line (${finderAt}px short)`);
+  await finder.click();
+  await soon(() => existsSync(revealed), "Open in Finder asks Finder");
+  assert.deepEqual(readFileSync(revealed, "utf8").split("\n"), ["-R", path.join(original, name), ""]);
+
   // The offload's own menu: its switches, and what each has to do.
   const offloadButton = page.getByRole("button", { name: "Offload", exact: true });
   await offloadButton.click();
@@ -283,11 +301,16 @@ try {
   assert.ok(await page.getByRole("button", { name: "Start Camera → Mac" }).isDisabled(), "nothing to take off no camera");
   // A shoot day is kept, and let go again.
   const days = page.getByRole("group", { name: "Days kept on this Mac" });
-  await days.getByRole("checkbox", { name: /2026-01-01/ }).check();
+  // Each by its day as the app says days ("1 Jan"), not as it's filed.
+  const keptDay = (within, day) => within.locator(`input[data-day="${day}"]`);
+  const dayNames = (on) => on.locator("#offload-days label > span:not(.menu-note)").allTextContents();
+  await keptDay(days, "2026-01-01").waitFor({ timeout: 5_000 });
+  assert.deepEqual(await dayNames(page), [dayLabel("2026-01-01")]);
+  await keptDay(days, "2026-01-01").check();
   await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "2 clips", null, { timeout: 5_000 });
   assert.equal(await page.locator("#offload-mac").textContent(), "Nothing to send");
   assert.deepEqual(JSON.parse(readFileSync(path.join(data, "keep.json"), "utf8")).days, ["2026-01-01"]);
-  await days.getByRole("checkbox", { name: /2026-01-01/ }).uncheck();
+  await keptDay(days, "2026-01-01").uncheck();
   await page.waitForFunction(() => document.getElementById("offload-kept").textContent === "", null, { timeout: 5_000 });
   // When the camera's copies go is remembered.
   await page.getByRole("button", { name: "Once in the cloud" }).click();
@@ -339,19 +362,31 @@ try {
   await savedSoon(() => !("deflicker" in saved()) && !("deflicker" in saved(other)), "the Light group's Reset turns it off");
   await otherRow.getByText("Not graded").waitFor({ timeout: 5_000 });
   // The picker counts the day's clips the same way, once it reads the library again.
-  const dayLabel = "2026-01-01 · 2 clips · 1 graded";
+  const dayOption = `${dayLabel("2026-01-01")} · 2 clips · 1 graded`;
+  const dayOptionNow = () => page.locator('#shoot option[value="mac:2026-01-01"]').textContent();
   await page.waitForFunction(
     (text) => document.querySelector('#shoot option[value="mac:2026-01-01"]')?.textContent === text,
-    dayLabel,
+    dayOption,
     { timeout: 10_000 },
-  );
+  ).catch(async () => assert.equal(await dayOptionNow(), dayOption));
+  // Its days fit the picker, a long one with its year too.
+  const cutDays = await page.evaluate(() => {
+    const picker = document.getElementById("shoot");
+    const style = getComputedStyle(picker);
+    const room = picker.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const pen = document.createElement("canvas").getContext("2d");
+    pen.font = style.font;
+    const texts = [...picker.options].map((o) => o.textContent);
+    return [...texts, "24 Nov 2025 · 30 clips · 12 graded"].filter((text) => pen.measureText(text).width > room);
+  });
+  assert.deepEqual(cutDays, [], "the picker's days fit it");
 
   // Cloudflare: the picker lists the day whose clips are there and not here; its clips come back one at a time, into
   // their own day, with the grade they had, and nothing in the list or the bar moves as they do.
   const picker = page.locator("#shoot");
   const option = picker.locator(`option[value="cloud:${cloudDay}"]`);
   await option.waitFor({ state: "attached", timeout: 10_000 });
-  assert.equal(await option.textContent(), `${cloudDay} · 227 clips`);
+  assert.equal(await option.textContent(), `${dayLabel(cloudDay)} · 227 clips`);
   assert.equal(await option.evaluate((el) => el.parentElement.label), "Cloud");
   await picker.selectOption(`cloud:${cloudDay}`);
   const cloudRow = (file) => page.locator(`.cloud-clip[data-stem="${file.replace(/\.MP4$/, "")}"]`);
@@ -363,6 +398,7 @@ try {
   assert.equal(await page.locator(".cloud-file").count(), 227, "a row has its original, and nothing else");
   assert.ok(await page.locator("#clip-list").isHidden(), "the clip list makes way");
   assert.ok(await page.locator("#export-frame").isDisabled(), "nothing here to export");
+  assert.ok(await page.locator("#reveal").isHidden(), "nor to show in Finder");
   assert.equal(await cloudRow(gone).locator(".when").textContent(), "10:01 · transcript");
   // Where things are, the rows from the top of their list, however it's scrolled.
   const cloudPlaces = () =>
@@ -650,10 +686,15 @@ try {
     assert.ok(!(await menu.getByRole("checkbox", { name: "Keep going when this tab is closed" }).isChecked()));
 
     // A whole day kept, and a day whose brought clips are: a click lets those go.
-    await menu.getByRole("checkbox", { name: /2026-11-08/ }).click();
+    await keptDay(menu, "2026-11-08").waitFor({ timeout: 5_000 });
+    assert.deepEqual(
+      await dayNames(menu),
+      ["2026-11-18", "2026-11-08"].map((day) => dayLabel(day)),
+    );
+    await keptDay(menu, "2026-11-08").click();
     await saysNow("kept", "229 clips");
     assert.deepEqual(asked.splice(0), [["/keep", { days: ["2026-11-08"] }]]);
-    const brought = menu.getByRole("checkbox", { name: /2026-11-18/ });
+    const brought = keptDay(menu, "2026-11-18");
     assert.ok(await brought.evaluate((el) => el.indeterminate));
     await menu.getByText("2 clips kept").waitFor({ timeout: 5_000 });
     await brought.click();

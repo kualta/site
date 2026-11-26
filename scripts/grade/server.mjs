@@ -38,6 +38,7 @@ import { lookFiles } from "./looks.mjs";
 import { saveSettings } from "./settings.mjs";
 import { thumbSender } from "./thumbs.mjs";
 import { transcriber } from "./transcripts.mjs";
+import { dayLabel } from "./ui/dates.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MOVIES = process.env.GRADE_ROOT || join(homedir(), "Movies");
@@ -238,13 +239,13 @@ async function source(id) {
   const cam = CAMERA_ID.exec(id);
   if (cam) {
     const list = (await card())?.get(cam[1]);
-    if (!list) throw httpError(404, `${CAMERA_NAME} isn't connected, or has no clips from ${cam[1]}`);
+    if (!list) throw httpError(404, `${CAMERA_NAME} isn't connected, or has no clips from ${dayLabel(cam[1])}`);
     return { id, kind: "camera", label: cam[1], paths: new Map(list.map((c) => [c.name, c.path])) };
   }
   const mac = MAC_ID.exec(id);
   if (!mac) throw httpError(400, "bad source");
   const list = (await originalDays()).get(mac[1]);
-  if (!list) throw httpError(404, `no clips from ${mac[1]} in ${ORIGINAL}`);
+  if (!list) throw httpError(404, `no clips from ${dayLabel(mac[1])} in ${ORIGINAL}`);
   return { id, kind: "mac", label: mac[1], paths: new Map(list.map((c) => [c.name, c.path])) };
 }
 
@@ -454,6 +455,21 @@ async function moveToTrash(files) {
   const left = [];
   for (const f of files) if (await exists(f)) left.push(basename(f));
   if (left.length) throw new Error(`couldn't move ${left.join(", ")} to the Trash`);
+}
+
+// ---- Open in Finder -------------------------------------------------------------------------------------------------
+
+/** What shows a file selected in Finder: open(1)'s -R, or a stand-in for the tests, which never open Finder. */
+const REVEAL = process.env.GRADE_REVEAL || "/usr/bin/open";
+
+/** Shows a clip's file selected in a Finder window: a path the app found, never one a request gave. */
+function reveal(path) {
+  return new Promise((resolve, reject) => {
+    execFile(REVEAL, ["-R", path], { timeout: 10_000 }, (err, _out, stderr) => {
+      if (err) reject(new Error(String(stderr).trim() || err.message));
+      else resolve();
+    });
+  });
 }
 
 /** The trash request in progress: requests run one after another. */
@@ -1432,7 +1448,10 @@ async function elsewhere(name) {
   const held = await cloudClips().catch(() => null);
   // Only originals come back from Cloudflare (#352), so any clip there is one.
   const hit = held?.clips.find((clip) => stemOf(clip.name).toLowerCase() === stem);
-  if (hit) return `${name} isn't on this Mac: it's in Cloudflare (${hit.day}). Bring it back with Bring to Mac first`;
+  if (hit) {
+    const day = dayLabel(hit.day);
+    return `${name} isn't on this Mac: it's in Cloudflare (${day}). Bring it back with Bring to Mac first`;
+  }
   if (!(await card())) return `${name} isn't on this Mac or in Cloudflare, and ${CAMERA_NAME} isn't connected`;
   return `${name} isn't on the camera, this Mac or in Cloudflare`;
 }
@@ -1511,19 +1530,23 @@ async function transcriptOf(clip, ext = "vtt") {
 
 /**
  * GET /footage/<clip> says what a clip on this Mac or the card is, /footage/<clip>/original streams it (seekable),
- * /footage/<clip>/transcript.vtt is its transcript and /footage/<clip>/transcript.json that with every word's time. Read
- * only, and only for the composer's pages: a request has to name one of their origins, which the answer allows, so the
- * player can draw the clip on its GPU. Anything else (another site, or a plain <video> or link, which sends no origin) is
- * refused, and only a clip the app lists is ever served.
+ * /footage/<clip>/transcript.vtt is its transcript and /footage/<clip>/transcript.json that with every word's time; POST
+ * /footage/<clip>/reveal shows it selected in Finder, and does nothing else. Only for the composer's pages: a request has
+ * to name one of their origins, which the answer allows, so the player can draw the clip on its GPU. Anything else
+ * (another site, or a plain <video> or link, which sends no origin) is refused, and only a clip the app lists is ever
+ * served or shown.
  */
 async function footageRoute(req, res, p) {
   const origin = req.headers.origin;
   if (!READ_BY.includes(origin)) throw httpError(403, "only the composer reads footage here");
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Vary", "Origin");
+  const m = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt|transcript\.json|reveal))?$/.exec(p);
+  const reveals = m?.[2] === "reveal";
+  const methods = reveals ? ["POST"] : ["GET", "HEAD"];
   if (req.method === "OPTIONS") {
     // A preflight: the player seeks with Range, and Chrome may ask whether a public page may reach this device.
-    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD");
+    res.setHeader("Access-Control-Allow-Methods", methods.join(", "));
     res.setHeader("Access-Control-Allow-Headers", "Range");
     res.setHeader("Access-Control-Max-Age", "600");
     if (req.headers["access-control-request-private-network"] === "true")
@@ -1531,12 +1554,17 @@ async function footageRoute(req, res, p) {
     res.writeHead(204);
     return res.end();
   }
-  if (req.method !== "GET" && req.method !== "HEAD") throw httpError(405, "footage is read only");
-  res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
-  const m = /^\/footage\/([^/]+?)(?:\/(original|transcript\.vtt|transcript\.json))?$/.exec(p);
   if (!m || !CLIP_NAME.test(m[1])) throw httpError(404, "no such clip");
+  if (!methods.includes(req.method))
+    throw httpError(405, reveals ? "Open in Finder is a POST" : "footage is read only");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
   const clip = await locate(m[1]);
   if (!clip) throw httpError(404, `${m[1]} isn't on this Mac or the camera`);
+  if (reveals) {
+    await reveal(clip.path);
+    res.writeHead(204, { "Cache-Control": "no-store" });
+    return res.end();
+  }
   if (m[2] === "original") return serveFile(req, res, clip.path);
   const transcript = await transcriptOf(clip, m[2] === "transcript.json" ? "json" : "vtt");
   if (m[2]) {
@@ -1782,6 +1810,16 @@ async function route(req, res) {
     if (!src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
     if (!Number.isInteger(frame) || frame < 0) throw httpError(400, "frame must be a whole number from 0");
     return send(res, 200, { file: await frameOne(src, name, frame) });
+  }
+
+  // Open in Finder: the clip on screen, by its day and name, selected in a Finder window.
+  if (p === "/api/reveal" && req.method === "POST") {
+    const { source: id, name } = await body(req);
+    const src = await source(String(id));
+    if (typeof name !== "string" || !src.paths.has(name)) throw httpError(400, `unknown clip ${name}`);
+    await reveal(src.paths.get(name));
+    res.writeHead(204, { "Cache-Control": "no-store" });
+    return res.end();
   }
 
   if (p === "/api/jobs" && req.method === "GET") {

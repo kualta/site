@@ -9,6 +9,7 @@ import ffmpegStatic from "ffmpeg-static";
 import { gradeKey, resolveGrade, writeCube } from "./color.mjs";
 import { filmAssets } from "./film.mjs";
 import { FFPROBE } from "./media.mjs";
+import { dayLabel } from "./ui/dates.mjs";
 
 // A film's assets through the grade server: preview copies of whole clips and trims of them, made in the cache from
 // the clips' grades wherever the clips are, stale when a clip is graded again, reused when asked for again, never
@@ -190,7 +191,10 @@ test.if(usable)("with autoRemake on, a regrade remakes the preview copy by itsel
 test.if(usable)("a clip that isn't here says where it is, and nothing is fetched to make it", async () => {
   const states = await askPreviews(away, nowhere);
   expect(states[away]).toMatchObject({ state: "missing", path: null });
-  expect(states[away].error).toBe(`${away} isn't on this Mac: it's in Cloudflare (2026-03-01). Bring it back with Bring to Mac first`);
+  // Its day as the app says days: "1 Mar", with the year when it isn't this one.
+  expect(states[away].error).toBe(
+    `${away} isn't on this Mac: it's in Cloudflare (${dayLabel("2026-03-01")}). Bring it back with Bring to Mac first`,
+  );
   expect(states[nowhere].error).toBe(`${nowhere} isn't on this Mac or in Cloudflare, and Pocket 4P isn't connected`);
   const { id, trims } = await (await api("/api/trims", { trims: [{ name: away, start: 0, end: 1 }, { name: nowhere, start: 0, end: 1 }] })).json();
   expect(trims.map((t) => [t.state, t.error])).toEqual([

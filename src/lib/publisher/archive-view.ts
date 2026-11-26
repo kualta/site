@@ -70,9 +70,24 @@ export interface MacClip {
   grade: Record<string, unknown> | null;
   transcript: boolean;
 }
-/** Where the grade app serves a clip it has: what it is, its original, or its transcript. */
-export const macUrl = (stem: string, part?: "original" | "transcript.vtt") =>
+/** Where the grade app serves a clip it has: what it is, its original, or its transcript; or shows it in Finder. */
+export const macUrl = (stem: string, part?: "original" | "transcript.vtt" | "reveal") =>
   `${GRADE_APP}/footage/${encodeURIComponent(stem)}${part ? `/${part}` : ""}`;
+
+/**
+ * Open in Finder: the grade app on the Mac shows a clip it has on the Mac or the card selected in Finder. Null once it
+ * has, else why not, in a few words.
+ */
+export async function revealOnMac(stem: string): Promise<string | null> {
+  try {
+    const response = await fetch(macUrl(stem, "reveal"), { method: "POST", signal: AbortSignal.timeout(MAC_PATIENCE) });
+    if (response.ok) return null;
+    if (response.status === 404) return "Not on the Mac or the camera";
+    return `The Mac answered ${response.status}`;
+  } catch {
+    return "Can't reach the Mac from here";
+  }
+}
 
 /** The clip the player plays, from the grade app on the Mac (the card's clips through it too) or from the cloud. */
 export interface ClipSource {

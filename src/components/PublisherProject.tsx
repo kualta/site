@@ -11,6 +11,7 @@ import {
   fileUrl,
 } from "@/lib/publisher/archive-view";
 import type { PiecePost } from "@/lib/publisher/content";
+import { dayLabel } from "@/lib/publisher/dates";
 import { type LedgerClip, type LedgerProject, lost, thumbUrl } from "@/lib/publisher/ledger";
 import { platformNames } from "@/lib/publisher/presets";
 import PlatformIcon from "./PlatformIcon";
@@ -47,14 +48,9 @@ async function readManifest(name: string): Promise<Read> {
   return { manifest };
 }
 
-const date = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const date = (iso: string) => dayLabel(Date.parse(iso));
 /** When a clip was recorded, by the ledger's local time: "8 Nov, 12:22". */
-const recordedAt = (local: string) =>
-  `${new Date(`${local.slice(0, 10)}T12:00:00`).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-  })}, ${local.slice(11, 16)}`;
+const recordedAt = (local: string) => `${dayLabel(local)}, ${local.slice(11, 16)}`;
 
 /** A video the film made, playing in place from the archive, with its size, its length once known, and a download. */
 function Output({ output }: { output: FilmOutput }) {

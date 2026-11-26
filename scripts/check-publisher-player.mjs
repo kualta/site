@@ -13,6 +13,7 @@ import {
   macAnswer,
   ON_MAC,
   OPENED,
+  shownDay,
 } from "./browser-fixtures/archive.mjs";
 import { composeLut, normalizeGrade, parseCube, sampleTetra } from "./grade/color.mjs";
 
@@ -67,7 +68,8 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
       const asked = new URL(route.request().url()).pathname;
       if (!asked.startsWith("/footage/"))
         return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Grade</title>" });
-      mac.asked.push({ path: asked, origin: await route.request().headerValue("origin") });
+      const method = route.request().method();
+      mac.asked.push({ path: asked, method, origin: await route.request().headerValue("origin") });
       if (!mac.reachable) return route.abort("connectionrefused");
       return macAnswer(route, { mimeType: "video/webm", buffer: original });
     });
@@ -92,12 +94,75 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
     assert.equal(await row("0001").getByRole("button", { name: /^Play/ }).count(), 0);
     assert.equal(await row("0001").getAttribute("data-plays"), null);
 
+    // Open in Finder, beside Grade, for a clip whose original is on the Mac or the camera: the grade app there shows it
+    // in Finder, asked by the composer's origin, and the row doesn't open. One in the cloud alone, or nowhere, has it
+    // greyed, as Grade is.
+    const finder = (clip) => row(clip).getByRole("button", { name: "Open in Finder" });
+    for (const [clip, can] of [
+      ["0402", true],
+      ["0399", true],
+      ["0258", true],
+      ["0086", false],
+      ["0001", false],
+    ])
+      assert.equal(await finder(clip).isEnabled(), can, `Open in Finder for ${clip}`);
+    assert.equal(await finder("0402").getAttribute("title"), "Open in Finder");
+    const origin = new URL(composer).origin;
+    const revealed = async (stem) => {
+      const asked = () =>
+        mac.asked.some((r) => r.path === `/footage/${stem}/reveal` && r.method === "POST" && r.origin === origin);
+      for (const end = Date.now() + 5000; !asked(); await page.waitForTimeout(50))
+        assert.ok(Date.now() < end, `Open in Finder asks the grade app for ${stem}`);
+    };
+    // Where each of a row's cells and buttons is, from the row's corner.
+    const cells = (clip) =>
+      row(clip)
+        .locator("td, button")
+        .evaluateAll((all) => {
+          const at = all[0].closest("tr").getBoundingClientRect();
+          return all.map((el) => {
+            const box = el.getBoundingClientRect();
+            return [box.left - at.left, box.top - at.top, box.width, box.height].map(Math.round);
+          });
+        });
+    // Both fit their column, Grade where it was and Finder as tall, on a phone too, where the table scrolls sideways.
+    const fits = await row("0399")
+      .locator("td.open")
+      .evaluate((cell) => {
+        const box = cell.getBoundingClientRect();
+        const [grade, open] = [...cell.querySelectorAll("button")].map((b) => b.getBoundingClientRect());
+        return [grade.left > box.left, open.right <= box.right - 9.5, Math.round(grade.height - open.height)];
+      });
+    assert.deepEqual(fits, [true, true, 0]);
+    await finder("0399").click();
+    await revealed(ON_MAC);
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    assert.equal(await row("0399").getByRole("status").count(), 0);
+    const before = await cells("0399");
+    // A clip the Mac doesn't have, and a Mac that can't be reached (a phone): it says so beside the button, over the
+    // row, and nothing moves.
+    await finder("0402").click();
+    await row("0402").getByRole("status").filter({ hasText: "Not on the Mac or the camera" }).waitFor();
+    mac.reachable = false;
+    await finder("0399").click();
+    await row("0399").getByRole("status").filter({ hasText: "Can't reach the Mac from here" }).waitFor();
+    assert.deepEqual(await cells("0399"), before);
+    if (shots) await page.screenshot({ path: path.join(shots, `footage-finder-away-${name}.png`) });
+    await row("0399").getByRole("status").waitFor({ state: "detached", timeout: 6000 });
+    mac.reachable = true;
+    mac.asked.length = 0;
+
     // A clip opens from anywhere on its row. This browser can't play HEVC: it says so, offers to try, and reads nothing.
     await row("0086").locator("td.dim").last().click();
     await page.waitForURL(new RegExp(`/footage\\?clip=${CLIP}$`));
     await player.getByText("This browser can't play HEVC, which the camera records.", { exact: false }).waitFor();
-    assert.match(await player.locator("h2 small").textContent(), /^8 Nov 2026, 12:22:04 · 2\.86 GB · D-Log2$/);
+    assert.equal(
+      await player.locator("h2 small").textContent(),
+      `${shownDay("2026-11-08", "8 Nov")}, 12:22:04 · 2.86 GB · D-Log2`,
+    );
     await player.getByRole("button", { name: "Try anyway" }).waitFor();
+    // In the cloud alone, there's nothing on the Mac to show in Finder.
+    assert.equal(await player.getByRole("button", { name: "Open in Finder" }).count(), 0);
     const transcript = player.getByRole("complementary", { name: "Transcript" });
     assert.deepEqual(await transcript.getByRole("button").allTextContents(), [
       "0:00Okay, rolling.",
@@ -282,7 +347,10 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
     const macPaths = new Set(mac.asked.map(({ path }) => path));
     for (const part of ["", "/original", "/transcript.vtt"]) assert.ok(macPaths.has(`/footage/${ON_MAC}${part}`), part);
     assert.ok(mac.asked.every(({ origin }) => origin === new URL(composer).origin));
-    assert.match(await onMac.locator("h2 small").textContent(), /^20 Nov 2026, 18:30:12 · 3\.00 GB · D-Log2$/);
+    assert.equal(
+      await onMac.locator("h2 small").textContent(),
+      `${shownDay("2026-11-20", "20 Nov")}, 18:30:12 · 3.00 GB · D-Log2`,
+    );
     const macTranscript = onMac.getByRole("complementary", { name: "Transcript" });
     assert.equal(await macTranscript.getByRole("button").count(), 3);
     // Graded as it's saved on the Mac, which the backup hasn't yet, with the camera's white balance from its file.
@@ -306,6 +374,14 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
     // It's on the Mac already: Grade opens it there.
     assert.equal(await onMac.getByRole("button", { name: "Bring to Mac" }).count(), 0);
     await onMac.getByRole("button", { name: "Open in Grade" }).waitFor();
+    // Open in Finder beside it: in words where there's room, its icon on a phone. The grade app shows it in Finder.
+    const macFinder = onMac.getByRole("button", { name: "Open in Finder" });
+    assert.equal(await macFinder.locator("span").isVisible(), width > 700);
+    assert.equal(await macFinder.locator("svg").isVisible(), width <= 700);
+    assert.equal(await macFinder.getAttribute("title"), null);
+    await macFinder.click();
+    await revealed(ON_MAC);
+    assert.equal(await onMac.locator(".publisher-finder-note").count(), 0);
     if (shots) await page.screenshot({ path: path.join(shots, `footage-player-mac-${name}.png`) });
     await page.keyboard.press("Escape");
     await onMac.waitFor({ state: "detached" });
@@ -324,6 +400,19 @@ export async function checkPlayer(browser, { composer, dir, shots }) {
     );
     assert.equal(reads.length, cloudReads);
     await onMac.getByText("Couldn't read it.").waitFor();
+    // Open in Finder says it can't reach the Mac, under the button, and nothing in the header moves.
+    const head = () =>
+      onMac
+        .locator(".publisher-archive-player-head > *")
+        .evaluateAll((all) => all.map((el) => Object.values(el.getBoundingClientRect().toJSON()).map(Math.round)));
+    const headWas = await head();
+    await onMac.getByRole("button", { name: "Open in Finder" }).click();
+    await onMac.getByRole("status").filter({ hasText: "Can't reach the Mac from here" }).waitFor();
+    assert.deepEqual(await head(), headWas);
+    assert.deepEqual(
+      mac.asked.map(({ path }) => path),
+      [`/footage/${ON_MAC}`, `/footage/${ON_MAC}/reveal`],
+    );
     if (shots) await page.screenshot({ path: path.join(shots, `footage-player-away-${name}.png`) });
     mac.reachable = true;
     await onMac.getByRole("button", { name: "Try again" }).click();

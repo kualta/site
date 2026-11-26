@@ -6,6 +6,7 @@ import path from "node:path";
 import ffmpeg from "ffmpeg-static";
 import { createServer } from "vite";
 import { chromium } from "playwright";
+import { shownDay } from "./browser-fixtures/archive.mjs";
 import { checkPlayer } from "./check-publisher-player.mjs";
 import { checkProject } from "./check-publisher-project.mjs";
 import { findShifts } from "./publisher-shifts.mjs";
@@ -1701,7 +1702,9 @@ try {
     assert.equal(await footage.inputValue(), "project:014-walk");
     await page.keyboard.press("Escape");
     await page.getByRole("dialog").waitFor({ state: "hidden" });
-    await card("Night market walk").getByText(/· 1 clip · 1 graded · 1 at risk$/).waitFor();
+    await card("Night market walk")
+      .getByText(`${shownDay("2026-11-21", "Sat 21 Nov")} · 1 clip · 1 graded · 1 at risk`, { exact: true })
+      .waitFor();
     await card("Why Bogotá has no seasons").getByRole("button").click();
     const editor = page.getByRole("dialog");
     await editor.getByRole("combobox", { name: /^Footage/ }).selectOption("project:013-maybe-later");
@@ -1901,7 +1904,9 @@ try {
     const theme = width > 700 ? "dark" : "light";
     await page.goto(`http://127.0.0.1:8797/publisher.html/footage?theme=${theme}`);
     const footage = page.getByRole("region", { name: "Footage", exact: true });
-    const bar = footage.getByRole("progressbar", { name: "Uploading 2026-11-21 10:15:00 · clip 0402" });
+    // A camera clip by when it was shot, its day as days are shown here: "21 Nov", never 2026-11-21.
+    const clip0402 = `${shownDay("2026-11-21", "21 Nov")}, 10:15:00 · clip 0402`;
+    const bar = footage.getByRole("progressbar", { name: `Uploading ${clip0402}` });
     await bar.waitFor();
     await sent("POST");
     assert.equal(await bar.getAttribute("aria-valuenow"), "40");
@@ -1917,6 +1922,13 @@ try {
     await row("0258").getByRole("link", { name: "✓" }).waitFor();
     await row("0001").getByText("No copy left").waitFor();
     await row("IMG_4857").getByText("Not log").waitFor();
+    // Each shoot day's heading: its weekday, date and month, and how many clips.
+    const day21 = ledger.locator('.publisher-ledger-scroll tbody[data-day="2026-11-21"]');
+    const clips21 = (await day21.locator("tr").count()) - 1;
+    assert.equal(
+      await day21.locator(".publisher-ledger-day").textContent(),
+      `${shownDay("2026-11-21", "Sat 21 Nov")} · ${clips21} ${clips21 === 1 ? "clip" : "clips"}`,
+    );
     // Each clip's films are a column of their own, each a link to its page: by number and name, or by number alone
     // when the clip is in several. Its size stays beside its number.
     assert.equal(await row("0402").locator("td.films").textContent(), "014 · walk");
@@ -2045,7 +2057,6 @@ try {
     if (shots) await page.screenshot({ path: path.join(shots, `grade-away-${name}.png`) });
 
     // A failure waited out says which clip, when, why in plain words (the connection cut, as such), and the next try.
-    const clip0402 = "2026-11-21 10:15:00 · clip 0402";
     for (const [state, line] of [
       ["paused", new RegExp(`^Upload of ${clip0402} failed at .+: YouTube refused part of the upload \\(503\\); trying again at .+$`)],
       ["dropped", new RegExp(`^Upload of ${clip0402} cut off at .+: the connection dropped; trying again at .+$`)],

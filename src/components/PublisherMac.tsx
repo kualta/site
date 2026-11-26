@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { dayLabel } from "@/lib/publisher/dates";
 import {
   formatDuration,
   formatRate,
@@ -300,7 +301,7 @@ export function MacSection({
         <dl className="publisher-mac-figures">
           <div>
             <dt>Kept</dt>
-            <dd title={kept?.days.join(", ") || undefined}>
+            <dd title={kept?.days.map((day) => dayLabel(day)).join(", ") || undefined}>
               {keptDays}
               <small>{kept?.clips ? clips(kept.clips) : ""}</small>
             </dd>
